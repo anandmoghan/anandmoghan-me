@@ -1,0 +1,5 @@
+# Robots.txt for media.anandmoghan.me
+# Media files are referenced from main site, no need to index subdomain directly
+
+User-agent: *
+Disallow: /
