@@ -80,12 +80,13 @@ export default async function PostPage({ params }: PostPageProps) {
               {post.tags.map(tag => (
                 <span
                   key={tag.id}
-                  className="px-2 py-1 text-xs font-medium rounded"
+                  className="px-3 py-1 text-sm font-medium rounded-full"
                   style={{
-                    backgroundColor: 'var(--card-bg)',
-                    color: 'var(--accent)',
-                    border: '1px solid var(--border)'
+                    backgroundColor: `${tag.color}20`,
+                    color: tag.color,
+                    border: `1px solid ${tag.color}40`
                   }}
+                  title={tag.description}
                 >
                   {tag.name}
                 </span>

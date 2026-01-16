@@ -28,7 +28,8 @@
     "react-dom": "^19.2.3",
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "wrangler": "^4.59.2"
   },
   "devDependencies": {
     "@types/node": "^25.0.8",

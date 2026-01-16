@@ -15,23 +15,23 @@ export function Navigation() {
               className="text-xl font-bold tracking-tight hover:opacity-80"
               style={{ color: 'var(--foreground)' }}
             >
-              Anand Mohan
+              AM
             </a>
             <div className="flex items-center gap-8">
+              <a 
+                href="/profile" 
+                className="text-sm font-medium hover:opacity-70 relative group"
+                style={{ color: 'var(--accent)' }}
+              >
+                Profile
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 group-hover:w-full transition-all duration-300" style={{ backgroundColor: 'var(--primary)' }}></span>
+              </a>
               <a 
                 href="/posts" 
                 className="text-sm font-medium hover:opacity-70 relative group"
                 style={{ color: 'var(--accent)' }}
               >
                 Posts
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 group-hover:w-full transition-all duration-300" style={{ backgroundColor: 'var(--primary)' }}></span>
-              </a>
-              <a 
-                href="/about" 
-                className="text-sm font-medium hover:opacity-70 relative group"
-                style={{ color: 'var(--accent)' }}
-              >
-                About
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 group-hover:w-full transition-all duration-300" style={{ backgroundColor: 'var(--primary)' }}></span>
               </a>
             </div>

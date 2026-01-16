@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Post } from '../types/post';
+import { InlineTagList } from './TagList';
 
 interface PostCardProps {
   post: Post;
@@ -38,25 +39,20 @@ export default function PostCard({ post }: PostCardProps) {
           </time>
           <span>•</span>
           <span>{post.metadata.readingTime} min read</span>
+          {post.metadata.hasFormulas && (
+            <>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Math
+              </span>
+            </>
+          )}
         </div>
 
-        {post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {post.tags.map(tag => (
-              <span
-                key={tag.id}
-                className="px-2 py-1 text-xs font-medium rounded"
-                style={{
-                  backgroundColor: 'var(--card-bg)',
-                  color: 'var(--accent)',
-                  border: '1px solid var(--border)'
-                }}
-              >
-                {tag.name}
-              </span>
-            ))}
-          </div>
-        )}
+        <InlineTagList tags={post.tags} size="sm" />
       </article>
     </Link>
   );
