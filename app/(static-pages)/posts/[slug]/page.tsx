@@ -2,6 +2,7 @@ import { getAllPosts, getPostBySlug } from '@/common/utils/post';
 import { compile } from '@mdx-js/mdx';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -9,6 +10,7 @@ import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
 import { run } from '@mdx-js/mdx';
 import * as runtime from 'react/jsx-runtime';
+import CodeBlock from '@/common/components/CodeBlock';
 
 interface PostPageProps {
   params: Promise<{ slug: string }>;
@@ -31,11 +33,19 @@ export default async function PostPage({ params }: PostPageProps) {
 
   const compiled = await compile(post.content, {
     outputFormat: 'function-body',
-    remarkPlugins: [remarkMath],
+    remarkPlugins: [remarkMath, remarkGfm],
     rehypePlugins: [rehypeKatex, rehypeHighlight],
   });
 
-  const { default: Content } = await run(compiled, runtime as any);
+  const { default: Content } = await run(compiled, {
+    ...runtime,
+    baseUrl: import.meta.url,
+  } as any);
+
+  // Custom components for MDX
+  const components = {
+    pre: (props: any) => <CodeBlock {...props} />,
+  };
 
   return (
     <main className="min-h-screen">
@@ -104,7 +114,7 @@ export default async function PostPage({ params }: PostPageProps) {
             border: '1px solid var(--border)',
             maxWidth: 'none'
           }}>
-            <Content />
+            <Content components={components} />
           </div>
         </div>
       </section>

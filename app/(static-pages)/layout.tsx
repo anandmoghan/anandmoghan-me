@@ -6,9 +6,11 @@ export default function StaticPagesLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="static-pages min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
+    <div className="static-pages flex flex-col min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
       <Navigation />
-      {children}
+      <main className="flex-1">
+        {children}
+      </main>
       <footer className="py-12 px-6 sm:px-8 lg:px-12" style={{ 
         backgroundColor: 'var(--foreground)',
         color: 'white'

@@ -35,16 +35,16 @@ export default function AboutPage() {
         <div className="max-w-5xl mx-auto">
           <div className="relative">
             {/* Timeline Line */}
-            <div className="absolute left-6 md:left-1/2 md:transform md:-translate-x-0.5 top-0 bottom-0 w-0.5" 
+            <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-0.5 top-0 bottom-0 w-0.5" 
                  style={{ backgroundColor: 'var(--border)' }}></div>
             
             <div className="space-y-12">
               {/* Current Role */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8 md:text-right">
-                  <div className="ml-16 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
+                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
                        style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
-                    <div className="flex items-center gap-2 mb-2 md:justify-end">
+                    <div className="flex items-center gap-2 mb-2 md:justify-end flex-wrap">
                       <span className="px-3 py-1 rounded-full text-xs font-medium" 
                             style={{ backgroundColor: 'var(--primary)', color: 'white' }}>Current</span>
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Sep 2024 - Present</span>
@@ -58,7 +58,7 @@ export default function AboutPage() {
                     </p>
                   </div>
                 </div>
-                <div className="absolute left-6 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
                      style={{ backgroundColor: 'var(--primary)' }}></div>
                 <div className="md:w-1/2 md:pl-8"></div>
               </div>
@@ -66,12 +66,12 @@ export default function AboutPage() {
               {/* Previous Amazon Role */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8"></div>
-                <div className="absolute left-6 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
                      style={{ backgroundColor: 'var(--accent)' }}></div>
                 <div className="md:w-1/2 md:pl-8">
-                  <div className="ml-16 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
+                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
                        style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Jul 2019 - Sep 2024</span>
                     </div>
                     <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
@@ -88,9 +88,9 @@ export default function AboutPage() {
               {/* Education - M.Tech */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8 md:text-right">
-                  <div className="ml-16 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
+                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
                        style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
-                    <div className="flex items-center gap-2 mb-2 md:justify-end">
+                    <div className="flex items-center gap-2 mb-2 md:justify-end flex-wrap">
                       <span className="px-3 py-1 rounded-full text-xs font-medium" 
                             style={{ backgroundColor: 'var(--card-bg)', color: 'var(--foreground)' }}>Education</span>
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>2017 - 2019</span>
@@ -104,7 +104,7 @@ export default function AboutPage() {
                     </p>
                   </div>
                 </div>
-                <div className="absolute left-6 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
                      style={{ backgroundColor: '#10b981' }}></div>
                 <div className="md:w-1/2 md:pl-8"></div>
               </div>
@@ -112,12 +112,12 @@ export default function AboutPage() {
               {/* Zoho */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8"></div>
-                <div className="absolute left-6 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
                      style={{ backgroundColor: '#8b5cf6' }}></div>
                 <div className="md:w-1/2 md:pl-8">
-                  <div className="ml-16 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
+                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
                        style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Jul 2015 - Jun 2016</span>
                     </div>
                     <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
@@ -134,9 +134,9 @@ export default function AboutPage() {
               {/* Education - B.Tech */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8 md:text-right">
-                  <div className="ml-16 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
+                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
                        style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
-                    <div className="flex items-center gap-2 mb-2 md:justify-end">
+                    <div className="flex items-center gap-2 mb-2 md:justify-end flex-wrap">
                       <span className="px-3 py-1 rounded-full text-xs font-medium" 
                             style={{ backgroundColor: 'var(--card-bg)', color: 'var(--foreground)' }}>Education</span>
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>2011 - 2015</span>
@@ -150,7 +150,7 @@ export default function AboutPage() {
                     </p>
                   </div>
                 </div>
-                <div className="absolute left-6 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
                      style={{ backgroundColor: '#10b981' }}></div>
                 <div className="md:w-1/2 md:pl-8"></div>
               </div>

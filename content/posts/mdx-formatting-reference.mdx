@@ -1,0 +1,373 @@
+---
+title: "MDX Formatting Reference Guide"
+publishedAt: "2026-01-01"
+excerpt: "A comprehensive reference for all Markdown and MDX formatting options available in this blog. Use this as a template for creating rich, well-formatted posts."
+tags: ["family", "personal", "ai", "technology"]
+---
+
+# MDX Formatting Reference Guide
+
+This post demonstrates all available Markdown and MDX formatting options you can use in your blog posts.
+
+## Headings
+
+# Heading 1
+## Heading 2
+### Heading 3
+#### Heading 4
+##### Heading 5
+###### Heading 6
+
+## Text Formatting
+
+**Bold text** or __bold text__
+
+*Italic text* or _italic text_
+
+***Bold and italic*** or ___bold and italic___
+
+~~Strikethrough text~~
+
+`Inline code` for technical terms
+
+## Links
+
+[External link](https://example.com)
+
+[Link with title](https://example.com "This is a title")
+
+Auto-linked URL: https://auto-linked-url.com
+
+## Lists
+
+### Unordered Lists
+
+- Item 1
+- Item 2
+  - Nested item 2.1
+  - Nested item 2.2
+    - Deeply nested item
+- Item 3
+
+* Alternative bullet style
+* Another item
+
+### Ordered Lists
+
+1. First item
+2. Second item
+   1. Nested numbered item
+   2. Another nested item
+3. Third item
+
+### Task Lists
+
+- [x] Completed task
+- [ ] Incomplete task
+- [ ] Another task to do
+
+## Blockquotes
+
+> This is a blockquote.
+> It can span multiple lines.
+
+> **Note:** You can use formatting inside blockquotes.
+> 
+> - Even lists
+> - Like this
+
+### Nested Blockquotes
+
+> This is a quote
+>> This is a nested quote
+>>> This is deeply nested
+
+## Code Blocks
+
+### Inline Code
+
+Use `const variable = value` for inline code.
+
+### Code Blocks with Syntax Highlighting
+
+```javascript
+// JavaScript example
+function greet(name) {
+  console.log(`Hello, ${name}!`);
+  return true;
+}
+
+const result = greet("World");
+```
+
+```python
+# Python example
+def calculate_sum(a, b):
+    """Calculate the sum of two numbers."""
+    return a + b
+
+result = calculate_sum(5, 3)
+print(f"Result: {result}")
+```
+
+```typescript
+// TypeScript example
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+const user: User = {
+  id: 1,
+  name: "John Doe",
+  email: "john@example.com"
+};
+```
+
+```bash
+# Bash commands
+npm install
+npm run dev
+git commit -m "Update post"
+```
+
+```json
+{
+  "name": "example",
+  "version": "1.0.0",
+  "description": "JSON example"
+}
+```
+
+```css
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f0f0;
+}
+```
+
+## Tables
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Markdown | ✅ | Full support |
+| MDX | ✅ | React components |
+| Syntax highlighting | ✅ | Multiple languages |
+| Images | ✅ | Local and remote |
+
+### Aligned Tables
+
+| Left Aligned | Center Aligned | Right Aligned |
+|:-------------|:--------------:|--------------:|
+| Left | Center | Right |
+| Text | Text | Text |
+
+## Horizontal Rules
+
+---
+
+***
+
+___
+
+## Images
+
+![Alt text for image](/placeholder-800x400.svg "Image title")
+
+### Image with Link
+
+[![Clickable image](/placeholder-400x200.svg)](https://example.com)
+
+## Emphasis and Special Characters
+
+Use backslash to escape special characters: \* \_ \` \# \[ \]
+
+Superscript: x^2^ (if supported)
+
+Subscript: H~2~O (if supported)
+
+## Footnotes
+
+Here's a sentence with a footnote[^1].
+
+Another reference[^2].
+
+[^1]: This is the first footnote.
+[^2]: This is the second footnote with more details.
+
+## Definition Lists
+
+Term 1
+: Definition 1
+
+Term 2
+: Definition 2a
+: Definition 2b
+
+## Abbreviations
+
+The HTML specification is maintained by the W3C.
+
+*[HTML]: Hyper Text Markup Language
+*[W3C]: World Wide Web Consortium
+
+## Emojis
+
+You can use emojis directly: 🚀 ✨ 💡 🎉 ❤️ 🔥 👍 🌟
+
+Or use emoji codes: :rocket: :sparkles: :bulb:
+
+## Math (if supported)
+
+Inline math: $E = mc^2$
+
+Block math:
+
+$$
+\int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+$$
+
+## HTML Elements
+
+You can use HTML directly in MDX:
+
+<div style={{ padding: '1rem', backgroundColor: '#f0f0f0', borderRadius: '0.5rem' }}>
+  <p>This is a custom HTML div with inline styles.</p>
+</div>
+
+<details>
+<summary>Click to expand</summary>
+
+Hidden content goes here. You can include:
+- Lists
+- **Formatted text**
+- Code blocks
+- Anything else!
+
+</details>
+
+## Keyboard Keys
+
+Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy.
+
+Use <kbd>⌘</kbd> + <kbd>V</kbd> to paste on Mac.
+
+## Alerts and Callouts
+
+> **💡 Tip:** This is a helpful tip for readers.
+
+> **⚠️ Warning:** Be careful with this operation.
+
+> **❌ Error:** This will cause an error.
+
+> **✅ Success:** Operation completed successfully.
+
+> **ℹ️ Info:** Additional information here.
+
+## Nested Lists with Mixed Types
+
+1. First ordered item
+   - Unordered sub-item
+   - Another sub-item
+     1. Nested ordered item
+     2. Another nested ordered item
+2. Second ordered item
+   - [ ] Task in a nested list
+   - [x] Completed task
+
+## Long Code Block with Line Numbers
+
+```javascript
+// Complex example with multiple concepts
+class BlogPost {
+  constructor(title, content, tags) {
+    this.title = title;
+    this.content = content;
+    this.tags = tags;
+    this.createdAt = new Date();
+  }
+
+  publish() {
+    console.log(`Publishing: ${this.title}`);
+    return {
+      success: true,
+      timestamp: this.createdAt
+    };
+  }
+
+  addTag(tag) {
+    if (!this.tags.includes(tag)) {
+      this.tags.push(tag);
+    }
+  }
+
+  getTags() {
+    return this.tags.join(', ');
+  }
+}
+
+const post = new BlogPost(
+  "My First Post",
+  "This is the content",
+  ["Tech", "AI"]
+);
+
+post.addTag("Automation");
+console.log(post.getTags());
+```
+
+## Combining Elements
+
+You can combine multiple formatting elements:
+
+- **Bold item** with *italic text* and `inline code`
+- [Link with **bold text**](https://example.com)
+- > Blockquote with **bold** and *italic*
+
+## Special Use Cases
+
+### Code with Output
+
+```bash
+$ npm run build
+
+> build
+> next build
+
+✓ Creating an optimized production build
+✓ Compiled successfully
+```
+
+### Multi-line Blockquote with Code
+
+> When working with React components:
+> ```jsx
+> function Component() {
+>   return <div>Hello World</div>;
+> }
+> ```
+> Remember to always return valid JSX.
+
+## Summary
+
+This reference covers:
+
+1. ✅ All heading levels (H1-H6)
+2. ✅ Text formatting (bold, italic, strikethrough)
+3. ✅ Links and images
+4. ✅ Lists (ordered, unordered, nested, tasks)
+5. ✅ Code blocks with syntax highlighting
+6. ✅ Tables with alignment
+7. ✅ Blockquotes and nested quotes
+8. ✅ HTML elements and custom styling
+9. ✅ Special characters and emojis
+10. ✅ Advanced formatting combinations
+
+---
+
+**Tags used in this post:** Family, Personal, AI, Technology
+
+Copy and modify sections from this post to create your own beautifully formatted content!

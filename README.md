@@ -25,6 +25,10 @@ This platform bridges professional life as an AI Scientist at Amazon with person
 # Install dependencies
 npm install
 
+# Configure environment (for media system)
+cp .env.example .env
+# Edit .env with your Cloudflare R2 credentials
+
 # Run development server
 npm run dev
 
@@ -33,6 +37,12 @@ npm run build
 ```
 
 Visit [http://localhost:3000](http://localhost:3000) to see the site.
+
+## Documentation
+
+- **[Media System Guide](docs/MEDIA-SYSTEM.md)** - Complete guide to media management with Cloudflare R2
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Deployment instructions for Cloudflare Pages
+- **[SEO Checklist](docs/SEO-CHECKLIST.md)** - SEO optimization checklist
 
 ## Project Structure
 
@@ -56,6 +66,18 @@ Visit [http://localhost:3000](http://localhost:3000) to see the site.
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run lint` - Run ESLint
+- `npm run upload-media` - Upload media to Cloudflare R2
+- `npm run generate-manifest` - Generate static media manifest
+
+## Key Features
+
+### Media System
+- **R2-First Architecture**: Media stored in Cloudflare R2, not in repository
+- **Build-Time Discovery**: Fetches media list from R2 during static generation
+- **CDN Delivery**: Global CDN serving with optimal performance
+- **Smart Upload**: Automatic change detection and optional local file cleanup
+
+See [docs/MEDIA-SYSTEM.md](docs/MEDIA-SYSTEM.md) for complete documentation.
 
 ## Deployment
 

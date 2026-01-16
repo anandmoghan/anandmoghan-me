@@ -1,9 +1,19 @@
 import { MetadataRoute } from 'next';
+import { getAllPosts } from '@/common/utils/post';
 
 export const dynamic = 'force-static';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://anandmoghan.me';
+  
+  const posts = getAllPosts();
+  
+  const postEntries: MetadataRoute.Sitemap = posts.map((post) => ({
+    url: `${baseUrl}/posts/${post.slug}`,
+    lastModified: post.updatedAt,
+    changeFrequency: 'monthly',
+    priority: 0.6,
+  }));
   
   return [
     {
@@ -25,34 +35,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/posts/welcome`,
+      url: `${baseUrl}/media`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
-      priority: 0.6,
+      priority: 0.7,
     },
-    {
-      url: `${baseUrl}/posts/ai-research-2024`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/posts/deep-learning-fundamentals`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/posts/building-scalable-systems`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/posts/life-in-uk`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
+    ...postEntries,
   ];
 }
