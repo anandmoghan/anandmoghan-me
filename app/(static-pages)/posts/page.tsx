@@ -1,6 +1,7 @@
 import { getAllPosts } from '@/common/utils/post';
 import PostsClient from './PostsClient';
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 
 export const metadata: Metadata = {
   title: "Posts",
@@ -24,7 +25,13 @@ export const metadata: Metadata = {
 };
 
 export default function PostsPage() {
-  const allPosts = getAllPosts();
+  // Get all posts including unpublished ones
+  // The client component will handle filtering based on URL params
+  const allPosts = getAllPosts(true);
 
-  return <PostsClient posts={allPosts} />;
+  return (
+    <Suspense fallback={<div>Loading posts...</div>}>
+      <PostsClient posts={allPosts} />
+    </Suspense>
+  );
 }

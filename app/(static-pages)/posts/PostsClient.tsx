@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import PostCard from '@/common/components/PostCard';
 import TagFilter from '@/common/components/TagFilter';
 import Pagination from '@/common/components/Pagination';
@@ -13,8 +14,22 @@ interface PostsClientProps {
 const POSTS_PER_PAGE = 9; // 3x3 grid
 
 export default function PostsClient({ posts }: PostsClientProps) {
-  const [filteredPosts, setFilteredPosts] = useState<Post[]>(posts);
+  const searchParams = useSearchParams();
+  const showUnpublished = searchParams.get('unpublished') === 'true';
+  
+  // Filter posts based on published status
+  const visiblePosts = useMemo(() => {
+    return showUnpublished ? posts : posts.filter(post => post.published);
+  }, [posts, showUnpublished]);
+
+  const [filteredPosts, setFilteredPosts] = useState<Post[]>(visiblePosts);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Update filtered posts when visibility changes
+  useEffect(() => {
+    setFilteredPosts(visiblePosts);
+    setCurrentPage(1);
+  }, [visiblePosts]);
 
   // Reset to page 1 when filtered posts change
   const handleFilteredPostsChange = (newFilteredPosts: Post[]) => {
@@ -48,15 +63,29 @@ export default function PostsClient({ posts }: PostsClientProps) {
           <p className="text-sm sm:text-base" style={{ color: 'var(--muted)' }}>
             Thoughts on AI, technology, and life
           </p>
+          {showUnpublished && (
+            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{
+              backgroundColor: 'rgba(234, 179, 8, 0.1)',
+              color: '#ca8a04',
+              border: '1px solid rgba(234, 179, 8, 0.2)'
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Showing unpublished posts
+            </div>
+          )}
         </div>
       </section>
 
       {/* Tag Filter Section */}
-      {posts.length > 0 && (
+      {visiblePosts.length > 0 && (
         <section className="pb-6 px-6 sm:px-8 lg:px-12">
           <div className="max-w-7xl mx-auto">
             <TagFilter 
-              posts={posts}
+              posts={visiblePosts}
               onFilteredPostsChange={handleFilteredPostsChange}
             />
           </div>
@@ -66,7 +95,7 @@ export default function PostsClient({ posts }: PostsClientProps) {
       {/* Posts Section */}
       <section className="pb-8 px-6 sm:px-8 lg:px-12">
         <div className="max-w-7xl mx-auto">
-          {filteredPosts.length === 0 && posts.length > 0 ? (
+          {filteredPosts.length === 0 && visiblePosts.length > 0 ? (
             <div className="p-10 rounded-lg shadow-sm text-center" style={{ 
               backgroundColor: 'white',
               border: '1px solid var(--border)'

@@ -13,11 +13,21 @@ export default function PostCard({ post }: PostCardProps) {
         backgroundColor: 'white',
         border: '1px solid var(--border)',
       }}>
-        <h2 className="text-xl font-bold mb-2 leading-tight" style={{ 
-          color: 'var(--foreground)'
-        }}>
-          {post.title}
-        </h2>
+        <div className="flex items-center gap-2 mb-2">
+          {!post.published && (
+            <span className="inline-block px-2 py-0.5 rounded text-xs font-medium flex-shrink-0" style={{
+              backgroundColor: '#000',
+              color: '#fff'
+            }}>
+              Draft
+            </span>
+          )}
+          <h2 className="text-xl font-bold leading-tight" style={{ 
+            color: 'var(--foreground)'
+          }}>
+            {post.title}
+          </h2>
+        </div>
         
         <p className="mb-3 text-sm leading-relaxed" style={{ 
           color: 'var(--muted)',

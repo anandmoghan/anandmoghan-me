@@ -11,16 +11,12 @@ export default function RedirectTracker() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Track UTM source
     const utmSource = searchParams.get('utm_source');
-    if (utmSource) {
-      trackRedirectSource(utmSource, 'utm');
-    }
-
-    // Track ref parameter
     const ref = searchParams.get('ref');
-    if (ref) {
-      trackRedirectSource(ref, 'ref');
+    
+    const source = ref || utmSource;
+    if (source) {
+      trackRedirectSource(source);
     }
   }, [searchParams]);
 

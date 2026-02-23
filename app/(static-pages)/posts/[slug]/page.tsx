@@ -13,6 +13,7 @@ import { run } from '@mdx-js/mdx';
 import * as runtime from 'react/jsx-runtime';
 import CodeBlock from '@/common/components/CodeBlock';
 import TableOfContents from '@/common/components/TableOfContents';
+import PrintButton from '@/common/components/PrintButton';
 import type { Metadata } from 'next';
 
 interface PostPageProps {
@@ -20,7 +21,8 @@ interface PostPageProps {
 }
 
 export async function generateStaticParams() {
-  const posts = getAllPosts();
+  // Generate paths for all posts (including unpublished) so they're accessible with the URL param
+  const posts = getAllPosts(true);
   return posts.map(post => ({
     slug: post.slug,
   }));
@@ -39,9 +41,15 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://anandmoghan.me';
   const postUrl = `${baseUrl}/posts/${slug}`;
 
+  // Add noindex for unpublished posts
+  const robotsConfig = post.published 
+    ? undefined 
+    : { index: false, follow: false };
+
   return {
     title: post.title,
     description: post.excerpt,
+    robots: robotsConfig,
     openGraph: {
       title: post.title,
       description: post.excerpt,
@@ -161,7 +169,7 @@ export default async function PostPage({ params }: PostPageProps) {
         }}></div>
         <div className="max-w-7xl mx-auto">
           <Link 
-            href="/posts" 
+            href={post.published ? "/posts" : "/posts?unpublished=true"}
             className="inline-flex items-center gap-2 mb-6 text-sm font-medium transition-colors hover:opacity-70"
             style={{ color: 'var(--accent)' }}
           >
@@ -170,6 +178,17 @@ export default async function PostPage({ params }: PostPageProps) {
             </svg>
             Back to Posts
           </Link>
+          
+          {!post.published && (
+            <div className="mb-3">
+              <span className="inline-block px-2 py-1 rounded text-sm font-medium" style={{
+                backgroundColor: '#000',
+                color: '#fff'
+              }}>
+                Draft
+              </span>
+            </div>
+          )}
           
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-4 leading-tight" style={{ color: 'var(--foreground)' }}>
             {post.title}
@@ -188,6 +207,9 @@ export default async function PostPage({ params }: PostPageProps) {
             <span>{post.metadata.readingTime} min read</span>
             <span>•</span>
             <span>{post.metadata.wordCount} words</span>
+            <span className="ml-auto">
+              <PrintButton />
+            </span>
           </div>
 
           {post.tags.length > 0 && (

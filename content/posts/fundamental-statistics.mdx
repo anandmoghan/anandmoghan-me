@@ -1,0 +1,257 @@
+---
+title: "Fundamental Statistics for Machine Learning"
+excerpt: "A condensed reference guide for ML practitioners—probability, estimation, testing, and dimensionality reduction."
+publishedAt: "2026-02-20"
+tags: ["ai", "machine-learning", "statistics"]
+author: "Anand Mohan"
+published: false
+---
+
+# Fundamental Statistics for Machine Learning
+
+When your model overfits, when your A/B test gives contradictory results, when your confidence intervals are nonsense—you need statistical foundations. This condensed guide covers the essentials for ML practitioners preparing for technical interviews: distributions, parameter estimation, bias-variance tradeoff, hypothesis testing, and PCA. Topics intentionally omitted (Bayesian inference, information theory, bootstrap methods, MCMC) are covered in the full version.
+
+## Probability Distributions & Moments
+
+### Normal Distribution
+
+The Gaussian $\mathcal{N}(\mu, \sigma^2)$ dominates ML due to the Central Limit Theorem. Density: $f(x) = \frac{1}{\sqrt{2\pi\sigma^2}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)$. Mean = $\mu$, Variance = $\sigma^2$. Linear transformations preserve normality: if $X \sim \mathcal{N}(\mu, \sigma^2)$, then $aX + b \sim \mathcal{N}(a\mu + b, a^2\sigma^2)$. Use for: gradient descent (assumes Gaussian errors), linear regression residuals, many ML algorithms explicitly assume normality.
+
+### Binomial Distribution
+
+Counts successes in $n$ independent trials with probability $p$: $P(X = k) = \binom{n}{k} p^k (1-p)^{n-k}$. Mean = $np$, Variance = $np(1-p)$. Approximates normal when $np > 5$ and $n(1-p) > 5$: $X \sim \mathcal{N}(np, np(1-p))$. Use for: binary classification metrics, A/B testing with conversion rates, click-through rate modeling.
+
+### Poisson Distribution
+
+Models event counts in fixed intervals: $P(X = k) = \frac{\lambda^k e^{-\lambda}}{k!}$. Mean = Variance = $\lambda$. If variance >> mean, data is overdispersed (consider negative binomial). Use for: rare events (system failures, user arrivals), count data, anomaly detection.
+
+### Moments
+
+**Expectation** is the probability-weighted average: $\mathbb{E}[X] = \sum_x x P(X=x)$ (discrete) or $\int x f(x) dx$ (continuous). Linearity holds even for dependent variables: $\mathbb{E}[aX + bY + c] = a\mathbb{E}[X] + b\mathbb{E}[Y] + c$.
+
+**Variance** measures spread: $\text{Var}(X) = \mathbb{E}[(X - \mathbb{E}[X])^2] = \mathbb{E}[X^2] - (\mathbb{E}[X])^2$. Key property: $\text{Var}(aX + b) = a^2 \text{Var}(X)$ (shifting doesn't change variance, scaling does). For independent $X, Y$: $\text{Var}(X + Y) = \text{Var}(X) + \text{Var}(Y)$.
+
+**Covariance** measures joint variation: $\text{Cov}(X, Y) = \mathbb{E}[(X - \mathbb{E}[X])(Y - \mathbb{E}[Y])] = \mathbb{E}[XY] - \mathbb{E}[X]\mathbb{E}[Y]$. If $X, Y$ independent, then $\text{Cov}(X, Y) = 0$, but the converse is false—zero covariance doesn't imply independence (only rules out linear relationships).
+
+**Correlation** normalizes covariance: $\rho(X, Y) = \frac{\text{Cov}(X, Y)}{\sigma_X \sigma_Y} \in [-1, 1]$. Values: $\rho = 1$ (perfect positive linear), $\rho = -1$ (perfect negative linear), $\rho = 0$ (no linear relationship, but nonlinear relationships may exist).
+
+## Parameter Estimation
+
+### Maximum Likelihood Estimation (MLE)
+
+Find parameters that make observed data most probable: $\hat{\theta}_{\text{MLE}} = \arg\max_{\theta} \log P(\mathcal{D} | \theta)$. For Gaussian data, the MLE mean is the sample mean $\bar{x} = \frac{1}{n}\sum x_i$, and the MLE variance is $\hat{\sigma}^2 = \frac{1}{n}\sum(x_i - \bar{x})^2$. The variance estimator is biased: $\mathbb{E}[\hat{\sigma}^2] = \frac{n-1}{n}\sigma^2$. Bessel's correction uses $n-1$ in the denominator to get an unbiased estimator, accounting for the fact that we're using the sample mean (which "uses up" one degree of freedom).
+
+### Maximum A Posteriori (MAP)
+
+Incorporate prior beliefs via Bayes' theorem: $\hat{\theta}_{\text{MAP}} = \arg\max_{\theta} [\log P(\mathcal{D} | \theta) + \log P(\theta)]$. The prior $P(\theta)$ regularizes the estimate. For linear regression with Gaussian prior $P(\theta) = \mathcal{N}(0, \tau^2 I)$ and Gaussian likelihood, MAP estimation is equivalent to Ridge regression: $\hat{\theta} = \arg\min_{\theta} \|y - X\theta\|_2^2 + \lambda \|\theta\|_2^2$ where $\lambda = \sigma^2/\tau^2$ (ratio of noise variance to prior variance). Similarly, Lasso (L1 regularization) corresponds to a Laplace prior, which has heavier tails and encourages sparsity.
+
+| Regularization | Prior Distribution | Penalty Term |
+|----------------|-------------------|--------------|
+| Ridge (L2) | Gaussian: $P(\theta) \propto \exp(-\frac{\lambda}{2}\|\theta\|_2^2)$ | $\lambda \|\theta\|_2^2$ |
+| Lasso (L1) | Laplace: $P(\theta) \propto \exp(-\lambda\|\theta\|_1)$ | $\lambda \|\theta\|_1$ |
+
+### Confidence Intervals
+
+A 95% confidence interval $[L, U]$ satisfies: if we repeated the experiment many times, 95% of constructed intervals would contain the true parameter. Common misconception: "There's a 95% probability the true parameter is in this interval" (incorrect—the parameter is fixed, the interval is random).
+
+For a Gaussian mean with known $\sigma$: $\bar{x} \pm z_{\alpha/2} \frac{\sigma}{\sqrt{n}}$ where $z_{0.025} = 1.96$ for 95% CI. With unknown $\sigma$, use t-distribution: $\bar{x} \pm t_{\alpha/2, n-1} \frac{s}{\sqrt{n}}$ where $s$ is sample standard deviation. The heavier-tailed t-distribution accounts for additional uncertainty from estimating $\sigma$.
+
+## Bias-Variance Tradeoff & Cross-Validation
+
+### The Decomposition
+
+Expected prediction error decomposes into three terms:
+
+$
+\mathbb{E}_{\mathcal{D}}[(y - \hat{f}(x))^2] = \text{Bias}^2[\hat{f}(x)] + \text{Var}[\hat{f}(x)] + \sigma^2
+$
+
+where Bias = $\mathbb{E}_{\mathcal{D}}[\hat{f}(x)] - f(x)$ (how far average prediction is from truth), Variance = $\mathbb{E}_{\mathcal{D}}[(\hat{f}(x) - \mathbb{E}_{\mathcal{D}}[\hat{f}(x)])^2]$ (how much predictions vary across datasets), and $\sigma^2$ is irreducible error (noise no model can capture).
+
+High bias, low variance: model too simple (underfitting), consistently wrong in the same way. Low bias, high variance: model too complex (overfitting), fits training data perfectly but predictions vary wildly. The sweet spot balances both for best generalization.
+
+Empirical studies show that as model complexity increases, training error monotonically decreases while test error follows a U-curve (initially decreases, then increases). However, in overparameterized regimes (modern deep learning), test error can decrease again beyond the interpolation threshold—this is the double descent phenomenon, where classical bias-variance intuition breaks down.
+
+### Cross-Validation
+
+k-fold CV estimates generalization: split data into $k$ folds, train on $k-1$ folds, validate on remaining fold, repeat $k$ times rotating validation fold, average scores. Small $k$ (e.g., 2): high bias, low variance. Large $k$ (e.g., leave-one-out): low bias, high variance. Typically $k=5$ or $k=10$ balances this tradeoff.
+
+Stratified k-fold maintains class proportions in each fold—critical for imbalanced classification where random splits might create unrepresentative validation sets. For time series data, use forward-chaining splits (train on past, validate on future) not random k-fold, to avoid data leakage from future to past.
+
+### Unified View: Managing Model Capacity
+
+Regularization, PCA, and bias-variance are different mechanisms for controlling effective degrees of freedom. Regularization applies soft constraints on parameter magnitude (Ridge shrinks coefficients, Lasso induces sparsity). PCA applies hard constraints on parameter subspace (keeping $k$ components discards variance $\sum_{i>k} \lambda_i$). Cross-validation empirically estimates optimal constraint strength. All three reduce variance at the cost of increased bias.
+
+## Hypothesis Testing & A/B Experiments
+
+### The Framework
+
+1. **Null hypothesis ($H_0$):** No difference (e.g., $\mu_1 = \mu_2$)
+2. **Alternative hypothesis ($H_1$):** There is a difference (e.g., $\mu_1 \neq \mu_2$)
+3. **Test statistic:** Number computed from data (e.g., t-statistic)
+4. **p-value:** Probability of observing this statistic (or more extreme) if $H_0$ is true
+5. **Decision:** Reject $H_0$ if p-value < significance level $\alpha$ (typically 0.05)
+
+**Type I error (false positive):** Reject $H_0$ when true. Probability = $\alpha$. In ML: deploying a model that's not actually better.
+
+**Type II error (false negative):** Fail to reject $H_0$ when false. Probability = $\beta$. In ML: missing a genuinely better model.
+
+**Statistical power:** $1 - \beta$, probability of correctly rejecting false $H_0$. Run power analysis before experiments. For medium effect size (Cohen's $d=0.5$) at 80% power and $\alpha=0.05$, you need ~64 samples per group.
+
+### Comparing Two Means
+
+Welch's t-test (unequal variances): $t = \frac{\bar{x}_1 - \bar{x}_2}{\sqrt{\frac{s_1^2}{n_1} + \frac{s_2^2}{n_2}}}$ with Welch-Satterthwaite degrees of freedom. Pooled t-test assumes equal variances and pools variance estimates: $s_p^2 = \frac{(n_1-1)s_1^2 + (n_2-1)s_2^2}{n_1 + n_2 - 2}$. Pooled version has more power when assumption holds but is less robust.
+
+### Multiple Testing Problem
+
+Testing $m$ hypotheses inflates false positive rate. Family-Wise Error Rate: $\text{FWER} = 1 - (1 - \alpha)^m$. With $\alpha = 0.05$ and $m = 20$ tests, FWER $\approx 0.64$—you have 64% chance of at least one false positive!
+
+**Bonferroni correction:** Divide $\alpha$ by number of tests: $\alpha_{\text{corrected}} = \alpha/m$. Controls FWER but very conservative (increases Type II errors). Use when you need strong control of false positives (safety-critical applications).
+
+**Benjamini-Hochberg procedure:** Controls False Discovery Rate (expected proportion of false positives among rejections). Sort p-values $p_{(1)} \leq p_{(2)} \leq ... \leq p_{(m)}$, find largest $i$ where $p_{(i)} \leq \frac{i}{m}\alpha$, reject hypotheses $1, ..., i$. Less conservative than Bonferroni. Use when you can tolerate some false positives (exploratory analysis, feature selection).
+
+## Dimensionality Reduction
+
+### Principal Component Analysis (PCA)
+
+PCA finds directions of maximum variance via eigendecomposition of the covariance matrix $\Sigma = Q \Lambda Q^T$. Eigenvectors $Q = [\mathbf{q}_1, ..., \mathbf{q}_d]$ are principal components (orthonormal directions), eigenvalues $\Lambda = \text{diag}(\lambda_1, ..., \lambda_d)$ with $\lambda_1 \geq \lambda_2 \geq ... \geq \lambda_d \geq 0$ are variances along those directions.
+
+**Geometric interpretation:** For multivariate Gaussian, eigenvectors are principal axes of the probability ellipsoid, eigenvalues are squared semi-axis lengths. The first PC $\mathbf{q}_1$ maximizes $\mathbf{w}^T \Sigma \mathbf{w}$ subject to $\|\mathbf{w}\| = 1$ (Rayleigh quotient), with maximum value $\lambda_1$.
+
+**Algorithm:**
+1. Center data: $\mathbf{X}_{\text{centered}} = \mathbf{X} - \bar{\mathbf{X}}$
+2. Compute covariance: $\Sigma = \frac{1}{n-1} \mathbf{X}_{\text{centered}}^T \mathbf{X}_{\text{centered}}$
+3. Eigendecompose: $\Sigma = Q \Lambda Q^T$
+4. Project onto top $k$ eigenvectors: $\mathbf{Z} = \mathbf{X}_{\text{centered}} Q_k$
+
+Reconstruction error is sum of discarded eigenvalues: $\frac{1}{n}\|\mathbf{X} - \hat{\mathbf{X}}\|_F^2 = \sum_{i=k+1}^{d} \lambda_i$. Variance explained: $\frac{\sum_{i=1}^{k} \lambda_i}{\sum_{i=1}^{d} \lambda_i}$.
+
+**When PCA works:** Features are correlated (redundancy to exploit), linear relationships dominate, variance equals information (e.g., images, sensor data).
+
+**When PCA fails:** Features already uncorrelated, nonlinear relationships are important (use kernel PCA or autoencoders), variance doesn't equal information (e.g., rare but important events). Classic failure case: concentric circles where classes are perfectly separable by radius, but PCA captures variance in x-y directions and misses the circular structure entirely.
+
+## Bayesian Inference & Credible Intervals
+
+The core idea: treat parameters as random variables with distributions, not fixed unknowns. Bayes' theorem gives the **posterior**:
+
+$
+P(\theta | \mathcal{D}) \propto P(\mathcal{D} | \theta) \cdot P(\theta)
+$
+
+where $P(\mathcal{D} | \theta)$ is the likelihood and $P(\theta)$ is the prior encoding beliefs before seeing data.
+
+**Posterior vs. point estimates:** MLE gives the mode of the likelihood. MAP gives the mode of the posterior. Full Bayesian inference gives the entire posterior distribution—you can compute means, medians, or any quantile.
+
+A **credible interval** directly means "there is a 95% probability the parameter lies in this range, given the data." This is what people incorrectly say confidence intervals mean. A confidence interval's correct interpretation is frequentist: 95% of identically constructed intervals would contain the true parameter across repeated experiments.
+
+**Conjugate priors** make the posterior analytically tractable—the posterior belongs to the same distributional family as the prior. Key pairs: Beta + Binomial → Beta posterior (A/B testing conversion rates); Gaussian + Gaussian → Gaussian posterior; Dirichlet + Multinomial → Dirichlet posterior (topic models). When the prior is uninformative, MAP ≈ MLE and credible intervals ≈ confidence intervals asymptotically.
+
+**Interview connections:** L2 regularization is MAP with a Gaussian prior. MC Dropout is approximate Bayesian inference. VAEs minimize a KL divergence term that arises directly from Bayesian inference on latent variables.
+
+## Information Theory: Entropy, KL Divergence, Mutual Information
+
+**Entropy** measures the average uncertainty of a distribution:
+
+$
+H(X) = -\sum p(x) \log p(x)
+$
+
+Uniform distributions maximize entropy. Deterministic distributions have zero entropy. Units are bits (log base 2) or nats (natural log).
+
+**Cross-entropy** measures the average bits needed to encode samples from $P$ using a code optimized for $Q$:
+
+$
+H(P, Q) = -\sum p(x) \log q(x)
+$
+
+This is exactly the classification loss function. Minimizing cross-entropy loss is equivalent to maximizing log-likelihood under the model distribution $Q$.
+
+**KL divergence** measures how much one distribution differs from another:
+
+$
+\text{KL}(P \| Q) = \sum p(x) \log\frac{p(x)}{q(x)} = H(P, Q) - H(P)
+$
+
+Always ≥ 0, zero iff $P = Q$, and asymmetric: $\text{KL}(P \| Q) \neq \text{KL}(Q \| P)$. Forward KL is mean-seeking; reverse KL is mode-seeking. VAEs minimize reverse KL, which can cause posterior collapse if not carefully managed.
+
+**Mutual information** measures how much knowing one variable reduces uncertainty about another:
+
+$
+I(X; Y) = H(X) - H(X | Y) = \text{KL}(P(X,Y) \| P(X)P(Y))
+$
+
+Zero iff $X$ and $Y$ are independent. Unlike correlation, mutual information captures nonlinear dependencies. Used in feature selection, representation learning, and the Information Bottleneck principle, which frames learning as compressing inputs while preserving information about outputs.
+
+## Bootstrap & Resampling
+
+The **bootstrap** estimates the sampling distribution of a statistic without assuming a parametric form. Procedure: given $n$ samples, draw $n$ samples with replacement $B$ times; compute your statistic on each resample; the distribution of those $B$ estimates approximates the true sampling distribution.
+
+This gives you standard errors and confidence intervals for virtually any statistic—median, AUC, correlation—where closed-form distributions don't exist or assumptions would be violated.
+
+**Bootstrap confidence interval variants:** The percentile method uses the 2.5th and 97.5th percentiles of the bootstrap distribution directly. The BCa (bias-corrected and accelerated) interval adjusts for skewness and is more accurate for small samples. Use BCa in practice when $n < 100$.
+
+**Permutation tests** are the hypothesis testing equivalent: instead of resampling with replacement, randomly shuffle labels $B$ times to construct the null distribution. Then compute where your observed test statistic falls. This makes no distributional assumptions and is exact for small samples.
+
+**Interview connections:** Bootstrap is used to estimate uncertainty in model evaluation metrics (especially when test sets are small), to construct confidence intervals around AUC, and to validate feature importance rankings that would otherwise be unstable.
+
+## MCMC & Sampling Methods
+
+When the posterior is intractable—too complex to compute analytically and too high-dimensional to integrate numerically—you need sampling methods to approximate it.
+
+**Rejection sampling:** Draw proposals from a simple distribution $q(x)$, accept with probability $p(x)/(M \cdot q(x))$ where $M$ bounds the ratio. Exact but catastrophically inefficient in high dimensions—acceptance rates drop exponentially.
+
+**Importance sampling** reweights samples from a proposal $q$ to approximate expectations under a target $p$. The importance weight for each sample is $w(x) = p(x)/q(x)$. Efficient when $q$ is close to $p$; weights become highly variable and the estimator breaks down when they diverge. Used in off-policy RL (weighting past experience under a new policy).
+
+**Markov Chain Monte Carlo (MCMC)** constructs a Markov chain whose stationary distribution is the target posterior. The chain converges to it regardless of the starting point, given enough steps.
+
+**Metropolis-Hastings:** Propose a new state $x'$ from $q(x'|x)$; accept with probability $\min\left(1, \frac{p(x')q(x|x')}{p(x)q(x'|x)}\right)$. Asymmetric proposals are handled by the $q$ ratio in the acceptance term. Simple but slow to mix in high dimensions.
+
+**Hamiltonian Monte Carlo (HMC)** uses gradient information to make proposals that move efficiently through high-dimensional spaces, avoiding the random walk behavior of Metropolis-Hastings. Stan and PyMC use HMC (specifically NUTS, No-U-Turn Sampler) by default. In practice, if you're doing Bayesian inference in ML, you're likely using NUTS.
+
+**Convergence diagnostics:** $\hat{R}$ (potential scale reduction factor) should be < 1.01 for convergence across chains. Effective sample size (ESS) accounts for autocorrelation in the chain—low ESS means the chain is mixing slowly and you need more samples.
+
+**Interview connections:** Importance sampling underpins PPO's clipping objective in RL. MCMC intuition is assumed knowledge for any role involving probabilistic modeling, Bayesian neural networks, or generative models.
+
+## Practical Checklist
+
+**Before modeling:**
+- Check normality: Shapiro-Wilk test or Q-Q plot (points should lie on diagonal)
+- Check independence: ACF plot for time series (significant lags indicate autocorrelation)
+- Check for outliers: IQR method (values beyond $Q_1 - 1.5 \times \text{IQR}$ or $Q_3 + 1.5 \times \text{IQR}$) or MAD (Median Absolute Deviation)
+
+**During modeling:**
+- Standardize features before applying regularization (Ridge/Lasso sensitive to scale)
+- Use stratified splits for imbalanced classification (maintains class proportions)
+- For time series, use forward-chaining splits to prevent data leakage
+
+**After modeling:**
+- Analyze residuals: plot residuals vs. predicted (should show no pattern), Q-Q plot (should be normal)
+- Compare models with paired t-test (same test set) not independent t-test
+- Apply multiple testing correction when comparing many model variants
+
+## What's Not Here
+
+Topics intentionally omitted from this condensed guide:
+
+**Fisher information & Cramér-Rao bound:** Asymptotic efficiency of estimators, lower bounds on variance.
+
+**Exponential family & sufficient statistics:** Canonical form, natural parameters, minimal sufficient statistics.
+
+**Convergence theorems:** Law of Large Numbers extensions, Berry-Esseen theorem, delta method.
+
+**Heavy-tailed distributions & extreme value theory:** Power laws, Pareto distributions, GEV distribution for modeling rare events.
+
+## References
+
+1. Wasserman, L. (2004). *All of Statistics: A Concise Course in Statistical Inference*. Springer.
+2. Hastie, T., Tibshirani, R., & Friedman, J. (2009). *The Elements of Statistical Learning*. Springer.
+3. Murphy, K. P. (2022). *Probabilistic Machine Learning: An Introduction*. MIT Press.
+4. Bishop, C. M. (2006). *Pattern Recognition and Machine Learning*. Springer.
+5. Gelman, A., et al. (2013). *Bayesian Data Analysis*. CRC Press.
+6. Efron, B., & Hastie, T. (2016). *Computer Age Statistical Inference*. Cambridge University Press.
+7. Casella, G., & Berger, R. L. (2002). *Statistical Inference*. Duxbury Press.
+8. James, G., et al. (2013). *An Introduction to Statistical Learning*. Springer.
+
+---
+
+Statistics isn't just about running tests and computing p-values. It's about understanding uncertainty, making principled decisions under incomplete information, and knowing when your assumptions are breaking down. Master these foundations, and you'll build more reliable ML systems.

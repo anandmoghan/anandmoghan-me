@@ -1,0 +1,33 @@
+
+> anandmoghan-me@1.0.0 build
+> next build
+
+▲ Next.js 16.1.2 (Turbopack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.1s
+  Running TypeScript ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/17) ...
+R2 credentials not configured. Media list will be empty.
+R2 credentials not configured. Media list will be empty.
+Error occurred prerendering page "/posts/resume-deep-dive". Read more: https://nextjs.org/docs/messages/prerender-error
+[831:118: Unexpected character `1` (U+0031) before name, expected a character that can start a name, such as a letter, `$`, or `_`] {
+  ancestors: undefined,
+  cause: undefined,
+  column: 118,
+  fatal: undefined,
+  file: '',
+  line: 831,
+  place: [Object],
+  reason: 'Unexpected character `1` (U+0031) before name, expected a character that can start a name, such as a letter, `$`, or `_`',
+  ruleId: 'unexpected-character',
+  source: 'micromark-extension-mdx-jsx',
+  actual: undefined,
+  expected: undefined,
+  note: undefined,
+  url: 'https://github.com/micromark/micromark-extension-mdx-jsx#unexpected-character-at-expected-expect',
+  digest: '111826248'
+}
+Export encountered an error on /(static-pages)/posts/[slug]/page: /posts/resume-deep-dive, exiting the build.
+⨯ Next.js build worker exited with code: 1 and signal: null

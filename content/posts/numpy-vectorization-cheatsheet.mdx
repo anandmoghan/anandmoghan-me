@@ -1,0 +1,207 @@
+---
+title: "NumPy Vectorization Cheat Sheet"
+excerpt: "Quick reference for NumPy's most-used vectorization functions with input/output dimensions."
+publishedAt: "2026-02-20"
+tags: ["python", "numpy", "data-science"]
+author: "Anand Mohan"
+published: false
+---
+
+<style>
+{`
+.two-column {
+  column-count: 2;
+  column-gap: 2rem;
+  column-rule: 1px solid #e5e7eb;
+}
+@media (max-width: 768px) {
+  .two-column { column-count: 1; }
+}
+`}
+</style>
+
+<div className="two-column">
+
+## Element-wise & Broadcasting
+
+```python
+# Arithmetic: (n,) op (n,) → (n,)
+a + b, a * 2, np.exp(a), np.log(a)
+
+# Broadcasting: (m,n) + (n,) → (m,n)
+A + b  # adds b to each row
+A + b[:, None]  # adds b to each column
+```
+
+**Rules:** Align right to left, dims compatible if equal or 1
+
+## Reductions
+
+```python
+# (m,n) → ()
+np.sum(a), np.mean(a), np.std(a)
+
+# (m,n) → (n,) or (m,)
+np.sum(a, axis=0)  # column sums
+np.sum(a, axis=1)  # row sums
+np.sum(a, axis=1, keepdims=True)  # (m,1)
+
+# Cumulative: (n,) → (n,)
+np.cumsum(a), np.cumprod(a)
+```
+
+## Linear Algebra
+
+```python
+# Dot: (n,)·(n,) → ()
+np.dot(a, b)
+
+# Matrix-vector: (m,n)·(n,) → (m,)
+A @ x
+
+# Matrix-matrix: (m,n)·(n,k) → (m,k)
+A @ B
+
+# Batch: (b,m,n)·(b,n,k) → (b,m,k)
+np.matmul(A, B)
+
+# Outer: (m,)×(n,) → (m,n)
+np.outer(a, b)
+
+# Transpose: (m,n) → (n,m)
+A.T
+
+# Reshape: (n,) → (m,k) where n=m*k
+a.reshape(m, k)
+a.reshape(-1, k)  # infer first dim
+```
+
+## Indexing
+
+```python
+# Boolean: (m,n)[mask] → (k,)
+a[a > 0]  # flattened
+
+# Fancy: (n,)[indices] → (k,)
+a[[0, 2, 4]]
+
+# 2D fancy: (m,n)[rows, cols] → (k,)
+A[rows, cols]  # specific elements
+
+# Broadcasting fancy
+A[rows[:, None], cols]  # (len(rows), len(cols))
+```
+
+## Stacking & Splitting
+
+```python
+# Vertical: (m,n)+(k,n) → (m+k,n)
+np.vstack([a, b])
+
+# Horizontal: (m,n)+(m,k) → (m,n+k)
+np.hstack([a, b])
+
+# Split: (m,n) → k arrays
+np.split(a, k, axis=0)  # k×(m/k,n)
+np.vsplit(a, k)  # same
+```
+
+## Statistics
+
+```python
+# Variance/Std: same dims as sum
+np.var(a, axis=0)
+np.std(a, ddof=1)  # sample std
+
+# Covariance: (n,m).T → (m,m)
+np.cov(X.T)  # features as rows
+np.corrcoef(X.T)  # correlation
+```
+
+## Sorting & Searching
+
+```python
+# Sort: (m,n) → (m,n)
+np.sort(a, axis=0)
+np.argsort(a)  # indices
+
+# Search
+np.argmax(a)  # () flattened index
+np.argmax(a, axis=0)  # (n,)
+np.where(a > 0)  # tuple of indices
+```
+
+## einsum Patterns
+
+```python
+# Matrix mult: 'ij,jk->ik'
+np.einsum('ij,jk->ik', A, B)
+
+# Batch mult: 'bij,bjk->bik'
+np.einsum('bij,bjk->bik', A, B)
+
+# Trace: 'ii->'
+np.einsum('ii->', A)
+
+# Diagonal: 'ii->i'
+np.einsum('ii->i', A)
+
+# Element-wise sum: 'ij,ij->'
+np.einsum('ij,ij->', a, b)
+```
+
+## Common Patterns
+
+```python
+# Z-score: (n,m) → (n,m)
+(X - X.mean(axis=0)) / X.std(axis=0)
+
+# Min-max: (n,m) → (n,m)
+(X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0))
+
+# One-hot: (n,) → (n,k)
+np.eye(n_classes)[labels]
+
+# Pairwise distances: (n,d) → (n,n)
+sq = (X**2).sum(axis=1)
+np.sqrt(sq[:, None] + sq - 2*X@X.T)
+```
+
+## Quick Reference
+
+| Operation | Dims | Example |
+|-----------|------|---------|
+| Element-wise | `(m,n)→(m,n)` | `a+b` |
+| Reduction | `(m,n)→()` | `sum(a)` |
+| Dot | `(n,)·(n,)→()` | `a@b` |
+| Matmul | `(m,n)·(n,k)→(m,k)` | `A@B` |
+| Outer | `(m,)×(n,)→(m,n)` | `outer(a,b)` |
+| Transpose | `(m,n)→(n,m)` | `A.T` |
+| Bool idx | `(m,n)[mask]→(k,)` | `a[a>0]` |
+| Fancy idx | `(n,)[idx]→(k,)` | `a[[0,2]]` |
+| Vstack | `(m,n)+(k,n)→(m+k,n)` | `vstack` |
+| Hstack | `(m,n)+(m,k)→(m,n+k)` | `hstack` |
+
+## Performance Tips
+
+1. Use vectorized ops, not loops
+2. Slicing = view, boolean/fancy = copy
+3. Preallocate with `np.zeros()`
+4. In-place: `a += b` not `a = a + b`
+5. Use `float32` if precision allows
+6. `einsum` for complex tensor ops
+
+## Memory
+
+```python
+# Views (share memory)
+b = a[1:3]  # slice
+c = a.reshape(2, 2)
+
+# Copies (new memory)
+d = a[a > 2]  # boolean
+e = a[[0, 2]]  # fancy
+f = a.copy()  # explicit
+```
+
+</div>

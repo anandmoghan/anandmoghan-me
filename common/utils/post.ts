@@ -11,6 +11,7 @@ const DEFAULT_TAGS: Record<string, Tag> = {
   'machine-learning': { id: 'machine-learning', name: 'Machine Learning', category: 'technical', color: '#8b5cf6', description: 'Machine learning algorithms and techniques' },
   'reinforcement-learning': { id: 'reinforcement-learning', name: 'Reinforcement Learning', category: 'technical', color: '#a855f7', description: 'Reinforcement learning and alignment techniques' },
   'deep-learning': { id: 'deep-learning', name: 'Deep Learning', category: 'technical', color: '#7c3aed', description: 'Neural networks and deep learning' },
+  'autonomous-driving': { id: 'autonomous-driving', name: 'Autonomous Driving', category: 'technical', color: '#0891b2', description: 'Self-driving cars and autonomous vehicle technology' },
   'research': { id: 'research', name: 'Research', category: 'technical', color: '#059669', description: 'Academic and industry research' },
   'personal': { id: 'personal', name: 'Personal', category: 'personal', color: '#ec4899', description: 'Personal thoughts and experiences' },
   'family': { id: 'family', name: 'Family', category: 'family', color: '#f59e0b', description: 'Family life and experiences' },
@@ -31,7 +32,7 @@ function hasFormulas(content: string): boolean {
   return /\$\$[\s\S]*?\$\$|\$[^\$]+\$/.test(content);
 }
 
-export function getAllPosts(): Post[] {
+export function getAllPosts(includeUnpublished: boolean = false): Post[] {
   if (!fs.existsSync(POST_CONTENT_DIR)) {
     return [];
   }
@@ -44,8 +45,13 @@ export function getAllPosts(): Post[] {
     return getPostBySlug(slug);
   }).filter((post): post is Post => post !== null);
 
+  // Filter out unpublished posts unless explicitly requested
+  const filteredPosts = includeUnpublished 
+    ? posts 
+    : posts.filter(post => post.published);
+
   // Sort by published date, newest first
-  return posts.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+  return filteredPosts.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
 }
 
 export function getPostBySlug(slug: string): Post | null {
@@ -93,6 +99,7 @@ export function getPostBySlug(slug: string): Post | null {
         wordCount,
         hasFormulas: hasFormulas(content),
       },
+      published: frontmatter.published !== false, // Default to true if not specified
     };
   } catch (error) {
     console.error(`Error reading post ${slug}:`, error);

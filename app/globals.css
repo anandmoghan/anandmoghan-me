@@ -311,11 +311,35 @@ a, button {
 }
 
 .katex-display {
-  margin: 1em 0;
-  overflow-x: auto;
-  overflow-y: visible;
+  margin: 1em auto;
   padding: 0.5em 0;
   max-width: 100%;
+  width: fit-content;
+  display: block;
+  text-align: center;
+}
+
+/* Center all math equations */
+.prose .katex-display {
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  display: block !important;
+}
+
+/* Hide equation numbers from align environments */
+.katex .tag {
+  display: none !important;
+}
+
+.katex .eqn-num {
+  display: none !important;
+}
+
+/* Ensure aligned equations are centered */
+.katex-display > .katex {
+  display: inline-block;
+  text-align: left;
 }
 
 .katex .vlist,
@@ -528,4 +552,416 @@ html {
 .toc-line,
 .toc-bullet {
   transition: all 0.2s ease;
+}
+
+/* Print Button Styles */
+.print-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: white;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.print-button:hover:not(:disabled) {
+  background-color: var(--card-bg);
+  border-color: var(--accent);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.print-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.print-button svg {
+  flex-shrink: 0;
+}
+
+/* Print Styles */
+@media print {
+  /* Page setup with margins and page numbers */
+  @page {
+    margin: 0.5in 0.5in 0.75in 0.5in; /* Extra bottom margin for page numbers */
+    size: letter;
+    
+    @bottom-center {
+      content: counter(page);
+      font-size: 9pt;
+      color: #666;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+  }
+
+  /* Hide non-essential elements */
+  nav,
+  footer,
+  aside,
+  .print-button,
+  button,
+  .copy-code-button {
+    display: none !important;
+  }
+
+  /* Specifically hide table of contents */
+  aside,
+  aside *,
+  [class*="lg:block w-72"],
+  .fixed.bottom-0,
+  .fixed.bottom-6 {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Hide back to posts link */
+  a[href*="/posts"] {
+    display: none !important;
+  }
+
+  /* Reset page layout */
+  html {
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  body {
+    width: 100%;
+    height: auto;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible;
+  }
+
+  /* Force all containers to respect print layout */
+  main,
+  section,
+  div {
+    max-width: 100% !important;
+    width: auto !important;
+  }
+
+  /* Remove all flex layouts */
+  .flex,
+  .flex-col,
+  .flex-1 {
+    display: block !important;
+  }
+
+  /* Remove all backgrounds and shadows */
+  * {
+    box-shadow: none !important;
+  }
+
+  body,
+  main,
+  section {
+    background: white !important;
+    background-color: white !important;
+  }
+
+  /* Remove all borders except where explicitly needed */
+  * {
+    border: none !important;
+  }
+
+  /* Content wrapper - minimal overrides */
+  .prose {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    font-size: 10pt !important;
+    color: #000 !important;
+  }
+
+  /* Hide the first h1 in prose since we show title in header */
+  .prose > h1:first-child {
+    display: none !important;
+  }
+
+  /* Reduce heading sizes slightly for print */
+  .prose h1 {
+    font-size: 13pt !important;
+    margin-top: 0 !important;
+    margin-bottom: 0.5rem !important;
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  .prose h2 {
+    font-size: 12pt !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.5rem !important;
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  .prose h3 {
+    font-size: 11pt !important;
+    margin-top: 1.25rem !important;
+    margin-bottom: 0.4rem !important;
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  .prose h4 {
+    font-size: 10pt !important;
+    margin-top: 1rem !important;
+    margin-bottom: 0.3rem !important;
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  .prose h5,
+  .prose h6 {
+    font-size: 10pt !important;
+    margin-top: 0.75rem !important;
+    margin-bottom: 0.3rem !important;
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  /* Optimize paragraphs and text - keep natural rendering */
+  .prose p {
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.25rem !important;
+    orphans: 3;
+    widows: 3;
+    color: #000 !important;
+  }
+
+  .prose strong {
+    color: #000 !important;
+    font-weight: 700 !important;
+  }
+
+  .prose em {
+    font-style: italic;
+    color: #000 !important;
+  }
+
+  /* Code blocks - minimal overrides */
+  .prose pre {
+    page-break-inside: auto;
+    background-color: #f9fafb !important;
+  }
+
+  .prose code {
+    color: #000 !important;
+  }
+
+  /* Lists - keep natural spacing */
+  .prose ul,
+  .prose ol {
+    color: #000 !important;
+  }
+
+  .prose li {
+    color: #000 !important;
+  }
+
+  /* Tables - minimal overrides */
+  .prose table {
+    page-break-inside: avoid;
+    color: #000 !important;
+  }
+
+  .prose th,
+  .prose td {
+    color: #000 !important;
+  }
+
+  /* Images - keep natural sizing */
+  .prose img {
+    page-break-inside: avoid;
+    max-width: 100% !important;
+  }
+
+  /* Blockquotes - keep natural styling */
+  .prose blockquote {
+    page-break-inside: avoid;
+    color: #000 !important;
+  }
+
+  /* Links - show URLs for external links */
+  .prose a {
+    color: #000 !important;
+  }
+
+  .prose a[href^="http"]:after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    color: #666;
+  }
+
+  .prose a[href^="#"]:after,
+  .prose a[href^="/"]:after {
+    content: "";
+  }
+
+  /* Page breaks */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Force page break before References section */
+  h2[id*="reference"],
+  h2[id*="Reference"] {
+    page-break-before: always !important;
+  }
+
+  /* Allow code blocks and tables to break across pages */
+  pre {
+    page-break-inside: auto !important;
+  }
+
+  table {
+    page-break-inside: auto !important;
+  }
+
+  /* Avoid breaking these */
+  blockquote, img {
+    page-break-inside: avoid;
+  }
+
+  /* Avoid orphan lines at page breaks */
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Math equations - keep screen rendering */
+  .katex-display {
+    page-break-inside: avoid;
+  }
+
+  .prose p .katex {
+    page-break-inside: avoid;
+  }
+
+  /* Preserve KaTeX mathematical borders */
+  .katex .frac-line {
+    border-bottom-width: 0.04em !important;
+    border-bottom-style: solid !important;
+    border-bottom-color: currentColor !important;
+  }
+
+  .katex .sqrt > .root {
+    border-top-width: 0.04em !important;
+    border-top-style: solid !important;
+    border-top-color: currentColor !important;
+  }
+
+  .katex .stretchy {
+    border: inherit !important;
+  }
+
+  /* Hide all SVG icons except in prose content */
+  svg {
+    display: none !important;
+  }
+
+  .prose svg {
+    display: inline !important;
+  }
+
+  /* Hide decorative divs */
+  .w-20,
+  [class*="gradient"] {
+    display: none !important;
+  }
+
+  /* Header section - clean and professional */
+  section:first-of-type {
+    padding: 0 !important;
+    margin: 0 0 1rem 0 !important;
+    border: none !important;
+    border-bottom: 2pt solid #000 !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  /* Remove gradient background from header */
+  section:first-of-type .absolute {
+    display: none !important;
+  }
+
+  /* Title styling */
+  section:first-of-type h1 {
+    font-size: 1.5rem !important;
+    margin: 0 0 0.5rem 0 !important;
+    line-height: 1.2 !important;
+    color: #000 !important;
+    font-weight: 700 !important;
+    border: none !important;
+  }
+
+  /* Metadata (date, reading time, etc) */
+  section:first-of-type time,
+  section:first-of-type > div > div:first-child > div {
+    color: #555 !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* Tags styling */
+  section:first-of-type > div > div:last-child {
+    margin-top: 0.5rem !important;
+  }
+
+  section:first-of-type span[class*="px-3"] {
+    padding: 0.15rem 0.5rem !important;
+    font-size: 0.7rem !important;
+    border: 1pt solid #666 !important;
+    margin-right: 0.35rem !important;
+    margin-bottom: 0.25rem !important;
+    display: inline-block !important;
+    border-radius: 3pt !important;
+    background-color: #f5f5f5 !important;
+    color: #000 !important;
+  }
+
+  /* Draft badge */
+  section:first-of-type span[style*="backgroundColor: #000"],
+  section:first-of-type span[style*="background-color: rgb(0, 0, 0)"] {
+    background-color: #000 !important;
+    color: #fff !important;
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    border: none !important;
+  }
+
+  /* Content section */
+  section:last-of-type {
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+  }
+
+  /* Remove all card styling from content */
+  section:last-of-type * {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Specifically target the content wrapper */
+  section:last-of-type > div,
+  section:last-of-type > div > div,
+  section:last-of-type > div > div > div {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
 }

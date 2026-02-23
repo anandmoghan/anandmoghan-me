@@ -29,6 +29,7 @@ export interface Post {
   tags: Tag[];
   author: Author;
   metadata: PostMetadata;
+  published: boolean; // Whether the post is published
 }
 
 export interface PostFrontmatter {
@@ -38,4 +39,5 @@ export interface PostFrontmatter {
   updatedAt?: string;
   tags?: string[];
   author?: string;
+  published?: boolean; // Default true if not specified
 }

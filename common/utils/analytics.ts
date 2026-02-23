@@ -142,15 +142,11 @@ export const trackTimeOnPage = (seconds: number) => {
  * Track redirect source from URL parameter
  * 
  * @example
- * trackRedirectSource('apple', 'utm')
- * trackRedirectSource('anthropic', 'ref')
+ * trackRedirectSource('apple')
+ * trackRedirectSource('anthropic')
  */
-export const trackRedirectSource = (source: string, type: 'utm' | 'ref' = 'utm') => {
+export const trackRedirectSource = (source: string) => {
   if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', 'referral_visit', {
-      referral_source: source,
-      referral_type: type,
-      page_path: window.location.pathname,
-    });
+    window.gtag('event', `ref_${source}`);
   }
 };
