@@ -1,0 +1,614 @@
+---
+title: "PyTorch Tensor Manipulation Cheat Sheet"
+excerpt: "Quick reference for PyTorch vectorization, broadcasting, indexing, and tensor operations to avoid loops and maximize performance."
+publishedAt: "2026-02-26"
+tags: ["python", "pytorch", "deep-learning", "machine-learning"]
+author: "Anand Mohan"
+published: true
+---
+
+<style>
+{`
+.two-column {
+  column-count: 2;
+  column-gap: 2rem;
+  column-rule: 1px solid #e5e7eb;
+}
+@media (max-width: 768px) {
+  .two-column { column-count: 1; }
+}
+`}
+</style>
+
+<div className="two-column">
+
+## Broadcasting Rules
+
+```python
+# Same as NumPy: align right, dims compatible if equal or 1
+a = torch.randn(3, 1, 5)
+b = torch.randn(1, 4, 5)
+c = a + b  # (3, 4, 5)
+
+# Common patterns
+x = torch.randn(32, 10)  # batch
+w = torch.randn(10)      # weights
+y = x + w                # (32, 10) - adds to each row
+
+# Explicit broadcasting
+x.unsqueeze(-1)  # add dim at end
+x.unsqueeze(0)   # add dim at start
+x[..., None]     # same as unsqueeze(-1)
+```
+
+## Tensor Creation
+
+```python
+# Zeros/Ones: specify shape
+torch.zeros(3, 4)
+torch.ones(2, 3, 4)
+torch.full((3, 3), 7)  # fill with value
+
+# Like existing tensor
+torch.zeros_like(x)
+torch.ones_like(x)
+
+# Random
+torch.randn(3, 4)      # normal(0, 1)
+torch.rand(3, 4)       # uniform[0, 1)
+torch.randint(0, 10, (3, 4))  # integers
+
+# Sequences
+torch.arange(0, 10, 2)  # [0, 2, 4, 6, 8]
+torch.linspace(0, 1, 5) # [0, 0.25, 0.5, 0.75, 1]
+
+# Identity
+torch.eye(3)  # (3, 3) identity matrix
+```
+
+## Reshaping & Views
+
+```python
+# Reshape: (n,) → (m, k) where n=m*k
+x.reshape(2, 3)
+x.view(2, 3)     # must be contiguous
+x.reshape(-1)    # flatten
+x.reshape(-1, 4) # infer first dim
+
+# Transpose
+x.T              # (m, n) → (n, m)
+x.transpose(0, 1)
+x.permute(2, 0, 1)  # arbitrary reorder
+
+# Squeeze/Unsqueeze
+x.squeeze()      # remove dims of size 1
+x.squeeze(1)     # remove specific dim if size 1
+x.unsqueeze(0)   # add dim of size 1
+
+# Flatten
+x.flatten()      # → (n,)
+x.flatten(1)     # flatten from dim 1 onwards
+```
+
+## Indexing & Slicing
+
+```python
+# Basic slicing (returns view)
+x[0]           # first element
+x[:, 1]        # second column
+x[1:3, :]      # rows 1-2
+x[..., -1]     # last element of last dim
+
+# Boolean indexing (returns copy)
+x[x > 0]       # elements > 0, flattened
+x[x > 0] = 0   # set elements to 0
+
+# Fancy indexing
+indices = torch.tensor([0, 2, 4])
+x[indices]     # select specific indices
+
+# Advanced indexing
+rows = torch.tensor([0, 1, 2])
+cols = torch.tensor([1, 2, 0])
+x[rows, cols]  # specific elements
+
+# Masked selection
+mask = x > 0
+torch.masked_select(x, mask)  # flattened
+
+# Index select
+torch.index_select(x, dim=0, index=indices)
+```
+
+## Assignment & In-place Ops
+
+```python
+# Direct assignment
+x[0] = 1
+x[:, 0] = torch.ones(3)
+x[x > 0] = 0
+
+# In-place operations (save memory)
+x.add_(1)      # x = x + 1
+x.mul_(2)      # x = x * 2
+x.clamp_(0, 1) # clip values
+x.fill_(0)     # fill with value
+
+# Scatter/Gather
+x.scatter_(dim, index, src)
+x.gather(dim, index)
+
+# Advanced assignment
+x.index_copy_(dim, index, tensor)
+x.index_add_(dim, index, tensor)
+x.index_fill_(dim, index, value)
+
+# Masked fill
+x.masked_fill_(mask, value)
+x.masked_scatter_(mask, source)
+```
+
+## Reductions
+
+```python
+# Full reduction: (m, n) → ()
+x.sum()
+x.mean()
+x.std()
+x.var()
+x.max()
+x.min()
+x.prod()
+
+# Along dimension: (m, n) → (m,) or (n,)
+x.sum(dim=0)   # column sums → (n,)
+x.sum(dim=1)   # row sums → (m,)
+x.sum(dim=1, keepdim=True)  # → (m, 1)
+
+# Multiple dimensions
+x.sum(dim=(0, 2))  # sum over dims 0 and 2
+
+# With indices
+x.max(dim=0)   # returns (values, indices)
+x.argmax(dim=0)  # just indices
+
+# Cumulative
+x.cumsum(dim=0)
+x.cumprod(dim=0)
+```
+
+## Matrix Operations
+
+```python
+# Dot product: (n,)·(n,) → ()
+torch.dot(a, b)
+
+# Matrix-vector: (m, n)·(n,) → (m,)
+torch.mv(A, x)
+A @ x
+
+# Matrix-matrix: (m, n)·(n, k) → (m, k)
+torch.mm(A, B)
+A @ B
+
+# Batch matrix multiply: (b, m, n)·(b, n, k) → (b, m, k)
+torch.bmm(A, B)
+
+# General matmul (handles broadcasting)
+torch.matmul(A, B)
+A @ B
+
+# Outer product: (m,)×(n,) → (m, n)
+torch.outer(a, b)
+
+# Element-wise multiply
+A * B
+torch.mul(A, B)
+```
+
+## Stacking & Concatenation
+
+```python
+# Stack: creates new dimension
+torch.stack([a, b])  # (2, *shape)
+torch.stack([a, b], dim=1)
+
+# Concatenate: along existing dimension
+torch.cat([a, b], dim=0)  # vertical
+torch.cat([a, b], dim=1)  # horizontal
+
+# Split
+torch.split(x, 2, dim=0)  # chunks of size 2
+torch.chunk(x, 3, dim=0)  # split into 3 parts
+
+# Unbind: remove dimension
+torch.unbind(x, dim=0)  # list of tensors
+```
+
+## Advanced Indexing Patterns
+
+```python
+# Gather along dimension
+# x: (3, 4), index: (3, 2) → (3, 2)
+torch.gather(x, dim=1, index=indices)
+
+# Scatter
+# src: (3, 2), index: (3, 2) → x: (3, 4)
+x.scatter_(dim=1, index=indices, src=values)
+
+# Take (flattened indexing)
+torch.take(x, torch.tensor([0, 4, 8]))
+
+# Where (ternary operator)
+torch.where(condition, x, y)  # x if True, y if False
+
+# Nonzero indices
+torch.nonzero(x > 0)  # (k, ndim) coordinates
+(x > 0).nonzero(as_tuple=True)  # tuple of indices
+```
+
+## einsum Patterns
+
+```python
+# Matrix multiply: 'ij,jk->ik'
+torch.einsum('ij,jk->ik', A, B)
+
+# Batch matrix multiply: 'bij,bjk->bik'
+torch.einsum('bij,bjk->bik', A, B)
+
+# Dot product: 'i,i->'
+torch.einsum('i,i->', a, b)
+
+# Outer product: 'i,j->ij'
+torch.einsum('i,j->ij', a, b)
+
+# Trace: 'ii->'
+torch.einsum('ii->', A)
+
+# Diagonal: 'ii->i'
+torch.einsum('ii->i', A)
+
+# Batch diagonal: 'bii->bi'
+torch.einsum('bii->bi', A)
+
+# Transpose: 'ij->ji'
+torch.einsum('ij->ji', A)
+
+# Sum: 'ij->'
+torch.einsum('ij->', A)
+
+# Column/row sums
+torch.einsum('ij->j', A)  # column sums
+torch.einsum('ij->i', A)  # row sums
+
+# Element-wise multiply then sum: 'ij,ij->'
+torch.einsum('ij,ij->', A, B)
+
+# Bilinear form: 'i,ij,j->'
+torch.einsum('i,ij,j->', x, A, y)  # x^T A y
+
+# Attention pattern: 'bqd,bkd->bqk'
+torch.einsum('bqd,bkd->bqk', Q, K)
+```
+
+## Common ML Patterns
+
+```python
+# Normalize (z-score)
+(x - x.mean(dim=0)) / x.std(dim=0)
+
+# Min-max scaling
+(x - x.min()) / (x.max() - x.min())
+
+# L2 normalization
+x / x.norm(dim=-1, keepdim=True)
+
+# One-hot encoding
+F.one_hot(labels, num_classes=10)
+
+# Softmax
+F.softmax(logits, dim=-1)
+
+# Log softmax (more stable)
+F.log_softmax(logits, dim=-1)
+
+# Pairwise distances: (n, d) → (n, n)
+# ||x_i - x_j||^2 = ||x_i||^2 + ||x_j||^2 - 2x_i·x_j
+sq = (x**2).sum(dim=1)
+dists = sq.unsqueeze(1) + sq.unsqueeze(0) - 2 * x @ x.T
+
+# Cosine similarity
+F.cosine_similarity(x1, x2, dim=-1)
+
+# Batch norm pattern
+(x - x.mean(dim=0, keepdim=True)) / torch.sqrt(x.var(dim=0, keepdim=True) + eps)
+```
+
+## Avoiding Loops
+
+```python
+# BAD: Loop over batch
+for i in range(batch_size):
+    output[i] = model(x[i])
+
+# GOOD: Vectorized
+output = model(x)  # (batch_size, ...)
+
+# BAD: Loop for element-wise op
+for i in range(len(x)):
+    y[i] = x[i] ** 2
+
+# GOOD: Vectorized
+y = x ** 2
+
+# BAD: Loop for conditional
+for i in range(len(x)):
+    if x[i] > 0:
+        y[i] = x[i]
+    else:
+        y[i] = 0
+
+# GOOD: Use where or clamp
+y = torch.where(x > 0, x, torch.zeros_like(x))
+y = torch.clamp(x, min=0)  # ReLU
+
+# BAD: Loop for gather
+for i in range(len(indices)):
+    result[i] = x[i, indices[i]]
+
+# GOOD: Advanced indexing
+result = x[torch.arange(len(indices)), indices]
+```
+
+## Memory Efficiency
+
+```python
+# Views (share memory, fast)
+x.view(2, 3)
+x.transpose(0, 1)
+x[1:3]
+
+# Copies (new memory)
+x.clone()
+x.contiguous()
+x[x > 0]  # boolean indexing
+x[[0, 2]]  # fancy indexing
+
+# In-place to save memory
+x.add_(1)  # instead of x = x + 1
+x.mul_(2)  # instead of x = x * 2
+
+# Preallocate
+result = torch.empty(100, 100)
+for i in range(100):
+    result[i] = compute(i)
+
+# Check if contiguous
+x.is_contiguous()
+x = x.contiguous()  # make contiguous if needed
+```
+
+## Device Management
+
+```python
+# Move to device
+x = x.to('cuda')
+x = x.to('cpu')
+x = x.cuda()  # shorthand for cuda
+
+# Create on device
+x = torch.randn(3, 4, device='cuda')
+
+# Check device
+x.device
+
+# Mixed precision
+with torch.cuda.amp.autocast():
+    output = model(input)
+```
+
+## Quick Reference Table
+
+| Operation | Input → Output | Example |
+|-----------|----------------|---------|
+| Element-wise | `(m,n)→(m,n)` | `x + y` |
+| Reduction | `(m,n)→()` | `x.sum()` |
+| Dim reduction | `(m,n)→(m,)` | `x.sum(0)` |
+| Matmul | `(m,n)·(n,k)→(m,k)` | `A @ B` |
+| Batch matmul | `(b,m,n)·(b,n,k)→(b,m,k)` | `torch.bmm` |
+| Outer | `(m,)×(n,)→(m,n)` | `torch.outer` |
+| Stack | `n×(m,k)→(n,m,k)` | `torch.stack` |
+| Cat | `(m,k)+(n,k)→(m+n,k)` | `torch.cat` |
+| Gather | `(m,n)[idx:(m,k)]→(m,k)` | `torch.gather` |
+| Scatter | `(m,k)→(m,n)[idx]` | `x.scatter_` |
+| Where | `mask,(m,n),(m,n)→(m,n)` | `torch.where` |
+| Einsum | varies | `einsum('ij,jk->ik')` |
+
+## Performance Tips
+
+1. **Vectorize everything** - avoid Python loops
+2. **Use in-place ops** when possible (`add_`, `mul_`)
+3. **Preallocate tensors** with `torch.empty()`
+4. **Use views** over copies when possible
+5. **Batch operations** - process multiple samples together
+6. **Use `torch.no_grad()`** during inference
+7. **Pin memory** for faster CPU→GPU transfer
+8. **Use appropriate dtype** - `float16` for speed, `float32` for stability
+9. **Profile your code** - `torch.profiler` or `torch.autograd.profiler`
+10. **Fuse operations** - combine multiple ops when possible
+
+## Debugging Tips
+
+```python
+# Check shapes
+print(x.shape)
+
+# Check values
+print(x.min(), x.max(), x.mean())
+
+# Check for NaN/Inf
+torch.isnan(x).any()
+torch.isinf(x).any()
+
+# Gradient checking
+torch.autograd.gradcheck(func, inputs)
+
+# Set anomaly detection
+torch.autograd.set_detect_anomaly(True)
+
+# Print with gradient
+print(x.requires_grad, x.grad)
+```
+
+</div>
+
+## Advanced Broadcasting Examples
+
+```python
+# Batch matrix-vector multiply
+# x: (batch, n, m), v: (m,) → (batch, n)
+result = x @ v  # broadcasts v across batch
+
+# Attention scores
+# Q: (batch, seq_q, d), K: (batch, seq_k, d)
+# → (batch, seq_q, seq_k)
+scores = torch.einsum('bqd,bkd->bqk', Q, K) / math.sqrt(d)
+
+# Batch outer product
+# a: (batch, m), b: (batch, n) → (batch, m, n)
+result = a.unsqueeze(2) * b.unsqueeze(1)
+# or
+result = torch.einsum('bi,bj->bij', a, b)
+
+# Weighted sum
+# x: (batch, seq, d), weights: (batch, seq)
+# → (batch, d)
+result = torch.einsum('bsd,bs->bd', x, weights)
+
+# Pairwise operations with broadcasting
+# x: (n, d), y: (m, d) → (n, m, d)
+diff = x.unsqueeze(1) - y.unsqueeze(0)
+# Then reduce: (n, m, d) → (n, m)
+distances = diff.norm(dim=2)
+```
+
+## Gradient Manipulation
+
+```python
+# Detach from computation graph
+x_detached = x.detach()
+
+# No gradient context
+with torch.no_grad():
+    output = model(input)
+
+# Gradient clipping
+torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+torch.nn.utils.clip_grad_value_(model.parameters(), clip_value=0.5)
+
+# Custom gradient
+class MyFunc(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return x.clamp(min=0)
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        x, = ctx.saved_tensors
+        grad_input = grad_output.clone()
+        grad_input[x < 0] = 0
+        return grad_input
+
+# Stop gradient
+x.requires_grad_(False)
+x.requires_grad = False
+```
+
+## Practical Examples
+
+### Attention Mechanism
+```python
+def attention(Q, K, V, mask=None):
+    """
+    Q: (batch, heads, seq_q, d_k)
+    K: (batch, heads, seq_k, d_k)
+    V: (batch, heads, seq_k, d_v)
+    """
+    d_k = Q.size(-1)
+    scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)
+    
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, -1e9)
+    
+    attn = F.softmax(scores, dim=-1)
+    return torch.matmul(attn, V), attn
+```
+
+### Batch Normalization
+```python
+def batch_norm(x, gamma, beta, eps=1e-5):
+    """x: (batch, channels, height, width)"""
+    # Compute mean and var over batch and spatial dims
+    mean = x.mean(dim=(0, 2, 3), keepdim=True)
+    var = x.var(dim=(0, 2, 3), keepdim=True, unbiased=False)
+    
+    # Normalize
+    x_norm = (x - mean) / torch.sqrt(var + eps)
+    
+    # Scale and shift
+    return gamma.view(1, -1, 1, 1) * x_norm + beta.view(1, -1, 1, 1)
+```
+
+### Efficient Pairwise Distance
+```python
+def pairwise_distance(x, y=None):
+    """
+    x: (n, d)
+    y: (m, d) or None
+    Returns: (n, m) or (n, n) if y is None
+    """
+    if y is None:
+        y = x
+    
+    # ||x - y||^2 = ||x||^2 + ||y||^2 - 2<x, y>
+    x_norm = (x ** 2).sum(1).view(-1, 1)
+    y_norm = (y ** 2).sum(1).view(1, -1)
+    dist = x_norm + y_norm - 2.0 * torch.mm(x, y.T)
+    
+    return torch.clamp(dist, min=0.0).sqrt()
+```
+
+### Top-K Selection
+```python
+# Get top-k values and indices
+values, indices = torch.topk(x, k=5, dim=-1)
+
+# Get top-k along specific dimension
+top_k_per_row = torch.topk(x, k=3, dim=1)
+
+# Efficient top-k with threshold
+mask = x > threshold
+top_k_mask = torch.topk(x * mask, k=5)
+```
+
+### Masked Operations
+```python
+# Masked mean
+mask = (x != 0)
+masked_mean = (x * mask).sum() / mask.sum()
+
+# Masked softmax
+def masked_softmax(x, mask):
+    x_masked = x.masked_fill(~mask, float('-inf'))
+    return F.softmax(x_masked, dim=-1)
+
+# Sequence padding
+def pad_sequence(sequences, padding_value=0):
+    """sequences: list of (seq_len, d) tensors"""
+    return torch.nn.utils.rnn.pad_sequence(
+        sequences, 
+        batch_first=True, 
+        padding_value=padding_value
+    )
+```

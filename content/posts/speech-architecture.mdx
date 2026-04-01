@@ -1,0 +1,2032 @@
+---
+title: "Speech Recognition Architecture: CTC and RNN-T Deep Dive"
+excerpt: "A comprehensive guide to Connectionist Temporal Classification and RNN-Transducer with step-by-step mathematical derivations."
+publishedAt: "2026-02-25"
+tags: ["ai", "machine-learning", "speech-recognition"]
+author: "Anand Mohan"
+published: false
+---
+
+# Speech Recognition Architecture: CTC and RNN-T Deep Dive
+
+Speech recognition has come a long way from Hidden Markov Models and Gaussian Mixture Models. Modern end-to-end systems like those powering Siri, Google Assistant, and Alexa rely on neural architectures that can directly map audio to text without intermediate phoneme representations. Two algorithms have been foundational to this revolution: Connectionist Temporal Classification (CTC) and RNN-Transducer (RNN-T).
+
+Understanding these algorithms isn't just academic—it's essential for anyone building production speech systems. CTC powers many offline transcription services, while RNN-T dominates streaming applications where low latency matters. Both solve the fundamental alignment problem: how do you train a model when you don't know which audio frames correspond to which characters?
+
+This post covers the full mathematical foundations. We'll derive the forward-backward algorithm for CTC, show how to compute gradients for backpropagation, and extend these concepts to RNN-T. If you're implementing speech recognition from scratch or debugging a production system, this is the deep dive you need.
+
+> **Disclaimer**: This post was written with the help of LLMs, with content carefully curated based on papers and systems I've studied. If you notice any errors, please send a note to [moghan.anand@gmail.com](mailto:moghan.anand@gmail.com).
+
+## The Alignment Problem
+
+Traditional supervised learning assumes aligned input-output pairs. For image classification, you have an image and a label. For machine translation, you have source and target sentences with word alignments (at least implicitly).
+
+Speech recognition is different. You have:
+- **Input**: Audio waveform, typically represented as a sequence of feature vectors (e.g., mel-spectrograms) of length $T$
+- **Output**: Text transcription of length $U$, where $U \ll T$ (typically $T$ is 3-10x longer than $U$)
+
+
+**The problem**: You don't know which audio frames correspond to which characters. The word "hello" might be spoken quickly (50 frames) or slowly (150 frames). Silence between words varies. Phonemes have different durations.
+
+**Example**:
+```
+Audio frames: [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12]
+Transcription: "cat"
+```
+
+Which frames correspond to 'c'? Which to 'a'? Which to 't'? We don't know, and manually labeling frame-level alignments for thousands of hours of speech is impractical.
+
+This is where CTC and RNN-T come in. They provide a way to train models without explicit alignments by marginalizing over all possible alignments.
+
+## Connectionist Temporal Classification (CTC)
+
+**References**: Graves et al. [1], Graves [2]
+
+CTC was introduced by Alex Graves in 2006 and revolutionized speech recognition by enabling end-to-end training without frame-level alignments.
+
+### The Core Idea
+
+CTC introduces a special "blank" token (denoted $\epsilon$ or $\varnothing$) that represents "no output" at a given timestep. The model outputs a probability distribution over the vocabulary plus blank at each frame:
+
+$$
+p(a_t | \mathbf{x}) \quad \text{for } a_t \in \mathcal{A} \cup \{\epsilon\}
+$$
+
+where $\mathcal{A}$ is the alphabet (characters or subword units) and $\mathbf{x}$ is the input sequence.
+
+**Key insight**: Multiple frame-level sequences (called "paths" or "alignments") can map to the same transcription after:
+1. Removing blanks
+2. Collapsing repeated characters
+
+**Example**:
+```
+Paths that map to "cat":
+- c-c-a-a-t-t
+- ε-c-ε-a-ε-t
+- c-ε-ε-a-t-ε
+- ε-ε-c-a-t-ε
+... (many more)
+```
+
+All of these paths decode to "cat" after removing blanks and collapsing repeats.
+
+
+### Mathematical Formulation
+
+Given:
+- Input sequence $\mathbf{x} = (x_1, x_2, \ldots, x_T)$ of length $T$
+- Target transcription $\mathbf{y} = (y_1, y_2, \ldots, y_U)$ of length $U$
+- Model outputs $p(a_t | \mathbf{x})$ for each frame $t$ and symbol $a_t$
+
+The CTC loss is the negative log-likelihood of the target sequence:
+
+$$
+\mathcal{L}_{\text{CTC}} = -\log p(\mathbf{y} | \mathbf{x}) = -\log \sum_{\pi \in \mathcal{B}^{-1}(\mathbf{y})} p(\pi | \mathbf{x})
+$$
+
+where:
+- $\pi$ is a path (frame-level sequence of length $T$)
+- $\mathcal{B}^{-1}(\mathbf{y})$ is the set of all paths that decode to $\mathbf{y}$
+- $p(\pi | \mathbf{x}) = \prod_{t=1}^T p(\pi_t | \mathbf{x})$ (assuming conditional independence)
+
+**The challenge**: The number of paths is exponential in $T$. For a vocabulary of size $|\mathcal{A}|$, there are $(|\mathcal{A}| + 1)^T$ possible paths. We can't enumerate them all.
+
+**The solution**: Dynamic programming via the forward-backward algorithm.
+
+### The Forward-Backward Algorithm
+
+To efficiently compute $p(\mathbf{y} | \mathbf{x})$, we use dynamic programming similar to the forward-backward algorithm in Hidden Markov Models.
+
+#### Label Sequence Preparation
+
+First, we create an extended label sequence $\mathbf{l}$ by inserting blanks:
+
+$$
+\mathbf{l} = (\epsilon, y_1, \epsilon, y_2, \epsilon, \ldots, \epsilon, y_U, \epsilon)
+$$
+
+This has length $|\mathbf{l}| = 2U + 1$.
+
+**Why insert blanks?** This allows the model to:
+1. Output blanks between characters (handling variable-duration phonemes)
+2. Output repeated characters (e.g., "hello" has two 'l's)
+
+**Example**:
+```
+Target: "cat"
+Extended: (ε, c, ε, a, ε, t, ε)
+Indices:  (1, 2, 3, 4, 5, 6, 7)
+```
+
+
+#### Forward Variables ($\alpha$)
+
+Define $\alpha_t(s)$ as the probability of outputting the first $s$ symbols of $\mathbf{l}$ after seeing the first $t$ frames.
+
+**Base case** (initialization at $t=1$):
+
+$$
+\alpha_1(1) = p(\epsilon | x_1) \quad \text{(start with blank)}
+$$
+
+$$
+\alpha_1(2) = p(y_1 | x_1) \quad \text{(start with first character)}
+$$
+
+$$
+\alpha_1(s) = 0 \quad \text{for } s > 2 \quad \text{(can't reach beyond position 2 in one step)}
+$$
+
+**Recursive case** (for $t > 1$):
+
+The forward variable at position $s$ and time $t$ is computed by considering all valid previous positions:
+
+$$
+\alpha_t(s) = \begin{cases}
+\left(\alpha_{t-1}(s) + \alpha_{t-1}(s-1)\right) \cdot p(l_s | x_t) & \text{if } l_s = \epsilon \text{ or } l_{s-2} = l_s \\
+\left(\alpha_{t-1}(s) + \alpha_{t-1}(s-1) + \alpha_{t-1}(s-2)\right) \cdot p(l_s | x_t) & \text{otherwise}
+\end{cases}
+$$
+
+**Explanation**:
+- $\alpha_{t-1}(s)$: Stay at position $s$ (emit same symbol or blank again)
+- $\alpha_{t-1}(s-1)$: Move from position $s-1$ to $s$ (emit new symbol)
+- $\alpha_{t-1}(s-2)$: Skip a blank (only allowed when $l_s \neq \epsilon$ and $l_{s-2} \neq l_s$)
+
+The third term (skip) is only allowed when:
+1. Current symbol is not blank ($l_s \neq \epsilon$)
+2. We're not repeating the same character ($l_{s-2} \neq l_s$)
+
+This prevents invalid paths like "c-a" → "c" (skipping 'a').
+
+**Final probability**:
+
+$$
+p(\mathbf{y} | \mathbf{x}) = \alpha_T(|\mathbf{l}|) + \alpha_T(|\mathbf{l}| - 1)
+$$
+
+We sum the last two positions because the path can end with either the last character or a blank.
+
+
+#### Backward Variables ($\beta$)
+
+Define $\beta_t(s)$ as the probability of outputting the remaining symbols $l_{s+1}, \ldots, l_{|\mathbf{l}|}$ starting from frame $t+1$.
+
+**Base case** (initialization at $t=T$):
+
+$$
+\beta_T(|\mathbf{l}|) = 1 \quad \text{(at the end, probability is 1)}
+$$
+
+$$
+\beta_T(|\mathbf{l}| - 1) = 1 \quad \text{(can end with last char or blank)}
+$$
+
+$$
+\beta_T(s) = 0 \quad \text{for } s < |\mathbf{l}| - 1 \quad \text{(can't reach the end)}
+$$
+
+**Recursive case** (for $t < T$):
+
+$$
+\beta_t(s) = \begin{cases}
+\beta_{t+1}(s) \cdot p(l_s | x_{t+1}) + \beta_{t+1}(s+1) \cdot p(l_{s+1} | x_{t+1}) & \text{if } l_s = \epsilon \text{ or } l_{s+2} = l_s \\
+\beta_{t+1}(s) \cdot p(l_s | x_{t+1}) + \beta_{t+1}(s+1) \cdot p(l_{s+1} | x_{t+1}) + \beta_{t+1}(s+2) \cdot p(l_{s+2} | x_{t+1}) & \text{otherwise}
+\end{cases}
+$$
+
+**Explanation**:
+- $\beta_{t+1}(s) \cdot p(l_s | x_{t+1})$: Stay at position $s$
+- $\beta_{t+1}(s+1) \cdot p(l_{s+1} | x_{t+1})$: Move to next position
+- $\beta_{t+1}(s+2) \cdot p(l_{s+2} | x_{t+1})$: Skip a blank (same conditions as forward)
+
+#### Computing the Total Probability
+
+The forward and backward variables satisfy:
+
+$$
+p(\mathbf{y} | \mathbf{x}) = \sum_{s=1}^{|\mathbf{l}|} \alpha_t(s) \cdot \beta_t(s) / p(l_s | x_t)
+$$
+
+for any $t \in [1, T]$. This is useful for verification and gradient computation.
+
+
+### Step-by-Step Example
+
+Let's work through a concrete example to solidify understanding.
+
+**Setup**:
+- Target: "ca"
+- Extended label: $\mathbf{l} = (\epsilon, c, \epsilon, a, \epsilon)$ with indices $(1, 2, 3, 4, 5)$
+- Input length: $T = 4$ frames
+- Vocabulary: $\{a, c, \epsilon\}$
+
+**Model outputs** (probabilities at each frame):
+```
+Frame 1: p(ε|x₁)=0.4, p(c|x₁)=0.5, p(a|x₁)=0.1
+Frame 2: p(ε|x₂)=0.3, p(c|x₂)=0.6, p(a|x₂)=0.1
+Frame 3: p(ε|x₃)=0.2, p(c|x₃)=0.1, p(a|x₃)=0.7
+Frame 4: p(ε|x₄)=0.5, p(c|x₄)=0.1, p(a|x₄)=0.4
+```
+
+**Forward computation**:
+
+$t=1$:
+```
+α₁(1) = p(ε|x₁) = 0.4
+α₁(2) = p(c|x₁) = 0.5
+α₁(3) = 0
+α₁(4) = 0
+α₁(5) = 0
+```
+
+$t=2$:
+```
+α₂(1) = α₁(1) · p(ε|x₂) = 0.4 · 0.3 = 0.12
+α₂(2) = (α₁(1) + α₁(2)) · p(c|x₂) = (0.4 + 0.5) · 0.6 = 0.54
+α₂(3) = (α₁(2) + α₁(3)) · p(ε|x₂) = (0.5 + 0) · 0.3 = 0.15
+α₂(4) = 0
+α₂(5) = 0
+```
+
+$t=3$:
+```
+α₃(1) = α₂(1) · p(ε|x₃) = 0.12 · 0.2 = 0.024
+α₃(2) = (α₂(1) + α₂(2)) · p(c|x₃) = (0.12 + 0.54) · 0.1 = 0.066
+α₃(3) = (α₂(2) + α₂(3)) · p(ε|x₃) = (0.54 + 0.15) · 0.2 = 0.138
+α₃(4) = (α₂(2) + α₂(3) + α₂(4)) · p(a|x₃) = (0.54 + 0.15 + 0) · 0.7 = 0.483
+α₃(5) = 0
+```
+
+$t=4$:
+```
+α₄(1) = α₃(1) · p(ε|x₄) = 0.024 · 0.5 = 0.012
+α₄(2) = (α₃(1) + α₃(2)) · p(c|x₄) = (0.024 + 0.066) · 0.1 = 0.009
+α₄(3) = (α₃(2) + α₃(3)) · p(ε|x₄) = (0.066 + 0.138) · 0.5 = 0.102
+α₄(4) = (α₃(3) + α₃(4)) · p(a|x₄) = (0.138 + 0.483) · 0.4 = 0.248
+α₄(5) = (α₃(4) + α₃(5)) · p(ε|x₄) = (0.483 + 0) · 0.5 = 0.242
+```
+
+**Final probability**:
+$$
+p(\text{"ca"} | \mathbf{x}) = \alpha_4(4) + \alpha_4(5) = 0.248 + 0.242 = 0.490
+$$
+
+
+### Gradient Computation for Backpropagation
+
+To train the model, we need to compute gradients of the CTC loss with respect to the network outputs. This is where the forward-backward algorithm becomes essential.
+
+#### Occupancy Probability
+
+Define the occupancy probability $\gamma_t(s)$ as the probability of being at position $s$ in the extended label sequence at time $t$:
+
+$$
+\gamma_t(s) = \frac{\alpha_t(s) \cdot \beta_t(s)}{p(\mathbf{y} | \mathbf{x})}
+$$
+
+This represents the posterior probability that the path goes through position $s$ at time $t$, given the entire input sequence and target label.
+
+#### Gradient Derivation
+
+The gradient of the negative log-likelihood with respect to the network output at time $t$ for symbol $k$ is:
+
+$$
+\frac{\partial \mathcal{L}_{\text{CTC}}}{\partial \log p(k | x_t)} = -\frac{\partial \log p(\mathbf{y} | \mathbf{x})}{\partial \log p(k | x_t)}
+$$
+
+Using the chain rule and the occupancy probabilities:
+
+$$
+\frac{\partial \log p(\mathbf{y} | \mathbf{x})}{\partial \log p(k | x_t)} = \frac{1}{p(\mathbf{y} | \mathbf{x})} \sum_{s: l_s = k} \alpha_t(s) \cdot \beta_t(s)
+$$
+
+Therefore, the gradient is:
+
+$$
+\frac{\partial \mathcal{L}_{\text{CTC}}}{\partial \log p(k | x_t)} = p(k | x_t) - \frac{1}{p(\mathbf{y} | \mathbf{x})} \sum_{s: l_s = k} \alpha_t(s) \cdot \beta_t(s)
+$$
+
+**Interpretation**:
+- First term: $p(k | x_t)$ is the model's predicted probability
+- Second term: $\sum_{s: l_s = k} \gamma_t(s)$ is the expected count of symbol $k$ at time $t$ under all valid alignments
+
+The gradient pushes the model to match the expected symbol distribution under valid alignments.
+
+
+#### Practical Gradient Computation
+
+In practice, we work in log-space to avoid numerical underflow. Here's a complete implementation of the CTC loss with detailed comments:
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+
+class CTCLoss(nn.Module):
+    """
+    Complete CTC Loss implementation with forward-backward algorithm.
+    
+    This implementation shows the full mathematical details of CTC.
+    For production, use torch.nn.CTCLoss which is optimized in C++/CUDA.
+    """
+    
+    def __init__(self, blank=0, reduction='mean', zero_infinity=True):
+        """
+        Args:
+            blank: index of the blank label (default: 0)
+            reduction: 'none' | 'mean' | 'sum' (default: 'mean')
+            zero_infinity: whether to zero infinite losses (default: True)
+        """
+        super().__init__()
+        self.blank = blank
+        self.reduction = reduction
+        self.zero_infinity = zero_infinity
+    
+    def forward(self, log_probs, targets, input_lengths, target_lengths):
+        """
+        Compute CTC loss using forward-backward algorithm.
+        
+        Args:
+            log_probs: (T, N, C) log probabilities from network
+                       T = max input length
+                       N = batch size
+                       C = number of classes (including blank)
+            targets: (N, S) target sequences (without blanks)
+                     S = max target length
+            input_lengths: (N,) actual lengths of input sequences
+            target_lengths: (N,) actual lengths of target sequences
+        
+        Returns:
+            loss: scalar loss value (or per-sample if reduction='none')
+        """
+        T, N, C = log_probs.shape
+        
+        # Compute loss for each sample in batch
+        losses = []
+        for n in range(N):
+            # Extract single sample
+            log_prob = log_probs[:input_lengths[n], n, :]  # (T_n, C)
+            target = targets[n, :target_lengths[n]]  # (U_n,)
+            
+            # Compute forward and backward variables
+            log_alpha = self._forward(log_prob, target)
+            log_beta = self._backward(log_prob, target)
+            
+            # Total probability: log p(y|x) = log_alpha[T-1, -1] or log_alpha[T-1, -2]
+            # Can end with either last label or blank
+            T_n = log_prob.size(0)
+            log_prob_total = torch.logsumexp(
+                torch.stack([log_alpha[T_n-1, -1], log_alpha[T_n-1, -2]]),
+                dim=0
+            )
+            
+            # Loss is negative log probability
+            loss = -log_prob_total
+            
+            # Handle infinite losses
+            if self.zero_infinity and torch.isinf(loss):
+                loss = torch.tensor(0.0, device=log_probs.device)
+            
+            losses.append(loss)
+        
+        losses = torch.stack(losses)
+        
+        # Apply reduction
+        if self.reduction == 'mean':
+            return losses.mean()
+        elif self.reduction == 'sum':
+            return losses.sum()
+        else:  # 'none'
+            return losses
+    
+    def _forward(self, log_probs, target):
+        """
+        Compute forward variables α(t, s) in log space.
+        
+        α(t, s) = log probability of outputting first s symbols of extended
+                  label sequence using first t frames
+        
+        Args:
+            log_probs: (T, C) log probabilities for single sample
+            target: (U,) target sequence for single sample
+        
+        Returns:
+            log_alpha: (T, 2U+1) forward variables in log space
+        """
+        T, C = log_probs.shape
+        U = len(target)
+        L = 2 * U + 1  # Length of extended label sequence
+        
+        # Create extended label sequence: ε, y1, ε, y2, ε, ..., yU, ε
+        extended_labels = torch.full((L,), self.blank, dtype=torch.long, device=target.device)
+        extended_labels[1::2] = target  # Fill odd positions with target symbols
+        
+        # Initialize log_alpha with -inf (log(0))
+        log_alpha = torch.full((T, L), float('-inf'), device=log_probs.device)
+        
+        # Base case: t=0
+        # Can start with blank or first symbol
+        log_alpha[0, 0] = log_probs[0, self.blank]
+        if U > 0:
+            log_alpha[0, 1] = log_probs[0, target[0]]
+        
+        # Recursive case: t > 0
+        for t in range(1, T):
+            for s in range(L):
+                label = extended_labels[s]
+                
+                # Case 1: Stay at current position (emit same symbol or blank again)
+                log_alpha[t, s] = log_alpha[t-1, s]
+                
+                # Case 2: Move from previous position
+                if s > 0:
+                    log_alpha[t, s] = torch.logaddexp(
+                        log_alpha[t, s],
+                        log_alpha[t-1, s-1]
+                    )
+                
+                # Case 3: Skip a blank (only if current is not blank and not repeating)
+                # This allows transitions like: ε, y_i, ε, y_{i+1} -> skip middle ε
+                if s > 1 and label != self.blank and extended_labels[s-2] != label:
+                    log_alpha[t, s] = torch.logaddexp(
+                        log_alpha[t, s],
+                        log_alpha[t-1, s-2]
+                    )
+                
+                # Multiply by emission probability (add in log space)
+                log_alpha[t, s] = log_alpha[t, s] + log_probs[t, label]
+        
+        return log_alpha
+    
+    def _backward(self, log_probs, target):
+        """
+        Compute backward variables β(t, s) in log space.
+        
+        β(t, s) = log probability of outputting remaining symbols from position s
+                  using remaining frames from t+1 to T
+        
+        Args:
+            log_probs: (T, C) log probabilities for single sample
+            target: (U,) target sequence for single sample
+        
+        Returns:
+            log_beta: (T, 2U+1) backward variables in log space
+        """
+        T, C = log_probs.shape
+        U = len(target)
+        L = 2 * U + 1
+        
+        # Create extended label sequence
+        extended_labels = torch.full((L,), self.blank, dtype=torch.long, device=target.device)
+        extended_labels[1::2] = target
+        
+        # Initialize log_beta with -inf (log(0))
+        log_beta = torch.full((T, L), float('-inf'), device=log_probs.device)
+        
+        # Base case: t=T-1
+        # Can end with last symbol or blank
+        log_beta[T-1, L-1] = 0.0  # log(1) = 0
+        log_beta[T-1, L-2] = 0.0
+        
+        # Recursive case: t < T-1 (going backwards)
+        for t in range(T-2, -1, -1):
+            for s in range(L):
+                label = extended_labels[s]
+                
+                # Case 1: Stay at current position (emit same symbol again)
+                log_beta[t, s] = log_beta[t+1, s] + log_probs[t+1, label]
+                
+                # Case 2: Move to next position
+                if s < L - 1:
+                    next_label = extended_labels[s+1]
+                    log_beta[t, s] = torch.logaddexp(
+                        log_beta[t, s],
+                        log_beta[t+1, s+1] + log_probs[t+1, next_label]
+                    )
+                
+                # Case 3: Skip a blank (only if next is not blank and not repeating)
+                if s < L - 2 and extended_labels[s+1] != self.blank and label != extended_labels[s+2]:
+                    skip_label = extended_labels[s+2]
+                    log_beta[t, s] = torch.logaddexp(
+                        log_beta[t, s],
+                        log_beta[t+1, s+2] + log_probs[t+1, skip_label]
+                    )
+        
+        return log_beta
+
+
+# Example usage with PyTorch's optimized implementation
+def ctc_loss_example():
+    """
+    Example of using CTC loss in practice.
+    """
+    # Network outputs (before softmax)
+    T, N, C = 50, 32, 28  # 50 frames, batch 32, 28 classes (26 letters + blank + space)
+    logits = torch.randn(T, N, C)
+    log_probs = F.log_softmax(logits, dim=-1)
+    
+    # Targets (without blanks)
+    targets = torch.randint(1, C, (N, 30))  # Random targets, max length 30
+    input_lengths = torch.full((N,), T, dtype=torch.long)
+    target_lengths = torch.randint(10, 30, (N,), dtype=torch.long)
+    
+    # Compute loss using PyTorch's optimized implementation
+    loss = F.ctc_loss(
+        log_probs,
+        targets,
+        input_lengths,
+        target_lengths,
+        blank=0,
+        reduction='mean',
+        zero_infinity=True
+    )
+    
+    print(f"CTC Loss: {loss.item():.4f}")
+    
+    # Backward pass
+    loss.backward()
+    
+    return loss
+
+def log_sum_exp(a, b):
+    """Numerically stable log(exp(a) + exp(b))"""
+    max_val = torch.max(a, b)
+    return max_val + torch.log(torch.exp(a - max_val) + torch.exp(b - max_val))
+
+def forward_algorithm_log_space(log_probs, target, blank_idx=0):
+    """
+    Forward algorithm in log space for numerical stability.
+    
+    Args:
+        log_probs: (T, C) log probabilities
+        target: (U,) target sequence
+        blank_idx: index of blank token
+    
+    Returns:
+        log_alpha: (T, 2U+1) forward variables in log space
+    """
+    T, C = log_probs.shape
+    U = len(target)
+    L = 2 * U + 1  # length of extended label sequence
+    
+    # Create extended label sequence
+    extended_labels = [blank_idx]
+    for char in target:
+        extended_labels.extend([char, blank_idx])
+    
+    # Initialize log_alpha with -inf (log(0))
+    log_alpha = torch.full((T, L), float('-inf'))
+    
+    # Base case
+    log_alpha[0, 0] = log_probs[0, blank_idx]
+    if U > 0:
+        log_alpha[0, 1] = log_probs[0, target[0]]
+    
+    # Forward pass
+    for t in range(1, T):
+        for s in range(L):
+            label = extended_labels[s]
+            
+            # Case 1: stay at current position
+            log_alpha[t, s] = log_alpha[t-1, s]
+            
+            # Case 2: move from previous position
+            if s > 0:
+                log_alpha[t, s] = log_sum_exp(
+                    log_alpha[t, s],
+                    log_alpha[t-1, s-1]
+                )
+            
+            # Case 3: skip blank (only if not blank and not repeat)
+            if s > 1 and label != blank_idx and extended_labels[s-2] != label:
+                log_alpha[t, s] = log_sum_exp(
+                    log_alpha[t, s],
+                    log_alpha[t-1, s-2]
+                )
+            
+            # Multiply by emission probability
+            log_alpha[t, s] = log_alpha[t, s] + log_probs[t, label]
+    
+    return log_alpha
+```
+
+
+### CTC Decoding
+
+Training with CTC is one thing; decoding (inference) is another challenge. Given the network outputs, how do we find the most likely transcription?
+
+#### Greedy Decoding
+
+The simplest approach: at each timestep, pick the most likely symbol, then collapse repeats and remove blanks.
+
+```python
+def greedy_decode(log_probs, blank_idx=0):
+    """
+    Greedy CTC decoding.
+    
+    Args:
+        log_probs: (T, C) log probabilities
+        blank_idx: index of blank token
+    
+    Returns:
+        decoded: list of predicted symbols
+    """
+    # Get most likely symbol at each timestep
+    best_path = torch.argmax(log_probs, dim=1)
+    
+    # Collapse repeats
+    collapsed = []
+    prev = None
+    for symbol in best_path:
+        if symbol != prev:
+            collapsed.append(symbol.item())
+        prev = symbol
+    
+    # Remove blanks
+    decoded = [s for s in collapsed if s != blank_idx]
+    
+    return decoded
+```
+
+**Problem**: Greedy decoding doesn't find the most likely transcription. It finds the most likely path, which is different.
+
+**Example**:
+```
+Most likely path: ε-ε-c-a-t → "cat" (probability 0.3)
+But there might be many paths to "cat" with combined probability 0.6
+And paths to "car" with combined probability 0.7
+```
+
+Greedy decoding would output "cat" even though "car" is more likely overall.
+
+#### Beam Search
+
+A better approach: maintain the top-K most likely partial hypotheses at each timestep.
+
+```python
+def beam_search_decode(log_probs, beam_width=10, blank_idx=0):
+    """
+    Beam search CTC decoding.
+    
+    Args:
+        log_probs: (T, C) log probabilities
+        beam_width: number of beams to maintain
+        blank_idx: index of blank token
+    
+    Returns:
+        decoded: most likely sequence
+        score: log probability of decoded sequence
+    """
+    T, C = log_probs.shape
+    
+    # Initialize beam with empty sequence
+    # Each beam entry: (prefix, last_char, blank_score, non_blank_score)
+    beams = {(): (0.0, float('-inf'))}  # (blank_prob, non_blank_prob)
+    
+    for t in range(T):
+        new_beams = {}
+        
+        for prefix, (p_blank, p_non_blank) in beams.items():
+            # Extend with blank
+            new_p_blank = log_sum_exp(p_blank, p_non_blank) + log_probs[t, blank_idx]
+            
+            if prefix not in new_beams:
+                new_beams[prefix] = (new_p_blank, float('-inf'))
+            else:
+                old_blank, old_non_blank = new_beams[prefix]
+                new_beams[prefix] = (
+                    log_sum_exp(old_blank, new_p_blank),
+                    old_non_blank
+                )
+            
+            # Extend with non-blank symbols
+            for c in range(C):
+                if c == blank_idx:
+                    continue
+                
+                new_prefix = prefix + (c,)
+                new_p_non_blank = log_probs[t, c]
+                
+                # If extending with same character, must go through blank
+                if len(prefix) > 0 and prefix[-1] == c:
+                    new_p_non_blank += p_blank
+                else:
+                    new_p_non_blank += log_sum_exp(p_blank, p_non_blank)
+                
+                if new_prefix not in new_beams:
+                    new_beams[new_prefix] = (float('-inf'), new_p_non_blank)
+                else:
+                    old_blank, old_non_blank = new_beams[new_prefix]
+                    new_beams[new_prefix] = (
+                        old_blank,
+                        log_sum_exp(old_non_blank, new_p_non_blank)
+                    )
+        
+        # Prune to top-K beams
+        beams = dict(sorted(
+            new_beams.items(),
+            key=lambda x: log_sum_exp(x[1][0], x[1][1]),
+            reverse=True
+        )[:beam_width])
+    
+    # Return best beam
+    best_prefix = max(beams.items(), key=lambda x: log_sum_exp(x[1][0], x[1][1]))
+    return list(best_prefix[0]), log_sum_exp(best_prefix[1][0], best_prefix[1][1])
+```
+
+
+#### Prefix Beam Search with Language Model
+
+In production systems, beam search is often augmented with a language model to improve accuracy:
+
+$$
+\text{score}(\mathbf{y}) = \log p_{\text{CTC}}(\mathbf{y} | \mathbf{x}) + \lambda \log p_{\text{LM}}(\mathbf{y}) + \gamma |\mathbf{y}|
+$$
+
+where:
+- $p_{\text{CTC}}(\mathbf{y} | \mathbf{x})$ is the CTC probability
+- $p_{\text{LM}}(\mathbf{y})$ is the language model probability
+- $\lambda$ is the LM weight (typically 0.3-0.8)
+- $\gamma$ is the word insertion bonus (encourages longer sequences)
+
+This shallow fusion approach significantly improves accuracy, especially for rare words and proper nouns.
+
+### CTC Limitations
+
+While CTC revolutionized speech recognition, it has fundamental limitations:
+
+1. **Conditional Independence**: CTC assumes outputs at different timesteps are conditionally independent given the input. This is unrealistic—the probability of "q" should depend on whether we just saw "u".
+
+2. **No Explicit Language Model**: CTC doesn't model the output sequence distribution $p(\mathbf{y})$. It only models $p(\mathbf{y} | \mathbf{x})$ through the alignment.
+
+3. **Monotonic Alignment**: CTC assumes strict left-to-right alignment. This works for speech but fails for tasks like machine translation where reordering is necessary.
+
+4. **Label Bias**: The model can learn to output blanks excessively to hedge its bets, since blanks don't commit to any particular character.
+
+These limitations motivated the development of attention-based models and RNN-Transducer.
+
+## RNN-Transducer (RNN-T)
+
+**References**: Graves [3], He et al. [4]
+
+RNN-Transducer extends CTC by adding an explicit prediction network that models the output sequence distribution. This addresses CTC's conditional independence assumption while maintaining the ability to handle variable-length alignments.
+
+### Architecture Overview
+
+RNN-T consists of three components:
+
+1. **Encoder (Transcription Network)**: Processes the input audio
+   - Input: acoustic features $\mathbf{x} = (x_1, \ldots, x_T)$
+   - Output: encoder hidden states $\mathbf{h}^{\text{enc}} = (h_1^{\text{enc}}, \ldots, h_T^{\text{enc}})$
+
+2. **Prediction Network**: Models the output sequence
+   - Input: previous outputs $\mathbf{y}_{<u} = (y_1, \ldots, y_{u-1})$
+   - Output: prediction hidden states $\mathbf{h}^{\text{pred}} = (h_1^{\text{pred}}, \ldots, h_U^{\text{pred}})$
+
+3. **Joint Network**: Combines encoder and prediction network
+   - Input: $h_t^{\text{enc}}$ and $h_u^{\text{pred}}$
+   - Output: probability distribution over vocabulary + blank
+
+
+### Mathematical Formulation
+
+The joint network outputs:
+
+$$
+p(k | t, u) = \text{Joint}(h_t^{\text{enc}}, h_u^{\text{pred}})_k
+$$
+
+This represents the probability of emitting symbol $k$ (or blank) when at audio frame $t$ and having output $u$ symbols so far.
+
+**Key difference from CTC**: The output probability depends on both the current audio frame AND the output history through the prediction network.
+
+#### Alignment Lattice
+
+RNN-T defines a lattice of possible alignments. Each path through the lattice corresponds to a sequence of (frame, output) positions:
+
+- Start at $(0, 0)$
+- End at $(T, U)$
+- Two types of moves:
+  1. **Emit blank**: $(t, u) \rightarrow (t+1, u)$ with probability $p(\epsilon | t, u)$
+  2. **Emit symbol $y_u$**: $(t, u) \rightarrow (t, u+1)$ with probability $p(y_u | t, u)$
+
+The probability of a path $\pi$ is:
+
+$$
+p(\pi | \mathbf{x}, \mathbf{y}) = \prod_{(t,u) \in \pi} p(a_{t,u} | t, u)
+$$
+
+where $a_{t,u}$ is the action (blank or symbol) taken at position $(t, u)$.
+
+The total probability of the target sequence is:
+
+$$
+p(\mathbf{y} | \mathbf{x}) = \sum_{\pi \in \mathcal{A}(\mathbf{y})} p(\pi | \mathbf{x}, \mathbf{y})
+$$
+
+where $\mathcal{A}(\mathbf{y})$ is the set of all valid alignments for $\mathbf{y}$.
+
+### Forward-Backward Algorithm for RNN-T
+
+Similar to CTC, we use dynamic programming to compute the total probability efficiently.
+
+#### Forward Variables ($\alpha$)
+
+Define $\alpha(t, u)$ as the probability of outputting the first $u$ symbols of $\mathbf{y}$ using the first $t$ frames.
+
+**Base case**:
+$$
+\alpha(0, 0) = 1
+$$
+
+**Recursive case**:
+$$
+\alpha(t, u) = \alpha(t-1, u) \cdot p(\epsilon | t-1, u) + \alpha(t, u-1) \cdot p(y_u | t, u-1)
+$$
+
+**Interpretation**:
+- First term: arrived at $(t, u)$ by emitting blank at frame $t-1$
+- Second term: arrived at $(t, u)$ by emitting $y_u$ at the current position
+
+**Boundary conditions**:
+- $\alpha(t, 0) = \alpha(t-1, 0) \cdot p(\epsilon | t-1, 0)$ for $t > 0$
+- $\alpha(0, u) = \alpha(0, u-1) \cdot p(y_u | 0, u-1)$ for $u > 0$
+
+
+#### Backward Variables ($\beta$)
+
+Define $\beta(t, u)$ as the probability of outputting the remaining symbols $y_{u+1}, \ldots, y_U$ using frames $t+1, \ldots, T$.
+
+**Base case**:
+$$
+\beta(T, U) = 1
+$$
+
+**Recursive case**:
+$$
+\beta(t, u) = \beta(t+1, u) \cdot p(\epsilon | t, u) + \beta(t, u+1) \cdot p(y_{u+1} | t, u)
+$$
+
+**Interpretation**:
+- First term: emit blank at current position, continue from $(t+1, u)$
+- Second term: emit $y_{u+1}$ at current position, continue from $(t, u+1)$
+
+**Boundary conditions**:
+- $\beta(t, U) = \beta(t+1, U) \cdot p(\epsilon | t, U)$ for $t < T$
+- $\beta(T, u) = \beta(T, u+1) \cdot p(y_{u+1} | T, u)$ for $u < U$
+
+#### Total Probability
+
+The forward and backward variables satisfy:
+
+$$
+p(\mathbf{y} | \mathbf{x}) = \alpha(T, U) = \sum_{t=0}^T \alpha(t, U) \cdot p(\epsilon | t, U) \cdot \beta(t+1, U)
+$$
+
+Also:
+$$
+p(\mathbf{y} | \mathbf{x}) = \sum_{u=0}^U \alpha(T, u) \cdot p(y_{u+1} | T, u) \cdot \beta(T, u+1)
+$$
+
+### Gradient Computation for RNN-T
+
+The gradient of the RNN-T loss with respect to the joint network outputs is:
+
+$$
+\frac{\partial \mathcal{L}_{\text{RNN-T}}}{\partial \log p(k | t, u)} = p(k | t, u) - \gamma(t, u, k)
+$$
+
+where $\gamma(t, u, k)$ is the expected count of emitting symbol $k$ at position $(t, u)$:
+
+$$
+\gamma(t, u, k) = \frac{\alpha(t, u) \cdot p(k | t, u) \cdot \beta'(t, u, k)}{p(\mathbf{y} | \mathbf{x})}
+$$
+
+Here, $\beta'(t, u, k)$ depends on whether $k$ is blank or a symbol:
+- If $k = \epsilon$: $\beta'(t, u, \epsilon) = \beta(t+1, u)$
+- If $k = y_{u+1}$: $\beta'(t, u, y_{u+1}) = \beta(t, u+1)$
+- Otherwise: $\beta'(t, u, k) = 0$
+
+#### Complete RNN-T Loss Implementation
+
+Here's a detailed implementation of the RNN-T loss with forward-backward algorithm:
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class RNNTLoss(nn.Module):
+    """
+    Complete RNN-T Loss implementation with forward-backward algorithm.
+    
+    This implementation shows the full mathematical details of RNN-T.
+    For production, use torchaudio.functional.rnnt_loss which is optimized.
+    """
+    
+    def __init__(self, blank=0, reduction='mean', clamp=0.0):
+        """
+        Args:
+            blank: index of the blank label (default: 0)
+            reduction: 'none' | 'mean' | 'sum' (default: 'mean')
+            clamp: clamp gradients to [-clamp, clamp] if > 0 (default: 0.0)
+        """
+        super().__init__()
+        self.blank = blank
+        self.reduction = reduction
+        self.clamp = clamp
+    
+    def forward(self, logits, targets, input_lengths, target_lengths):
+        """
+        Compute RNN-T loss using forward-backward algorithm.
+        
+        Args:
+            logits: (B, T, U+1, V) joint network outputs (before softmax)
+                    B = batch size
+                    T = max input length
+                    U = max target length
+                    V = vocabulary size (including blank)
+            targets: (B, U) target sequences (without blanks)
+            input_lengths: (B,) actual lengths of input sequences
+            target_lengths: (B,) actual lengths of target sequences
+        
+        Returns:
+            loss: scalar loss value (or per-sample if reduction='none')
+        """
+        B, T, U_plus_1, V = logits.shape
+        
+        # Convert logits to log probabilities
+        log_probs = F.log_softmax(logits, dim=-1)
+        
+        # Compute loss for each sample in batch
+        losses = []
+        for b in range(B):
+            # Extract single sample
+            T_b = input_lengths[b].item()
+            U_b = target_lengths[b].item()
+            
+            # Get log probs and target for this sample
+            log_prob = log_probs[b, :T_b, :U_b+1, :]  # (T_b, U_b+1, V)
+            target = targets[b, :U_b]  # (U_b,)
+            
+            # Compute forward and backward variables
+            log_alpha = self._forward(log_prob, target)
+            log_beta = self._backward(log_prob, target)
+            
+            # Total probability: log p(y|x) = log_alpha[T_b, U_b]
+            log_prob_total = log_alpha[T_b, U_b]
+            
+            # Loss is negative log probability
+            loss = -log_prob_total
+            losses.append(loss)
+        
+        losses = torch.stack(losses)
+        
+        # Apply reduction
+        if self.reduction == 'mean':
+            return losses.mean()
+        elif self.reduction == 'sum':
+            return losses.sum()
+        else:  # 'none'
+            return losses
+    
+    def _forward(self, log_probs, target):
+        """
+        Compute forward variables α(t, u) in log space.
+        
+        α(t, u) = log probability of outputting first u symbols
+                  using first t frames
+        
+        Args:
+            log_probs: (T, U+1, V) log probabilities for single sample
+            target: (U,) target sequence for single sample
+        
+        Returns:
+            log_alpha: (T+1, U+1) forward variables in log space
+        """
+        T, U_plus_1, V = log_probs.shape
+        U = U_plus_1 - 1
+        
+        # Initialize log_alpha with -inf (log(0))
+        log_alpha = torch.full((T+1, U+1), float('-inf'), device=log_probs.device)
+        
+        # Base case: α(0, 0) = 1 (log(1) = 0)
+        log_alpha[0, 0] = 0.0
+        
+        # Recursive case
+        for t in range(T+1):
+            for u in range(U+1):
+                # Skip if we're at the base case
+                if t == 0 and u == 0:
+                    continue
+                
+                # Case 1: Emit blank at (t-1, u) -> move to (t, u)
+                if t > 0:
+                    log_alpha[t, u] = torch.logaddexp(
+                        log_alpha[t, u],
+                        log_alpha[t-1, u] + log_probs[t-1, u, self.blank]
+                    )
+                
+                # Case 2: Emit target[u-1] at (t, u-1) -> move to (t, u)
+                if u > 0:
+                    label = target[u-1].item()
+                    log_alpha[t, u] = torch.logaddexp(
+                        log_alpha[t, u],
+                        log_alpha[t, u-1] + log_probs[t, u-1, label]
+                    )
+        
+        return log_alpha
+    
+    def _backward(self, log_probs, target):
+        """
+        Compute backward variables β(t, u) in log space.
+        
+        β(t, u) = log probability of outputting remaining symbols
+                  from position (t, u) to (T, U)
+        
+        Args:
+            log_probs: (T, U+1, V) log probabilities for single sample
+            target: (U,) target sequence for single sample
+        
+        Returns:
+            log_beta: (T+1, U+1) backward variables in log space
+        """
+        T, U_plus_1, V = log_probs.shape
+        U = U_plus_1 - 1
+        
+        # Initialize log_beta with -inf (log(0))
+        log_beta = torch.full((T+1, U+1), float('-inf'), device=log_probs.device)
+        
+        # Base case: β(T, U) = 1 (log(1) = 0)
+        log_beta[T, U] = 0.0
+        
+        # Recursive case (going backwards)
+        for t in range(T, -1, -1):
+            for u in range(U, -1, -1):
+                # Skip if we're at the base case
+                if t == T and u == U:
+                    continue
+                
+                # Case 1: Emit blank at (t, u) -> continue from (t+1, u)
+                if t < T:
+                    log_beta[t, u] = torch.logaddexp(
+                        log_beta[t, u],
+                        log_beta[t+1, u] + log_probs[t, u, self.blank]
+                    )
+                
+                # Case 2: Emit target[u] at (t, u) -> continue from (t, u+1)
+                if u < U:
+                    label = target[u].item()
+                    log_beta[t, u] = torch.logaddexp(
+                        log_beta[t, u],
+                        log_beta[t, u+1] + log_probs[t, u, label]
+                    )
+        
+        return log_beta
+
+
+# Example usage with torchaudio's optimized implementation
+def rnnt_loss_example():
+    """
+    Example of using RNN-T loss in practice.
+    """
+    import torchaudio
+    
+    # Joint network outputs (before softmax)
+    B, T, U, V = 4, 50, 30, 28  # batch 4, 50 frames, max 30 labels, 28 classes
+    logits = torch.randn(B, T, U+1, V)
+    log_probs = F.log_softmax(logits, dim=-1)
+    
+    # Targets (without blanks)
+    targets = torch.randint(1, V, (B, U))
+    input_lengths = torch.randint(T//2, T, (B,), dtype=torch.long)
+    target_lengths = torch.randint(U//2, U, (B,), dtype=torch.long)
+    
+    # Compute loss using torchaudio's optimized implementation
+    loss = torchaudio.functional.rnnt_loss(
+        log_probs,
+        targets,
+        input_lengths,
+        target_lengths,
+        blank=0,
+        reduction='mean'
+    )
+    
+    print(f"RNN-T Loss: {loss.item():.4f}")
+    
+    # Backward pass
+    loss.backward()
+    
+    return loss
+
+
+# Utility function for numerical stability
+def log_sum_exp_2d(a, b):
+    """
+    Numerically stable log(exp(a) + exp(b)) for 2D tensors.
+    
+    Args:
+        a, b: tensors of same shape
+    
+    Returns:
+        log(exp(a) + exp(b)) computed stably
+    """
+    max_val = torch.maximum(a, b)
+    return max_val + torch.log(torch.exp(a - max_val) + torch.exp(b - max_val))
+```
+
+**Key implementation notes**:
+
+1. **Log-space computation**: All probabilities are in log-space to prevent underflow
+2. **Lattice structure**: RNN-T uses a 2D lattice (t, u) instead of CTC's 1D sequence
+3. **Two types of moves**: 
+   - Emit blank: (t, u) → (t+1, u) - advance time, same output position
+   - Emit symbol: (t, u) → (t, u+1) - same time, advance output position
+4. **Boundary conditions**: Start at (0, 0), end at (T, U)
+5. **Gradient computation**: Automatically handled by PyTorch's autograd
+
+**Production tip**: Always use optimized implementations:
+- `torch.nn.CTCLoss` for CTC
+- `torchaudio.functional.rnnt_loss` for RNN-T
+- These are implemented in C++/CUDA and are 10-100x faster than pure Python
+
+
+
+### Step-by-Step RNN-T Example
+
+Let's work through a concrete example to understand the forward-backward computation.
+
+**Setup**:
+- Target: "ab"
+- Input length: $T = 3$ frames
+- Vocabulary: $\{a, b, \epsilon\}$
+
+**Joint network outputs** (simplified probabilities):
+```
+p(ε|0,0)=0.7  p(a|0,0)=0.2  p(b|0,0)=0.1
+p(ε|1,0)=0.6  p(a|1,0)=0.3  p(b|1,0)=0.1
+p(ε|2,0)=0.5  p(a|2,0)=0.4  p(b|2,0)=0.1
+
+p(ε|0,1)=0.4  p(a|0,1)=0.1  p(b|0,1)=0.5
+p(ε|1,1)=0.3  p(a|1,1)=0.2  p(b|1,1)=0.5
+p(ε|2,1)=0.2  p(a|2,1)=0.1  p(b|2,1)=0.7
+
+p(ε|0,2)=0.8  p(a|0,2)=0.1  p(b|0,2)=0.1
+p(ε|1,2)=0.7  p(a|1,2)=0.2  p(b|1,2)=0.1
+p(ε|2,2)=0.6  p(a|2,2)=0.3  p(b|2,2)=0.1
+```
+
+**Forward computation**:
+
+Base: $\alpha(0, 0) = 1.0$
+
+$t=1, u=0$:
+$$
+\alpha(1, 0) = \alpha(0, 0) \cdot p(\epsilon | 0, 0) = 1.0 \cdot 0.7 = 0.7
+$$
+
+$t=0, u=1$:
+$$
+\alpha(0, 1) = \alpha(0, 0) \cdot p(a | 0, 0) = 1.0 \cdot 0.2 = 0.2
+$$
+
+$t=1, u=1$:
+$$
+\alpha(1, 1) = \alpha(0, 1) \cdot p(\epsilon | 0, 1) + \alpha(1, 0) \cdot p(a | 1, 0)
+$$
+$$
+= 0.2 \cdot 0.4 + 0.7 \cdot 0.3 = 0.08 + 0.21 = 0.29
+$$
+
+$t=2, u=0$:
+$$
+\alpha(2, 0) = \alpha(1, 0) \cdot p(\epsilon | 1, 0) = 0.7 \cdot 0.6 = 0.42
+$$
+
+$t=0, u=2$:
+$$
+\alpha(0, 2) = \alpha(0, 1) \cdot p(b | 0, 1) = 0.2 \cdot 0.5 = 0.10
+$$
+
+$t=2, u=1$:
+$$
+\alpha(2, 1) = \alpha(1, 1) \cdot p(\epsilon | 1, 1) + \alpha(2, 0) \cdot p(a | 2, 0)
+$$
+$$
+= 0.29 \cdot 0.3 + 0.42 \cdot 0.4 = 0.087 + 0.168 = 0.255
+$$
+
+$t=1, u=2$:
+$$
+\alpha(1, 2) = \alpha(0, 2) \cdot p(\epsilon | 0, 2) + \alpha(1, 1) \cdot p(b | 1, 1)
+$$
+$$
+= 0.10 \cdot 0.8 + 0.29 \cdot 0.5 = 0.08 + 0.145 = 0.225
+$$
+
+$t=2, u=2$:
+$$
+\alpha(2, 2) = \alpha(1, 2) \cdot p(\epsilon | 1, 2) + \alpha(2, 1) \cdot p(b | 2, 1)
+$$
+$$
+= 0.225 \cdot 0.7 + 0.255 \cdot 0.7 = 0.1575 + 0.1785 = 0.336
+$$
+
+$t=3, u=2$:
+$$
+\alpha(3, 2) = \alpha(2, 2) \cdot p(\epsilon | 2, 2) = 0.336 \cdot 0.6 = 0.2016
+$$
+
+**Final probability**: $p(\text{"ab"} | \mathbf{x}) = \alpha(3, 2) = 0.2016$
+
+
+### Implementation
+
+Here's a complete PyTorch implementation of RNN-T:
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class RNNTransducer(nn.Module):
+    def __init__(self, input_dim, vocab_size, enc_hidden=256, pred_hidden=256, joint_hidden=256):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.blank_idx = 0
+        
+        # Encoder (transcription network)
+        self.encoder = nn.LSTM(
+            input_dim,
+            enc_hidden,
+            num_layers=3,
+            bidirectional=True,
+            batch_first=True
+        )
+        self.enc_projection = nn.Linear(enc_hidden * 2, joint_hidden)
+        
+        # Prediction network
+        self.embedding = nn.Embedding(vocab_size, pred_hidden)
+        self.predictor = nn.LSTM(
+            pred_hidden,
+            pred_hidden,
+            num_layers=2,
+            batch_first=True
+        )
+        self.pred_projection = nn.Linear(pred_hidden, joint_hidden)
+        
+        # Joint network
+        self.joint = nn.Sequential(
+            nn.Linear(joint_hidden, joint_hidden),
+            nn.Tanh(),
+            nn.Linear(joint_hidden, vocab_size + 1)  # +1 for blank
+        )
+    
+    def encode(self, x, lengths):
+        """
+        Encode audio features.
+        
+        Args:
+            x: (B, T, input_dim) audio features
+            lengths: (B,) sequence lengths
+        
+        Returns:
+            h_enc: (B, T, joint_hidden) encoder hidden states
+        """
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x, lengths.cpu(), batch_first=True, enforce_sorted=False
+        )
+        outputs, _ = self.encoder(packed)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
+        h_enc = self.enc_projection(outputs)
+        return h_enc
+    
+    def predict(self, y):
+        """
+        Predict next symbol probabilities.
+        
+        Args:
+            y: (B, U) previous outputs
+        
+        Returns:
+            h_pred: (B, U+1, joint_hidden) prediction hidden states
+        """
+        # Prepend blank token
+        y_with_blank = torch.cat([
+            torch.full((y.size(0), 1), self.blank_idx, dtype=torch.long, device=y.device),
+            y
+        ], dim=1)
+        
+        embedded = self.embedding(y_with_blank)
+        outputs, _ = self.predictor(embedded)
+        h_pred = self.pred_projection(outputs)
+        return h_pred
+    
+    def joint_network(self, h_enc, h_pred):
+        """
+        Compute joint probabilities.
+        
+        Args:
+            h_enc: (B, T, joint_hidden) encoder states
+            h_pred: (B, U, joint_hidden) prediction states
+        
+        Returns:
+            logits: (B, T, U, vocab_size+1) joint network outputs
+        """
+        B, T, _ = h_enc.shape
+        U = h_pred.size(1)
+        
+        # Expand dimensions for broadcasting
+        h_enc = h_enc.unsqueeze(2)  # (B, T, 1, joint_hidden)
+        h_pred = h_pred.unsqueeze(1)  # (B, 1, U, joint_hidden)
+        
+        # Add and pass through joint network
+        combined = h_enc + h_pred  # (B, T, U, joint_hidden)
+        logits = self.joint(combined)  # (B, T, U, vocab_size+1)
+        
+        return logits
+    
+    def forward(self, x, x_lengths, y, y_lengths):
+        """
+        Forward pass.
+        
+        Args:
+            x: (B, T, input_dim) audio features
+            x_lengths: (B,) input lengths
+            y: (B, U) target sequences
+            y_lengths: (B,) target lengths
+        
+        Returns:
+            logits: (B, T, U+1, vocab_size+1) joint network outputs
+        """
+        h_enc = self.encode(x, x_lengths)
+        h_pred = self.predict(y)
+        logits = self.joint_network(h_enc, h_pred)
+        return logits
+
+def rnnt_loss(logits, targets, input_lengths, target_lengths, blank=0):
+    """
+    Compute RNN-T loss using forward-backward algorithm.
+    
+    In practice, use optimized implementations like:
+    - torchaudio.functional.rnnt_loss
+    - warp-transducer
+    
+    This is a simplified version for illustration.
+    """
+    # Use torchaudio's optimized implementation
+    log_probs = F.log_softmax(logits, dim=-1)
+    
+    loss = torchaudio.functional.rnnt_loss(
+        log_probs,
+        targets,
+        input_lengths,
+        target_lengths,
+        blank=blank,
+        reduction='mean'
+    )
+    
+    return loss
+```
+
+
+### RNN-T Decoding
+
+Decoding RNN-T is more complex than CTC because the prediction network maintains state.
+
+#### Greedy Decoding
+
+```python
+def greedy_decode_rnnt(model, x, max_symbols=100):
+    """
+    Greedy decoding for RNN-T.
+    
+    Args:
+        model: RNN-T model
+        x: (1, T, input_dim) audio features
+        max_symbols: maximum number of symbols to output
+    
+    Returns:
+        decoded: list of predicted symbols
+    """
+    model.eval()
+    device = next(model.parameters()).device
+    x = x.to(device)
+    
+    # Encode audio
+    h_enc = model.encode(x, torch.tensor([x.size(1)]))  # (1, T, hidden)
+    
+    # Initialize prediction network state
+    decoded = []
+    y = torch.tensor([[model.blank_idx]], device=device)  # Start with blank
+    
+    t = 0
+    while t < h_enc.size(1) and len(decoded) < max_symbols:
+        # Get prediction network output
+        h_pred = model.predict(torch.tensor([decoded], device=device))  # (1, U+1, hidden)
+        
+        # Compute joint network output for current frame and output position
+        logits = model.joint_network(
+            h_enc[:, t:t+1, :],  # (1, 1, hidden)
+            h_pred[:, -1:, :]     # (1, 1, hidden)
+        )  # (1, 1, 1, vocab_size+1)
+        
+        # Get most likely symbol
+        symbol = torch.argmax(logits[0, 0, 0]).item()
+        
+        if symbol == model.blank_idx:
+            # Emit blank, move to next frame
+            t += 1
+        else:
+            # Emit symbol, stay at current frame
+            decoded.append(symbol)
+    
+    return decoded
+```
+
+#### Beam Search for RNN-T
+
+Beam search for RNN-T is more involved because we need to track both the output sequence and the prediction network state.
+
+```python
+def beam_search_decode_rnnt(model, x, beam_width=10, max_symbols=100):
+    """
+    Beam search decoding for RNN-T.
+    
+    Args:
+        model: RNN-T model
+        x: (1, T, input_dim) audio features
+        beam_width: number of beams
+        max_symbols: maximum symbols to output
+    
+    Returns:
+        decoded: most likely sequence
+        score: log probability
+    """
+    model.eval()
+    device = next(model.parameters()).device
+    x = x.to(device)
+    
+    # Encode audio
+    h_enc = model.encode(x, torch.tensor([x.size(1)]))
+    T = h_enc.size(1)
+    
+    # Initialize beams: (sequence, score, pred_state)
+    beams = [([], 0.0, None)]
+    
+    for t in range(T):
+        new_beams = []
+        
+        for seq, score, pred_state in beams:
+            # Get prediction network output
+            y = torch.tensor([seq] if seq else [[model.blank_idx]], device=device)
+            h_pred = model.predict(y)
+            
+            # Compute joint network output
+            logits = model.joint_network(
+                h_enc[:, t:t+1, :],
+                h_pred[:, -1:, :]
+            )
+            log_probs = F.log_softmax(logits[0, 0, 0], dim=0)
+            
+            # Consider top-K symbols
+            top_k_probs, top_k_symbols = torch.topk(log_probs, min(beam_width, len(log_probs)))
+            
+            for prob, symbol in zip(top_k_probs, top_k_symbols):
+                symbol = symbol.item()
+                new_score = score + prob.item()
+                
+                if symbol == model.blank_idx:
+                    # Blank: will advance to next frame
+                    new_beams.append((seq, new_score, pred_state))
+                else:
+                    # Non-blank: extend sequence
+                    new_seq = seq + [symbol]
+                    if len(new_seq) < max_symbols:
+                        new_beams.append((new_seq, new_score, None))
+        
+        # Prune to top-K beams
+        beams = sorted(new_beams, key=lambda x: x[1], reverse=True)[:beam_width]
+    
+    # Return best beam
+    best_seq, best_score, _ = beams[0]
+    return best_seq, best_score
+```
+
+
+### RNN-T vs CTC: Key Differences
+
+| Aspect | CTC | RNN-T |
+|--------|-----|-------|
+| **Output Independence** | Assumes conditional independence | Models output dependencies via prediction network |
+| **Language Modeling** | No explicit LM | Built-in LM through prediction network |
+| **Streaming** | Naturally streaming | Naturally streaming |
+| **Complexity** | $O(TU)$ forward-backward | $O(TU)$ forward-backward |
+| **Accuracy** | Good baseline | Generally 10-20% better WER |
+| **Training Speed** | Faster | Slower (more parameters) |
+| **Inference Speed** | Faster | Slower (prediction network overhead) |
+| **Memory** | Lower | Higher (stores prediction states) |
+
+**When to use CTC**:
+- Offline transcription where speed matters
+- Limited compute budget
+- Simple baseline system
+- Non-autoregressive generation desired
+
+**When to use RNN-T**:
+- Streaming applications (voice assistants)
+- Maximum accuracy needed
+- Sufficient compute available
+- Autoregressive modeling beneficial
+
+## Production Considerations
+
+### Numerical Stability
+
+Both CTC and RNN-T involve computing products of many small probabilities, which can cause numerical underflow. Always work in log-space:
+
+```python
+def log_sum_exp(a, b):
+    """Numerically stable log(exp(a) + exp(b))"""
+    if a == float('-inf'):
+        return b
+    if b == float('-inf'):
+        return a
+    
+    max_val = max(a, b)
+    return max_val + torch.log(torch.exp(a - max_val) + torch.exp(b - max_val))
+
+# For multiple values
+def log_sum_exp_multi(values):
+    """Numerically stable log(sum(exp(values)))"""
+    max_val = max(values)
+    if max_val == float('-inf'):
+        return float('-inf')
+    
+    return max_val + torch.log(sum(torch.exp(v - max_val) for v in values))
+```
+
+### Efficient Implementation
+
+Production systems use highly optimized implementations:
+
+1. **CTC**: Use `torch.nn.CTCLoss` or `torchaudio.functional.ctc_loss`
+2. **RNN-T**: Use `torchaudio.functional.rnnt_loss` or `warp-transducer`
+
+These implementations:
+- Use CUDA kernels for GPU acceleration
+- Implement efficient memory management
+- Handle edge cases (empty sequences, very long sequences)
+- Provide numerical stability guarantees
+
+
+### Training Strategies
+
+#### Data Augmentation
+
+Speech recognition models benefit significantly from data augmentation:
+
+**SpecAugment**: Mask random time and frequency bands in the spectrogram
+```python
+def spec_augment(spec, time_mask_param=70, freq_mask_param=20, num_masks=2):
+    """
+    Apply SpecAugment to mel-spectrogram.
+    
+    Args:
+        spec: (freq, time) spectrogram
+        time_mask_param: maximum time mask width
+        freq_mask_param: maximum frequency mask width
+        num_masks: number of masks to apply
+    """
+    spec = spec.clone()
+    
+    for _ in range(num_masks):
+        # Time masking
+        t = torch.randint(0, time_mask_param, (1,)).item()
+        t0 = torch.randint(0, spec.size(1) - t, (1,)).item()
+        spec[:, t0:t0+t] = 0
+        
+        # Frequency masking
+        f = torch.randint(0, freq_mask_param, (1,)).item()
+        f0 = torch.randint(0, spec.size(0) - f, (1,)).item()
+        spec[f0:f0+f, :] = 0
+    
+    return spec
+```
+
+**Speed Perturbation**: Resample audio at 0.9x, 1.0x, and 1.1x speed
+
+**Noise Addition**: Add background noise, music, or babble at various SNR levels
+
+#### Curriculum Learning
+
+Start with easier examples (clean speech, short utterances) and gradually increase difficulty:
+
+```python
+def curriculum_sampler(dataset, epoch, total_epochs):
+    """
+    Sample data based on curriculum strategy.
+    
+    Early epochs: short, clean utterances
+    Later epochs: long, noisy utterances
+    """
+    difficulty_threshold = (epoch / total_epochs) * max_difficulty
+    
+    filtered_data = [
+        sample for sample in dataset
+        if sample.difficulty <= difficulty_threshold
+    ]
+    
+    return filtered_data
+```
+
+#### Multi-Task Learning
+
+Train on multiple related tasks simultaneously:
+- ASR (primary task)
+- Language identification
+- Speaker identification
+- Emotion recognition
+
+Shared encoder learns more robust representations.
+
+
+## Modern Architectures
+
+### Conformer
+
+**References**: Gulati et al. [5]
+
+Conformer combines convolution and self-attention for state-of-the-art speech recognition. The key insight: convolution captures local patterns (phonetic features), while attention captures long-range dependencies (linguistic context).
+
+**Architecture**:
+```
+Input → Convolution Subsampling → Conformer Blocks → Linear → CTC/RNN-T
+```
+
+**Conformer Block**:
+```
+x → Feed-Forward (1/2) → Multi-Head Self-Attention → Convolution → Feed-Forward (1/2) → Output
+```
+
+Each component serves a purpose:
+- Feed-forward (first half): Pre-processing
+- Self-attention: Global context
+- Convolution: Local patterns
+- Feed-forward (second half): Post-processing
+
+```python
+class ConformerBlock(nn.Module):
+    def __init__(self, d_model, num_heads, conv_kernel_size=31, dropout=0.1):
+        super().__init__()
+        
+        # Feed-forward module 1
+        self.ffn1 = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_model * 4),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model * 4, d_model),
+            nn.Dropout(dropout)
+        )
+        
+        # Multi-head self-attention
+        self.mha = nn.MultiheadAttention(d_model, num_heads, dropout=dropout)
+        self.mha_norm = nn.LayerNorm(d_model)
+        
+        # Convolution module
+        self.conv = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Conv1d(d_model, d_model * 2, 1),
+            nn.GLU(dim=1),
+            nn.Conv1d(d_model, d_model, conv_kernel_size, padding=conv_kernel_size//2, groups=d_model),
+            nn.BatchNorm1d(d_model),
+            nn.SiLU(),
+            nn.Conv1d(d_model, d_model, 1),
+            nn.Dropout(dropout)
+        )
+        
+        # Feed-forward module 2
+        self.ffn2 = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_model * 4),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model * 4, d_model),
+            nn.Dropout(dropout)
+        )
+        
+        self.norm = nn.LayerNorm(d_model)
+    
+    def forward(self, x):
+        # Feed-forward 1 (half-step residual)
+        x = x + 0.5 * self.ffn1(x)
+        
+        # Multi-head self-attention
+        x_norm = self.mha_norm(x)
+        attn_out, _ = self.mha(x_norm, x_norm, x_norm)
+        x = x + attn_out
+        
+        # Convolution
+        x_conv = x.transpose(1, 2)  # (B, T, C) -> (B, C, T)
+        x_conv = self.conv(x_conv)
+        x = x + x_conv.transpose(1, 2)
+        
+        # Feed-forward 2 (half-step residual)
+        x = x + 0.5 * self.ffn2(x)
+        
+        return self.norm(x)
+```
+
+**Why Conformer works**:
+- Convolution: Efficient local feature extraction (phonemes span 10-30ms)
+- Attention: Captures long-range dependencies (coarticulation effects span 100ms+)
+- Macaron-style FFN: Better gradient flow with half-step residuals
+
+
+### Whisper Architecture
+
+**References**: Radford et al. [6]
+
+OpenAI's Whisper uses an encoder-decoder Transformer architecture trained on 680,000 hours of multilingual data. Unlike CTC/RNN-T, it uses standard sequence-to-sequence modeling with cross-attention.
+
+**Key innovations**:
+1. **Massive scale**: 680K hours of weakly-supervised data
+2. **Multitask training**: ASR, translation, language ID, timestamp prediction
+3. **Robust to noise**: Trained on diverse audio conditions
+4. **Zero-shot transfer**: Works across languages and domains
+
+**Architecture**:
+```
+Audio → Log-Mel Spectrogram → Encoder (Transformer) → Decoder (Transformer) → Text
+```
+
+**Special tokens**:
+```
+<|startoftranscript|> <|en|> <|transcribe|> <|notimestamps|> ... <|endoftext|>
+```
+
+These tokens control behavior:
+- Language: `<|en|>`, `<|zh|>`, etc.
+- Task: `<|transcribe|>` or `<|translate|>`
+- Timestamps: `<|0.00|>`, `<|0.50|>`, etc.
+
+**Advantages**:
+- State-of-the-art accuracy on diverse benchmarks
+- Multilingual (99 languages)
+- Robust to accents, noise, technical language
+- Handles timestamps, speaker diarization
+
+**Disadvantages**:
+- Not streaming (requires full audio)
+- Higher latency than RNN-T
+- Larger model size (requires more compute)
+
+### Comparison: CTC vs RNN-T vs Attention
+
+| Feature | CTC | RNN-T | Attention (Whisper) |
+|---------|-----|-------|---------------------|
+| **Streaming** | ✓ | ✓ | ✗ |
+| **Latency** | Low | Low | High |
+| **Accuracy** | Good | Better | Best |
+| **Training Data** | Moderate | Moderate | Massive |
+| **Language Model** | External | Built-in | Built-in |
+| **Alignment** | Monotonic | Monotonic | Flexible |
+| **Use Case** | Offline transcription | Voice assistants | Offline, multilingual |
+
+
+## Evaluation Metrics
+
+### Word Error Rate (WER)
+
+The standard metric for speech recognition:
+
+$$
+\text{WER} = \frac{S + D + I}{N} \times 100\%
+$$
+
+where:
+- $S$ = substitutions (wrong word)
+- $D$ = deletions (missing word)
+- $I$ = insertions (extra word)
+- $N$ = total words in reference
+
+**Example**:
+```
+Reference:  the cat sat on the mat
+Hypothesis: the cat sit on mat
+
+S=1 (sat→sit), D=1 (the), I=0
+WER = (1+1+0)/6 = 33.3%
+```
+
+**Computing WER**:
+```python
+import editdistance
+
+def compute_wer(reference, hypothesis):
+    """
+    Compute Word Error Rate.
+    
+    Args:
+        reference: ground truth text
+        hypothesis: predicted text
+    
+    Returns:
+        wer: word error rate (0-1)
+        details: dict with S, D, I, N
+    """
+    ref_words = reference.split()
+    hyp_words = hypothesis.split()
+    
+    # Compute edit distance
+    distance = editdistance.eval(ref_words, hyp_words)
+    
+    # WER is normalized edit distance
+    wer = distance / len(ref_words) if len(ref_words) > 0 else 0
+    
+    return wer, {
+        'distance': distance,
+        'ref_length': len(ref_words),
+        'hyp_length': len(hyp_words)
+    }
+```
+
+### Character Error Rate (CER)
+
+Similar to WER but computed at character level. More appropriate for languages without clear word boundaries (Chinese, Japanese).
+
+### Real-Time Factor (RTF)
+
+Measures inference speed:
+
+$$
+\text{RTF} = \frac{\text{Processing Time}}{\text{Audio Duration}}
+$$
+
+- RTF < 1: Faster than real-time (good for streaming)
+- RTF = 1: Real-time
+- RTF > 1: Slower than real-time (not suitable for streaming)
+
+**Example**: Processing 10 seconds of audio in 2 seconds → RTF = 0.2
+
+
+## Practical Tips
+
+### Debugging CTC/RNN-T Training
+
+**Problem**: Loss is NaN or infinite
+
+**Solutions**:
+1. Check for log(0) in forward-backward algorithm
+2. Use log-space computation throughout
+3. Clip gradients: `torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)`
+4. Reduce learning rate
+5. Check for extremely long sequences (T >> U)
+
+**Problem**: Model outputs only blanks
+
+**Solutions**:
+1. Reduce blank penalty in loss
+2. Check label encoding (ensure targets are correct)
+3. Verify input features are normalized
+4. Increase model capacity
+5. Use label smoothing
+
+**Problem**: Poor convergence
+
+**Solutions**:
+1. Use warmup learning rate schedule
+2. Apply SpecAugment
+3. Increase batch size (accumulate gradients if needed)
+4. Pre-train encoder on auxiliary task
+5. Check for data imbalance
+
+### Hyperparameter Tuning
+
+**Critical hyperparameters**:
+
+1. **Learning rate**: Start with 1e-3, use warmup + decay
+2. **Batch size**: As large as GPU memory allows (32-128 typical)
+3. **Model size**: Balance accuracy vs. latency
+4. **Dropout**: 0.1-0.3 for regularization
+5. **Beam width**: 5-10 for decoding (diminishing returns beyond 10)
+
+**Learning rate schedule**:
+```python
+def get_lr_schedule(optimizer, warmup_steps=10000):
+    """
+    Transformer-style learning rate schedule.
+    """
+    def lr_lambda(step):
+        if step < warmup_steps:
+            return step / warmup_steps
+        return (warmup_steps / step) ** 0.5
+    
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+```
+
+### Production Deployment
+
+**Optimization techniques**:
+
+1. **Quantization**: INT8 inference (2-4x speedup, minimal accuracy loss)
+2. **Pruning**: Remove redundant weights
+3. **Knowledge distillation**: Train smaller student model
+4. **ONNX export**: Use optimized runtime
+5. **Batch inference**: Process multiple utterances together
+
+**Streaming considerations**:
+
+1. **Chunk size**: Balance latency vs. accuracy (typical: 200-400ms)
+2. **Look-ahead**: Allow small future context (50-100ms)
+3. **State management**: Cache encoder states between chunks
+4. **Endpointing**: Detect speech boundaries for segmentation
+
+
+## Summary
+
+We've covered the mathematical foundations of modern speech recognition:
+
+**CTC (Connectionist Temporal Classification)**:
+- Solves alignment problem via marginalization over all paths
+- Forward-backward algorithm computes total probability in $O(TU)$ time
+- Gradient computation uses occupancy probabilities
+- Assumes conditional independence (limitation)
+- Best for: offline transcription, simple baselines
+
+**RNN-T (RNN-Transducer)**:
+- Extends CTC with prediction network for output dependencies
+- Models $p(k | t, u)$ jointly from audio and output history
+- Forward-backward over 2D lattice
+- Better accuracy than CTC (10-20% relative WER reduction)
+- Best for: streaming applications, voice assistants
+
+**Key Insights**:
+
+1. **Alignment is the core problem**: Both CTC and RNN-T marginalize over exponentially many alignments using dynamic programming
+
+2. **Log-space is essential**: Numerical stability requires working in log-space throughout
+
+3. **Forward-backward enables gradients**: The algorithm computes both the loss and its gradients efficiently
+
+4. **Trade-offs matter**: CTC is faster but less accurate; RNN-T is slower but more accurate; Attention is best but not streaming
+
+5. **Production requires optimization**: Quantization, pruning, and efficient implementations are essential for deployment
+
+**Modern trends**:
+- Conformer architecture (convolution + attention)
+- Large-scale pre-training (Whisper, wav2vec 2.0)
+- Self-supervised learning
+- Multilingual and multitask models
+- End-to-end neural codecs
+
+The field continues to evolve, but the mathematical foundations of CTC and RNN-T remain central to understanding how modern speech recognition systems work.
+
+
+## References
+
+[1] Graves, A., Fernández, S., Gomez, F., & Schmidhuber, J. (2006). Connectionist temporal classification: labelling unsegmented sequence data with recurrent neural networks. *ICML*.
+
+[2] Graves, A. (2012). Sequence transduction with recurrent neural networks. *arXiv preprint arXiv:1211.3711*.
+
+[3] Graves, A. (2013). Generating sequences with recurrent neural networks. *arXiv preprint arXiv:1308.0850*.
+
+[4] He, Y., Sainath, T. N., Prabhavalkar, R., McGraw, I., Alvarez, R., Zhao, D., ... & Strohman, T. (2019). Streaming end-to-end speech recognition for mobile devices. *ICASSP*.
+
+[5] Gulati, A., Qin, J., Chiu, C. C., Parmar, N., Zhang, Y., Yu, J., ... & Pang, R. (2020). Conformer: Convolution-augmented transformer for speech recognition. *Interspeech*.
+
+[6] Radford, A., Kim, J. W., Xu, T., Brockman, G., McLeavey, C., & Sutskever, I. (2022). Robust speech recognition via large-scale weak supervision. *arXiv preprint arXiv:2212.04356*.
+
+## Further Reading
+
+**Foundational Papers**:
+- Graves et al. (2006): Original CTC paper
+- Graves (2012): RNN-Transducer introduction
+- Hannun et al. (2014): Deep Speech - first end-to-end deep learning ASR
+
+**Modern Architectures**:
+- Gulati et al. (2020): Conformer
+- Radford et al. (2022): Whisper
+- Baevski et al. (2020): wav2vec 2.0 - self-supervised learning
+
+**Optimization**:
+- Park et al. (2019): SpecAugment
+- Prabhavalkar et al. (2018): Minimum Word Error Rate Training
+
+**Production Systems**:
+- Chiu et al. (2018): State-of-the-art speech recognition with sequence-to-sequence models
+- Li et al. (2019): Jasper - convolutional ASR
+- Kriman et al. (2020): Quartznet - efficient ASR
+
+**Tutorials and Code**:
+- [PyTorch CTC Loss Documentation](https://pytorch.org/docs/stable/generated/torch.nn.CTCLoss.html)
+- [torchaudio RNN-T Loss](https://pytorch.org/audio/stable/generated/torchaudio.functional.rnnt_loss.html)
+- [ESPnet: End-to-End Speech Processing Toolkit](https://github.com/espnet/espnet)
+- [NeMo: NVIDIA's toolkit for conversational AI](https://github.com/NVIDIA/NeMo)
+
+---
+
+*This post provides a deep dive into the mathematical foundations of speech recognition. For questions or corrections, reach out at [moghan.anand@gmail.com](mailto:moghan.anand@gmail.com).*
