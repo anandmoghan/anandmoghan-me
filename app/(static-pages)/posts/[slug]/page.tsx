@@ -109,7 +109,7 @@ export default async function PostPage({ params }: PostPageProps) {
       </div>
     ),
     img: (props: any) => (
-      <span style={{ 
+      <span style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -128,11 +128,11 @@ export default async function PostPage({ params }: PostPageProps) {
           }}
         />
         {props.alt && (
-          <span style={{ 
+          <span style={{
             display: 'block',
-            marginTop: '0.75rem', 
-            textAlign: 'center', 
-            fontSize: '0.875rem', 
+            marginTop: '0.75rem',
+            textAlign: 'center',
+            fontSize: '0.875rem',
             fontStyle: 'italic',
             color: 'var(--muted)',
             maxWidth: '90%'
@@ -148,14 +148,14 @@ export default async function PostPage({ params }: PostPageProps) {
       </div>
     ),
     a: (props: any) => (
-      <a {...props} 
+      <a {...props}
         target="_blank"
         rel="noopener noreferrer"
         style={{
           wordBreak: 'break-word',
           overflowWrap: 'break-word',
           ...props.style
-        }} 
+        }}
       />
     ),
   };

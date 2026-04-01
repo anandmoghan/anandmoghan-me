@@ -1,0 +1,123 @@
+---
+title: "Running Home Assistant on a Mac Mini"
+publishedAt: "2026-03-21"
+excerpt: "A practical guide to setting up Home Assistant OS on a Mac Mini using UTM, with secure remote access via Cloudflare Tunnel, Matter support, and Apple HomeKit bridging."
+tags: ["technology", "home-automation", "iot"]
+---
+
+A Mac Mini makes for a solid Home Assistant server — plenty of power, low noise, and reliable enough to run 24/7. This guide covers the full setup: installing HAOS via UTM, configuring secure remote access with Cloudflare Tunnel, adding Matter devices, and bridging everything into Apple Home.
+
+## Installing Home Assistant OS with UTM
+
+Home Assistant OS (HAOS) is the recommended install method since it includes the Supervisor for managing add-ons, backups, and updates. On macOS, [UTM](https://getutm.app/) is the way to go — it's a solid virtualization tool built on QEMU.
+
+### Download the HAOS Image
+
+Grab the latest `.qcow2` image from the [HAOS GitHub Releases](https://github.com/home-assistant/operating-system/releases):
+
+- Apple Silicon (M1/M2/M3): `haos_generic-aarch64-X.X.qcow2.xz`
+- Intel Mac: `haos_generic-x86-64-X.X.qcow2.xz`
+
+```bash
+# Set your architecture: aarch64 for Apple Silicon, x86-64 for Intel
+ARCH="aarch64"
+VERSION="17.1"
+FILE="haos_generic-${ARCH}-${VERSION}.qcow2"
+
+# Download and extract
+curl -L -O "https://github.com/home-assistant/operating-system/releases/download/${VERSION}/${FILE}.xz"
+xz -d "${FILE}.xz"
+```
+
+You'll end up with a `.qcow2` file ready to import into UTM.
+
+### Create the VM
+
+1. Open UTM and click **+** to create a new VM.
+2. Select **Virtualize** (not Emulate).
+3. Make sure **Apple Virtualization is unchecked** — HAOS needs the QEMU backend to boot properly on Apple Silicon.
+4. Choose **Other** as the OS type and skip the Boot ISO screen.
+5. Allocate resources:
+   - Memory: **4096 MB** minimum (2 GB works but add-ons will struggle)
+   - CPU: **2 cores** minimum
+6. Leave the default storage size (64 GB) and finish the wizard. We'll replace this drive next.
+
+### Configure the Drive, Network, and Console
+
+Right-click the VM and select **Edit**:
+
+1. Under **System**, confirm **UEFI Boot** is enabled.
+2. Add a **Serial** device (under the Serial tab) and set it to **Built-in Terminal**. This gives you a reliable CLI — the graphical display often doesn't initialize on Apple Silicon.
+3. Under **Devices**, delete the empty VirtIO drive that was created by default. Then click **New** → **Import** and select your `.qcow2` file.
+4. Under **Network**, switch from "Shared Network" to **Bridged (Advanced)** and select your Mac's primary interface (e.g., `en0`). This lets Home Assistant get its own IP from your router.
+
+### First Boot
+
+1. Start the VM. The serial console will show boot logs.
+2. The first boot takes a while (up to ~20 minutes) as it downloads the latest supervisor and core components. If the web UI isn't loading yet, it's still initializing.
+3. Once ready, the console displays the URL: `http://homeassistant.local:8123`
+4. Open that in a browser and follow the onboarding wizard to create your account and configure your location.
+
+## Secure Remote Access with Cloudflare Tunnel
+
+Port forwarding is the traditional approach to remote access, but it exposes your home IP and often doesn't work behind CGNAT. A Cloudflare Tunnel is a better option — it creates an encrypted outbound-only connection, so no ports need to be opened on your router.
+
+### Install the Cloudflared Add-on
+
+1. Go to **Settings** → **Add-ons** → **Add-on Store**.
+2. Open the three-dot menu → **Repositories** and add:
+
+```
+https://github.com/brenner-tobias/ha-addons
+```
+
+3. Search for **Cloudflared** and install it.
+
+### Configure the Tunnel
+
+1. In the add-on's **Configuration** tab, set your external hostname (e.g., `ha.yourdomain.com`).
+2. Start the add-on from the **Info** tab.
+3. Check the **Logs** tab for an authorization URL — visit it to link the tunnel to your Cloudflare account and select your domain.
+
+### Trust the Reverse Proxy
+
+Home Assistant blocks reverse proxy requests by default. Add this to your `configuration.yaml`:
+
+```yaml
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.30.33.0/24
+```
+
+> **ℹ️ Info:** The `172.30.33.0/24` range covers the internal Docker network where add-ons run. If you see "invalid authentication" errors in your logs, verify this range matches your setup.
+
+Restart Home Assistant to apply. After that, your instance is accessible from anywhere via your custom domain.
+
+## Adding Matter Devices
+
+Matter provides local-first control and cross-platform interoperability. Home Assistant handles it well.
+
+1. Install the **Matter Server** add-on from **Settings** → **Add-ons**.
+2. Open the Home Assistant Companion App on your phone.
+3. Tap **Add Device** → **Add Matter Device** and scan the QR code on your device.
+
+Home Assistant commissions the device onto your local Thread or Wi-Fi network. Everything stays local — devices continue working even if your internet goes down.
+
+## Bridging to Apple Home via HomeKit
+
+If you use Apple Home or Siri for quick controls (Apple Watch, CarPlay, etc.), the HomeKit Bridge integration lets you expose Home Assistant entities as native Apple Home accessories.
+
+### Setup
+
+1. Go to **Settings** → **Devices & Services** → **Add Integration**.
+2. Search for **HomeKit Bridge**.
+3. Use **Manual** mode to pick which domains to expose (lights, switches, sensors). Exposing everything tends to clutter the Home app.
+4. Once added, a notification appears with a HomeKit pairing QR code.
+5. In the Apple Home app, tap **+** → **Add Accessory** and scan the code.
+
+This makes any device connected to Home Assistant — Zigbee sensors, ESPHome devices, Matter plugs — show up as native accessories in Apple Home. You get the flexibility of Home Assistant with the convenience of Siri and the Home app.
+
+## Wrapping Up
+
+A Mac Mini running HAOS through UTM gives you a fast, quiet, and capable home automation server. Combined with Cloudflare Tunnel for secure remote access, Matter for local device control, and HomeKit Bridge for Apple integration, it covers pretty much everything you'd want from a smart home setup.

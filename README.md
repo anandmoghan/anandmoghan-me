@@ -81,7 +81,37 @@ See [docs/MEDIA-SYSTEM.md](docs/MEDIA-SYSTEM.md) for complete documentation.
 
 ## Deployment
 
-The platform is designed for deployment on Cloudflare Pages with static generation for the blog and SSR for the apps hub.
+The platform uses automated CI/CD with GitHub Actions for deployment to Cloudflare Pages.
+
+### Quick Deploy
+
+```bash
+# Deploy to production
+npm run deploy:production
+
+# Deploy to preview
+npm run deploy:preview
+
+# Setup deployment (first time)
+npm run setup-deployment
+```
+
+### Automated Deployment
+
+- **Production**: Automatic deployment on push to `main` branch
+- **Preview**: Automatic preview deployment for pull requests
+- **Staging**: Automatic deployment on push to `staging` branch
+
+### Deployment Features
+
+- ✅ Automated build and deployment
+- ✅ Preview deployments for pull requests
+- ✅ Automatic rollback on failure
+- ✅ Health monitoring (hourly checks)
+- ✅ Manual rollback capability
+- ✅ Zero-downtime deployments
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/CI-CD.md](docs/CI-CD.md) for complete documentation.
 
 ## License
 
