@@ -7,18 +7,16 @@ const POST_CONTENT_DIR = path.join(process.cwd(), 'content/posts');
 
 // Default tag definitions
 const DEFAULT_TAGS: Record<string, Tag> = {
-  'ai': { id: 'ai', name: 'AI', category: 'technical', color: '#3b82f6', description: 'Artificial Intelligence research and applications' },
-  'machine-learning': { id: 'machine-learning', name: 'Machine Learning', category: 'technical', color: '#8b5cf6', description: 'Machine learning algorithms and techniques' },
-  'reinforcement-learning': { id: 'reinforcement-learning', name: 'Reinforcement Learning', category: 'technical', color: '#a855f7', description: 'Reinforcement learning and alignment techniques' },
-  'deep-learning': { id: 'deep-learning', name: 'Deep Learning', category: 'technical', color: '#7c3aed', description: 'Neural networks and deep learning' },
-  'autonomous-driving': { id: 'autonomous-driving', name: 'Autonomous Driving', category: 'technical', color: '#0891b2', description: 'Self-driving cars and autonomous vehicle technology' },
-  'research': { id: 'research', name: 'Research', category: 'technical', color: '#059669', description: 'Academic and industry research' },
-  'personal': { id: 'personal', name: 'Personal', category: 'personal', color: '#ec4899', description: 'Personal thoughts and experiences' },
-  'family': { id: 'family', name: 'Family', category: 'family', color: '#f59e0b', description: 'Family life and experiences' },
-  'official': { id: 'official', name: 'Official', category: 'official', color: '#10b981', description: 'Official work and professional content' },
-  'uk': { id: 'uk', name: 'UK Life', category: 'personal', color: '#dc2626', description: 'Life experiences in the United Kingdom' },
-  'technology': { id: 'technology', name: 'Technology', category: 'technical', color: '#2563eb', description: 'Technology trends and insights' },
-  'systems': { id: 'systems', name: 'Systems', category: 'technical', color: '#7c2d12', description: 'System design and architecture' },
+  'machine-learning': { id: 'machine-learning', name: 'Machine Learning', category: 'technical', color: '#7c3aed', description: 'Machine learning algorithms and techniques' },
+  'deep-learning': { id: 'deep-learning', name: 'Deep Learning', category: 'technical', color: '#dc2626', description: 'Neural networks and deep learning architectures' },
+  'reinforcement-learning': { id: 'reinforcement-learning', name: 'Reinforcement Learning', category: 'technical', color: '#059669', description: 'Reinforcement learning and alignment techniques' },
+  'nlp': { id: 'nlp', name: 'NLP', category: 'technical', color: '#2563eb', description: 'Natural language processing and text models' },
+  'system-design': { id: 'system-design', name: 'System Design', category: 'technical', color: '#0891b2', description: 'ML system architecture and design' },
+  'autonomous-driving': { id: 'autonomous-driving', name: 'Autonomous Driving', category: 'technical', color: '#16a34a', description: 'Self-driving cars and autonomous vehicle technology' },
+  'python': { id: 'python', name: 'Python', category: 'technical', color: '#d97706', description: 'Python programming, libraries, and tools' },
+  'technology': { id: 'technology', name: 'Technology', category: 'technical', color: '#475569', description: 'Technology trends and practical setups' },
+  'personal': { id: 'personal', name: 'Personal', category: 'personal', color: '#db2777', description: 'Personal thoughts and experiences' },
+  'family': { id: 'family', name: 'Family', category: 'family', color: '#ea580c', description: 'Family life and experiences' },
 };
 
 function calculateReadingTime(content: string): number {
