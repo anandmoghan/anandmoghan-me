@@ -1,0 +1,10 @@
+name = "t212-proxy"
+main = "trading212-proxy.ts"
+compatibility_date = "2024-01-01"
+
+[observability]
+enabled = true
+
+[[routes]]
+pattern = "t212-proxy.anandmoghan-apps.workers.dev/*"
+custom_domain = false
