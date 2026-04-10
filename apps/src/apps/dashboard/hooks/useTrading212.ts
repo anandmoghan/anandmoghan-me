@@ -3,12 +3,12 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../firebase'
 import { useAuth } from '../../../hooks/useAuth'
 import { decryptApiKey } from '../services/crypto'
-import { getPortfolio, getAccountCash, getOrders } from '../services/trading212'
+import { getPortfolio, getAccountCash, getOrders, getInstruments } from '../services/trading212'
 import type { Position, AccountCash, Order } from '../services/trading212'
 import type { Group } from '../../../types'
 import type { GroupMemberPortfolio, MemberData } from '../types'
 
-export function useTrading212(apiKey: string | null) {
+export function useTrading212(apiKey: string | null, apiSecret: string | null) {
   const [portfolio, setPortfolio] = useState<Position[]>([])
   const [cash, setCash] = useState<AccountCash | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
@@ -16,14 +16,14 @@ export function useTrading212(apiKey: string | null) {
   const [error, setError] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
-    if (!apiKey) return
+    if (!apiKey || !apiSecret) return
     setLoading(true)
     setError(null)
     try {
       const [p, c, o] = await Promise.all([
-        getPortfolio(apiKey),
-        getAccountCash(apiKey),
-        getOrders(apiKey),
+        getPortfolio(apiKey, apiSecret),
+        getAccountCash(apiKey, apiSecret),
+        getOrders(apiKey, apiSecret),
       ])
       setPortfolio(p)
       setCash(c)
@@ -45,6 +45,7 @@ export function useTrading212(apiKey: string | null) {
 export function useGroupPortfolios(group: Group | null) {
   const { user } = useAuth()
   const [memberData, setMemberData] = useState<GroupMemberPortfolio[]>([])
+  const [currencyMap, setCurrencyMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -75,14 +76,26 @@ export function useGroupPortfolios(group: Group | null) {
           continue
         }
 
-        const { encryptedApiKey, iv } = settingsSnap.data()
+        const { encryptedApiKey, iv, encryptedApiSecret, secretIv } = settingsSnap.data()
+        if (!encryptedApiSecret || !secretIv) {
+          results.push({ member, portfolio: [], cash: null, orders: [], loading: false, error: 'API secret not set' })
+          continue
+        }
         try {
-          const decryptedKey = await decryptApiKey(encryptedApiKey, iv, uid)
-          const [portfolio, cash, ordersResp] = await Promise.all([
-            getPortfolio(decryptedKey),
-            getAccountCash(decryptedKey),
-            getOrders(decryptedKey),
+          const [decryptedKey, decryptedSecret] = await Promise.all([
+            decryptApiKey(encryptedApiKey, iv),
+            decryptApiKey(encryptedApiSecret, secretIv),
           ])
+          const [portfolio, cash, ordersResp, instruments] = await Promise.all([
+            getPortfolio(decryptedKey, decryptedSecret),
+            getAccountCash(decryptedKey, decryptedSecret),
+            getOrders(decryptedKey, decryptedSecret),
+            results.length === 0 ? getInstruments(decryptedKey, decryptedSecret) : Promise.resolve(null),
+          ])
+          // Build currency map from first member's instruments fetch (same for all members)
+          if (instruments) {
+            setCurrencyMap(new Map(instruments.map(i => [i.ticker, i.currencyCode])))
+          }
           results.push({ member, portfolio, cash, orders: ordersResp.items, loading: false, error: null })
         } catch (err) {
           results.push({
@@ -103,5 +116,5 @@ export function useGroupPortfolios(group: Group | null) {
     fetchAll()
   }, [group, user])
 
-  return { memberData, loading }
+  return { memberData, currencyMap, loading }
 }

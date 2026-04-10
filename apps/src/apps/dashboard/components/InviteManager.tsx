@@ -1,15 +1,28 @@
 import { useState } from 'react'
-import type { Group, Invite } from '../../../types'
+import type { Group, Invite, UserProfile } from '../../../types'
 
 interface Props {
   group: Group | null
   sentInvites: Invite[]
   receivedInvites: Invite[]
+  userProfiles: Record<string, UserProfile>
   onSendInvite: (groupId: string, groupName: string, email: string) => Promise<void>
   onRespond: (inviteId: string, status: 'accepted' | 'declined', groupId?: string) => Promise<void>
 }
 
-export function InviteManager({ group, sentInvites, receivedInvites, onSendInvite, onRespond }: Props) {
+function UserAvatar({ profile }: { profile?: UserProfile }) {
+  if (!profile) return <div className="w-7 h-7 rounded-full bg-muted/30 flex-shrink-0" />
+  if (profile.photoURL) return (
+    <img src={profile.photoURL} alt={profile.displayName} className="w-7 h-7 rounded-full flex-shrink-0 object-cover" />
+  )
+  return (
+    <div className="w-7 h-7 rounded-full bg-accent flex items-center justify-center text-xs font-medium text-background flex-shrink-0">
+      {(profile.displayName || profile.email || '?')[0].toUpperCase()}
+    </div>
+  )
+}
+
+export function InviteManager({ group, sentInvites, receivedInvites, userProfiles, onSendInvite, onRespond }: Props) {
   const [email, setEmail] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,28 +53,37 @@ export function InviteManager({ group, sentInvites, receivedInvites, onSendInvit
         <div>
           <h3 className="text-sm font-semibold mb-2">Pending Invites</h3>
           <div className="space-y-2">
-            {receivedInvites.map((invite) => (
-              <div key={invite.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
-                <div>
-                  <p className="text-sm font-medium">{invite.groupName}</p>
-                  <p className="text-xs text-muted">From {invite.fromName}</p>
+            {receivedInvites.map((invite) => {
+              const from = userProfiles[invite.fromUid]
+              return (
+                <div key={invite.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <UserAvatar profile={from} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{invite.groupName}</p>
+                      <p className="text-xs text-muted truncate">
+                        From {from?.displayName || invite.fromName}
+                        {from?.email && <span className="ml-1 opacity-70">· {from.email}</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => onRespond(invite.id, 'accepted', invite.groupId)}
+                      className="text-xs px-3 py-1 rounded-md bg-success text-success-foreground hover:bg-success/90 transition-colors"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => onRespond(invite.id, 'declined')}
+                      className="text-xs px-3 py-1 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onRespond(invite.id, 'accepted', invite.groupId)}
-                    className="text-xs px-3 py-1 rounded-md bg-success text-success-foreground hover:bg-success/90 transition-colors"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => onRespond(invite.id, 'declined')}
-                    className="text-xs px-3 py-1 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -90,17 +112,26 @@ export function InviteManager({ group, sentInvites, receivedInvites, onSendInvit
           {success && <p className="text-xs text-success mt-1">Invite sent!</p>}
 
           {groupInvites.length > 0 && (
-            <div className="mt-3 space-y-1">
-              {groupInvites.map((i) => (
-                <div key={i.id} className="flex items-center justify-between text-xs py-1">
-                  <span className="text-muted">{i.toEmail}</span>
-                  <span className={`px-2 py-0.5 rounded-full ${
-                    i.status === 'accepted' ? 'bg-success/10 text-success' :
-                    i.status === 'declined' ? 'bg-destructive/10 text-destructive' :
-                    'bg-muted/20 text-muted'
-                  }`}>{i.status}</span>
-                </div>
-              ))}
+            <div className="mt-3 space-y-2">
+              {groupInvites.map((i) => {
+                const toUser = userProfiles[i.toUid]
+                return (
+                  <div key={i.id} className="flex items-center justify-between text-xs py-1.5 px-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <UserAvatar profile={toUser} />
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{toUser?.displayName || i.toUid}</p>
+                        {toUser?.email && <p className="text-muted truncate">{toUser.email}</p>}
+                      </div>
+                    </div>
+                    <span className={`flex-shrink-0 px-2 py-0.5 rounded-full ml-2 ${
+                      i.status === 'accepted' ? 'bg-success/10 text-success' :
+                      i.status === 'declined' ? 'bg-destructive/10 text-destructive' :
+                      'bg-muted/20 text-muted'
+                    }`}>{i.status}</span>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

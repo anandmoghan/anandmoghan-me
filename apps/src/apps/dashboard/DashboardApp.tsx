@@ -2,19 +2,22 @@ import { useState } from 'react'
 import { useGroups } from './hooks/useGroups'
 import { useInvites } from './hooks/useInvites'
 import { useGroupPortfolios } from './hooks/useTrading212'
+import { useExchangeRates } from './hooks/useExchangeRates'
 import { GroupSelector } from './components/GroupSelector'
 import { ViewToggle } from './components/ViewToggle'
 import { PortfolioTable } from './components/PortfolioTable'
 import { CashSummary } from './components/CashSummary'
 import { TransactionList } from './components/TransactionList'
 import { InviteManager } from './components/InviteManager'
+import { CurrencySelector } from './components/CurrencySelector'
 import type { MemberData } from './types'
 import type { Position, AccountCash, Order } from './services/trading212'
 
 export default function DashboardApp() {
   const { groups, loading: groupsLoading, selectedGroupId, setSelectedGroupId, selectedGroup, createGroup } = useGroups()
-  const { sentInvites, receivedInvites, sendInvite, respondToInvite } = useInvites()
-  const { memberData, loading: dataLoading } = useGroupPortfolios(selectedGroup)
+  const { sentInvites, receivedInvites, userProfiles, sendInvite, respondToInvite } = useInvites()
+  const { memberData, currencyMap, loading: dataLoading } = useGroupPortfolios(selectedGroup)
+  const { rates, displayCurrency, setDisplayCurrency } = useExchangeRates()
 
   const [activeView, setActiveView] = useState<string | 'combined'>('combined')
   const [showCreateGroup, setShowCreateGroup] = useState(false)
@@ -136,13 +139,16 @@ export default function DashboardApp() {
             </button>
           )}
         </div>
-        {members.length > 0 && (
-          <ViewToggle
-            members={members}
-            activeUid={activeView}
-            onSelect={setActiveView}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} />
+          {members.length > 0 && (
+            <ViewToggle
+              members={members}
+              activeUid={activeView}
+              onSelect={setActiveView}
+            />
+          )}
+        </div>
       </div>
 
       {/* Create group modal */}
@@ -195,6 +201,7 @@ export default function DashboardApp() {
             group={selectedGroup}
             sentInvites={sentInvites}
             receivedInvites={receivedInvites}
+            userProfiles={userProfiles}
             onSendInvite={sendInvite}
             onRespond={respondToInvite}
           />
@@ -238,13 +245,13 @@ export default function DashboardApp() {
 
           <section>
             <h2 className="text-sm font-semibold text-muted mb-3 uppercase tracking-wide">Cash Summary</h2>
-            <CashSummary cash={viewData.cash} loading={viewData.loading} />
+            <CashSummary cash={viewData.cash} loading={viewData.loading} rates={rates} displayCurrency={displayCurrency} />
           </section>
 
           <section>
             <h2 className="text-sm font-semibold text-muted mb-3 uppercase tracking-wide">Portfolio</h2>
             <div className="rounded-lg border border-border bg-background overflow-hidden">
-              <PortfolioTable positions={viewData.portfolio} loading={viewData.loading} />
+              <PortfolioTable positions={viewData.portfolio} loading={viewData.loading} currencyMap={currencyMap} rates={rates} displayCurrency={displayCurrency} />
             </div>
           </section>
 

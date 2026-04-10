@@ -1,19 +1,54 @@
 import type { Position } from '../services/trading212'
+import type { ExchangeRates } from '../services/exchangeRates'
+import type { Currency } from '../hooks/useExchangeRates'
+import { convert } from '../services/exchangeRates'
 
 interface Props {
   positions: Position[]
   loading?: boolean
+  currencyMap?: Map<string, string>
+  rates: ExchangeRates | null
+  displayCurrency: Currency
 }
 
-function fmt(n: number) {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2 }).format(n)
+const FORMATTERS: Record<string, Intl.NumberFormat> = {
+  GBP: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2 }),
+  USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }),
+  EUR: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }),
+  INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }),
+}
+
+function fmt(amount: number, currency: string) {
+  return (FORMATTERS[currency] ?? FORMATTERS.GBP).format(amount)
 }
 
 function fmtPct(n: number) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
-export function PortfolioTable({ positions, loading }: Props) {
+export function PortfolioTable({ positions, loading, currencyMap = new Map(), rates, displayCurrency }: Props) {
+  // GBX instruments are priced in pence — divide by 100 to get £
+  const normalisePrice = (ticker: string, price: number) =>
+    currencyMap.get(ticker) === 'GBX' ? price / 100 : price
+
+  // Native currency after normalisation (GBX → GBP)
+  const nativeCurrency = (ticker: string) => {
+    const c = currencyMap.get(ticker) ?? 'GBP'
+    return c === 'GBX' ? 'GBP' : c
+  }
+
+  // Convert from a ticker's native currency to display currency
+  const cx = (amount: number, ticker: string) => {
+    if (!rates) return amount
+    return convert(amount, nativeCurrency(ticker), displayCurrency, rates)
+  }
+
+  // Convert from GBP (where T212 always reports P&L) to display currency
+  const cxGbp = (amount: number) => {
+    if (!rates) return amount
+    return convert(amount, 'GBP', displayCurrency, rates)
+  }
+
   if (loading) {
     return (
       <div className="space-y-2">
@@ -28,11 +63,14 @@ export function PortfolioTable({ positions, loading }: Props) {
     return <p className="text-muted text-sm text-center py-8">No positions found.</p>
   }
 
+  // Sort by value descending (in native GBP terms as proxy)
   const sorted = [...positions].sort((a, b) => {
-    const aVal = a.currentPrice * a.quantity
-    const bVal = b.currentPrice * b.quantity
+    const aVal = normalisePrice(a.ticker, a.currentPrice) * a.quantity
+    const bVal = normalisePrice(b.ticker, b.currentPrice) * b.quantity
     return bVal - aVal
   })
+
+  const totalPpl = sorted.reduce((s, p) => s + p.ppl, 0)
 
   return (
     <div className="overflow-x-auto">
@@ -50,18 +88,19 @@ export function PortfolioTable({ positions, loading }: Props) {
         </thead>
         <tbody>
           {sorted.map((pos) => {
-            const value = pos.currentPrice * pos.quantity
-            const cost = pos.averagePrice * pos.quantity
-            const pctReturn = cost > 0 ? ((value - cost) / cost) * 100 : 0
+            const normAvg = normalisePrice(pos.ticker, pos.averagePrice)
+            const normCurrent = normalisePrice(pos.ticker, pos.currentPrice)
+            const cost = normAvg * pos.quantity
+            const pctReturn = cost > 0 ? ((normCurrent - normAvg) / normAvg) * 100 : 0
             return (
               <tr key={pos.ticker} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
                 <td className="py-2.5 px-3 font-medium">{pos.ticker}</td>
                 <td className="py-2.5 px-3 text-right text-muted">{pos.quantity.toFixed(4)}</td>
-                <td className="py-2.5 px-3 text-right">{fmt(pos.averagePrice)}</td>
-                <td className="py-2.5 px-3 text-right">{fmt(pos.currentPrice)}</td>
-                <td className="py-2.5 px-3 text-right font-medium">{fmt(value)}</td>
+                <td className="py-2.5 px-3 text-right">{fmt(cx(normAvg, pos.ticker), displayCurrency)}</td>
+                <td className="py-2.5 px-3 text-right">{fmt(cx(normCurrent, pos.ticker), displayCurrency)}</td>
+                <td className="py-2.5 px-3 text-right font-medium">{fmt(cx(normCurrent * pos.quantity, pos.ticker), displayCurrency)}</td>
                 <td className={`py-2.5 px-3 text-right font-medium ${pos.ppl >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  {fmt(pos.ppl)}
+                  {fmt(cxGbp(pos.ppl), displayCurrency)}
                 </td>
                 <td className={`py-2.5 px-3 text-right hidden sm:table-cell ${pctReturn >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {fmtPct(pctReturn)}
@@ -72,14 +111,9 @@ export function PortfolioTable({ positions, loading }: Props) {
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-border">
-            <td colSpan={4} className="py-2.5 px-3 font-semibold">Total</td>
-            <td className="py-2.5 px-3 text-right font-semibold">
-              {fmt(sorted.reduce((s, p) => s + p.currentPrice * p.quantity, 0))}
-            </td>
-            <td className={`py-2.5 px-3 text-right font-semibold ${
-              sorted.reduce((s, p) => s + p.ppl, 0) >= 0 ? 'text-success' : 'text-destructive'
-            }`}>
-              {fmt(sorted.reduce((s, p) => s + p.ppl, 0))}
+            <td colSpan={5} className="py-2.5 px-3 font-semibold text-muted text-xs">P&L total</td>
+            <td className={`py-2.5 px-3 text-right font-semibold ${totalPpl >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {fmt(cxGbp(totalPpl), displayCurrency)}
             </td>
             <td className="py-2.5 px-3 hidden sm:table-cell" />
           </tr>

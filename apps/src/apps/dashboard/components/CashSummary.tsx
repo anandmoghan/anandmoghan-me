@@ -1,15 +1,26 @@
 import type { AccountCash } from '../services/trading212'
+import type { ExchangeRates } from '../services/exchangeRates'
+import type { Currency } from '../hooks/useExchangeRates'
+import { convert } from '../services/exchangeRates'
 
 interface Props {
   cash: AccountCash | null
   loading?: boolean
+  rates: ExchangeRates | null
+  displayCurrency: Currency
 }
 
-function fmt(n: number) {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2 }).format(n)
+const FORMATTERS: Record<string, Intl.NumberFormat> = {
+  GBP: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2 }),
+  USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }),
+  INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }),
 }
 
-export function CashSummary({ cash, loading }: Props) {
+function fmt(amount: number, currency: Currency) {
+  return (FORMATTERS[currency] ?? FORMATTERS.GBP).format(amount)
+}
+
+export function CashSummary({ cash, loading, rates, displayCurrency }: Props) {
   if (loading) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -27,13 +38,16 @@ export function CashSummary({ cash, loading }: Props) {
     return <p className="text-muted text-sm">No cash data available.</p>
   }
 
+  // T212 cash values are always in GBP (account base currency)
+  const cx = (n: number) => rates ? convert(n, 'GBP', displayCurrency, rates) : n
+
   const items = [
-    { label: 'Total', value: cash.total, highlight: true },
-    { label: 'Free Cash', value: cash.free },
-    { label: 'Invested', value: cash.invested },
-    { label: 'P&L', value: cash.ppl, pnl: true },
-    { label: 'Result', value: cash.result, pnl: true },
-    { label: 'Blocked', value: cash.blocked },
+    { label: 'Total', value: cx(cash.total), highlight: true },
+    { label: 'Free Cash', value: cx(cash.free) },
+    { label: 'Invested', value: cx(cash.invested) },
+    { label: 'P&L', value: cx(cash.ppl), pnl: true },
+    { label: 'Result', value: cx(cash.result), pnl: true },
+    { label: 'Blocked', value: cx(cash.blocked) },
   ]
 
   return (
@@ -46,7 +60,7 @@ export function CashSummary({ cash, loading }: Props) {
               ? item.value >= 0 ? 'text-success' : 'text-destructive'
               : item.highlight ? 'text-lg' : ''
           }`}>
-            {fmt(item.value)}
+            {fmt(item.value, displayCurrency)}
           </p>
         </div>
       ))}

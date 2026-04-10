@@ -1,12 +1,14 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { ThemeProvider } from './components/ThemeProvider'
-import { AuthProvider } from './hooks/useAuth'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { ThemeProvider, useTheme } from './components/ThemeProvider'
+import { AuthProvider, useAuth } from './hooks/useAuth'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { db } from './firebase'
 import type { AppDefinition } from './types'
 
 const DashboardApp = lazy(() => import('./apps/dashboard/DashboardApp'))
@@ -21,6 +23,30 @@ const apps: AppDefinition[] = [
     requiresAuth: true,
   },
 ]
+
+// Syncs theme between Firestore and ThemeProvider — must be inside both AuthProvider and ThemeProvider
+function ThemeSync() {
+  const { user } = useAuth()
+  const { theme, setTheme } = useTheme()
+
+  // Load theme from Firestore on login
+  useEffect(() => {
+    if (!user) return
+    getDoc(doc(db, 'users', user.uid, 'settings', 'preferences')).then(snap => {
+      if (snap.exists() && snap.data().theme) {
+        setTheme(snap.data().theme)
+      }
+    })
+  }, [user?.uid])
+
+  // Save theme to Firestore whenever it changes (only when logged in)
+  useEffect(() => {
+    if (!user) return
+    setDoc(doc(db, 'users', user.uid, 'settings', 'preferences'), { theme }, { merge: true })
+  }, [theme, user?.uid])
+
+  return null
+}
 
 function LoadingSpinner() {
   return (
@@ -38,6 +64,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
+          <ThemeSync />
           <Layout apps={apps}>
             <Suspense fallback={<LoadingSpinner />}>
               <Routes>

@@ -29,7 +29,7 @@ export interface Invite {
   groupName: string
   fromUid: string
   fromName: string
-  toEmail: string
+  toUid: string
   status: 'pending' | 'accepted' | 'declined'
   createdAt: Date
 }
