@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "date-fns": "^3.6.0",
     "firebase": "^10.7.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.0.0"
+    "react-router-dom": "^7.0.0",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

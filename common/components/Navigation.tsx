@@ -26,12 +26,20 @@ export function Navigation() {
                 Profile
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 group-hover:w-full transition-all duration-300" style={{ backgroundColor: 'var(--primary)' }}></span>
               </a>
-              <a 
-                href="/posts" 
+              <a
+                href="/posts"
                 className="text-sm font-medium hover:opacity-70 relative group"
                 style={{ color: 'var(--accent)' }}
               >
                 Posts
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 group-hover:w-full transition-all duration-300" style={{ backgroundColor: 'var(--primary)' }}></span>
+              </a>
+              <a
+                href="https://apps.anandmoghan.me"
+                className="text-sm font-medium hover:opacity-70 relative group"
+                style={{ color: 'var(--accent)' }}
+              >
+                Apps
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 group-hover:w-full transition-all duration-300" style={{ backgroundColor: 'var(--primary)' }}></span>
               </a>
             </div>
