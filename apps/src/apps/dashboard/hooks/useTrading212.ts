@@ -46,6 +46,7 @@ export function useGroupPortfolios(group: Group | null) {
   const { user } = useAuth()
   const [memberData, setMemberData] = useState<GroupMemberPortfolio[]>([])
   const [currencyMap, setCurrencyMap] = useState<Map<string, string>>(new Map())
+  const [nameMap, setNameMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -86,23 +87,21 @@ export function useGroupPortfolios(group: Group | null) {
             decryptApiKey(encryptedApiKey, iv),
             decryptApiKey(encryptedApiSecret, secretIv),
           ])
+
           const [portfolio, cash, ordersResp, instruments] = await Promise.all([
             getPortfolio(decryptedKey, decryptedSecret),
             getAccountCash(decryptedKey, decryptedSecret),
             getOrders(decryptedKey, decryptedSecret),
             results.length === 0 ? getInstruments(decryptedKey, decryptedSecret) : Promise.resolve(null),
           ])
-          // Build currency map from first member's instruments fetch (same for all members)
           if (instruments) {
             setCurrencyMap(new Map(instruments.map(i => [i.ticker, i.currencyCode])))
+            setNameMap(new Map(instruments.map(i => [i.ticker, i.name || i.shortname || i.ticker])))
           }
           results.push({ member, portfolio, cash, orders: ordersResp.items, loading: false, error: null })
         } catch (err) {
           results.push({
-            member,
-            portfolio: [],
-            cash: null,
-            orders: [],
+            member, portfolio: [], cash: null, orders: [],
             loading: false,
             error: err instanceof Error ? err.message : 'Failed to fetch',
           })
@@ -114,7 +113,9 @@ export function useGroupPortfolios(group: Group | null) {
     }
 
     fetchAll()
-  }, [group, user])
+  // Use stable primitives — group object reference changes on every Firestore snapshot
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id, group?.members?.join(','), user?.uid])
 
-  return { memberData, currencyMap, loading }
+  return { memberData, currencyMap, nameMap, loading }
 }

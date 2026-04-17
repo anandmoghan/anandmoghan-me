@@ -16,7 +16,7 @@ import type { Position, AccountCash, Order } from './services/trading212'
 export default function DashboardApp() {
   const { groups, loading: groupsLoading, selectedGroupId, setSelectedGroupId, selectedGroup, createGroup } = useGroups()
   const { sentInvites, receivedInvites, userProfiles, sendInvite, respondToInvite } = useInvites()
-  const { memberData, currencyMap, loading: dataLoading } = useGroupPortfolios(selectedGroup)
+  const { memberData, currencyMap, nameMap, loading: dataLoading } = useGroupPortfolios(selectedGroup)
   const { rates, displayCurrency, setDisplayCurrency } = useExchangeRates()
 
   const [activeView, setActiveView] = useState<string | 'combined'>('combined')
@@ -251,14 +251,14 @@ export default function DashboardApp() {
           <section>
             <h2 className="text-sm font-semibold text-muted mb-3 uppercase tracking-wide">Portfolio</h2>
             <div className="rounded-lg border border-border bg-background overflow-hidden">
-              <PortfolioTable positions={viewData.portfolio} loading={viewData.loading} currencyMap={currencyMap} rates={rates} displayCurrency={displayCurrency} />
+              <PortfolioTable positions={viewData.portfolio} loading={viewData.loading} currencyMap={currencyMap} nameMap={nameMap} rates={rates} displayCurrency={displayCurrency} />
             </div>
           </section>
 
           <section>
             <h2 className="text-sm font-semibold text-muted mb-3 uppercase tracking-wide">Recent Transactions</h2>
             <div className="rounded-lg border border-border bg-background p-2">
-              <TransactionList orders={viewData.orders} loading={viewData.loading} />
+              <TransactionList orders={viewData.orders} loading={viewData.loading} nameMap={nameMap} />
             </div>
           </section>
         </div>

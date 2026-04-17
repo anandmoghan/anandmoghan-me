@@ -3,13 +3,14 @@ import type { Order } from '../services/trading212'
 interface Props {
   orders: Order[]
   loading?: boolean
+  nameMap?: Map<string, string>
 }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2 }).format(n)
 }
 
-export function TransactionList({ orders, loading }: Props) {
+export function TransactionList({ orders, loading, nameMap = new Map() }: Props) {
   if (loading) {
     return (
       <div className="space-y-2">
@@ -20,14 +21,15 @@ export function TransactionList({ orders, loading }: Props) {
     )
   }
 
-  if (orders.length === 0) {
+  const filled = orders.filter((o) => o.status === 'FILLED' || o.status === 'PARTIALLY_FILLED')
+
+  if (filled.length === 0) {
     return <p className="text-muted text-sm text-center py-8">No recent transactions.</p>
   }
 
   return (
     <div className="space-y-1">
-      {orders.slice(0, 20).map((order, i) => {
-        const isBuy = (order.type ?? '').includes('BUY') || (!order.type?.includes('SELL') && order.fillCost > 0)
+      {filled.slice(0, 5).map((order, i) => {
         const date = new Date(order.dateModified)
         return (
           <div key={`${order.id}-${i}`} className="flex items-center justify-between py-2.5 px-3 rounded-md hover:bg-muted/10 transition-colors border border-transparent hover:border-border">
@@ -40,8 +42,8 @@ export function TransactionList({ orders, loading }: Props) {
                 {(order.type ?? '').includes('SELL') ? 'SELL' : 'BUY'}
               </span>
               <div>
-                <p className="font-medium text-sm">{order.ticker}</p>
-                <p className="text-xs text-muted">{date.toLocaleDateString()}</p>
+                <p className="font-medium text-sm">{nameMap.get(order.ticker) ?? order.ticker}</p>
+                <p className="text-xs text-muted">{order.ticker} · {date.toLocaleDateString()}</p>
               </div>
             </div>
             <div className="text-right">

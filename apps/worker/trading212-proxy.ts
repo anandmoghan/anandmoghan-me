@@ -14,7 +14,7 @@ interface Env {
   RATE_LIMIT: KVNamespace
   FIREBASE_PROJECT_ID: string
   RATE_LIMIT_PER_MINUTE: number
-  SA_EMAIL: string        // service account client_email (set in [vars])
+  SA_EMAIL: string        // service account client_email (set in [vars]) — used for cron rate sync
   SA_PRIVATE_KEY: string  // service account private_key (set via: wrangler secret put SA_PRIVATE_KEY)
 }
 
@@ -82,7 +82,10 @@ async function getServiceAccountToken(email: string, privateKeyPem: string): Pro
 
   const signingInput = `${jwtHeader}.${jwtPayload}`
 
-  const pemStripped = privateKeyPem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '')
+  const pemStripped = privateKeyPem
+    .replace(/\\n/g, '\n')         // wrangler secrets store newlines as literal \n
+    .replace(/-----[^-]+-----/g, '')
+    .replace(/\s/g, '')
   const keyBytes = Uint8Array.from(atob(pemStripped), (c) => c.charCodeAt(0))
   const cryptoKey = await crypto.subtle.importKey(
     'pkcs8', keyBytes,
@@ -102,7 +105,7 @@ async function getServiceAccountToken(email: string, privateKeyPem: string): Pro
   return access_token
 }
 
-// ── Firestore write helper ────────────────────────────────────────────────────
+// ── Firestore helpers ─────────────────────────────────────────────────────────
 
 async function writeRatesToFirestore(
   projectId: string,

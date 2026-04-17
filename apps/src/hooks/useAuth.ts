@@ -29,9 +29,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
+      // Google users have no password so derive the key from their UID.
+      // Email users get the key set during signInWithEmail — don't override it.
+      const isGoogleUser = firebaseUser?.providerData.some(p => p.providerId === 'google.com')
+      if (firebaseUser && isGoogleUser && !localStorage.getItem('anandmoghan:enc_key')) {
+        await initEncryptionKey(firebaseUser.uid, firebaseUser.uid)
+      }
     })
     return unsubscribe
   }, [])
@@ -52,6 +58,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         createdAt: serverTimestamp(),
       })
     }
+
+    // Google users have no password — derive encryption key from UID
+    await initEncryptionKey(firebaseUser.uid, firebaseUser.uid)
   }
 
   const signInWithEmail = async (email: string, password: string) => {

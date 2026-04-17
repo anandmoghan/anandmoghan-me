@@ -7,6 +7,7 @@ interface Props {
   positions: Position[]
   loading?: boolean
   currencyMap?: Map<string, string>
+  nameMap?: Map<string, string>
   rates: ExchangeRates | null
   displayCurrency: Currency
 }
@@ -26,7 +27,7 @@ function fmtPct(n: number) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
-export function PortfolioTable({ positions, loading, currencyMap = new Map(), rates, displayCurrency }: Props) {
+export function PortfolioTable({ positions, loading, currencyMap = new Map(), nameMap = new Map(), rates, displayCurrency }: Props) {
   // GBX instruments are priced in pence — divide by 100 to get £
   const normalisePrice = (ticker: string, price: number) =>
     currencyMap.get(ticker) === 'GBX' ? price / 100 : price
@@ -70,8 +71,6 @@ export function PortfolioTable({ positions, loading, currencyMap = new Map(), ra
     return bVal - aVal
   })
 
-  const totalPpl = sorted.reduce((s, p) => s + p.ppl, 0)
-
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -94,7 +93,10 @@ export function PortfolioTable({ positions, loading, currencyMap = new Map(), ra
             const pctReturn = cost > 0 ? ((normCurrent - normAvg) / normAvg) * 100 : 0
             return (
               <tr key={pos.ticker} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
-                <td className="py-2.5 px-3 font-medium">{pos.ticker}</td>
+                <td className="py-2.5 px-3 font-medium">
+                  <span>{nameMap.get(pos.ticker) ?? pos.ticker}</span>
+                  <span className="block text-xs text-muted font-normal">{pos.ticker}</span>
+                </td>
                 <td className="py-2.5 px-3 text-right text-muted">{pos.quantity.toFixed(4)}</td>
                 <td className="py-2.5 px-3 text-right">{fmt(cx(normAvg, pos.ticker), displayCurrency)}</td>
                 <td className="py-2.5 px-3 text-right">{fmt(cx(normCurrent, pos.ticker), displayCurrency)}</td>
@@ -109,15 +111,6 @@ export function PortfolioTable({ positions, loading, currencyMap = new Map(), ra
             )
           })}
         </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-border">
-            <td colSpan={5} className="py-2.5 px-3 font-semibold text-muted text-xs">P&L total</td>
-            <td className={`py-2.5 px-3 text-right font-semibold ${totalPpl >= 0 ? 'text-success' : 'text-destructive'}`}>
-              {fmt(cxGbp(totalPpl), displayCurrency)}
-            </td>
-            <td className="py-2.5 px-3 hidden sm:table-cell" />
-          </tr>
-        </tfoot>
       </table>
     </div>
   )

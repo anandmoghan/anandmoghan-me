@@ -76,6 +76,8 @@ export interface HistoryOrders {
 export interface Instrument {
   ticker: string
   currencyCode: string // 'GBP', 'GBX', 'USD', etc.
+  name: string
+  shortname: string
 }
 
 export async function getPortfolio(apiKey: string, apiSecret: string): Promise<Position[]> {
@@ -105,3 +107,4 @@ export async function getOrders(apiKey: string, apiSecret: string, limit = 50): 
   }
   return res.json()
 }
+

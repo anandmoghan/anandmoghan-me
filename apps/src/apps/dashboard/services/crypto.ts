@@ -6,7 +6,15 @@
 const SESSION_KEY = 'anandmoghan:enc_key'
 
 async function getKey(): Promise<CryptoKey> {
-  const stored = sessionStorage.getItem(SESSION_KEY)
+  let stored = localStorage.getItem(SESSION_KEY)
+  // Migrate from old sessionStorage location (users who were already signed in)
+  if (!stored) {
+    const legacy = sessionStorage.getItem(SESSION_KEY)
+    if (legacy) {
+      localStorage.setItem(SESSION_KEY, legacy)
+      stored = legacy
+    }
+  }
   if (!stored) throw new Error('Session key not found. Please sign in again.')
   const rawKey = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0))
   return window.crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
@@ -34,11 +42,11 @@ export async function initEncryptionKey(password: string, uid: string): Promise<
     ['encrypt', 'decrypt']
   )
   const exported = await window.crypto.subtle.exportKey('raw', derivedKey)
-  sessionStorage.setItem(SESSION_KEY, btoa(String.fromCharCode(...new Uint8Array(exported))))
+  localStorage.setItem(SESSION_KEY, btoa(String.fromCharCode(...new Uint8Array(exported))))
 }
 
 export function clearEncryptionKey(): void {
-  sessionStorage.removeItem(SESSION_KEY)
+  localStorage.removeItem(SESSION_KEY)
 }
 
 export async function encryptApiKey(value: string): Promise<{ encryptedApiKey: string; iv: string }> {

@@ -47,9 +47,9 @@ export function SettingsPage() {
         lastSynced: serverTimestamp(),
       })
       setHasApiKey(true)
+      setKeySaved(true)
       setApiKey('')
       setApiSecret('')
-      setKeySaved(true)
     } catch (err) {
       setKeyError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
