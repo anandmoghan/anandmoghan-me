@@ -11,7 +11,6 @@ import {
 } from 'firebase/auth'
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
-import { initEncryptionKey, clearEncryptionKey } from '../apps/dashboard/services/crypto'
 
 interface AuthContextType {
   user: User | null
@@ -29,15 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
-      // Google users have no password so derive the key from their UID.
-      // Email users get the key set during signInWithEmail — don't override it.
-      const isGoogleUser = firebaseUser?.providerData.some(p => p.providerId === 'google.com')
-      if (firebaseUser && isGoogleUser && !localStorage.getItem('anandmoghan:enc_key')) {
-        await initEncryptionKey(firebaseUser.uid, firebaseUser.uid)
-      }
     })
     return unsubscribe
   }, [])
@@ -58,14 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         createdAt: serverTimestamp(),
       })
     }
-
-    // Google users have no password — derive encryption key from UID
-    await initEncryptionKey(firebaseUser.uid, firebaseUser.uid)
   }
 
   const signInWithEmail = async (email: string, password: string) => {
-    const result = await signInWithEmailAndPassword(auth, email, password)
-    await initEncryptionKey(password, result.user.uid)
+    await signInWithEmailAndPassword(auth, email, password)
   }
 
   const signUpWithEmail = async (email: string, password: string, displayName: string) => {
@@ -78,15 +67,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       photoURL: null,
       createdAt: serverTimestamp(),
     })
-    await initEncryptionKey(password, result.user.uid)
   }
 
   const signOut = async () => {
-    clearEncryptionKey()
     await firebaseSignOut(auth)
   }
 
-  return createElement(AuthContext.Provider, { value: { user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut } }, children)
+  return createElement(
+    AuthContext.Provider,
+    { value: { user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut } },
+    children
+  )
 }
 
 export function useAuth() {

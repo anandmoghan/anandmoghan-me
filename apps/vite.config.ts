@@ -18,7 +18,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         time: resolve(__dirname, 'time/index.html'),
-        dashboard: resolve(__dirname, 'dashboard/index.html'),
+        wealth: resolve(__dirname, 'wealth/index.html'),
       },
     },
   },

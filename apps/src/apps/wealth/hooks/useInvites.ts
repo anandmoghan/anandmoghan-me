@@ -118,9 +118,21 @@ export function useInvites() {
     await updateDoc(doc(db, 'invites', inviteId), { status })
 
     if (status === 'accepted' && groupId) {
-      await updateDoc(doc(db, 'groups', groupId), {
-        members: arrayUnion(user.uid),
-      })
+      const groupSnap = await getDoc(doc(db, 'groups', groupId))
+      const existingMembers: string[] = groupSnap.data()?.members ?? []
+
+      // Add accepting user to the group
+      await updateDoc(doc(db, 'groups', groupId), { members: arrayUnion(user.uid) })
+
+      // Maintain readableBy on all member docs so Firestore rules can check cross-user access
+      await Promise.all([
+        // New member can be read by existing members
+        updateDoc(doc(db, 'users', user.uid), { readableBy: arrayUnion(...existingMembers) }),
+        // Existing members can now be read by the new member
+        ...existingMembers.map((uid) =>
+          updateDoc(doc(db, 'users', uid), { readableBy: arrayUnion(user.uid) })
+        ),
+      ])
     }
   }
 

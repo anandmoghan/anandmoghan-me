@@ -12,16 +12,16 @@ import { SettingsPage } from './pages/SettingsPage'
 import { db } from './firebase'
 import type { AppDefinition } from './types'
 
-const DashboardApp = lazy(() => import('./apps/dashboard/DashboardApp'))
+const DashboardApp = lazy(() => import('./apps/wealth/DashboardApp'))
 const TimeApp = lazy(() => import('./apps/time/TimeApp'))
 
 const apps: AppDefinition[] = [
   {
     id: 'dashboard',
-    name: 'Wealth Dashboard',
-    description: 'Track your Trading212 investments. Create groups to share portfolios with friends and family.',
+    name: 'Wealth',
+    description: 'Track assets, investments, and net worth. Real estate, crypto, stocks, and your Trading 212 ISA.',
     icon: '📊',
-    path: '/dashboard',
+    path: '/wealth',
     requiresAuth: true,
   },
   {
@@ -77,7 +77,7 @@ export default function App() {
                     <SettingsPage />
                   </ProtectedRoute>
                 } />
-                <Route path="/dashboard/*" element={
+                <Route path="/wealth/*" element={
                   <ProtectedRoute>
                     <DashboardApp />
                   </ProtectedRoute>

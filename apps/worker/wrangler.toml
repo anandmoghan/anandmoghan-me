@@ -6,13 +6,15 @@ compatibility_date = "2024-01-01"
 enabled = false
 
 [triggers]
-crons = ["0 * * * *"]  # every hour on the hour
+crons = ["0 */4 * * *"]  # every 4 hours
 
 [vars]
 FIREBASE_PROJECT_ID = "anandmoghan-me"
 RATE_LIMIT_PER_MINUTE = 120
-# SA_PRIVATE_KEY must be set via: wrangler secret put SA_PRIVATE_KEY
-# SA_EMAIL must be set via: wrangler secret put SA_EMAIL  (client_email from service account JSON)
+# Secrets — set via wrangler secret put <NAME>:
+#   SA_EMAIL        — service account client_email
+#   SA_PRIVATE_KEY  — service account private_key
+#   ENCRYPTION_SECRET — random 32+ char string for T212 credential encryption
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
