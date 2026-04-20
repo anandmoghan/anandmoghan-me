@@ -25,7 +25,7 @@ export function Trading212Page() {
 
   const { snapshot, loading: snapshotLoading } = useT212Snapshot(uid || undefined)
   const configured = useT212Configured(uid || undefined)
-  const { currencyMap, nameMap } = useInstruments()
+  const { currencyMap, nameMap } = useInstruments(snapshot)
   const { rates, displayCurrency, setDisplayCurrency } = useExchangeRates()
 
   const [syncing, setSyncing] = useState(false)

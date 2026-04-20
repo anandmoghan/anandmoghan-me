@@ -28,13 +28,13 @@ export function useRollups(uid: string | undefined, tz: string): UseRollupsResul
     const wKey = WEEK_PREFIX + isoWeekKey(now, tz)
     const mKey = MONTH_PREFIX + monthKey(now, tz)
 
-    const unsubWeek = onSnapshot(doc(db, 'users', uid, 'rollups', wKey), snap => {
+    const unsubWeek = onSnapshot(doc(db, 'time', uid, 'rollups', wKey), snap => {
       setWeekRollup(snap.exists() ? rollupMapFromWire(snap.data()) : {})
     })
-    const unsubMonth = onSnapshot(doc(db, 'users', uid, 'rollups', mKey), snap => {
+    const unsubMonth = onSnapshot(doc(db, 'time', uid, 'rollups', mKey), snap => {
       setMonthRollup(snap.exists() ? rollupMapFromWire(snap.data()) : {})
     })
-    const unsubLifetime = onSnapshot(doc(db, 'users', uid, 'rollups', 'lifetime'), snap => {
+    const unsubLifetime = onSnapshot(doc(db, 'time', uid, 'rollups', 'lifetime'), snap => {
       setLifetimeRollup(snap.exists() ? rollupMapFromWire(snap.data()) : {})
     })
 

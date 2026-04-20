@@ -38,9 +38,9 @@ export function StatsPage() {
     setLoadingSessions(true)
 
     const q = range.startDk === 0 && range.endDk === 99999999
-      ? query(collection(db, 'users', uid, 'sessions'), orderBy('s', 'desc'))
+      ? query(collection(db, 'time', uid, 'sessions'), orderBy('s', 'desc'))
       : query(
-          collection(db, 'users', uid, 'sessions'),
+          collection(db, 'time', uid, 'sessions'),
           where('dk', '>=', range.startDk),
           where('dk', '<=', range.endDk),
         )

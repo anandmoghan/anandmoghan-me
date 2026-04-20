@@ -37,18 +37,18 @@ export function applySessionDelta(
   addition: SessionDeltaEntry | null,
 ): void {
   if (removal) {
-    const wRef = doc(db, 'users', uid, 'rollups', WEEK_PREFIX + removal.weekKey)
-    const mRef = doc(db, 'users', uid, 'rollups', MONTH_PREFIX + removal.monthKey)
-    const lRef = doc(db, 'users', uid, 'rollups', 'lifetime')
+    const wRef = doc(db, 'time', uid, 'rollups', WEEK_PREFIX + removal.weekKey)
+    const mRef = doc(db, 'time', uid, 'rollups', MONTH_PREFIX + removal.monthKey)
+    const lRef = doc(db, 'time', uid, 'rollups', 'lifetime')
     const cid = removal.cid
     tx.set(wRef, { [cid]: { t: increment(-removal.seconds), n: increment(-removal.count) } }, { merge: true })
     tx.set(mRef, { [cid]: { t: increment(-removal.seconds), n: increment(-removal.count) } }, { merge: true })
     tx.set(lRef, { [cid]: { t: increment(-removal.seconds), n: increment(-removal.count) } }, { merge: true })
   }
   if (addition) {
-    const wRef = doc(db, 'users', uid, 'rollups', WEEK_PREFIX + addition.weekKey)
-    const mRef = doc(db, 'users', uid, 'rollups', MONTH_PREFIX + addition.monthKey)
-    const lRef = doc(db, 'users', uid, 'rollups', 'lifetime')
+    const wRef = doc(db, 'time', uid, 'rollups', WEEK_PREFIX + addition.weekKey)
+    const mRef = doc(db, 'time', uid, 'rollups', MONTH_PREFIX + addition.monthKey)
+    const lRef = doc(db, 'time', uid, 'rollups', 'lifetime')
     const cid = addition.cid
     tx.set(wRef, { [cid]: { t: increment(addition.seconds), n: increment(addition.count) } }, { merge: true })
     tx.set(mRef, { [cid]: { t: increment(addition.seconds), n: increment(addition.count) } }, { merge: true })
@@ -62,7 +62,7 @@ export function applySessionDelta(
  */
 export async function runRollupCatchup(uid: string, tz: string): Promise<void> {
   try {
-    const stateRef = doc(db, 'users', uid, 'rollups', 'state')
+    const stateRef = doc(db, 'time', uid, 'rollups', 'state')
     const stateSnap = await getDoc(stateRef)
     const lr: number = stateSnap.exists() ? (stateSnap.data().lr ?? 0) : 0
 
@@ -72,7 +72,7 @@ export async function runRollupCatchup(uid: string, tz: string): Promise<void> {
     // Fetch all sessions with dk in (lr, todayKey) — i.e. past unrolled days
     const sessionsSnap = await getDocs(
       query(
-        collection(db, 'users', uid, 'sessions'),
+        collection(db, 'time', uid, 'sessions'),
         where('dk', '>', lr),
         where('dk', '<', todayKey),
       )
@@ -113,7 +113,7 @@ export async function runRollupCatchup(uid: string, tz: string): Promise<void> {
 
     const wRefs: Record<string, ReturnType<typeof doc>> = {}
     const mRefs: Record<string, ReturnType<typeof doc>> = {}
-    const lifetimeRef = doc(db, 'users', uid, 'rollups', 'lifetime')
+    const lifetimeRef = doc(db, 'time', uid, 'rollups', 'lifetime')
 
     for (const [dayDk, entries] of byDk) {
       if (dayDk >= todayKey) continue // skip today
@@ -121,8 +121,8 @@ export async function runRollupCatchup(uid: string, tz: string): Promise<void> {
       const wKey = WEEK_PREFIX + isoWeekKeyFromDk(dayDk, tz)
       const mKey = MONTH_PREFIX + monthKeyFromDk(dayDk)
 
-      if (!wRefs[wKey]) wRefs[wKey] = doc(db, 'users', uid, 'rollups', wKey)
-      if (!mRefs[mKey]) mRefs[mKey] = doc(db, 'users', uid, 'rollups', mKey)
+      if (!wRefs[wKey]) wRefs[wKey] = doc(db, 'time', uid, 'rollups', wKey)
+      if (!mRefs[mKey]) mRefs[mKey] = doc(db, 'time', uid, 'rollups', mKey)
 
       // Aggregate by category for this day
       const byCat: Record<string, { t: number; n: number }> = {}
@@ -163,7 +163,7 @@ export async function recomputeRollups(uid: string, tz: string): Promise<void> {
   // Fetch all sealed past sessions
   const sessionsSnap = await getDocs(
     query(
-      collection(db, 'users', uid, 'sessions'),
+      collection(db, 'time', uid, 'sessions'),
       where('dk', '<', todayKey),
     )
   )
@@ -211,7 +211,7 @@ export async function recomputeRollups(uid: string, tz: string): Promise<void> {
 
   // Write week rollups
   for (const [wKey, catMap] of Object.entries(weeks)) {
-    const ref = doc(db, 'users', uid, 'rollups', WEEK_PREFIX + wKey)
+    const ref = doc(db, 'time', uid, 'rollups', WEEK_PREFIX + wKey)
     batch.set(ref, catMap)
     ops++
     if (ops >= 490) await flush()
@@ -219,19 +219,19 @@ export async function recomputeRollups(uid: string, tz: string): Promise<void> {
 
   // Write month rollups
   for (const [mKey, catMap] of Object.entries(months)) {
-    const ref = doc(db, 'users', uid, 'rollups', MONTH_PREFIX + mKey)
+    const ref = doc(db, 'time', uid, 'rollups', MONTH_PREFIX + mKey)
     batch.set(ref, catMap)
     ops++
     if (ops >= 490) await flush()
   }
 
   // Write lifetime
-  const lifetimeRef = doc(db, 'users', uid, 'rollups', 'lifetime')
+  const lifetimeRef = doc(db, 'time', uid, 'rollups', 'lifetime')
   batch.set(lifetimeRef, lifetime)
   ops++
 
   // Write state
-  const stateRef = doc(db, 'users', uid, 'rollups', 'state')
+  const stateRef = doc(db, 'time', uid, 'rollups', 'state')
   batch.set(stateRef, { lr: todayKey - 1 })
   ops++
 
@@ -249,9 +249,9 @@ export async function loadRollups(uid: string, tz: string): Promise<{
   const mKey = MONTH_PREFIX + monthKey(now, tz)
 
   const [wSnap, mSnap, lSnap] = await Promise.all([
-    getDoc(doc(db, 'users', uid, 'rollups', wKey)),
-    getDoc(doc(db, 'users', uid, 'rollups', mKey)),
-    getDoc(doc(db, 'users', uid, 'rollups', 'lifetime')),
+    getDoc(doc(db, 'time', uid, 'rollups', wKey)),
+    getDoc(doc(db, 'time', uid, 'rollups', mKey)),
+    getDoc(doc(db, 'time', uid, 'rollups', 'lifetime')),
   ])
 
   return {

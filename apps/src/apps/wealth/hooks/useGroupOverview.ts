@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { collection, query, orderBy, onSnapshot, doc, getDoc } from 'firebase/firestore'
 import { db } from '../../../firebase'
+import { assetFromWire } from '../types'
 import type { Group } from '../../../types'
-import type { Asset } from '../types'
+import type { Asset, WireAsset } from '../types'
 import type { T212Snapshot } from './useTrading212'
 import type { AccountCash, Position, Order } from '../services/trading212'
 
@@ -20,6 +21,7 @@ const EMPTY_SNAPSHOT: T212Snapshot = {
   portfolio: [],
   cash: null,
   orders: [],
+  meta: {},
   syncedAt: null,
   error: null,
 }
@@ -51,10 +53,10 @@ export function useGroupOverview(group: Group | null, selfUid: string | undefine
     const publish = () => setMembers([...memberMap.values()])
 
     for (const uid of group.members) {
-      // Initialise with placeholder
+      // Initialise with placeholder (empty displayName until profile resolves)
       memberMap.set(uid, {
         uid,
-        displayName: uid,
+        displayName: '',
         photoURL: '',
         assets: [],
         snapshot: EMPTY_SNAPSHOT,
@@ -76,18 +78,13 @@ export function useGroupOverview(group: Group | null, selfUid: string | undefine
 
       // Subscribe to assets
       const assetsQ = query(
-        collection(db, 'users', uid, 'assets'),
-        orderBy('createdAt', 'desc')
+        collection(db, 'wealth', uid, 'assets'),
+        orderBy('ca', 'desc')
       )
       const unsubAssets = onSnapshot(
         assetsQ,
         (snap) => {
-          const assets: Asset[] = snap.docs.map((d) => ({
-            id: d.id,
-            ...(d.data() as Omit<Asset, 'id' | 'createdAt' | 'updatedAt'>),
-            createdAt: d.data().createdAt?.toDate() ?? new Date(),
-            updatedAt: d.data().updatedAt?.toDate() ?? new Date(),
-          }))
+          const assets: Asset[] = snap.docs.map((d) => assetFromWire(d.id, d.data() as WireAsset))
           const existing = memberMap.get(uid)
           if (!existing) return
           const wasLoading = existing.assetsLoading
@@ -116,7 +113,7 @@ export function useGroupOverview(group: Group | null, selfUid: string | undefine
           const wasLoading = existing.snapshotLoading
           const d = snapDoc.exists() ? snapDoc.data() : null
           const snapshot: T212Snapshot = d
-            ? { portfolio: (d.p as Position[]) ?? [], cash: (d.c as AccountCash) ?? null, orders: (d.o as Order[]) ?? [], syncedAt: (d.ts as number) ?? null, error: (d.err as string) ?? null }
+            ? { portfolio: (d.p as Position[]) ?? [], cash: (d.c as AccountCash) ?? null, orders: (d.o as Order[]) ?? [], meta: (d.m as Record<string, { n: string; c: string }>) ?? {}, syncedAt: (d.ts as number) ?? null, error: (d.err as string) ?? null }
             : EMPTY_SNAPSHOT
           memberMap.set(uid, { ...existing, snapshot, snapshotLoading: false })
           publish()

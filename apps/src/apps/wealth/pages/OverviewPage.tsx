@@ -26,101 +26,53 @@ function fmt(n: number, currency: string) {
   return (CURRENCY_FMT[currency] ?? CURRENCY_FMT.GBP).format(n)
 }
 
-function fmtPct(n: number) {
-  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
-}
+// ── T212 snapshot → virtual assets ───────────────────────────────────────────
+// Converts T212 account data into Asset-shaped objects so they appear alongside
+// manual assets in the group list without any special-casing downstream.
 
-function timeAgo(ts: number | null): string {
-  if (!ts) return 'Never'
-  const diff = Math.floor((Date.now() - ts) / 1000)
-  if (diff < 60) return 'Just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
+function snapshotToVirtualAssets(snapshot: T212Snapshot): Asset[] {
+  if (!snapshot.cash) return []
+  const out: Asset[] = []
+
+  // Invested portfolio (total account value minus free uninvested cash)
+  const portfolioValue = snapshot.cash.total - snapshot.cash.free
+  if (portfolioValue > 0.01) {
+    out.push({
+      id: '__t212_portfolio',
+      name: 'Trading 212 ISA',
+      type: 'stocks',
+      currency: 'GBP',
+      initialValue: snapshot.cash.invested,
+      currentValue: portfolioValue,
+      growthRate: 0, yearlyContribution: 0, purchaseDate: '',
+      createdAt: new Date(), updatedAt: new Date(),
+    })
+  }
+
+  // Free/uninvested cash sitting in the account
+  if (snapshot.cash.free > 0.01) {
+    out.push({
+      id: '__t212_cash',
+      name: 'T212 Free Cash',
+      type: 'cash',
+      currency: 'GBP',
+      initialValue: 0, currentValue: snapshot.cash.free,
+      growthRate: 0, yearlyContribution: 0, purchaseDate: '',
+      createdAt: new Date(), updatedAt: new Date(),
+    })
+  }
+
+  return out
 }
 
 const ASSET_TYPE_ICONS: Record<AssetType, string> = {
-  stocks: '📈', real_estate: '🏠', crypto: '₿', bonds: '📋', cash: '💵', other: '📦',
+  stocks: '📈', real_estate: '🏠', crypto: '₿', bonds: '📋', cash: '💵',
+  mutual_funds: '🏦', pension: '🏖️', insurance: '🛡️', gold: '🥇', vehicle: '🚗', other: '📦',
 }
 const ASSET_TYPE_LABELS: Record<AssetType, string> = {
-  stocks: 'Stocks', real_estate: 'Real Estate', crypto: 'Crypto',
-  bonds: 'Bonds', cash: 'Cash', other: 'Other',
-}
-
-// ── T212 summary ──────────────────────────────────────────────────────────────
-
-interface T212CardProps {
-  snapshot: T212Snapshot
-  rates: ExchangeRates | null
-  displayCurrency: Currency
-  onClick: () => void
-}
-
-function T212Card({ snapshot, rates, displayCurrency, onClick }: T212CardProps) {
-  const cx = (n: number) => rates ? convert(n, 'GBP', displayCurrency, rates) : n
-  const total = snapshot.cash ? cx(snapshot.cash.total) : null
-  const invested = snapshot.cash ? cx(snapshot.cash.invested) : null
-  const ret = snapshot.cash ? snapshot.cash.ppl + snapshot.cash.result : 0
-  const retPct = snapshot.cash && snapshot.cash.invested > 0
-    ? (ret / snapshot.cash.invested) * 100 : null
-
-  if (!snapshot.cash) {
-    return (
-      <button
-        onClick={onClick}
-        className="w-full text-left border border-border bg-background hover:bg-muted/10 transition-colors p-4 flex items-center justify-between"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📊</span>
-          <div>
-            <p className="font-semibold text-sm">Trading 212 ISA</p>
-            <p className="text-xs text-muted">No data yet — tap to configure</p>
-          </div>
-        </div>
-        <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-    )
-  }
-
-  return (
-    <button onClick={onClick} className="w-full text-left border border-border bg-background hover:bg-muted/10 transition-colors p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📊</span>
-          <div>
-            <p className="font-semibold text-sm">Trading 212 ISA</p>
-            <p className="text-xs text-muted">Synced {timeAgo(snapshot.syncedAt)}</p>
-          </div>
-        </div>
-        <svg className="w-4 h-4 text-muted mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </div>
-      <div className="grid grid-cols-3 gap-px bg-border border border-border">
-        <div className="bg-background px-3 py-2">
-          <p className="text-[10px] text-muted uppercase tracking-wide font-medium">Total</p>
-          <p className="text-base font-semibold tabular-nums mt-0.5">{total !== null ? fmt(total, displayCurrency) : '—'}</p>
-        </div>
-        <div className="bg-background px-3 py-2">
-          <p className="text-[10px] text-muted uppercase tracking-wide font-medium">Invested</p>
-          <p className="text-base font-semibold tabular-nums mt-0.5">{invested !== null ? fmt(invested, displayCurrency) : '—'}</p>
-        </div>
-        <div className="bg-background px-3 py-2">
-          <p className="text-[10px] text-muted uppercase tracking-wide font-medium">Return</p>
-          <p className={`text-base font-semibold tabular-nums mt-0.5 ${ret >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {retPct !== null ? fmtPct(retPct) : '—'}
-          </p>
-          {retPct !== null && (
-            <p className={`text-[10px] tabular-nums ${ret >= 0 ? 'text-success' : 'text-destructive'}`}>
-              {ret >= 0 ? '+' : ''}{fmt(cx(ret), displayCurrency)}
-            </p>
-          )}
-        </div>
-      </div>
-    </button>
-  )
+  stocks: 'Stocks / ISA', real_estate: 'Real Estate', crypto: 'Crypto',
+  bonds: 'Bonds / FD', cash: 'Cash', mutual_funds: 'Mutual Funds',
+  pension: 'Pension / PF', insurance: 'Insurance', gold: 'Gold', vehicle: 'Vehicle', other: 'Other',
 }
 
 // ── Asset group list ──────────────────────────────────────────────────────────
@@ -189,7 +141,7 @@ function AssetGroupList({
                 className="w-full text-left px-4 py-3 hover:bg-muted/10 transition-colors flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-base">{ASSET_TYPE_ICONS[g.type]}</span>
+                  <span className="text-base w-5 text-center shrink-0">{ASSET_TYPE_ICONS[g.type]}</span>
                   <div>
                     <p className="text-sm font-medium">{ASSET_TYPE_LABELS[g.type]}</p>
                     <p className="text-xs text-muted">
@@ -239,6 +191,7 @@ export function OverviewPage() {
       const combinedSnapshot: T212Snapshot = {
         portfolio: [],
         orders: [],
+        meta: {},
         syncedAt: null,
         error: null,
         cash: members.reduce<import('../services/trading212').AccountCash | null>((acc, m) => {
@@ -260,7 +213,7 @@ export function OverviewPage() {
     }
     // Individual member view
     const member = members.find((m) => m.uid === view)
-    if (!member) return { assets: [], snapshot: { portfolio: [], cash: null, orders: [], syncedAt: null, error: null }, loading: false }
+    if (!member) return { assets: [], snapshot: { portfolio: [], cash: null, orders: [], meta: {}, syncedAt: null, error: null }, loading: false }
     return {
       assets: member.assets,
       snapshot: member.snapshot,
@@ -271,15 +224,16 @@ export function OverviewPage() {
   const { assets, snapshot, loading: dataLoading } = getActiveData()
 
   const cx = (a: Asset) => rates ? convert(a.currentValue, a.currency, displayCurrency, rates) : a.currentValue
-  const manualTotal = assets.reduce((s, a) => s + cx(a), 0)
-  const t212Total = snapshot.cash
-    ? (rates ? convert(snapshot.cash.total, 'GBP', displayCurrency, rates) : snapshot.cash.total)
-    : 0
-  const netWorth = manualTotal + t212Total
+
+  // Merge broker virtual assets into the manual list for unified display
+  const brokerAssets = snapshotToVirtualAssets(snapshot)
+  const allAssets = [...assets, ...brokerAssets]
+  const netWorth = allAssets.reduce((s, a) => s + cx(a), 0)
 
   const loading = groupsLoading || ratesLoading || dataLoading
 
-  if (loading && !members.length && !selfAssets.length) {
+  // Block until all data is loaded — prevents partial renders when members load at different times
+  if (loading) {
     return (
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-6">
         <InlineSpinner />
@@ -342,7 +296,7 @@ export function OverviewPage() {
                       : 'border-border hover:bg-muted/20 text-muted'
                   }`}
                 >
-                  {m.uid === uid ? 'Me' : m.displayName.split(' ')[0]}
+                  {m.uid === uid ? 'Me' : (m.displayName || '…').split(' ')[0]}
                 </button>
               ))}
             </div>
@@ -352,20 +306,9 @@ export function OverviewPage() {
 
       {dataLoading && <InlineSpinner text="Loading data" />}
 
-      {/* T212 ISA card */}
-      <div>
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Brokerage</h2>
-        <T212Card
-          snapshot={snapshot}
-          rates={rates}
-          displayCurrency={displayCurrency}
-          onClick={() => navigate('/wealth/trading212')}
-        />
-      </div>
-
-      {/* Manual assets */}
+      {/* All assets (manual + broker connections) grouped by type */}
       <AssetGroupList
-        assets={assets}
+        assets={allAssets}
         rates={rates}
         displayCurrency={displayCurrency}
         netWorth={netWorth}

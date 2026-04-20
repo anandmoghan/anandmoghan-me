@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../../firebase'
-import type { Position, AccountCash, Order, Instrument } from '../services/trading212'
+import { inferTickerCurrency, cleanTicker } from '../services/trading212'
+import type { Position, AccountCash, Order } from '../services/trading212'
 
 // ── Snapshot (portfolio data, updated every 4h by Worker cron) ───────────────
 
@@ -9,6 +10,7 @@ export interface T212Snapshot {
   portfolio: Position[]
   cash: AccountCash | null
   orders: Order[]
+  meta: Record<string, { n: string; c: string }>  // ticker → { name, currencyCode }
   syncedAt: number | null   // unix ms
   error: string | null
 }
@@ -17,6 +19,7 @@ const EMPTY_SNAPSHOT: T212Snapshot = {
   portfolio: [],
   cash: null,
   orders: [],
+  meta: {},
   syncedAt: null,
   error: null,
 }
@@ -37,6 +40,7 @@ export function useT212Snapshot(uid: string | undefined) {
           portfolio: (d.p as Position[]) ?? [],
           cash: (d.c as AccountCash) ?? null,
           orders: (d.o as Order[]) ?? [],
+          meta: (d.m as Record<string, { n: string; c: string }>) ?? {},
           syncedAt: (d.ts as number) ?? null,
           error: (d.err as string) ?? null,
         })
@@ -68,21 +72,16 @@ export function useT212Configured(uid: string | undefined) {
 
 // ── Instrument metadata (ticker → name/currency) ─────────────────────────────
 
-/** Listen to config/t212Instruments for ticker metadata. Returns stable Maps. */
-export function useInstruments() {
-  const [currencyMap, setCurrencyMap] = useState<Map<string, string>>(new Map())
-  const [nameMap, setNameMap] = useState<Map<string, string>>(new Map())
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'config', 't212Instruments'), (snap) => {
-      if (!snap.exists()) return
-      const instruments = (snap.data().i as Instrument[]) ?? []
-      setCurrencyMap(new Map(instruments.map((i) => [i.ticker, i.currencyCode])))
-      setNameMap(new Map(instruments.map((i) => [i.ticker, i.name || i.shortname || i.ticker])))
-    })
-    return unsub
-  }, [])
-
+/** Derive currencyMap and nameMap from snapshot.meta (written by Worker at sync time). */
+export function useInstruments(snapshot: T212Snapshot) {
+  const currencyMap = useMemo(
+    () => new Map(Object.entries(snapshot.meta).map(([t, v]) => [t, v.c])),
+    [snapshot.meta]
+  )
+  const nameMap = useMemo(
+    () => new Map(Object.entries(snapshot.meta).map(([t, v]) => [t, v.n || cleanTicker(t)])),
+    [snapshot.meta]
+  )
   return { currencyMap, nameMap }
 }
 

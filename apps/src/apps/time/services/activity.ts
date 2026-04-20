@@ -24,7 +24,7 @@ import { applySessionDelta } from './rollup'
 /** Finds the currently active session (e == null), if any. Returns null otherwise. */
 export async function getActiveSession(uid: string): Promise<Session | null> {
   const q = query(
-    collection(db, 'users', uid, 'sessions'),
+    collection(db, 'time', uid, 'sessions'),
     where('e', '==', null),
     limit(1),
   )
@@ -53,7 +53,7 @@ export async function switchActivity(
   await runTransaction(db, async (tx) => {
     // Re-verify inside transaction
     if (active) {
-      const activeRef = doc(db, 'users', uid, 'sessions', active.id)
+      const activeRef = doc(db, 'time', uid, 'sessions', active.id)
       const snap = await tx.get(activeRef)
       if (snap.exists() && snap.data().e === null) {
         const session = sessionFromWire(active.id, snap.data() as WireSession)
@@ -62,7 +62,7 @@ export async function switchActivity(
     }
 
     // Create new active session
-    const newRef = doc(collection(db, 'users', uid, 'sessions'))
+    const newRef = doc(collection(db, 'time', uid, 'sessions'))
     tx.set(newRef, {
       c: cid,
       s: Timestamp.fromDate(now),
@@ -86,7 +86,7 @@ export async function stopActivity(
   if (!active) return
 
   await runTransaction(db, async (tx) => {
-    const activeRef = doc(db, 'users', uid, 'sessions', active.id)
+    const activeRef = doc(db, 'time', uid, 'sessions', active.id)
     const snap = await tx.get(activeRef)
     if (!snap.exists() || snap.data().e !== null) return
     const session = sessionFromWire(active.id, snap.data() as WireSession)
@@ -103,7 +103,7 @@ export async function deleteSession(
   tz: string,
 ): Promise<void> {
   const todayKey = localDayKey(new Date(), tz)
-  const sessionRef = doc(db, 'users', uid, 'sessions', sessionId)
+  const sessionRef = doc(db, 'time', uid, 'sessions', sessionId)
   const snap = await getDoc(sessionRef)
   if (!snap.exists()) return
 
@@ -141,7 +141,7 @@ export async function editSession(
   tz: string,
 ): Promise<void> {
   const todayKey = localDayKey(new Date(), tz)
-  const sessionRef = doc(db, 'users', uid, 'sessions', sessionId)
+  const sessionRef = doc(db, 'time', uid, 'sessions', sessionId)
   const snap = await getDoc(sessionRef)
   if (!snap.exists()) return
 
@@ -209,7 +209,7 @@ export async function switchTimezone(
   const allToDelete: string[] = []
 
   for (const dk of todayKeys) {
-    const q = query(collection(db, 'users', uid, 'sessions'), where('dk', '==', dk))
+    const q = query(collection(db, 'time', uid, 'sessions'), where('dk', '==', dk))
     const snap = await fsGetDocs(q)
     snap.docs.forEach(d => allToDelete.push(d.id))
   }
@@ -219,10 +219,10 @@ export async function switchTimezone(
   if (active && !allToDelete.includes(active.id)) allToDelete.push(active.id)
 
   // Delete all
-  await Promise.all(allToDelete.map(id => deleteDoc(fsDoc(db, 'users', uid, 'sessions', id))))
+  await Promise.all(allToDelete.map(id => deleteDoc(fsDoc(db, 'time', uid, 'sessions', id))))
 
   // Write new tz to prefs
-  await setDoc(fsDoc(db, 'users', uid, 'settings', 'preferences'), { tz: newTz }, { merge: true })
+  await setDoc(fsDoc(db, 'time', uid, 'prefs', 'p'), { tz: newTz }, { merge: true })
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ async function closeSessionInTx(
   todayKey: number,
   minDuration?: number,
 ): Promise<void> {
-  const sessionRef = doc(db, 'users', uid, 'sessions', session.id)
+  const sessionRef = doc(db, 'time', uid, 'sessions', session.id)
   const dur = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000))
 
   if (minDuration && dur < minDuration) {
@@ -246,7 +246,7 @@ async function closeSessionInTx(
   }
 
   // Write last-run timestamp to category doc
-  const catRef = doc(db, 'users', uid, 'categories', session.categoryId)
+  const catRef = doc(db, 'time', uid, 'categories', session.categoryId)
   tx.update(catRef, { lr: Timestamp.fromDate(now) })
 
   const pieces = splitAcrossMidnight(session.startedAt, now, tz)
@@ -267,7 +267,7 @@ async function closeSessionInTx(
     // Multi-day: delete original, emit one doc per piece
     tx.delete(sessionRef)
     for (const piece of pieces) {
-      const pieceRef = doc(collection(db, 'users', uid, 'sessions'))
+      const pieceRef = doc(collection(db, 'time', uid, 'sessions'))
       const pieceDur = Math.max(0, Math.floor((piece.e.getTime() - piece.s.getTime()) / 1000))
       tx.set(pieceRef, {
         c: session.categoryId,

@@ -32,35 +32,39 @@ export function useInvites() {
       return
     }
 
-    const sentQ = query(collection(db, 'invites'), where('fromUid', '==', user.uid))
+    // 'fu' = fromUid, 'tu' = toUid, 's' = status
+    const sentQ = query(collection(db, 'invites'), where('fu', '==', user.uid))
     const recvQ = query(
       collection(db, 'invites'),
-      where('toUid', '==', user.uid),
-      where('status', '==', 'pending')
+      where('tu', '==', user.uid),
+      where('s', '==', 'pending')
     )
 
     let sentDone = false, recvDone = false
     const check = () => { if (sentDone && recvDone) setLoading(false) }
 
+    const wireToInvite = (d: ReturnType<typeof doc> extends never ? never : { id: string; data: () => Record<string, unknown> }): Invite | null => {
+      const w = (d as { id: string; data: () => Record<string, unknown> }).data()
+      if (!w.tu) return null  // skip legacy toEmail docs
+      return {
+        id: (d as { id: string }).id,
+        groupId: w.gi as string,
+        groupName: w.gn as string,
+        fromUid: w.fu as string,
+        fromName: w.fn as string,
+        toUid: w.tu as string,
+        status: w.s as 'pending' | 'accepted' | 'declined',
+        createdAt: (w.ca as { toDate?: () => Date } | null)?.toDate?.() ?? new Date(),
+      }
+    }
+
     const unsubSent = onSnapshot(sentQ, (snap) => {
-      setSentInvites(snap.docs
-        .filter(d => d.data().toUid)  // skip legacy toEmail docs
-        .map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<Invite, 'id' | 'createdAt'>),
-          createdAt: d.data().createdAt?.toDate() || new Date(),
-        })))
+      setSentInvites(snap.docs.map(wireToInvite).filter(Boolean) as Invite[])
       sentDone = true; check()
     })
 
     const unsubRecv = onSnapshot(recvQ, (snap) => {
-      setReceivedInvites(snap.docs
-        .filter(d => d.data().toUid)  // skip legacy toEmail docs
-        .map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<Invite, 'id' | 'createdAt'>),
-          createdAt: d.data().createdAt?.toDate() || new Date(),
-        })))
+      setReceivedInvites(snap.docs.map(wireToInvite).filter(Boolean) as Invite[])
       recvDone = true; check()
     })
 
@@ -103,36 +107,22 @@ export function useInvites() {
     if (existing) throw new Error('Invite already sent to this user for this group')
 
     await addDoc(collection(db, 'invites'), {
-      groupId,
-      groupName,
-      fromUid: user.uid,
-      fromName: user.displayName || user.email,
-      toUid,
-      status: 'pending',
-      createdAt: serverTimestamp(),
+      gi: groupId,
+      gn: groupName,
+      fu: user.uid,
+      fn: user.displayName || user.email,
+      tu: toUid,
+      s: 'pending',
+      ca: serverTimestamp(),
     })
   }
 
   const respondToInvite = async (inviteId: string, status: 'accepted' | 'declined', groupId?: string) => {
     if (!user) throw new Error('Not authenticated')
-    await updateDoc(doc(db, 'invites', inviteId), { status })
+    await updateDoc(doc(db, 'invites', inviteId), { s: status })
 
     if (status === 'accepted' && groupId) {
-      const groupSnap = await getDoc(doc(db, 'groups', groupId))
-      const existingMembers: string[] = groupSnap.data()?.members ?? []
-
-      // Add accepting user to the group
-      await updateDoc(doc(db, 'groups', groupId), { members: arrayUnion(user.uid) })
-
-      // Maintain readableBy on all member docs so Firestore rules can check cross-user access
-      await Promise.all([
-        // New member can be read by existing members
-        updateDoc(doc(db, 'users', user.uid), { readableBy: arrayUnion(...existingMembers) }),
-        // Existing members can now be read by the new member
-        ...existingMembers.map((uid) =>
-          updateDoc(doc(db, 'users', uid), { readableBy: arrayUnion(user.uid) })
-        ),
-      ])
+      await updateDoc(doc(db, 'groups', groupId), { m: arrayUnion(user.uid) })
     }
   }
 

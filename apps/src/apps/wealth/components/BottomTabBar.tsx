@@ -26,13 +26,12 @@ const tabs = [
     ),
   },
   {
-    path: '/wealth/trading212',
+    path: '/wealth/connections',
     exact: false,
-    label: 'Trading212',
+    label: 'Connections',
     icon: (active: boolean) => (
       <svg className={`w-5 h-5 ${active ? 'text-accent' : 'text-muted'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 2}>
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-        <polyline points="16 7 22 7 22 13" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
     ),
   },

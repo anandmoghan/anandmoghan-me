@@ -16,13 +16,13 @@ export async function createCategory(
   uid: string,
   data: Omit<Category, 'id'>,
 ): Promise<string> {
-  const metaRef = doc(db, 'users', uid, 'categories', '_meta')
+  const metaRef = doc(db, 'time', uid, 'categories', '_meta')
   let cid = ''
   await runTransaction(db, async (tx) => {
     const metaSnap = await tx.get(metaRef)
     const next: number = metaSnap.exists() ? (metaSnap.data().next ?? 1) : 1
     cid = `c${next}`
-    const catRef = doc(db, 'users', uid, 'categories', cid)
+    const catRef = doc(db, 'time', uid, 'categories', cid)
     tx.set(catRef, categoryToWire(data))
     tx.set(metaRef, { next: next + 1 }, { merge: true })
   })
@@ -35,7 +35,7 @@ export async function updateCategory(
   cid: string,
   data: Partial<Omit<Category, 'id'>>,
 ): Promise<void> {
-  const ref = doc(db, 'users', uid, 'categories', cid)
+  const ref = doc(db, 'time', uid, 'categories', cid)
   const wire: Partial<WireCategory> = {}
   if (data.name !== undefined) wire.n = data.name
   if (data.icon !== undefined) wire.i = data.icon
@@ -53,12 +53,12 @@ export async function updateCategory(
 
 /** Soft-deletes a category by setting a: true. */
 export async function archiveCategory(uid: string, cid: string): Promise<void> {
-  await updateDoc(doc(db, 'users', uid, 'categories', cid), { a: true })
+  await updateDoc(doc(db, 'time', uid, 'categories', cid), { a: true })
 }
 
 /** Restores an archived category. */
 export async function unarchiveCategory(uid: string, cid: string): Promise<void> {
-  await updateDoc(doc(db, 'users', uid, 'categories', cid), { a: false })
+  await updateDoc(doc(db, 'time', uid, 'categories', cid), { a: false })
 }
 
 /** Returns { categories: Category[], categoryMap: Record<cid, Category> } from a snapshot. */

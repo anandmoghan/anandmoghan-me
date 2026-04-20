@@ -23,7 +23,7 @@ export function useTodaySessions(uid: string | undefined, tz: string): {
     }
 
     const q = query(
-      collection(db, 'users', uid, 'sessions'),
+      collection(db, 'time', uid, 'sessions'),
       where('dk', '==', todayKey),
     )
 

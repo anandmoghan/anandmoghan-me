@@ -27,16 +27,21 @@ export function useGroups() {
       return
     }
 
-    const q = query(collection(db, 'groups'), where('members', 'array-contains', user.uid))
+    // 'm' is the wire name for the members array
+    const q = query(collection(db, 'groups'), where('m', 'array-contains', user.uid))
     const unsub = onSnapshot(q, (snap) => {
-      const data: Group[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<Group, 'id' | 'createdAt'>),
-        createdAt: d.data().createdAt?.toDate() || new Date(),
-      }))
+      const data: Group[] = snap.docs.map((d) => {
+        const w = d.data()
+        return {
+          id: d.id,
+          name: w.n as string,
+          createdBy: w.cb as string,
+          members: (w.m as string[]) ?? [],
+          createdAt: (w.ca as { toDate?: () => Date } | null)?.toDate?.() ?? new Date(),
+        }
+      })
       setGroups(data)
       setLoading(false)
-      // Auto-select first group if none selected
       if (data.length > 0 && !selectedGroupId) {
         setSelectedGroupId(data[0].id)
       }
@@ -47,10 +52,10 @@ export function useGroups() {
   const createGroup = async (name: string) => {
     if (!user) throw new Error('Not authenticated')
     const docRef = await addDoc(collection(db, 'groups'), {
-      name,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      members: [user.uid],
+      n: name,
+      cb: user.uid,
+      ca: serverTimestamp(),
+      m: [user.uid],
     })
     setSelectedGroupId(docRef.id)
     return docRef.id
@@ -58,7 +63,7 @@ export function useGroups() {
 
   const addMemberToGroup = async (groupId: string, uid: string) => {
     await updateDoc(doc(db, 'groups', groupId), {
-      members: arrayUnion(uid),
+      m: arrayUnion(uid),
     })
   }
 

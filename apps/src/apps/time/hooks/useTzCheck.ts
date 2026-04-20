@@ -26,7 +26,7 @@ export function useTzCheck(uid: string | undefined): UseTzCheckResult {
       return
     }
 
-    const ref = doc(db, 'users', uid, 'settings', 'preferences')
+    const ref = doc(db, 'time', uid, 'prefs', 'p')
     const unsub = onSnapshot(ref, async (snap) => {
       if (snap.exists() && snap.data().tz) {
         setStoredTz(snap.data().tz)

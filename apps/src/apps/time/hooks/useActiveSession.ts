@@ -20,7 +20,7 @@ export function useActiveSession(uid: string | undefined): {
     }
 
     const q = query(
-      collection(db, 'users', uid, 'sessions'),
+      collection(db, 'time', uid, 'sessions'),
       where('e', '==', null),
       limit(1),
     )

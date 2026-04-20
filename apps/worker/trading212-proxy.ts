@@ -305,17 +305,18 @@ interface T212Order {
 }
 interface T212Instrument { ticker: string; currencyCode: string; name: string; shortname: string }
 
-// Fetch portfolio, cash, orders (and optionally instruments) for a user.
-// Snapshot fields are minimal keys to save Firestore bandwidth.
+// Fetch portfolio, cash, orders, and instrument metadata for a user.
+// Snapshot fields use minimal keys: p=portfolio, c=cash, o=orders, ts=timestamp,
+// err=error, m=instrument metadata map (ticker → {n: name, c: currency}).
 async function fetchAndWriteSnapshot(
   projectId: string, uid: string, apiKey: string, apiSecret: string,
-  token: string, fetchInstruments: boolean
+  token: string
 ): Promise<void> {
   let error: string | null = null
   let portfolio: T212Position[] = []
   let cash: T212Cash | null = null
   let orders: T212Order[] = []
-  let instruments: T212Instrument[] | null = null
+  let meta: Record<string, { n: string; c: string }> = {}
 
   try {
     const [p, c, oResp] = await Promise.all([
@@ -331,29 +332,36 @@ async function fetchAndWriteSnapshot(
       const oBody = (await oResp.json()) as { items: T212Order[] }
       orders = oBody.items ?? []
     }
-    if (fetchInstruments) {
-      instruments = await t212Get<T212Instrument[]>('/equity/metadata/instruments', apiKey, apiSecret)
+
+    // Fetch full instrument list and filter to just this user's portfolio tickers.
+    // T212 returns 10k+ instruments — we only store what the user holds.
+    if (portfolio.length > 0) {
+      const needed = new Set(portfolio.map((pos) => pos.ticker))
+      const allInstruments = await t212Get<T212Instrument[]>('/equity/metadata/instruments', apiKey, apiSecret)
+      for (const instr of allInstruments) {
+        if (needed.has(instr.ticker)) {
+          meta[instr.ticker] = {
+            n: instr.name || instr.shortname || instr.ticker,
+            c: instr.currencyCode,
+          }
+        }
+      }
     }
   } catch (e) {
     error = String(e)
   }
 
-  // Write snapshot with minimal field names (p, c, o, ts, err)
-  await fsWrite(projectId, `t212Snapshots/${uid}`, {
+  // Write snapshot — include meta only when we have it
+  const doc: Record<string, unknown> = {
     p: portfolio,
     c: cash,
     o: orders,
     ts: Date.now(),
     err: error,
-  }, token)
-
-  // Write instruments to shared config if fetched
-  if (instruments && instruments.length > 0) {
-    await fsWrite(projectId, 'config/t212Instruments', {
-      i: instruments,
-      updatedAt: Date.now(),
-    }, token)
   }
+  if (Object.keys(meta).length > 0) doc.m = meta
+
+  await fsWrite(projectId, `t212Snapshots/${uid}`, doc, token)
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────

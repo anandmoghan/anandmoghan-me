@@ -1,20 +1,30 @@
 import { useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useAssets } from '../hooks/useAssets'
+import { useGroups } from '../hooks/useGroups'
+import { useGroupOverview } from '../hooks/useGroupOverview'
 import { useExchangeRates } from '../hooks/useExchangeRates'
+import { useT212Snapshot, useInstruments } from '../hooks/useTrading212'
 import { convert } from '../services/exchangeRates'
+import { inferTickerCurrency, cleanTicker } from '../services/trading212'
 import { CurrencySelector } from '../components/CurrencySelector'
 import { InlineSpinner } from '../../../components/Spinner'
 import type { Asset, AssetInput, AssetType, AssetCurrency } from '../types'
+import type { Position } from '../services/trading212'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ASSET_TYPES: Array<{ value: AssetType; label: string; icon: string }> = [
-  { value: 'stocks', label: 'Stocks', icon: '📈' },
+  { value: 'stocks', label: 'Stocks / ISA / ETF', icon: '📈' },
+  { value: 'mutual_funds', label: 'Mutual Funds', icon: '🏦' },
   { value: 'real_estate', label: 'Real Estate', icon: '🏠' },
   { value: 'crypto', label: 'Crypto', icon: '₿' },
-  { value: 'bonds', label: 'Bonds', icon: '📋' },
-  { value: 'cash', label: 'Cash', icon: '💵' },
+  { value: 'bonds', label: 'Bonds / FD', icon: '📋' },
+  { value: 'pension', label: 'Pension / PF', icon: '🏖️' },
+  { value: 'insurance', label: 'Insurance / ULIP', icon: '🛡️' },
+  { value: 'gold', label: 'Gold', icon: '🥇' },
+  { value: 'vehicle', label: 'Vehicle', icon: '🚗' },
+  { value: 'cash', label: 'Cash / Savings', icon: '💵' },
   { value: 'other', label: 'Other', icon: '📦' },
 ]
 
@@ -24,6 +34,14 @@ const DISPLAY_FMT: Record<string, Intl.NumberFormat> = {
   GBP: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }),
   USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }),
   INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }),
+}
+const PRICE_FMT: Record<string, Intl.NumberFormat> = {
+  GBP: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+}
+function fmtPrice(n: number, currency: string) {
+  return (PRICE_FMT[currency] ?? PRICE_FMT.GBP).format(n)
 }
 
 function fmt(n: number, currency: string) {
@@ -46,6 +64,9 @@ interface AssetFormProps {
   onCancel: () => void
 }
 
+// Types where investment-style fields (purchase date, growth rate, initial value) don't apply
+const SIMPLE_TYPES = new Set<AssetType>(['cash', 'vehicle'])
+
 function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
   const [name, setName] = useState(initial?.name ?? '')
   const [type, setType] = useState<AssetType>(initial?.type ?? 'stocks')
@@ -59,22 +80,24 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
   const [error, setError] = useState('')
 
   const isEdit = !!initial
+  const isSimple = SIMPLE_TYPES.has(type)
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Name is required.'); return }
-    if (!currentValue || isNaN(parseFloat(currentValue))) { setError('Current value is required.'); return }
+    if (!currentValue || isNaN(parseFloat(currentValue))) { setError('Balance is required.'); return }
     setSaving(true)
     setError('')
     try {
+      const cv = parseFloat(currentValue)
       await onSave({
         name: name.trim(),
         type,
         currency,
-        initialValue: parseFloat(initialValue) || 0,
-        currentValue: parseFloat(currentValue),
-        growthRate: parseFloat(growthRate) || 0,
-        yearlyContribution: parseFloat(yearlyContribution) || 0,
-        purchaseDate,
+        initialValue: isSimple ? cv : (parseFloat(initialValue) || 0),
+        currentValue: cv,
+        growthRate: isSimple ? 0 : (parseFloat(growthRate) || 0),
+        yearlyContribution: isSimple ? 0 : (parseFloat(yearlyContribution) || 0),
+        purchaseDate: isSimple ? new Date().toISOString().slice(0, 10) : purchaseDate,
       })
     } catch (e) {
       setError(String(e))
@@ -102,7 +125,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Flat in London"
+              placeholder={type === 'cash' ? 'e.g. Barclays Current Account' : 'e.g. Flat in London'}
               className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
               autoFocus
             />
@@ -151,21 +174,12 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
             </div>
           </div>
 
-          {/* Values */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Cash/Vehicle: just current balance */}
+          {isSimple ? (
             <div>
-              <label className="text-xs text-muted font-medium mb-1 block">Initial Value ({currency})</label>
-              <input
-                type="number"
-                value={initialValue}
-                onChange={(e) => setInitialValue(e.target.value)}
-                placeholder="0"
-                min="0"
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted font-medium mb-1 block">Current Value ({currency})</label>
+              <label className="text-xs text-muted font-medium mb-1 block">
+                {type === 'cash' ? `Current Balance (${currency})` : `Current Value (${currency})`}
+              </label>
               <input
                 type="number"
                 value={currentValue}
@@ -175,44 +189,72 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
                 className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Values */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted font-medium mb-1 block">Initial Value ({currency})</label>
+                  <input
+                    type="number"
+                    value={initialValue}
+                    onChange={(e) => setInitialValue(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted font-medium mb-1 block">Current Value ({currency})</label>
+                  <input
+                    type="number"
+                    value={currentValue}
+                    onChange={(e) => setCurrentValue(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              </div>
 
-          {/* Growth rate and contribution */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted font-medium mb-1 block">Growth Rate (% / yr)</label>
-              <input
-                type="number"
-                value={growthRate}
-                onChange={(e) => setGrowthRate(e.target.value)}
-                placeholder="7"
-                step="0.5"
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted font-medium mb-1 block">Yearly Contribution ({currency})</label>
-              <input
-                type="number"
-                value={yearlyContribution}
-                onChange={(e) => setYearlyContribution(e.target.value)}
-                placeholder="0"
-                min="0"
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-          </div>
+              {/* Growth rate and contribution */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted font-medium mb-1 block">Growth Rate (% / yr)</label>
+                  <input
+                    type="number"
+                    value={growthRate}
+                    onChange={(e) => setGrowthRate(e.target.value)}
+                    placeholder="7"
+                    step="0.5"
+                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted font-medium mb-1 block">Yearly Contribution ({currency})</label>
+                  <input
+                    type="number"
+                    value={yearlyContribution}
+                    onChange={(e) => setYearlyContribution(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              </div>
 
-          {/* Purchase date */}
-          <div>
-            <label className="text-xs text-muted font-medium mb-1 block">Purchase Date</label>
-            <input
-              type="date"
-              value={purchaseDate}
-              onChange={(e) => setPurchaseDate(e.target.value)}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
-            />
-          </div>
+              {/* Purchase date */}
+              <div>
+                <label className="text-xs text-muted font-medium mb-1 block">Purchase Date</label>
+                <input
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+            </>
+          )}
 
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
@@ -379,23 +421,71 @@ function AssetDetailModal({ asset, displayCurrency, rates, onEdit, onDelete, onC
 
 // ── Assets Page ───────────────────────────────────────────────────────────────
 
+// ── T212 position helpers ─────────────────────────────────────────────────────
+
+/** Returns position current value and its actual currency (GBX normalised to GBP). */
+function positionNative(pos: Position, currencyMap: Map<string, string>): { value: number; currency: string } {
+  const raw = currencyMap.get(pos.ticker) ?? inferTickerCurrency(pos.ticker)
+  const isGbx = raw === 'GBX'
+  const price = isGbx ? pos.currentPrice / 100 : pos.currentPrice
+  return { value: price * pos.quantity, currency: isGbx ? 'GBP' : raw }
+}
+
+/** Returns position cost basis and its actual currency. */
+function positionCostNative(pos: Position, currencyMap: Map<string, string>): { value: number; currency: string } {
+  const raw = currencyMap.get(pos.ticker) ?? inferTickerCurrency(pos.ticker)
+  const isGbx = raw === 'GBX'
+  const price = isGbx ? pos.averagePrice / 100 : pos.averagePrice
+  return { value: price * pos.quantity, currency: isGbx ? 'GBP' : raw }
+}
+
 export function AssetsPage() {
   const { user } = useAuth()
   const uid = user?.uid ?? ''
 
   const { assets, loading, addAsset, updateAsset, deleteAsset } = useAssets(uid || undefined)
-  const { rates, displayCurrency, setDisplayCurrency } = useExchangeRates()
+  const { rates, displayCurrency, setDisplayCurrency, loading: ratesLoading } = useExchangeRates()
+  const { groups, selectedGroupId, setSelectedGroupId } = useGroups()
+  const selectedGroup = groups.find(g => g.id === selectedGroupId) ?? null
+  const { members, loading: groupLoading } = useGroupOverview(selectedGroup, uid)
+  const { snapshot: t212Snapshot, loading: t212Loading } = useT212Snapshot(uid || undefined)
+  const { currencyMap, nameMap } = useInstruments(t212Snapshot)
 
+  const [view, setView] = useState<'mine' | 'family'>('mine')
   const [showForm, setShowForm] = useState(false)
   const [editAsset, setEditAsset] = useState<Asset | null>(null)
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null)
 
-  const cx = (a: Asset) => rates ? convert(a.currentValue, a.currency, displayCurrency, rates) : a.currentValue
-  const total = assets.reduce((s, a) => s + cx(a), 0)
-
   const fmt2 = (n: number) => (DISPLAY_FMT[displayCurrency] ?? DISPLAY_FMT.GBP).format(n)
+  const cx = (a: Asset) => rates ? convert(a.currentValue, a.currency, displayCurrency, rates) : a.currentValue
+  const cxGbp = (n: number) => rates ? convert(n, 'GBP', displayCurrency, rates) : n
 
-  if (loading) {
+  const hasGroup = groups.length > 0
+
+  // T212 total for "mine" view (family view totals are computed per-member below)
+  const myT212Total = view === 'mine' && t212Snapshot.cash
+    ? cxGbp(t212Snapshot.cash.total)
+    : 0
+
+  // In family view: group assets by member; in mine view: just own assets
+  const memberSections = view === 'family' && hasGroup
+    ? members.map(m => {
+        const memberT212Total = m.snapshot.cash ? cxGbp(m.snapshot.cash.total) : 0
+        return {
+          uid: m.uid,
+          name: m.uid === uid ? 'Me' : (m.displayName || '…'),
+          isMine: m.uid === uid,
+          assets: m.assets,
+          snapshot: m.snapshot,
+          total: m.assets.reduce((s, a) => s + cx(a), 0) + memberT212Total,
+        }
+      })
+    : [{ uid, name: 'Me', isMine: true, assets, snapshot: t212Snapshot, total: assets.reduce((s, a) => s + cx(a), 0) + myT212Total }]
+
+  const total = memberSections.reduce((s, m) => s + m.total, 0)
+  const isLoading = ratesLoading || loading || (view === 'family' && groupLoading)
+
+  if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-6">
         <InlineSpinner />
@@ -409,7 +499,7 @@ export function AssetsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">Assets</h2>
-          {assets.length > 0 && (
+          {total > 0 && (
             <p className="text-2xl font-bold tabular-nums mt-0.5">{fmt2(total)}</p>
           )}
         </div>
@@ -427,8 +517,38 @@ export function AssetsPage() {
         </div>
       </div>
 
+      {/* View toggle — only shown when in a group */}
+      {hasGroup && (
+        <div className="flex items-center gap-0">
+          {/* Group selector if multiple groups */}
+          {groups.length > 1 && (
+            <select
+              value={selectedGroupId ?? ''}
+              onChange={e => setSelectedGroupId(e.target.value)}
+              className="text-xs border border-border bg-background px-2 py-1.5 mr-2 focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
+          <div className="flex border border-border overflow-hidden text-xs">
+            <button
+              onClick={() => setView('mine')}
+              className={`px-4 py-1.5 transition-colors ${view === 'mine' ? 'bg-foreground text-background font-medium' : 'hover:bg-muted/20'}`}
+            >
+              Mine
+            </button>
+            <button
+              onClick={() => setView('family')}
+              className={`px-4 py-1.5 border-l border-border transition-colors ${view === 'family' ? 'bg-foreground text-background font-medium' : 'hover:bg-muted/20'}`}
+            >
+              {selectedGroup?.name ?? 'Family'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {assets.length === 0 && (
+      {memberSections[0]?.assets.length === 0 && view === 'mine' && (
         <div className="text-center py-16">
           <p className="text-4xl mb-3">🏦</p>
           <h2 className="text-lg font-semibold mb-2">Track your assets</h2>
@@ -444,40 +564,121 @@ export function AssetsPage() {
         </div>
       )}
 
-      {/* Asset list */}
-      {assets.length > 0 && (
-        <div className="border border-border bg-background divide-y divide-border">
-          {assets.map((a) => {
-            const displayVal = cx(a)
-            const pnl = a.currentValue - a.initialValue
-            const pnlPct = a.initialValue > 0 ? (pnl / a.initialValue) * 100 : null
-            const displayPnl = rates ? convert(pnl, a.currency, displayCurrency, rates) : pnl
-            return (
-              <button
-                key={a.id}
-                onClick={() => setDetailAsset(a)}
-                className="w-full text-left px-4 py-3 hover:bg-muted/10 transition-colors flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-lg flex-shrink-0">{typeIcon(a.type)}</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{a.name}</p>
-                    <p className="text-xs text-muted">{a.type === 'stocks' ? 'Stocks' : a.currency} · {a.growthRate}% growth</p>
+      {/* Asset list — grouped by member in family view */}
+      <div className="space-y-6">
+        {memberSections.map(section => {
+          const snap = section.snapshot
+          const hasT212 = snap.portfolio.length > 0 || (snap.cash?.free ?? 0) > 0
+          const sectionT212Total = snap.cash ? cxGbp(snap.cash.total) : 0
+
+          return (
+            <div key={section.uid} className="space-y-3">
+              {/* Section header — only in family view */}
+              {view === 'family' && (
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-semibold text-muted uppercase tracking-wide">
+                    {section.name}
+                  </span>
+                  <span className="text-xs font-semibold tabular-nums text-muted">{fmt2(section.total)}</span>
+                </div>
+              )}
+
+              {/* Unified asset list: manual assets + T212 positions in one block */}
+              {(() => {
+                type Row =
+                  | { kind: 'asset'; key: string; icon: string; name: string; label: string; value: number; pnl: number | null; pnlPct: number | null; onClick?: () => void }
+
+                const rows: Row[] = []
+
+                // Manual assets
+                for (const a of section.assets) {
+                  const displayVal = cx(a)
+                  const pnl = a.currentValue - a.initialValue
+                  const pnlPct = a.initialValue > 0 ? (pnl / a.initialValue) * 100 : null
+                  const displayPnl = rates ? convert(pnl, a.currency, displayCurrency, rates) : pnl
+                  rows.push({
+                    kind: 'asset',
+                    key: a.id,
+                    icon: typeIcon(a.type),
+                    name: a.name,
+                    label: `${typeLabel(a.type)} · ${a.currency}`,
+                    value: displayVal,
+                    pnl: pnlPct !== null ? displayPnl : null,
+                    pnlPct,
+                    onClick: section.isMine ? () => setDetailAsset(a) : undefined,
+                  })
+                }
+
+                // T212 positions
+                for (const pos of snap.portfolio) {
+                  const { value: nativeValue, currency: nativeCur } = positionNative(pos, currencyMap)
+                  const { value: nativeCost } = positionCostNative(pos, currencyMap)
+                  const value = rates ? convert(nativeValue, nativeCur, displayCurrency, rates) : nativeValue
+                  const pnl = cxGbp(pos.ppl)
+                  const pnlPct = nativeCost > 0 ? ((nativeValue - nativeCost) / nativeCost) * 100 : null
+                  rows.push({
+                    kind: 'asset',
+                    key: pos.ticker,
+                    icon: '📈',
+                    name: nameMap.get(pos.ticker) ?? cleanTicker(pos.ticker),
+                    label: 'Stocks / ISA · T212',
+                    value,
+                    pnl,
+                    pnlPct,
+                  })
+                }
+
+                // T212 free cash
+                if ((snap.cash?.free ?? 0) > 0) {
+                  rows.push({
+                    kind: 'asset',
+                    key: '__t212_cash',
+                    icon: '💵',
+                    name: 'T212 Free Cash',
+                    label: 'Cash · T212',
+                    value: cxGbp(snap.cash!.free),
+                    pnl: null,
+                    pnlPct: null,
+                  })
+                }
+
+                // Sort by value descending
+                rows.sort((a, b) => b.value - a.value)
+
+                if (rows.length === 0) return null
+
+                return (
+                  <div className="border border-border bg-background divide-y divide-border">
+                    {rows.map((row) => (
+                      <button
+                        key={row.key}
+                        onClick={row.onClick}
+                        className={`w-full text-left px-4 py-3 transition-colors flex items-center justify-between gap-3 ${row.onClick ? 'hover:bg-muted/10 cursor-pointer' : 'cursor-default'}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-lg flex-shrink-0">{row.icon}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{row.name}</p>
+                            <p className="text-xs text-muted">{row.label}</p>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold tabular-nums">{fmt2(row.value)}</p>
+                          {row.pnlPct !== null && row.pnl !== null && (
+                            <p className={`text-xs tabular-nums ${row.pnl >= 0 ? 'text-success' : 'text-destructive'}`}>
+                              {row.pnl >= 0 ? '+' : ''}{fmt2(row.pnl)} ({row.pnlPct >= 0 ? '+' : ''}{row.pnlPct.toFixed(1)}%)
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-semibold tabular-nums">{fmt2(displayVal)}</p>
-                  {pnlPct !== null && (
-                    <p className={`text-xs tabular-nums ${displayPnl >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {displayPnl >= 0 ? '+' : ''}{fmt2(displayPnl)} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
-                    </p>
-                  )}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      )}
+                )
+              })()}
+            </div>
+          )
+        })}
+      </div>
 
       {/* Add form modal */}
       {showForm && (
@@ -503,7 +704,7 @@ export function AssetsPage() {
         />
       )}
 
-      {/* Detail modal */}
+      {/* Detail modal — only for own assets */}
       {detailAsset && !editAsset && (
         <AssetDetailModal
           asset={detailAsset}

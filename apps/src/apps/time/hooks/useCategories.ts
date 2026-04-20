@@ -25,7 +25,7 @@ export function useCategories(uid: string | undefined): UseCategoriesResult {
       return
     }
 
-    const ref = collection(db, 'users', uid, 'categories')
+    const ref = collection(db, 'time', uid, 'categories')
     const unsub = onSnapshot(ref, (snap) => {
       const map: Record<string, Category> = {}
       const all: Category[] = []

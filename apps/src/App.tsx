@@ -45,9 +45,9 @@ function ThemeSync() {
       return
     }
     setFirestoreLoaded(false)
-    getDoc(doc(db, 'users', user.uid, 'settings', 'preferences')).then(snap => {
-      if (snap.exists() && snap.data().theme) {
-        setTheme(snap.data().theme)
+    getDoc(doc(db, 'users', user.uid, 'prefs', 'p')).then(snap => {
+      if (snap.exists() && snap.data().th) {
+        setTheme(snap.data().th)
       }
       setFirestoreLoaded(true)
     })
@@ -55,7 +55,7 @@ function ThemeSync() {
 
   useEffect(() => {
     if (!user || !firestoreLoaded) return
-    setDoc(doc(db, 'users', user.uid, 'settings', 'preferences'), { theme }, { merge: true })
+    setDoc(doc(db, 'users', user.uid, 'prefs', 'p'), { th: theme }, { merge: true })
   }, [theme, user?.uid, firestoreLoaded])
 
   return null
