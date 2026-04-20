@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ────────────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // ── users (profile + app-level prefs) ─────────────────────────────────────
+
+    match /users/{uid} {
+      // Anyone authenticated can read user profiles (for group member display)
+      allow read: if isAuth();
+      // Only owner can write
+      allow create, update, delete: if isOwner(uid);
+
+      // App-level prefs (theme, etc.) — single doc at prefs/p
+      match /prefs/{doc} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ── wealth app ────────────────────────────────────────────────────────────
+
+    match /wealth/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /assets/{assetId} {
+        // Group members need to read each other's assets
+        allow read: if isAuth();
+        allow write: if isOwner(uid);
+      }
+
+      match /prefs/{doc} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ── time app ──────────────────────────────────────────────────────────────
+
+    match /time/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /categories/{catId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /sessions/{sessionId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /rollups/{rollupId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /prefs/{doc} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ── groups ────────────────────────────────────────────────────────────────
+    // 'm' = members array (wire field name)
+
+    match /groups/{groupId} {
+      // Members can read the group
+      allow read: if isAuth() && request.auth.uid in resource.data.m;
+
+      // Any authenticated user can create a group
+      allow create: if isAuth();
+
+      // Existing members can update anything.
+      // Non-members can add only themselves (joining via accepted invite).
+      allow update: if isAuth() && (
+        request.auth.uid in resource.data.m
+        || (
+          request.auth.uid in request.resource.data.m
+          && request.resource.data.m.hasAll(resource.data.m)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['m'])
+        )
+      );
+
+      allow delete: if isAuth() && request.auth.uid == resource.data.cb;
+    }
+
+    // ── invites ───────────────────────────────────────────────────────────────
+    // 'fu' = fromUid, 'tu' = toUid, 's' = status (wire field names)
+
+    match /invites/{inviteId} {
+      // Sender or recipient can read
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.fu ||
+        request.auth.uid == resource.data.tu
+      );
+      // Sender can create
+      allow create: if isAuth() && request.auth.uid == request.resource.data.fu;
+      // Recipient can update status only
+      allow update: if isAuth()
+        && request.auth.uid == resource.data.tu
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['s']);
+    }
+
+    // ── t212 snapshots ────────────────────────────────────────────────────────
+
+    match /t212Snapshots/{uid} {
+      allow read: if isAuth();
+      allow write: if isOwner(uid);
+    }
+
+    // ── config (exchange rates etc.) ──────────────────────────────────────────
+
+    match /config/{doc} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+  }
+}
