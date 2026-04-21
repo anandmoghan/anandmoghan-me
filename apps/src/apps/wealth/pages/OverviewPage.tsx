@@ -131,14 +131,14 @@ function AssetGroupList({
           </svg>
         </button>
       ) : (
-        <div className="border border-border bg-background divide-y divide-border">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {groupedList.map((g) => {
             const pct = netWorth > 0 ? (g.total / netWorth) * 100 : 0
             return (
               <button
                 key={g.type}
                 onClick={onNavigate}
-                className="w-full text-left px-4 py-3 hover:bg-muted/10 transition-colors flex items-center justify-between"
+                className="text-left border border-border bg-background px-4 py-3 hover:bg-muted/10 transition-colors flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-base w-5 text-center shrink-0">{ASSET_TYPE_ICONS[g.type]}</span>

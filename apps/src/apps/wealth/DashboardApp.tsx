@@ -5,6 +5,7 @@ import { OverviewPage } from './pages/OverviewPage'
 import { AssetsPage } from './pages/AssetsPage'
 import { ConnectionsPage } from './pages/ConnectionsPage'
 import { DashboardSettingsPage } from './pages/DashboardSettingsPage'
+import { FirePage } from './pages/FirePage'
 
 export default function DashboardApp() {
   const { user } = useAuth()
@@ -16,6 +17,7 @@ export default function DashboardApp() {
       <Routes>
         <Route index element={<OverviewPage />} />
         <Route path="assets" element={<AssetsPage />} />
+        <Route path="fire" element={<FirePage />} />
         <Route path="connections" element={<ConnectionsPage />} />
         <Route path="trading212" element={<ConnectionsPage />} />
         <Route path="settings" element={<DashboardSettingsPage />} />

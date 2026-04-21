@@ -36,3 +36,6 @@ next-env.d.ts
 
 # IDE
 .idea/
+
+# Admin scripts (service account keys + one-off scripts)
+/scripts/

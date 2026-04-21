@@ -455,6 +455,7 @@ export function AssetsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editAsset, setEditAsset] = useState<Asset | null>(null)
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null)
+  const [assetSort, setAssetSort] = useState<'name' | 'value' | 'return'>('value')
 
   const fmt2 = (n: number) => (DISPLAY_FMT[displayCurrency] ?? DISPLAY_FMT.GBP).format(n)
   const cx = (a: Asset) => rates ? convert(a.currentValue, a.currency, displayCurrency, rates) : a.currentValue
@@ -517,10 +518,9 @@ export function AssetsPage() {
         </div>
       </div>
 
-      {/* View toggle — only shown when in a group */}
+      {/* View toggle + sort — only shown when in a group */}
       {hasGroup && (
         <div className="flex items-center gap-0">
-          {/* Group selector if multiple groups */}
           {groups.length > 1 && (
             <select
               value={selectedGroupId ?? ''}
@@ -535,7 +535,7 @@ export function AssetsPage() {
               onClick={() => setView('mine')}
               className={`px-4 py-1.5 transition-colors ${view === 'mine' ? 'bg-foreground text-background font-medium' : 'hover:bg-muted/20'}`}
             >
-              Mine
+              Me
             </button>
             <button
               onClick={() => setView('family')}
@@ -546,6 +546,22 @@ export function AssetsPage() {
           </div>
         </div>
       )}
+
+      {/* Sort controls */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-[10px] text-muted uppercase tracking-wide">Sort:</span>
+        <div className="flex border border-border overflow-hidden text-[10px]">
+          {(['name', 'value', 'return'] as const).map((s, i) => (
+            <button
+              key={s}
+              onClick={() => setAssetSort(s)}
+              className={`px-2.5 py-1 capitalize transition-colors ${assetSort === s ? 'bg-foreground text-background font-medium' : 'hover:bg-muted/20'} ${i > 0 ? 'border-l border-border' : ''}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Empty state */}
       {memberSections[0]?.assets.length === 0 && view === 'mine' && (
@@ -642,21 +658,27 @@ export function AssetsPage() {
                   })
                 }
 
-                // Sort by value descending
-                rows.sort((a, b) => b.value - a.value)
+                // Sort
+                if (assetSort === 'name') {
+                  rows.sort((a, b) => a.name.localeCompare(b.name))
+                } else if (assetSort === 'return') {
+                  rows.sort((a, b) => (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity))
+                } else {
+                  rows.sort((a, b) => b.value - a.value)
+                }
 
                 if (rows.length === 0) return null
 
                 return (
-                  <div className="border border-border bg-background divide-y divide-border">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {rows.map((row) => (
                       <button
                         key={row.key}
                         onClick={row.onClick}
-                        className={`w-full text-left px-4 py-3 transition-colors flex items-center justify-between gap-3 ${row.onClick ? 'hover:bg-muted/10 cursor-pointer' : 'cursor-default'}`}
+                        className={`text-left border border-border bg-background px-4 py-3 transition-colors flex items-center justify-between gap-3 ${row.onClick ? 'hover:bg-muted/10 cursor-pointer' : 'cursor-default'}`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <span className="text-lg flex-shrink-0">{row.icon}</span>
+                          <span className="text-lg w-6 text-center shrink-0">{row.icon}</span>
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{row.name}</p>
                             <p className="text-xs text-muted">{row.label}</p>

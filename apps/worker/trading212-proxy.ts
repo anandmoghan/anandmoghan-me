@@ -2,8 +2,6 @@ const T212_BASE = 'https://live.trading212.com/api/v0'
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'
 const FRANKFURTER_URL = 'https://api.frankfurter.app/latest?base=GBP&symbols=USD,EUR,INR'
 
-// Instruments cache TTL: 24 hours (they change rarely)
-const INSTRUMENTS_CACHE_MS = 24 * 60 * 60 * 1000
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -333,7 +331,7 @@ async function fetchAndWriteSnapshot(
       orders = oBody.items ?? []
     }
 
-    // Fetch full instrument list and filter to just this user's portfolio tickers.
+    // Fetch instrument names/currencies for portfolio tickers.
     // T212 returns 10k+ instruments — we only store what the user holds.
     if (portfolio.length > 0) {
       const needed = new Set(portfolio.map((pos) => pos.ticker))
@@ -460,12 +458,8 @@ export default {
           creds.ct as string, creds.iv as string
         )
 
-        // Check if instruments are stale
-        const instrDoc = await fsRead(env.FIREBASE_PROJECT_ID, 'config/t212Instruments', saToken)
-        const instrStale = !instrDoc || (Date.now() - (instrDoc.updatedAt as number ?? 0)) > INSTRUMENTS_CACHE_MS
-
         await fetchAndWriteSnapshot(
-          env.FIREBASE_PROJECT_ID, uid, apiKey, apiSecret, saToken, instrStale
+          env.FIREBASE_PROJECT_ID, uid, apiKey, apiSecret, saToken
         )
         return new Response('OK', { status: 200, headers: CORS_HEADERS })
       } catch (err) {
@@ -489,29 +483,16 @@ export default {
 
       if (!env.ENCRYPTION_SECRET) return
 
-      // Check if instruments are stale
-      const instrDoc = await fsRead(env.FIREBASE_PROJECT_ID, 'config/t212Instruments', saToken)
-      const instrStale = !instrDoc || (Date.now() - (instrDoc.updatedAt as number ?? 0)) > INSTRUMENTS_CACHE_MS
-
-      // List all users with T212 credentials
+      // List all users with T212 credentials and sync each
       const uids = await fsListIds(env.FIREBASE_PROJECT_ID, 't212Creds', saToken)
-
-      let instrumentsFetched = false
       for (const uid of uids) {
         try {
           const creds = await fsRead(env.FIREBASE_PROJECT_ID, `t212Creds/${uid}`, saToken)
           if (!creds || !creds.ct || !creds.iv) continue
-
           const { apiKey, apiSecret } = await decryptCredentials(
             env.ENCRYPTION_SECRET, uid, creds.ct as string, creds.iv as string
           )
-
-          // Fetch instruments from the first valid account if stale
-          const fetchInstr = instrStale && !instrumentsFetched
-          await fetchAndWriteSnapshot(
-            env.FIREBASE_PROJECT_ID, uid, apiKey, apiSecret, saToken, fetchInstr
-          )
-          if (fetchInstr) instrumentsFetched = true
+          await fetchAndWriteSnapshot(env.FIREBASE_PROJECT_ID, uid, apiKey, apiSecret, saToken)
         } catch { /* skip this user, try next */ }
       }
     } catch { /* silent — next run will retry */ }
