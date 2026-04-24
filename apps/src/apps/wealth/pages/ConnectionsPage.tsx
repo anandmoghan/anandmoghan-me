@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { useT212Snapshot, useT212Configured, useInstruments, triggerT212Sync } from '../hooks/useTrading212'
+import { useT212Snapshot, useT212Configured, useInstruments, triggerT212Sync, useT212Settings } from '../hooks/useTrading212'
 import { useExchangeRates } from '../hooks/useExchangeRates'
 import { CurrencySelector } from '../components/CurrencySelector'
 import { CashSummary } from '../components/CashSummary'
@@ -34,6 +34,46 @@ function timeAgo(ts: number | null): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   return `${Math.floor(diff / 86400)}d ago`
+}
+
+// ── Numeric input (commits on blur / Enter) ──────────────────────────────────
+
+function NumField({
+  value, onChange, suffix, prefix, min, max,
+}: {
+  value: number
+  onChange: (v: number) => void
+  suffix?: string
+  prefix?: string
+  min?: number
+  max?: number
+}) {
+  const [local, setLocal] = useState(String(value))
+  useEffect(() => { setLocal(String(value)) }, [value])
+
+  const commit = (raw: string) => {
+    const v = parseFloat(raw)
+    if (isNaN(v)) { setLocal(String(value)); return }
+    const clamped = min !== undefined && v < min ? min : max !== undefined && v > max ? max : v
+    onChange(clamped)
+    setLocal(String(clamped))
+  }
+
+  return (
+    <div className="flex items-center w-full border border-border bg-background px-2 py-1.5 gap-1 focus-within:ring-1 focus-within:ring-accent focus-within:border-accent">
+      {prefix && <span className="text-xs text-muted select-none shrink-0">{prefix}</span>}
+      <input
+        type="text"
+        inputMode="decimal"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit((e.target as HTMLInputElement).value) }}
+        className="min-w-0 flex-1 text-sm bg-transparent text-right tabular-nums focus:outline-none"
+      />
+      {suffix && <span className="text-xs text-muted select-none shrink-0">{suffix}</span>}
+    </div>
+  )
 }
 
 // ── Eye icon ──────────────────────────────────────────────────────────────────
@@ -146,6 +186,7 @@ function Trading212Connection({ uid }: { uid: string }) {
   const configured = useT212Configured(uid || undefined)
   const { currencyMap, nameMap } = useInstruments(snapshot)
   const { rates, displayCurrency, setDisplayCurrency } = useExchangeRates()
+  const { settings: t212Settings, update: updateT212Settings } = useT212Settings(uid || undefined)
 
   const [expanded, setExpanded] = useState(false)
   const [showCredForm, setShowCredForm] = useState(false)
@@ -368,6 +409,32 @@ function Trading212Connection({ uid }: { uid: string }) {
               <section className="px-4">
                 <h3 className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Account Summary</h3>
                 <CashSummary cash={snapshot.cash} loading={false} rates={rates} displayCurrency={displayCurrency} />
+              </section>
+
+              <section className="px-4">
+                <h3 className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Projection Assumptions</h3>
+                <p className="text-xs text-muted mb-3">Used by the FIRE projection. Contribution is in GBP — T212 ISA only accepts GBP.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] text-muted uppercase tracking-wide mb-1.5">Growth / yr</p>
+                    <NumField
+                      value={t212Settings.growthRate}
+                      onChange={(v) => updateT212Settings({ growthRate: v })}
+                      suffix="%"
+                      min={-20}
+                      max={100}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted uppercase tracking-wide mb-1.5">Add / yr</p>
+                    <NumField
+                      value={t212Settings.contribution}
+                      onChange={(v) => updateT212Settings({ contribution: Math.max(0, v) })}
+                      prefix="£"
+                      min={0}
+                    />
+                  </div>
+                </div>
               </section>
 
               <section>

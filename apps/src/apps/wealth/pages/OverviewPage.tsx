@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useT212Snapshot } from '../hooks/useTrading212'
@@ -31,38 +31,18 @@ function fmt(n: number, currency: string) {
 // manual assets in the group list without any special-casing downstream.
 
 function snapshotToVirtualAssets(snapshot: T212Snapshot): Asset[] {
-  if (!snapshot.cash) return []
-  const out: Asset[] = []
-
-  // Invested portfolio (total account value minus free uninvested cash)
-  const portfolioValue = snapshot.cash.total - snapshot.cash.free
-  if (portfolioValue > 0.01) {
-    out.push({
-      id: '__t212_portfolio',
-      name: 'Trading 212 ISA',
-      type: 'stocks',
-      currency: 'GBP',
-      initialValue: snapshot.cash.invested,
-      currentValue: portfolioValue,
-      growthRate: 0, yearlyContribution: 0, purchaseDate: '',
-      createdAt: new Date(), updatedAt: new Date(),
-    })
-  }
-
-  // Free/uninvested cash sitting in the account
-  if (snapshot.cash.free > 0.01) {
-    out.push({
-      id: '__t212_cash',
-      name: 'T212 Free Cash',
-      type: 'cash',
-      currency: 'GBP',
-      initialValue: 0, currentValue: snapshot.cash.free,
-      growthRate: 0, yearlyContribution: 0, purchaseDate: '',
-      createdAt: new Date(), updatedAt: new Date(),
-    })
-  }
-
-  return out
+  if (!snapshot.cash || snapshot.cash.total <= 0.01) return []
+  // Roll the whole T212 account (invested + free cash) into a single stocks entry.
+  return [{
+    id: '__t212_portfolio',
+    name: 'Trading 212 ISA',
+    type: 'stocks',
+    currency: 'GBP',
+    initialValue: snapshot.cash.invested,
+    currentValue: snapshot.cash.total,
+    growthRate: 0, yearlyContribution: 0, purchaseDate: '',
+    createdAt: new Date(), updatedAt: new Date(),
+  }]
 }
 
 const ASSET_TYPE_ICONS: Record<AssetType, string> = {
@@ -75,20 +55,145 @@ const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   pension: 'Pension / PF', insurance: 'Insurance', gold: 'Gold', vehicle: 'Vehicle', other: 'Other',
 }
 
-// ── Asset group list ──────────────────────────────────────────────────────────
+// ── Asset group card (with inline popover) ────────────────────────────────────
+
+interface MemberBreakdown {
+  uid: string
+  name: string
+  assets: Asset[]  // manual + broker virtual, already combined
+}
+
+interface ExpansionAsset {
+  key: string
+  name: string
+  value: number
+}
+
+interface ExpansionSection {
+  key: string
+  title: string | null  // null when there's no grouping (single-user view)
+  total: number
+  items: ExpansionAsset[]
+}
+
+function AssetGroupCard({
+  type,
+  count,
+  total,
+  netWorth,
+  displayCurrency,
+  sections,
+}: {
+  type: AssetType
+  count: number
+  total: number
+  netWorth: number
+  displayCurrency: Currency
+  sections: ExpansionSection[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [openUpward, setOpenUpward] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const handleToggle = () => {
+    if (!open && ref.current) {
+      const rect = ref.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      setOpenUpward(spaceBelow < 200 && rect.top > spaceBelow)
+    }
+    setOpen((o) => !o)
+  }
+
+  const pct = netWorth > 0 ? (total / netWorth) * 100 : 0
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={handleToggle}
+        className={`w-full text-left border px-4 py-3 transition-colors flex items-center justify-between ${
+          open
+            ? 'border-accent bg-accent/10'
+            : 'border-border bg-background hover:bg-muted/10'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-base w-5 text-center shrink-0">{ASSET_TYPE_ICONS[type]}</span>
+          <div>
+            <p className="text-sm font-medium">{ASSET_TYPE_LABELS[type]}</p>
+            <p className="text-xs text-muted">
+              {count} asset{count !== 1 ? 's' : ''} · {pct.toFixed(1)}% of net worth
+            </p>
+          </div>
+        </div>
+        <p className="text-sm font-semibold tabular-nums">{fmt(total, displayCurrency)}</p>
+      </button>
+
+      {open && (
+        <div
+          className={`absolute z-20 left-0 right-0 border border-border bg-background shadow-lg ${
+            openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
+          }`}
+        >
+          {sections.length === 0 || sections.every((s) => s.items.length === 0) ? (
+            <p className="text-xs text-muted px-3 py-2">No holdings</p>
+          ) : (
+            <div>
+              {sections.map((sec, si) => (
+                <div key={sec.key} className={si > 0 ? 'border-t border-border' : ''}>
+                  {sec.title && (
+                    <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
+                      <p className="text-xs font-semibold uppercase tracking-wide">{sec.title}</p>
+                      <span className="text-xs font-semibold tabular-nums">
+                        {fmt(sec.total, displayCurrency)}
+                      </span>
+                    </div>
+                  )}
+                  {sec.items.map((it) => (
+                    <div
+                      key={it.key}
+                      className={`flex items-center justify-between gap-3 py-2 pr-3 ${
+                        sec.title ? 'pl-6' : 'pl-3'
+                      }`}
+                    >
+                      <p className="text-xs truncate min-w-0">{it.name}</p>
+                      <p className="text-xs tabular-nums text-muted flex-shrink-0">
+                        {fmt(it.value, displayCurrency)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function AssetGroupList({
   assets,
   rates,
   displayCurrency,
   netWorth,
-  onNavigate,
+  memberBreakdown,
+  onNavigateEmpty,
 }: {
   assets: Asset[]
   rates: ExchangeRates | null
   displayCurrency: Currency
   netWorth: number
-  onNavigate: () => void
+  memberBreakdown: MemberBreakdown[] | null  // non-null → family combined view
+  onNavigateEmpty: () => void
 }) {
   const cx = (a: Asset) => rates ? convert(a.currentValue, a.currency, displayCurrency, rates) : a.currentValue
   const manualTotal = assets.reduce((s, a) => s + cx(a), 0)
@@ -103,6 +208,35 @@ function AssetGroupList({
   }, {})
   const groupedList = Object.values(grouped).sort((a, b) => b.total - a.total)
 
+  const sectionsForType = (type: AssetType): ExpansionSection[] => {
+    if (memberBreakdown) {
+      return memberBreakdown
+        .map((m) => {
+          const items = m.assets
+            .filter((a) => a.type === type)
+            .map((a) => ({
+              key: `${m.uid}:${a.id}`,
+              name: a.name,
+              value: cx(a),
+            }))
+            .sort((a, b) => b.value - a.value)
+          const total = items.reduce((s, it) => s + it.value, 0)
+          return { key: m.uid, title: m.name, total, items }
+        })
+        .filter((sec) => sec.total > 0.01)
+        .sort((a, b) => b.total - a.total)
+    }
+    const items = assets
+      .filter((a) => a.type === type)
+      .map((a) => ({
+        key: a.id,
+        name: a.name,
+        value: cx(a),
+      }))
+      .sort((a, b) => b.value - a.value)
+    return [{ key: 'single', title: null, total: items.reduce((s, it) => s + it.value, 0), items }]
+  }
+
   const headerRight = manualTotal > 0
     ? <span className="text-sm font-semibold tabular-nums">{fmt(manualTotal, displayCurrency)}</span>
     : null
@@ -116,7 +250,7 @@ function AssetGroupList({
 
       {assets.length === 0 ? (
         <button
-          onClick={onNavigate}
+          onClick={onNavigateEmpty}
           className="w-full text-left border border-border bg-background hover:bg-muted/10 transition-colors p-4 flex items-center justify-between"
         >
           <div className="flex items-center gap-2">
@@ -132,27 +266,17 @@ function AssetGroupList({
         </button>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {groupedList.map((g) => {
-            const pct = netWorth > 0 ? (g.total / netWorth) * 100 : 0
-            return (
-              <button
-                key={g.type}
-                onClick={onNavigate}
-                className="text-left border border-border bg-background px-4 py-3 hover:bg-muted/10 transition-colors flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-base w-5 text-center shrink-0">{ASSET_TYPE_ICONS[g.type]}</span>
-                  <div>
-                    <p className="text-sm font-medium">{ASSET_TYPE_LABELS[g.type]}</p>
-                    <p className="text-xs text-muted">
-                      {g.count} asset{g.count !== 1 ? 's' : ''} · {pct.toFixed(1)}% of net worth
-                    </p>
-                  </div>
-                </div>
-                <p className="text-sm font-semibold tabular-nums">{fmt(g.total, displayCurrency)}</p>
-              </button>
-            )
-          })}
+          {groupedList.map((g) => (
+            <AssetGroupCard
+              key={g.type}
+              type={g.type}
+              count={g.count}
+              total={g.total}
+              netWorth={netWorth}
+              displayCurrency={displayCurrency}
+              sections={sectionsForType(g.type)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -180,6 +304,7 @@ export function OverviewPage() {
   const [view, setView] = useState<ViewMode>('combined')
 
   const hasGroup = !!selectedGroup
+  const isFamilyCombined = hasGroup && view === 'combined'
 
   // Active data for current view
   const getActiveData = (): { assets: Asset[]; snapshot: T212Snapshot; loading: boolean } => {
@@ -229,6 +354,16 @@ export function OverviewPage() {
   const brokerAssets = snapshotToVirtualAssets(snapshot)
   const allAssets = [...assets, ...brokerAssets]
   const netWorth = allAssets.reduce((s, a) => s + cx(a), 0)
+
+  // Per-member breakdown (family combined view only): each member's manual
+  // assets plus their own broker virtuals so expansions show individual contributions.
+  const memberBreakdown: MemberBreakdown[] | null = isFamilyCombined
+    ? members.map((m) => ({
+        uid: m.uid,
+        name: m.uid === uid ? 'Me' : (m.displayName || '…').split(' ')[0],
+        assets: [...m.assets, ...snapshotToVirtualAssets(m.snapshot)],
+      }))
+    : null
 
   const loading = groupsLoading || ratesLoading || dataLoading
 
@@ -312,7 +447,8 @@ export function OverviewPage() {
         rates={rates}
         displayCurrency={displayCurrency}
         netWorth={netWorth}
-        onNavigate={() => navigate('/wealth/assets')}
+        memberBreakdown={memberBreakdown}
+        onNavigateEmpty={() => navigate('/wealth/assets')}
       />
     </div>
   )

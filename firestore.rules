@@ -105,9 +105,26 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['s']);
     }
 
+    // ── t212 encrypted credentials ────────────────────────────────────────────
+    // Owner reads only (just to check "is configured"). Worker service account
+    // bypasses rules via IAM to write the encrypted credentials.
+
+    match /t212Creds/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
     // ── t212 snapshots ────────────────────────────────────────────────────────
 
     match /t212Snapshots/{uid} {
+      allow read: if isAuth();
+      allow write: if isOwner(uid);
+    }
+
+    // ── t212 projection settings (growth rate, yearly contribution) ───────────
+    // Owner writes, any authenticated user reads (so shared family projections work).
+
+    match /t212Settings/{uid} {
       allow read: if isAuth();
       allow write: if isOwner(uid);
     }

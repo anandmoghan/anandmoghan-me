@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../../../firebase'
 import { inferTickerCurrency, cleanTicker } from '../services/trading212'
 import type { Position, AccountCash, Order } from '../services/trading212'
@@ -83,6 +83,56 @@ export function useInstruments(snapshot: T212Snapshot) {
     [snapshot.meta]
   )
   return { currencyMap, nameMap }
+}
+
+// ── T212 projection settings (growth rate + yearly contribution) ─────────────
+
+export interface T212Settings {
+  growthRate: number   // % per year
+  contribution: number // annual, GBP (T212 account is GBP-native)
+}
+
+const DEFAULT_T212_SETTINGS: T212Settings = {
+  growthRate: 7,
+  contribution: 0,
+}
+
+/**
+ * T212 projection assumptions (growth rate, yearly contribution) edited on the
+ * Connections page and consumed by the FIRE projection. Stored at t212Settings/{uid}.
+ * Contribution is in GBP — T212 ISA only accepts GBP contributions.
+ */
+export function useT212Settings(uid: string | undefined) {
+  const [value, setValue] = useState<T212Settings>(DEFAULT_T212_SETTINGS)
+
+  useEffect(() => {
+    if (!uid) { setValue(DEFAULT_T212_SETTINGS); return }
+    const unsub = onSnapshot(doc(db, 't212Settings', uid), (snap) => {
+      if (!snap.exists()) { setValue(DEFAULT_T212_SETTINGS); return }
+      const d = snap.data()
+      // Legacy: contribution used to be Record<Currency, number> — pick GBP if present.
+      const rawContrib = d.contribution
+      const contribution = typeof rawContrib === 'number'
+        ? rawContrib
+        : (rawContrib && typeof rawContrib === 'object' && typeof rawContrib.GBP === 'number' ? rawContrib.GBP : 0)
+      setValue({
+        growthRate: typeof d.growthRate === 'number' ? d.growthRate : DEFAULT_T212_SETTINGS.growthRate,
+        contribution,
+      })
+    })
+    return unsub
+  }, [uid])
+
+  const update = (patch: Partial<T212Settings>) => {
+    const next: T212Settings = {
+      growthRate: patch.growthRate ?? value.growthRate,
+      contribution: patch.contribution ?? value.contribution,
+    }
+    setValue(next)
+    if (uid) setDoc(doc(db, 't212Settings', uid), next, { merge: true })
+  }
+
+  return { settings: value, update }
 }
 
 // ── Manual sync trigger ──────────────────────────────────────────────────────

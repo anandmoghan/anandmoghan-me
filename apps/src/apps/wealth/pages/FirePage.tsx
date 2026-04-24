@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../../../firebase'
 import { useAuth } from '../../../hooks/useAuth'
-import { useT212Snapshot } from '../hooks/useTrading212'
+import { useT212Snapshot, useT212Settings } from '../hooks/useTrading212'
 import { useAssets } from '../hooks/useAssets'
 import { useExchangeRates } from '../hooks/useExchangeRates'
 import { convert } from '../services/exchangeRates'
@@ -53,11 +53,13 @@ function currencySymbol(c: Currency) {
 interface FireSettings {
   inflationRate: number
   taxRate: number
-  monthlySpending: number
-  retirementYears: number   // years to project after retirement
+  // Per-currency monthly spend — each currency has its own native amount, so
+  // switching display currency picks up a different absolute value
+  // (cost of living differs per country).
+  monthlySpending: Record<Currency, number>
+  endAge: number            // final age of the projection (absolute, independent of retirement age)
   currentAge: number
   retirementAge: number     // age at which contributions stop and withdrawals begin
-  t212Contribution: number  // stored in display currency, annual
 }
 
 interface ProjectionItem {
@@ -94,11 +96,10 @@ interface ProjectionRow {
 const DEFAULT_SETTINGS: FireSettings = {
   inflationRate: 3,
   taxRate: 20,
-  monthlySpending: 3000,
-  retirementYears: 25,
+  monthlySpending: { GBP: 3000, USD: 3800, INR: 250000 },
+  endAge: 85,
   currentAge: 30,
   retirementAge: 60,
-  t212Contribution: 0,
 }
 
 const ASSET_TYPE_ICONS: Partial<Record<AssetType, string>> = {
@@ -308,6 +309,7 @@ export function FirePage() {
 
   const { assets, loading: assetsLoading } = useAssets(uid || undefined)
   const { snapshot, loading: snapshotLoading } = useT212Snapshot(uid || undefined)
+  const { settings: t212Settings } = useT212Settings(uid || undefined)
   const { rates, displayCurrency, setDisplayCurrency, loading: ratesLoading } = useExchangeRates()
 
   const [settings, setSettings] = useState<FireSettings>(DEFAULT_SETTINGS)
@@ -320,10 +322,21 @@ export function FirePage() {
   useEffect(() => {
     if (!uid) return
     getDoc(doc(db, 'wealth', uid)).then((snap) => {
-      if (snap.exists()) {
-        const saved = snap.data()?.fireSettings
-        if (saved) setSettings((prev) => ({ ...prev, ...saved }))
+      if (!snap.exists()) return
+      const saved = snap.data()?.fireSettings
+      if (!saved) return
+      // Drop any keys that don't match the current shape; the spread falls back
+      // to defaults for anything missing. No legacy migration.
+      const cleaned: Partial<FireSettings> = {}
+      if (typeof saved.inflationRate === 'number') cleaned.inflationRate = saved.inflationRate
+      if (typeof saved.taxRate === 'number') cleaned.taxRate = saved.taxRate
+      if (typeof saved.currentAge === 'number') cleaned.currentAge = saved.currentAge
+      if (typeof saved.retirementAge === 'number') cleaned.retirementAge = saved.retirementAge
+      if (typeof saved.endAge === 'number') cleaned.endAge = saved.endAge
+      if (saved.monthlySpending && typeof saved.monthlySpending === 'object' && !Array.isArray(saved.monthlySpending)) {
+        cleaned.monthlySpending = { ...DEFAULT_SETTINGS.monthlySpending, ...saved.monthlySpending }
       }
+      setSettings((prev) => ({ ...prev, ...cleaned }))
     })
   }, [uid])
 
@@ -360,15 +373,15 @@ export function FirePage() {
         name: 'Trading 212 ISA',
         type: 'stocks',
         value: cx(snapshot.cash.total, 'GBP'),
-        defaultGrowthRate: 7,
-        defaultYearlyContrib: settings.t212Contribution,
+        defaultGrowthRate: t212Settings.growthRate,
+        defaultYearlyContrib: cx(t212Settings.contribution, 'GBP'),
         isBroker: true,
       })
     }
 
     return items
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, snapshot, rates, displayCurrency, settings.t212Contribution])
+  }, [assets, snapshot, rates, displayCurrency, t212Settings.growthRate, t212Settings.contribution])
 
   const growthFor = (id: string, defaultRate: number) => growthOverrides[id] ?? defaultRate
   const contribFor = (id: string, defaultContrib: number) => contribOverrides[id] ?? defaultContrib
@@ -378,9 +391,10 @@ export function FirePage() {
   const projection = useMemo<ProjectionRow[]>(() => {
     if (projectionItems.length === 0) return []
 
-    const { inflationRate, taxRate, monthlySpending, retirementYears, currentAge, retirementAge } = settings
+    const { inflationRate, taxRate, endAge, currentAge, retirementAge } = settings
+    const monthlySpending = settings.monthlySpending[displayCurrency] ?? 0
     const accYears = Math.max(0, retirementAge - currentAge)
-    const totalYears = accYears + retirementYears
+    const totalYears = Math.max(accYears, endAge - currentAge)
     const currentYear = new Date().getFullYear()
     const values = projectionItems.map((item) => item.value)
 
@@ -388,10 +402,11 @@ export function FirePage() {
       const y = idx + 1
       const year = currentYear + y
       const age = currentAge + y
-      const isWithdrawal = age >= retirementAge
+      // Contributions run through the retirement year itself; withdrawals start the year after.
+      const isWithdrawal = age > retirementAge
       const isRetirementYear = age === retirementAge
 
-      // Grow each asset; contributions stop at retirement, growth continues always
+      // Grow each asset; contributions stop after retirement, growth continues always
       for (let i = 0; i < projectionItems.length; i++) {
         const item = projectionItems[i]
         const g = growthFor(item.id, item.defaultGrowthRate) / 100
@@ -407,9 +422,11 @@ export function FirePage() {
         }))
         return {
           year, age, totalNominal: totalAfterGrowth,
-          wealthBeforeWithdrawal: null,
+          // For the retirement year itself we also report the end-of-year wealth —
+          // that's the "at age X" number the summary card refers to.
+          wealthBeforeWithdrawal: isRetirementYear ? totalAfterGrowth : null,
           phase: 'accumulation' as const,
-          isRetirementYear: false,
+          isRetirementYear,
           monthlyNominal: null,
           depleted: false,
           assetValues,
@@ -433,16 +450,16 @@ export function FirePage() {
 
       return {
         year, age, totalNominal: newTotal,
-        wealthBeforeWithdrawal: isRetirementYear ? totalAfterGrowth : null,
+        wealthBeforeWithdrawal: null,
         phase: 'withdrawal' as const,
-        isRetirementYear,
+        isRetirementYear: false,
         monthlyNominal: annualSpendingNominal / 12,
         depleted,
         assetValues,
       }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectionItems, settings, growthOverrides, contribOverrides])
+  }, [projectionItems, settings, growthOverrides, contribOverrides, displayCurrency])
 
   const retirementRow = projection.find((r) => r.isRetirementYear)
   const depletionRow = projection.find((r) => r.depleted)
@@ -524,7 +541,7 @@ export function FirePage() {
           </div>
           <div className="flex items-center justify-between px-4 py-3 bg-background">
             <span className="text-sm text-muted">Monthly spending</span>
-            <div className="w-28 shrink-0"><NumInput value={settings.monthlySpending} onChange={(v) => updateSettings({ monthlySpending: v })} prefix={currencySymbol(displayCurrency)} min={0} /></div>
+            <div className="w-28 shrink-0"><NumInput value={settings.monthlySpending[displayCurrency] ?? 0} onChange={(v) => updateSettings({ monthlySpending: { ...settings.monthlySpending, [displayCurrency]: Math.max(0, v) } })} prefix={currencySymbol(displayCurrency)} min={0} /></div>
           </div>
           <div className="flex items-center justify-between px-4 py-3 bg-background">
             <span className="text-sm text-muted">Inflation rate</span>
@@ -539,40 +556,40 @@ export function FirePage() {
 
         <div className="border-l border-r border-b border-border bg-background px-4 py-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted">Years in retirement</span>
+            <span className="text-sm text-muted">Project until age</span>
             <span className="text-sm font-semibold tabular-nums">
-              {settings.retirementYears} yrs
+              {settings.endAge}
               <span className="text-muted font-normal ml-1">
-                · to age {settings.retirementAge + settings.retirementYears}
+                · {Math.max(0, settings.endAge - settings.retirementAge)} yrs in retirement
               </span>
             </span>
           </div>
           <input
             type="range"
-            min={5}
-            max={50}
+            min={settings.retirementAge + 1}
+            max={100}
             step={1}
-            value={settings.retirementYears}
-            onChange={(e) => updateSettings({ retirementYears: parseInt(e.target.value) })}
+            value={Math.max(settings.retirementAge + 1, settings.endAge)}
+            onChange={(e) => updateSettings({ endAge: parseInt(e.target.value) })}
             className="w-full accent-accent h-1.5 cursor-pointer"
           />
           <div className="flex justify-between text-[10px] text-muted mt-1">
-            <span>5 yrs</span>
-            <span>50 yrs</span>
+            <span>age {settings.retirementAge + 1}</span>
+            <span>age 100</span>
           </div>
         </div>
       </section>
 
       {/* Plan verdict */}
-      {retirementRow && settings.monthlySpending > 0 && (() => {
+      {retirementRow && (settings.monthlySpending[displayCurrency] ?? 0) > 0 && (() => {
         const lastRow = projection[projection.length - 1]
-        const endAge = settings.retirementAge + settings.retirementYears
+        const endAge = settings.endAge
         return (
           <div className={`border px-4 py-3 bg-background ${lastsFullRetirement ? 'border-success/50' : 'border-destructive/40'}`}>
             {lastsFullRetirement ? (
               <>
                 <p className="text-sm font-semibold text-success">
-                  Plan works — {fmtFull(settings.monthlySpending, displayCurrency)}/mo through age {endAge}
+                  Plan works — {fmtFull(settings.monthlySpending[displayCurrency] ?? 0, displayCurrency)}/mo through age {endAge}
                 </p>
                 {lastRow && (
                   <p className="text-xs text-muted mt-1">
@@ -668,7 +685,6 @@ export function FirePage() {
                           onChange={(v) => {
                             const val = Math.max(0, v)
                             setContribOverrides((p) => ({ ...p, [item.id]: val }))
-                            if (item.id === '__t212_portfolio') updateSettings({ t212Contribution: val })
                           }}
                           prefix={currencySymbol(displayCurrency)}
                           min={0}
@@ -766,7 +782,7 @@ export function FirePage() {
 
           <p className="text-xs text-muted mt-3">
             Accumulation: contributions on, no withdrawals.
-            Retirement: each year withdraws {fmtFull(settings.monthlySpending, displayCurrency)}/mo in today's money (grossed up for {settings.taxRate}% tax and {settings.inflationRate}% inflation).
+            Retirement: each year withdraws {fmtFull(settings.monthlySpending[displayCurrency] ?? 0, displayCurrency)}/mo in today's money (grossed up for {settings.taxRate}% tax and {settings.inflationRate}% inflation).
             Click any card to see per-asset breakdown.
           </p>
         </section>

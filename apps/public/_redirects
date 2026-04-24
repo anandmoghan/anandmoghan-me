@@ -1,3 +1,5 @@
+/time /time/ 301
+/wealth /wealth/ 301
 /time/* /time/index.html 200
 /wealth/* /wealth/index.html 200
 /* /index.html 200
