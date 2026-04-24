@@ -57,6 +57,7 @@ interface FireSettings {
   // switching display currency picks up a different absolute value
   // (cost of living differs per country).
   monthlySpending: Record<Currency, number>
+  pensionIncome: Record<Currency, number>   // monthly pension/annuity income, offsets withdrawals
   endAge: number            // final age of the projection (absolute, independent of retirement age)
   currentAge: number
   retirementAge: number     // age at which contributions stop and withdrawals begin
@@ -97,6 +98,7 @@ const DEFAULT_SETTINGS: FireSettings = {
   inflationRate: 3,
   taxRate: 20,
   monthlySpending: { GBP: 3000, USD: 3800, INR: 250000 },
+  pensionIncome: { GBP: 0, USD: 0, INR: 0 },
   endAge: 85,
   currentAge: 30,
   retirementAge: 60,
@@ -106,6 +108,11 @@ const ASSET_TYPE_ICONS: Partial<Record<AssetType, string>> = {
   stocks: '📈', real_estate: '🏠', crypto: '₿', bonds: '📋', cash: '💵',
   mutual_funds: '🏦', pension: '🏖️', insurance: '🛡️', gold: '🥇', vehicle: '🚗', other: '📦',
 }
+
+// Asset types you can't withdraw cash from (you can't spend half a house).
+// These keep growing but are excluded from drawdown; they show up in the final
+// net-worth total but don't cover retirement spending.
+const ILLIQUID_TYPES = new Set<AssetType>(['real_estate', 'vehicle'])
 
 const ASSET_TYPE_COLORS: Partial<Record<AssetType, string>> = {
   stocks: '#6366f1',       // indigo
@@ -350,6 +357,9 @@ export function FirePage() {
       if (saved.monthlySpending && typeof saved.monthlySpending === 'object' && !Array.isArray(saved.monthlySpending)) {
         cleaned.monthlySpending = { ...DEFAULT_SETTINGS.monthlySpending, ...saved.monthlySpending }
       }
+      if (saved.pensionIncome && typeof saved.pensionIncome === 'object' && !Array.isArray(saved.pensionIncome)) {
+        cleaned.pensionIncome = { ...DEFAULT_SETTINGS.pensionIncome, ...saved.pensionIncome }
+      }
       setSettings((prev) => ({ ...prev, ...cleaned }))
     })
   }, [uid])
@@ -407,6 +417,9 @@ export function FirePage() {
 
     const { inflationRate, taxRate, endAge, currentAge, retirementAge } = settings
     const monthlySpending = settings.monthlySpending[displayCurrency] ?? 0
+    const monthlyPension = settings.pensionIncome[displayCurrency] ?? 0
+    // Pension income offsets spending; only the shortfall is drawn from the pot.
+    const netMonthlyNeeded = Math.max(0, monthlySpending - monthlyPension)
     const accYears = Math.max(0, retirementAge - currentAge)
     const totalYears = Math.max(accYears, endAge - currentAge)
     const currentYear = new Date().getFullYear()
@@ -448,15 +461,25 @@ export function FirePage() {
       }
 
       const inflFactor = Math.pow(1 + inflationRate / 100, y)
-      const annualSpendingNominal = monthlySpending * 12 * inflFactor
+      const annualSpendingNominal = netMonthlyNeeded * 12 * inflFactor
       const annualGrossNeeded = taxRate > 0 ? annualSpendingNominal / (1 - taxRate / 100) : annualSpendingNominal
-      const depleted = monthlySpending > 0 && totalAfterGrowth < annualGrossNeeded
-      const newTotal = Math.max(0, totalAfterGrowth - annualGrossNeeded)
 
-      if (totalAfterGrowth > 0) {
-        const ratio = newTotal / totalAfterGrowth
-        for (let i = 0; i < values.length; i++) values[i] *= ratio
+      // Only draw from liquid assets — house, vehicle etc. keep growing untouched.
+      let liquidTotal = 0
+      for (let i = 0; i < projectionItems.length; i++) {
+        if (!ILLIQUID_TYPES.has(projectionItems[i].type)) liquidTotal += values[i]
       }
+      const illiquidTotal = totalAfterGrowth - liquidTotal
+
+      const depleted = netMonthlyNeeded > 0 && liquidTotal < annualGrossNeeded
+      const newLiquid = Math.max(0, liquidTotal - annualGrossNeeded)
+      if (liquidTotal > 0 && annualGrossNeeded > 0) {
+        const ratio = newLiquid / liquidTotal
+        for (let i = 0; i < values.length; i++) {
+          if (!ILLIQUID_TYPES.has(projectionItems[i].type)) values[i] *= ratio
+        }
+      }
+      const newTotal = newLiquid + illiquidTotal
 
       const assetValues: AssetSnapshot[] = projectionItems.map((item, i) => ({
         id: item.id, name: item.name, type: item.type, value: values[i],
@@ -477,7 +500,12 @@ export function FirePage() {
 
   const retirementRow = projection.find((r) => r.isRetirementYear)
   const depletionRow = projection.find((r) => r.depleted)
-  const lastsFullRetirement = retirementRow !== undefined && !depletionRow
+  const hasWithdrawalPhase = projection.some((r) => r.phase === 'withdrawal')
+  const netMonthlyNeeded = Math.max(
+    0,
+    (settings.monthlySpending[displayCurrency] ?? 0) - (settings.pensionIncome[displayCurrency] ?? 0)
+  )
+  const lastsFullRetirement = hasWithdrawalPhase && !depletionRow
   const totalNetWorth = projectionItems.reduce((s, i) => s + i.value, 0)
   const accYears = Math.max(0, settings.retirementAge - settings.currentAge)
 
@@ -551,11 +579,15 @@ export function FirePage() {
           </div>
           <div className="flex items-center justify-between px-4 py-3 bg-background">
             <span className="text-sm text-muted">Retirement age</span>
-            <div className="w-28 shrink-0"><NumInput value={settings.retirementAge} onChange={(v) => updateSettings({ retirementAge: Math.round(Math.max(settings.currentAge + 1, v)) })} suffix="yrs" min={1} max={90} /></div>
+            <div className="w-28 shrink-0"><NumInput value={settings.retirementAge} onChange={(v) => updateSettings({ retirementAge: Math.round(Math.max(0, v)) })} suffix="yrs" min={0} max={90} /></div>
           </div>
           <div className="flex items-center justify-between px-4 py-3 bg-background">
             <span className="text-sm text-muted">Monthly spending</span>
             <div className="w-28 shrink-0"><NumInput value={settings.monthlySpending[displayCurrency] ?? 0} onChange={(v) => updateSettings({ monthlySpending: { ...settings.monthlySpending, [displayCurrency]: Math.max(0, v) } })} prefix={currencySymbol(displayCurrency)} min={0} /></div>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3 bg-background">
+            <span className="text-sm text-muted">Monthly pension</span>
+            <div className="w-28 shrink-0"><NumInput value={settings.pensionIncome[displayCurrency] ?? 0} onChange={(v) => updateSettings({ pensionIncome: { ...settings.pensionIncome, [displayCurrency]: Math.max(0, v) } })} prefix={currencySymbol(displayCurrency)} min={0} /></div>
           </div>
           <div className="flex items-center justify-between px-4 py-3 bg-background">
             <span className="text-sm text-muted">Inflation rate</span>
@@ -565,7 +597,6 @@ export function FirePage() {
             <span className="text-sm text-muted">Tax rate</span>
             <div className="w-28 shrink-0"><NumInput value={settings.taxRate} onChange={(v) => updateSettings({ taxRate: v })} suffix="%" min={0} max={60} /></div>
           </div>
-          <div className="hidden lg:block bg-background" aria-hidden="true" />
         </div>
 
         <div className="border-l border-r border-b border-border bg-background px-4 py-3">
@@ -578,24 +609,31 @@ export function FirePage() {
               </span>
             </span>
           </div>
-          <input
-            type="range"
-            min={settings.retirementAge + 1}
-            max={100}
-            step={1}
-            value={Math.max(settings.retirementAge + 1, settings.endAge)}
-            onChange={(e) => updateSettings({ endAge: parseInt(e.target.value) })}
-            className="w-full accent-accent h-1.5 cursor-pointer"
-          />
-          <div className="flex justify-between text-[10px] text-muted mt-1">
-            <span>age {settings.retirementAge + 1}</span>
-            <span>age 100</span>
-          </div>
+          {(() => {
+            const minEnd = Math.max(settings.retirementAge + 1, settings.currentAge + 1)
+            return (
+              <>
+                <input
+                  type="range"
+                  min={minEnd}
+                  max={100}
+                  step={1}
+                  value={Math.max(minEnd, settings.endAge)}
+                  onChange={(e) => updateSettings({ endAge: parseInt(e.target.value) })}
+                  className="w-full accent-accent h-1.5 cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-muted mt-1">
+                  <span>age {minEnd}</span>
+                  <span>age 100</span>
+                </div>
+              </>
+            )
+          })()}
         </div>
       </section>
 
       {/* Plan verdict */}
-      {retirementRow && (settings.monthlySpending[displayCurrency] ?? 0) > 0 && (() => {
+      {hasWithdrawalPhase && (settings.monthlySpending[displayCurrency] ?? 0) > 0 && (() => {
         const lastRow = projection[projection.length - 1]
         const endAge = settings.endAge
         return (
