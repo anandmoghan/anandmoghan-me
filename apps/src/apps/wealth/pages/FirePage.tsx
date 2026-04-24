@@ -107,6 +107,20 @@ const ASSET_TYPE_ICONS: Partial<Record<AssetType, string>> = {
   mutual_funds: '🏦', pension: '🏖️', insurance: '🛡️', gold: '🥇', vehicle: '🚗', other: '📦',
 }
 
+const ASSET_TYPE_COLORS: Partial<Record<AssetType, string>> = {
+  stocks: '#6366f1',       // indigo
+  real_estate: '#f59e0b',  // amber
+  crypto: '#f97316',       // orange
+  bonds: '#64748b',        // slate
+  cash: '#10b981',         // emerald
+  mutual_funds: '#8b5cf6', // violet
+  pension: '#06b6d4',      // cyan
+  insurance: '#ec4899',    // pink
+  gold: '#eab308',         // yellow
+  vehicle: '#94a3b8',      // slate
+  other: '#6b7280',        // gray
+}
+
 // ── NumInput component ────────────────────────────────────────────────────────
 
 function NumInput({
@@ -611,16 +625,96 @@ export function FirePage() {
         )
       })()}
 
-      {/* Asset growth rates */}
+      {/* Assets — growth & contribution settings */}
       <section>
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">Assets &amp; Growth Rates</h2>
+            <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">Assets</h2>
             <p className="text-xs text-muted mt-0.5">Growth applies throughout · Add/yr stops at retirement</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {showRates && (
-              <>
+          <button
+            onClick={() => setShowRates((s) => !s)}
+            className="text-xs text-muted hover:text-foreground transition-colors shrink-0"
+          >
+            {showRates ? 'Hide' : 'Show'}
+          </button>
+        </div>
+
+        {/* Yearly contributions breakdown — sits just under the Assets header */}
+        {showRates && projectionItems.length > 0 && (() => {
+          const contribs = projectionItems
+            .map((item) => ({
+              id: item.id,
+              name: item.name,
+              type: item.type,
+              amount: contribFor(item.id, item.defaultYearlyContrib),
+            }))
+            .filter((c) => c.amount > 0)
+            .sort((a, b) => b.amount - a.amount)
+          const total = contribs.reduce((s, c) => s + c.amount, 0)
+          if (total <= 0) return null
+          const accYearsLeft = Math.max(0, settings.retirementAge - settings.currentAge)
+          return (
+            <div className="border border-border bg-background px-4 py-3 space-y-3 mb-3">
+              <div className="flex items-baseline justify-between">
+                <p className="text-[10px] text-muted uppercase tracking-wide font-medium">Investments / yr</p>
+                <div>
+                  <span className="text-lg font-bold tabular-nums">{fmtFull(total, displayCurrency)}</span>
+                  <span className="text-xs text-muted ml-1">/ yr</span>
+                </div>
+              </div>
+
+              {/* Stacked bar */}
+              <div className="flex h-3 overflow-hidden bg-muted/10">
+                {contribs.map((c) => {
+                  const pct = (c.amount / total) * 100
+                  return (
+                    <div
+                      key={c.id}
+                      title={`${c.name}: ${fmtFull(c.amount, displayCurrency)}`}
+                      style={{
+                        width: `${pct}%`,
+                        background: ASSET_TYPE_COLORS[c.type] ?? '#6b7280',
+                      }}
+                    />
+                  )
+                })}
+              </div>
+
+              {/* Legend — responsive grid so items spread across the full width */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1.5">
+                {contribs.map((c) => {
+                  const pct = (c.amount / total) * 100
+                  return (
+                    <div key={c.id} className="flex items-center gap-2 text-xs min-w-0">
+                      <span
+                        className="inline-block w-2.5 h-2.5 shrink-0"
+                        style={{ background: ASSET_TYPE_COLORS[c.type] ?? '#6b7280' }}
+                      />
+                      <span className="text-muted truncate flex-1 min-w-0">{c.name}</span>
+                      <span className="tabular-nums font-medium shrink-0">{fmtFull(c.amount, displayCurrency)}</span>
+                      <span className="text-muted tabular-nums shrink-0">({pct.toFixed(0)}%)</span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <p className="text-[10px] text-muted">
+                Applies for {accYearsLeft} year{accYearsLeft !== 1 ? 's' : ''} until retirement at age {settings.retirementAge} · total contributed: {fmt(total * accYearsLeft, displayCurrency)}
+              </p>
+            </div>
+          )
+        })()}
+
+        {showRates && (
+          <>
+            {projectionItems.length === 0 && (
+              <p className="px-4 py-6 text-sm text-muted text-center border border-border bg-background">No assets found.</p>
+            )}
+
+            {/* Sort controls — right above the asset list */}
+            {projectionItems.length > 0 && (
+              <div className="flex items-center justify-end gap-2 mb-2">
                 <span className="text-[10px] text-muted">Sort:</span>
                 <div className="flex border border-border overflow-hidden text-[10px]">
                   {(['name', 'value'] as const).map((s, i) => (
@@ -633,21 +727,7 @@ export function FirePage() {
                     </button>
                   ))}
                 </div>
-              </>
-            )}
-            <button
-              onClick={() => setShowRates((s) => !s)}
-              className="text-xs text-muted hover:text-foreground transition-colors"
-            >
-              {showRates ? 'Hide' : 'Show'}
-            </button>
-          </div>
-        </div>
-
-        {showRates && (
-          <>
-            {projectionItems.length === 0 && (
-              <p className="px-4 py-6 text-sm text-muted text-center border border-border bg-background">No assets found.</p>
+              </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
