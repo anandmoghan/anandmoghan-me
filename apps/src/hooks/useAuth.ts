@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  signInAnonymously,
   signOut as firebaseSignOut,
 } from 'firebase/auth'
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
@@ -15,9 +16,11 @@ import { auth, db } from '../firebase'
 interface AuthContextType {
   user: User | null
   loading: boolean
+  displayName: string | null
   signInWithGoogle: () => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string, displayName: string) => Promise<void>
+  signInAsGuest: (nickname: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -26,6 +29,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [guestNickname, setGuestNickname] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('shareGuestNickname') : null
+  )
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -69,13 +75,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  const signInAsGuest = async (nickname: string) => {
+    const result = await signInAnonymously(auth)
+    await updateProfile(result.user, { displayName: nickname })
+    localStorage.setItem('shareGuestNickname', nickname)
+    setGuestNickname(nickname)
+  }
+
   const signOut = async () => {
     await firebaseSignOut(auth)
   }
 
+  const displayName: string | null = !user
+    ? null
+    : user.isAnonymous
+      ? guestNickname
+      : user.displayName || user.email || null
+
   return createElement(
     AuthContext.Provider,
-    { value: { user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut } },
+    {
+      value: {
+        user,
+        loading,
+        displayName,
+        signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
+        signInAsGuest,
+        signOut,
+      },
+    },
     children
   )
 }

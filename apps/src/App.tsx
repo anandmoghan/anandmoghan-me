@@ -14,6 +14,8 @@ import type { AppDefinition } from './types'
 
 const DashboardApp = lazy(() => import('./apps/wealth/DashboardApp'))
 const TimeApp = lazy(() => import('./apps/time/TimeApp'))
+const ExpenseApp = lazy(() => import('./apps/expense/ExpenseApp'))
+const ShareApp = lazy(() => import('./apps/share/ShareApp'))
 
 const apps: AppDefinition[] = [
   {
@@ -30,6 +32,14 @@ const apps: AppDefinition[] = [
     description: 'Chess-clock time tracker with dynamic categories, budgets, and live stats.',
     icon: '⏱️',
     path: '/time',
+    requiresAuth: true,
+  },
+  {
+    id: 'expense',
+    name: 'Expense',
+    description: 'Track expenses across bank and credit card statements. Upload PDFs, auto-group by vendor.',
+    icon: '💸',
+    path: '/expense',
     requiresAuth: true,
   },
 ]
@@ -87,6 +97,12 @@ export default function App() {
                     <TimeApp />
                   </ProtectedRoute>
                 } />
+                <Route path="/expense/*" element={
+                  <ProtectedRoute>
+                    <ExpenseApp />
+                  </ProtectedRoute>
+                } />
+                <Route path="/share/*" element={<ShareApp />} />
               </Routes>
             </Suspense>
           </Layout>

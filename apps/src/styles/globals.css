@@ -65,3 +65,31 @@ a {
 a, button {
   transition: all 0.2s ease;
 }
+
+@media print {
+  header {
+    display: none !important;
+  }
+}
+
+@keyframes share-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.share-fade-in {
+  animation: share-fade-in 0.25s ease-out;
+}
+@keyframes share-slide-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.share-slide-in {
+  animation: share-slide-in 0.3s ease-out;
+}
+@keyframes share-slide-in-minimal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.share-slide-in-minimal {
+  animation: share-slide-in-minimal 0.18s ease-out;
+}

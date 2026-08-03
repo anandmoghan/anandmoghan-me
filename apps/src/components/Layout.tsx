@@ -18,9 +18,10 @@ function getAppName(pathname: string, apps: AppDefinition[]): string | null {
 }
 
 export function Layout({ children, apps }: LayoutProps) {
-  const { user } = useAuth()
+  const { user, displayName, signOut } = useAuth()
   const location = useLocation()
   const appName = getAppName(location.pathname, apps)
+  const isShareRoute = location.pathname.startsWith('/share')
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -28,22 +29,36 @@ export function Layout({ children, apps }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-2 text-sm">
-              <Link to="/" className="font-semibold hover:text-muted transition-colors">
-                Apps
-              </Link>
-              {appName && (
+              {!isShareRoute && (
                 <>
-                  <span className="text-muted">/</span>
-                  <span className="text-muted">{appName}</span>
+                  <Link to="/" className="font-semibold hover:text-muted transition-colors">
+                    Apps
+                  </Link>
+                  {appName && (
+                    <>
+                      <span className="text-muted">/</span>
+                      <span className="text-muted">{appName}</span>
+                    </>
+                  )}
                 </>
               )}
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              {user ? (
+              {user?.isAnonymous ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted">Viewing as {displayName}</span>
+                  <button
+                    onClick={() => signOut()}
+                    className="text-sm font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted/20 transition-colors"
+                  >
+                    Log out
+                  </button>
+                </div>
+              ) : user ? (
                 <ProfileMenu />
               ) : (
-                location.pathname !== '/login' && (
+                location.pathname !== '/login' && !isShareRoute && (
                   <Link
                     to="/login"
                     className="text-sm font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted/20 transition-colors"
