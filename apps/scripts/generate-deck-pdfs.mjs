@@ -7,7 +7,7 @@ const ROOT = path.resolve(import.meta.dirname, '..')
 const PORT = 4319
 const BASE_URL = `http://localhost:${PORT}`
 const NICKNAME = 'PDF Export'
-const SLUGS = ['fin-project-review']
+const SLUGS = ['fin-project-review', 'cartesia-project-review']
 
 function waitForServer(url, timeoutMs = 30000) {
   const start = Date.now()
@@ -28,8 +28,11 @@ function waitForServer(url, timeoutMs = 30000) {
 }
 
 async function generateDeckPdf(browser, slug, outputPath) {
-  const page = await browser.newPage()
-  await page.goto(`${BASE_URL}/share/${slug}`, { waitUntil: 'networkidle0' })
+  // Each slug gets its own incognito context so the nickname saved to
+  // localStorage for one deck doesn't skip the gate on the next deck.
+  const context = await browser.createBrowserContext()
+  const page = await context.newPage()
+  await page.goto(`${BASE_URL}/share/${slug}`, { waitUntil: 'domcontentloaded' })
 
   await page.waitForSelector('input[placeholder="Nickname"]')
   await page.type('input[placeholder="Nickname"]', NICKNAME)
@@ -40,7 +43,7 @@ async function generateDeckPdf(browser, slug, outputPath) {
   await page.emulateMediaType('print')
   await page.pdf({ path: outputPath, preferCSSPageSize: true, printBackground: true })
 
-  await page.close()
+  await context.close()
   console.log(`Wrote ${outputPath}`)
 }
 

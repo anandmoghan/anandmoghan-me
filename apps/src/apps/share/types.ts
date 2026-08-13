@@ -14,6 +14,16 @@ export interface Bullet {
   label?: string
   text: string
   section?: string
+  equation?: {
+    formula: string
+    legend: string
+    citation?: string
+  }
+  code?: {
+    lines: string[]
+    legend?: string[]
+    fullWidth?: boolean
+  }
 }
 
 export interface DiagramBlockMeta {
@@ -25,6 +35,7 @@ export interface DiagramBlockMeta {
 export interface Footnote {
   text: string
   href?: string
+  afterBulletId?: string
 }
 
 export type SlideKind = 'title' | 'content' | 'split' | 'custom'
@@ -37,9 +48,9 @@ export interface Slide {
   bullets?: Bullet[]
   custom?: ComponentType<DiagramProps>
   diagramBlocks?: DiagramBlockMeta[]
-  footnote?: Footnote
-  footnoteAfterBulletId?: string
+  footnotes?: Footnote[]
   diagramStages?: number
+  diagramRevealAt?: number
 }
 
 export interface DeckMeta {

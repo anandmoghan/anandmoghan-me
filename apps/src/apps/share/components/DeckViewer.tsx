@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Deck } from '../types'
+import { useSearchParams } from 'react-router-dom'
+import type { Deck, Slide } from '../types'
 import { useComments } from '../hooks/useComments'
 import { useAuth } from '../../../hooks/useAuth'
 import { SlideView } from './SlideView'
 import { ActivityPane } from './ActivityPane'
 import { CommentDialog } from './CommentDialog'
+import 'katex/dist/katex.min.css'
 import '../deck-theme.css'
 
 interface DeckViewerProps {
@@ -15,6 +17,10 @@ interface DeckViewerProps {
 interface Pos {
   slideIndex: number
   revealed: number
+}
+
+function totalSteps(s: Slide): number {
+  return (s.bullets?.length ?? 0) + (s.diagramStages ?? 0)
 }
 
 function IconActivity() {
@@ -79,7 +85,16 @@ export function DeckViewer({ deck, slug }: DeckViewerProps) {
   const { user } = useAuth()
   const currentUid = user?.uid ?? null
 
-  const [pos, setPos] = useState<Pos>({ slideIndex: 0, revealed: 0 })
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const [pos, setPos] = useState<Pos>(() => {
+    const raw = searchParams.get('slide')
+    const parsed = raw !== null ? parseInt(raw, 10) : NaN
+    const initialIndex = Number.isFinite(parsed)
+      ? Math.max(0, Math.min(parsed - 1, deck.slides.length - 1))
+      : 0
+    return { slideIndex: initialIndex, revealed: totalSteps(deck.slides[initialIndex]) }
+  })
   const [fullscreen, setFullscreen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
@@ -94,8 +109,6 @@ export function DeckViewer({ deck, slug }: DeckViewerProps) {
   const { slideIndex, revealed } = pos
   const slide = deck.slides[slideIndex]
 
-  const totalSteps = (s: (typeof deck.slides)[number]) => (s.bullets?.length ?? 0) + (s.diagramStages ?? 0)
-
   const advance = () => {
     setPos((prev) => {
       const currentSlide = deck.slides[prev.slideIndex]
@@ -105,13 +118,14 @@ export function DeckViewer({ deck, slug }: DeckViewerProps) {
         prev.revealed < steps
       if (canReveal) return { slideIndex: prev.slideIndex, revealed: prev.revealed + 1 }
       if (prev.slideIndex >= deck.slides.length - 1) return prev
-      return { slideIndex: prev.slideIndex + 1, revealed: 0 }
+      const nextSlide = deck.slides[prev.slideIndex + 1]
+      return { slideIndex: prev.slideIndex + 1, revealed: Math.min(1, totalSteps(nextSlide)) }
     })
   }
 
   const back = () => {
     setPos((prev) => {
-      if (prev.revealed > 0) return { slideIndex: prev.slideIndex, revealed: prev.revealed - 1 }
+      if (prev.revealed > 1) return { slideIndex: prev.slideIndex, revealed: prev.revealed - 1 }
       const prevIndex = Math.max(prev.slideIndex - 1, 0)
       const prevSlide = deck.slides[prevIndex]
       return { slideIndex: prevIndex, revealed: totalSteps(prevSlide) }
@@ -168,6 +182,17 @@ export function DeckViewer({ deck, slug }: DeckViewerProps) {
   }, [deck])
 
   useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('slide', String(slideIndex + 1))
+        return next
+      },
+      { replace: true }
+    )
+  }, [slideIndex, slug, setSearchParams])
+
+  useEffect(() => {
     const handleFullscreenChange = () => {
       setFullscreen(document.fullscreenElement === containerRef.current)
     }
@@ -202,6 +227,14 @@ export function DeckViewer({ deck, slug }: DeckViewerProps) {
     }
   }
 
+  const phaseTitles = useMemo(() => {
+    const titles: string[] = []
+    deck.slides.forEach((s) => {
+      if (s.title && !titles.includes(s.title)) titles.push(s.title)
+    })
+    return titles
+  }, [deck])
+
   const bulletMeta = useMemo(() => {
     const map: Record<string, { slideIndex: number; label?: string; text: string }> = {}
     deck.slides.forEach((s, i) => {
@@ -230,6 +263,7 @@ export function DeckViewer({ deck, slug }: DeckViewerProps) {
             <SlideView
               slide={slide}
               deckMeta={deck.meta}
+              phaseTitles={phaseTitles}
               revealedCount={revealed}
               commentsByBullet={commentsByBullet}
               onOpenComment={setActiveBulletId}
@@ -325,6 +359,7 @@ export function DeckViewer({ deck, slug }: DeckViewerProps) {
             <SlideView
               slide={s}
               deckMeta={deck.meta}
+              phaseTitles={phaseTitles}
               revealedCount={totalSteps(s)}
               commentsByBullet={{}}
               onOpenComment={() => {}}

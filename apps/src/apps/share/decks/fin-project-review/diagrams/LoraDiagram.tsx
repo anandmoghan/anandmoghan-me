@@ -117,7 +117,10 @@ export default function LoraDiagram({
 
       {stage >= 4 && (
         <div className="sd-lora-caption">
-          h = Wx + BAx, simplified from Hu et al. 2021, Fig. 1<sup>1</sup>
+          h = Wx + BAx, simplified from Hu et al. 2021,{' '}
+          <span style={{ whiteSpace: 'nowrap' }}>
+            Fig. 1<sup>1</sup>
+          </span>
         </div>
       )}
     </div>

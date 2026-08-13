@@ -22,17 +22,17 @@ const deck: Deck = {
         {
           id: 'about-experience',
           label: 'Experience',
-          text: '7+ years building ML models at scale for speech and language at Amazon, spanning generations of ASR models: hybrid DNN-HMM with WFSTs, CTC, all-neural RNN Transducers, large multilingual ASR, and now speech LLMs',
+          text: '7+ years building ML models at scale for speech and language at Amazon',
         },
         {
           id: 'about-education',
           label: 'Education',
-          text: 'Masters in AI, Indian Institute of Science, Bangalore, thesis on Attention Based Relevance Modeling for Speaker and Language Recognition',
+          text: 'Masters Thesis on "Attention Based Relevance Modeling for Speaker and Language Recognition"',
         },
         {
           id: 'about-today',
           label: 'Today',
-          text: "on the post-training side, aligning Nova Sonic, Amazon's multi-billion-parameter speech-to-speech LLM, to Alexa+ use cases",
+          text: "post-training Nova Sonic, Amazon's multi-billion-parameter speech-to-speech LLM, to Alexa+ use cases",
         },
         {
           id: 'about-continual-learning',
@@ -42,12 +42,12 @@ const deck: Deck = {
         {
           id: 'about-timeline',
           label: 'Timeline',
-          text: '1 quarter at 50% bandwidth carried it from ideation through experimentation to a proper POC for engineering; worked with engineering for implementation and deployed it the following quarter',
+          text: '2 quarters at 50% bandwidth for science, engineering and deployment'
         },
         {
           id: 'about-team',
           label: 'Team',
-          text: 'started with a junior scientist modeling continual learning for ASR, grew to a senior scientist doing full-session-context DPO on new data, and now mentors another junior scientist on the ASR/TTS feedback loop; mentored both the junior scientists to onboard into AGI/Alexa infrastructure and systems',
+          text: 'Onboarded two junior scientists into AGI/Alexa infrastructure and systems + Senior Scientist',
         },
       ],
     },
@@ -59,32 +59,32 @@ const deck: Deck = {
         {
           id: 'problem-problem',
           label: 'Problem',
-          text: 'we needed a mechanism to continually update our production speech-to-speech LLM with the latest data at a bi-weekly cadence, through minimal science intervention, and iteratively improve the model',
+          text: 'Update our production model with latest data at a bi-weekly cadence, through minimal science intervention',
         },
         {
           id: 'problem-scope',
           label: 'Scope of this deck',
-          text: "the ASR continual learning loop, built on LoRA adapters, is what's in production; a TTS feedback loop and an online RL investment are the active extensions",
+          text: "the ASR continual learning loop, built on LoRA adapters, Active Extensions: Full production feedback loop and online RL track",
         },
         {
           id: 'problem-data',
           label: 'Data',
-          text: 'domain teams needed a mechanism to ingest data for new features and production issues directly, plus newly transcribed data coming in continuously',
+          text: 'domain/product teams + New transcribed data',
         },
         {
           id: 'problem-model',
           label: 'Model',
-          text: 'a sub-10B parameter S2S multimodal Llama-style transformer, handling text and speech together, supporting streaming and non-streaming ASR and TTS',
+          text: 'a sub-10B parameter S2S speech + text multimodal Llama-style transformer with streaming and non-streaming modes',
         },
         {
           id: 'problem-constraints',
           label: 'Constraints',
-          text: 'no regression on the standing regression suite, and no latency regression at inference time',
+          text: 'no regression on the standard suite and latency',
         },
         {
           id: 'problem-evaluation',
           label: 'Evaluation & gating',
-          text: 'offline evaluations, then online benchmarking through the production stack for accurate latency numbers, A/B testing with increasing dial-up, and gating against the current production model before full dial up',
+          text: 'offline evaluations, online benchmarking on prod stack, A/B test, dial-up',
         },
       ],
     },
@@ -97,22 +97,22 @@ const deck: Deck = {
         {
           id: 'naive-naive-path',
           label: 'Naive path',
-          text: 'fine-tune the model directly on new data, but each fine-tune still needed full resources for a training run, packaging, and extensive testing and releases will stay slow',
+          text: 'fine-tuning the seed model',
         },
         {
           id: 'naive-why-broke',
           label: 'Why it broke at scale',
-          text: 'simulating 6 continual releases stacked on the last checkpoint (the normal gap before a full retrain) produced severe distribution shift and hallucinations',
+          text: 'continual learning simulations produced drifts and hallucinations',
         },
         {
           id: 'naive-trade',
           label: 'The trade',
-          text: 'fine-tuning was easier for engineering to support, but the recurring distribution shift forced frequent full retrains just to recover',
+          text: 'minimal engineering investment vs stable flexible recipe',
         },
         {
           id: 'naive-direction',
           label: 'The direction',
-          text: 'moved to LoRA adapters instead, trading more design work up front for far less compute per update and per-locale/use-case configurability',
+          text: 'LoRA Adapters',
         },
       ],
     },
@@ -125,31 +125,33 @@ const deck: Deck = {
         {
           id: 'adapters-lora-adapters',
           label: 'LoRA adapters¹',
-          text: 'freeze the base weights and train a small pair of rank-16 low-rank matrices on the attention query and value projections only, a fraction of the trainable parameters',
+          text: 'freeze the base weights and train a small pair of low-rank matrices; a fraction of the trainable parameters',
         },
         {
           id: 'adapters-latency-trick',
           label: 'Latency trick',
-          text: "adapters fuse into the base model's weights at load time, the same zero-overhead merge property from the original LoRA paper, so inference carries no added parameters or latency",
+          text: "adapters fuse into the base model's weights at load time; no latency overhead",
         },
         {
           id: 'adapters-flexible',
           label: 'Flexible per locale, easy rollback',
-          text: 'adapters differ per locale or use case, e.g. Alexa for BMW vs. regular Alexa, and a bad update reverts by swapping the adapter back instead of a full retrain',
+          text: 'model became very configurable',
         },
         {
           id: 'adapters-resists-drift',
           label: 'Resists compounding drift',
-          text: 'updates touch only a small low-rank delta with the base frozen, avoiding the drift and hallucinations from stacking 6 naive fine-tunes',
+          text: 'updates touch only a small low-rank delta; survived simulations',
         },
       ],
       custom: LoraDiagram,
       diagramBlocks: LORA_BLOCKS,
-      footnote: {
-        text: '1. Hu et al., 2021: LoRA: Low-Rank Adaptation of Large Language Models, arXiv:2106.09685',
-        href: 'https://arxiv.org/abs/2106.09685',
-      },
-      footnoteAfterBulletId: 'adapters-lora-adapters',
+      footnotes: [
+        {
+          text: '1. Hu et al., 2021: LoRA: Low-Rank Adaptation of Large Language Models, arXiv:2106.09685',
+          href: 'https://arxiv.org/abs/2106.09685',
+          afterBulletId: 'adapters-lora-adapters',
+        },
+      ],
     },
     {
       id: 'data-pipeline',
@@ -169,12 +171,12 @@ const deck: Deck = {
         {
           id: 'experimentation-iterative',
           label: 'Iterative setup',
-          text: 'ran 6 continual learning cycles, each seeded from the previous checkpoint',
+          text: 'continual learning simulations, each seeded from the previous checkpoint',
         },
         {
           id: 'experimentation-compared',
           label: 'Compared approaches',
-          text: 'ran the same 6-cycle loop for both full fine-tuning and LoRA adapters',
+          text: 'fine-tuning and adapter variants',
         },
         {
           id: 'experimentation-adapter-matrix',
@@ -189,12 +191,12 @@ const deck: Deck = {
         {
           id: 'experimentation-layer-coverage',
           label: 'Layer coverage',
-          text: 'also tested adapters on initial-only layers, end-only layers, and the full model; full layers won',
+          text: 'adapters on different locations in the model architecture - initial layers too important',
         },
         {
           id: 'experimentation-data-replay',
           label: 'Data replay',
-          text: 'mixing in past data during replay was the game changer for avoiding catastrophic forgetting across the iterative cycles',
+          text: 'game changer for catastrophic forgetting',
         },
       ],
     },
@@ -207,7 +209,7 @@ const deck: Deck = {
           id: 'challenges-what-broke',
           section: 'Background Speech Regression',
           label: 'What broke',
-          text: "background speech, people talking near the device after invoking it but not to it, shouldn't be transcribed, but the continual learning data mix pushed its transcription upward, which causes regressions downstream",
+          text: "increased with simulations, bad customer experience and regressions downstream",
         },
         {
           id: 'challenges-fix',
@@ -219,13 +221,13 @@ const deck: Deck = {
           id: 'challenges-buyin',
           section: 'Engineering Buy-In',
           label: 'Buy-in',
-          text: 'engineering was reluctant without headcount upfront; escalated to leadership and delivered a proof of concept before they committed, resulting in the standing Airflow release pipeline',
+          text: 'reluctant to invest due to complexity, initial proof-of-concept, escalations and scoped the work out with them',
         },
         {
           id: 'challenges-coordination',
           section: 'Engineering Buy-In',
           label: 'Coordination',
-          text: 'aligned Runtime Engineering, the inference engine team, the personalization team, and the deployment team, plus TPMs across five top Alexa domains',
+          text: 'aligned runtime, inference engine, personalization and deployment engineering teams, plus TPMs across five top Alexa domains',
         },
       ],
     },
@@ -237,27 +239,22 @@ const deck: Deck = {
         {
           id: 'results-effort',
           label: 'Effort',
-          text: 'cut from about a month of manual science and engineering effort to a fully automated pipeline that only needs scientist involvement if gating fails',
+          text: 'cut from about a month of manual science and engineering effort to a fully automated pipeline; scientist involved if gating fails',
         },
         {
           id: 'results-data-regression',
           label: 'Data & regression',
-          text: '~40–50% relative WERR improvement from newly ingested data, near-zero regression on the standing suite, and no regression in preference or A/B testing at the full-system level',
+          text: '~40–50% WERR on new data, near-zero regression on the standard suite; positive preference and A/B test',
         },
         {
           id: 'results-top-domain-lift',
           label: 'Top-domain lift',
-          text: 'A/B testing showed a measurable end-to-end customer metric improvement for top-traffic domains like Music and Communications, the same domains that made up the bulk of domain team data ingestion',
+          text: 'improvement in end-to-end customer metrics for top domains',
         },
         {
           id: 'results-poc-to-scale',
           label: 'From PoC to scale',
-          text: 'delivered the working proof of concept for en-US, then onboarded and led 6 scientists from Alexa Auto team who extended it further for various locales and use cases',
-        },
-        {
-          id: 'results-critical-auto',
-          label: 'Critical for Auto launch',
-          text: 'expanding beyond en-US was critical in meeting Alexa Auto launch bars for the de-DE locale; onboarded the full Auto science team to the recipe, giving them their own adapters tuned to Auto use cases like Places of Interest and Navigation',
+          text: 'proof of concept for en-US, onboarded team of 6 Alexa Auto scientists to extend it further',
         },
       ],
     },
@@ -268,28 +265,28 @@ const deck: Deck = {
       bullets: [
         {
           id: 'ongoing-tts-feedback',
-          label: 'TTS feedback loop',
-          text: 'mining production drift in volume, voice, and personality, then resynthesizing and feeding it into DPO',
+          label: 'Feedback loop',
+          text: 'mining production drift in volume, voice, and personality, regenerate and improve the model; data flywheel',
         },
         {
           id: 'ongoing-online-rl',
           label: 'Online RL infrastructure',
-          text: 'batched the streaming ASR/TTS HuggingFace interface with a novel right-aligned KV-cache mechanism to generate rollouts for training',
+          text: 'batched generation for custom HF interface with a novel right-aligned KV cache technique, GRPO orchestration',
         },
         {
           id: 'ongoing-grpo',
           label: 'GRPO as alternative to min-WER training¹',
-          text: 'GRPO is the natural LLM-era equivalent of legacy minimum-WER training for ASR systems, this proof-of-concept was to negotiate with the leadership to invest further into online RL infrastructure',
+          text: 'negotiated with the leadership to invest further into online RL infrastructure',
         },
         {
           id: 'ongoing-wer-penalty',
           label: 'WER deletion penalty',
-          text: 'added an explicit deletion-penalty term to the WER reward, carrying the background-speech fix from plain adapter recipe to online RL side',
+          text: 'explicit deletion-penalty to the WER reward on background speech data helped with hallucinations',
         },
         {
           id: 'ongoing-result-so-far',
           label: 'Result so far',
-          text: '~7% further improvement on top of the continual learning gains on regular datasets',
+          text: '~7% further improvement on top of the continual learning gains on standard suite',
         },
         {
           id: 'ongoing-where-headed',
@@ -297,11 +294,13 @@ const deck: Deck = {
           text: 'reward modeling for TTS and full conversational AI stack',
         },
       ],
-      footnote: {
-        text: '1. Shao et al., 2024: DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models, arXiv:2402.03300 (introduces GRPO)',
-        href: 'https://arxiv.org/abs/2402.03300',
-      },
-      footnoteAfterBulletId: 'ongoing-grpo',
+      footnotes: [
+        {
+          text: '1. Shao et al., 2024: DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models, arXiv:2402.03300 (introduces GRPO)',
+          href: 'https://arxiv.org/abs/2402.03300',
+          afterBulletId: 'ongoing-grpo',
+        },
+      ],
     },
   ],
 }

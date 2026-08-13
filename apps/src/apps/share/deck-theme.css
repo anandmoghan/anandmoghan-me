@@ -140,13 +140,144 @@
   content: ':';
 }
 
+.sd-point-equation {
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--sd-line-soft);
+  border-bottom: 1px solid var(--sd-line-soft);
+}
+.sd-eq-formula .katex-display {
+  margin: 0;
+}
+.sd-point-equation .sd-point-gutter {
+  position: absolute;
+  left: 0;
+  top: 0.3rem;
+  width: auto;
+}
+.sd-eq-label {
+  font-family: var(--sd-sans);
+  font-weight: 700;
+  color: var(--sd-amber);
+  font-size: clamp(0.68rem, 0.64rem + 0.12vw, 0.75rem);
+  margin-bottom: 0.2rem;
+}
+.sd-eq-formula {
+  font-size: clamp(1.13rem, 1.07rem + 0.3vw, 1.31rem);
+  color: var(--sd-paper);
+}
+.sd-eq-formula .katex,
+.sd-eq-legend .katex,
+.sd-eq-citation .katex {
+  color: inherit;
+  font-size: 1em;
+}
+.sd-eq-legend {
+  font-size: clamp(0.83rem, 0.8rem + 0.1vw, 0.89rem);
+  color: var(--sd-ink-muted);
+  max-width: 46rem;
+  line-height: 1.25;
+  padding: 0 1rem;
+  margin-top: 0.05rem;
+}
+.sd-eq-citation {
+  font-family: var(--sd-mono);
+  font-size: 0.65rem;
+  color: var(--sd-cyan);
+  margin-top: 0.15rem;
+}
+
+.sd-point-code {
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--sd-line-soft);
+  border-bottom: 1px solid var(--sd-line-soft);
+}
+.sd-point-code .sd-point-gutter {
+  position: absolute;
+  left: 0;
+  top: 0.3rem;
+  width: auto;
+}
+.sd-point-code-intro {
+  font-size: clamp(0.7rem, 0.66rem + 0.12vw, 0.78rem);
+  color: var(--sd-ink-muted);
+  margin-bottom: 0.3rem;
+}
+.sd-code-block {
+  font-family: var(--sd-mono);
+  font-size: clamp(0.58rem, 0.5rem + 0.3vw, 0.68rem);
+  line-height: 1.55;
+  color: var(--sd-paper);
+  background: var(--sd-panel-2);
+  border: 1px solid var(--sd-line);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sd-code-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2rem 1.5rem;
+  width: 100%;
+  max-width: 46rem;
+  margin: 0.4rem auto 0;
+}
+.sd-code-legend-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  text-align: left;
+  font-size: clamp(0.79rem, 0.76rem + 0.1vw, 0.87rem);
+  line-height: 1.35;
+}
+.sd-code-legend-tag {
+  font-family: var(--sd-mono);
+  color: var(--sd-cyan);
+  white-space: nowrap;
+}
+.sd-code-legend-desc {
+  color: var(--sd-ink-muted);
+}
+
+.sd-points-top {
+  flex: 0 0 auto;
+}
+.sd-points-top .sd-point-code {
+  padding: 0.4rem 0 0.7rem;
+}
+.sd-points-top .sd-code-block {
+  max-width: min(100%, 46rem);
+  font-size: clamp(0.68rem, 0.6rem + 0.35vw, 0.82rem);
+}
+.sd-points-top .sd-code-legend {
+  max-width: min(100%, 46rem);
+}
+
+.sd-footnote-list {
+  border-top: 1px solid var(--sd-line-soft);
+  padding-top: 0.75rem;
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
 .sd-footnote {
   font-family: var(--sd-mono);
   font-size: clamp(0.65rem, 0.6rem + 0.2vw, 0.8rem);
   color: var(--sd-ink-muted);
-  border-top: 1px solid var(--sd-line-soft);
-  padding-top: 0.75rem;
-  margin-top: 1.5rem;
   line-height: 1.4;
 }
 .sd-footnote a {
@@ -164,11 +295,11 @@
   flex-wrap: wrap;
 }
 .sd-col-text {
-  flex: 1.15;
+  flex: 1 1 0%;
   min-width: 260px;
 }
 .sd-col-diagram {
-  flex: 0.85;
+  flex: 0 1 340px;
   min-width: 220px;
   display: flex;
   flex-direction: column;
@@ -355,6 +486,63 @@
 }
 .sd-p5-box.sd-out .sd-t {
   color: var(--sd-cyan);
+}
+
+.sd-kv-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 360px;
+}
+.sd-kv-row-label {
+  font-family: var(--sd-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sd-ink-muted);
+  margin-bottom: 0.4rem;
+}
+.sd-kv-row {
+  display: flex;
+  gap: 3px;
+}
+.sd-kv-cell {
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--sd-panel-2);
+  border: 1px solid var(--sd-line);
+}
+.sd-kv-cell.sd-kv-content {
+  background: var(--sd-amber);
+  border-color: var(--sd-amber);
+  opacity: 0.85;
+}
+.sd-kv-cell.sd-kv-pad {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--sd-line);
+}
+.sd-kv-arrow-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--sd-mono);
+  font-size: 0.7rem;
+  color: var(--sd-cyan);
+}
+.sd-kv-arrow-glyph {
+  font-size: 1.1rem;
+}
+.sd-kv-result {
+  font-family: var(--sd-mono);
+  font-size: 0.75rem;
+  color: var(--sd-amber);
+  border: 1px solid var(--sd-amber);
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
 }
 
 .sd-pill-labeled {
@@ -633,10 +821,45 @@
   .sd-print-slide .sd-section-heading {
     font-size: 10pt;
   }
-  .sd-print-slide .sd-footnote {
+  .sd-print-slide .sd-point-equation {
+    padding: 3mm 0;
+  }
+  .sd-print-slide .sd-eq-label {
+    font-size: 9pt;
+  }
+  .sd-print-slide .sd-eq-formula {
+    font-size: 13pt;
+  }
+  .sd-print-slide .sd-eq-legend {
+    font-size: 8.5pt;
+  }
+  .sd-print-slide .sd-eq-citation {
     font-size: 6.5pt;
+  }
+  .sd-print-slide .sd-point-code {
+    padding: 3mm 0;
+  }
+  .sd-print-slide .sd-point-code-intro {
+    font-size: 8.5pt;
+  }
+  .sd-print-slide .sd-code-block {
+    font-size: 7.5pt;
+    padding: 2mm 2.6mm;
+  }
+  .sd-print-slide .sd-code-legend {
+    gap: 0.5mm 4mm;
+    margin-top: 1.5mm;
+  }
+  .sd-print-slide .sd-code-legend-row {
+    font-size: 7pt;
+  }
+  .sd-print-slide .sd-footnote-list {
     margin-top: 3mm;
     padding-top: 2mm;
+    gap: 1mm;
+  }
+  .sd-print-slide .sd-footnote {
+    font-size: 6.5pt;
   }
   .sd-print-slide .sd-pipeline5 {
     gap: 2mm;
@@ -661,6 +884,19 @@
     max-width: 62mm;
   }
   .sd-print-slide .sd-lora-caption {
+    font-size: 6.5pt;
+  }
+  .sd-print-slide .sd-kv-wrap {
+    max-width: 62mm;
+    gap: 2mm;
+  }
+  .sd-print-slide .sd-kv-cell {
+    width: 4mm;
+    height: 4mm;
+  }
+  .sd-print-slide .sd-kv-row-label,
+  .sd-print-slide .sd-kv-arrow-row,
+  .sd-print-slide .sd-kv-result {
     font-size: 6.5pt;
   }
 }
