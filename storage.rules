@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Storage rules for the default bucket of Firebase project anandmoghan-me.
+//
+// The bucket anandmoghan-me.appspot.com was empty when these rules were written (checked
+// 2026-10-05) and no app uses Storage: anandmoghan-me keeps its media in Cloudflare R2 and its web
+// apps only carry the storageBucket config value. So these rules own the bucket and everything
+// outside family/ is denied. If another app ever needs Storage, add its paths here.
+//
+// family/<person>/media/**    thumbnails and images written by the Mac bridge (admin SDK, bypasses rules)
+// family/<person>/uploads/**  photos uploaded from the app by members (create only, no overwrite), e.g. uploads/<date>/<file>
+//
+// Membership is family/household.members in Firestore (cross-service firestore.get).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isMember() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in firestore.get(/databases/(default)/documents/family/household).data.members;
+    }
+
+    match /family/{person}/{allPaths=**} {
+      allow read: if isMember() && person in ['anand', 'kavya', 'nila'];
+    }
+
+    match /family/{person}/uploads/{allPaths=**} {
+      allow create: if isMember()
+        && person in ['anand', 'kavya', 'nila']
+        && request.resource.size <= 25 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
+
+    // Everything else is denied.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
