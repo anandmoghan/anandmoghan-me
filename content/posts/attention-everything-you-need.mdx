@@ -71,14 +71,18 @@ Three advantages for production systems:
 
 #### What Attention Heads Learn
 
+**References**: [22, 23]
+
 Research shows attention heads develop distinct patterns:
 
 1. **Positional heads**: Attend to adjacent tokens (position $n±1$) for local syntax
 2. **Syntactic heads**: Track grammatical relationships like subject-verb agreement
 3. **Semantic heads**: Capture long-range dependencies and coreference
-4. **Rare heads**: Focus on specific tokens like `[CLS]`, `[SEP]`, punctuation
+4. **Rare-word heads**: Attend to the least frequent tokens in the input
 
-Tools like BertViz and Attention Flow let you inspect these patterns.
+Voita et al. found the positional, syntactic, and rare-word heads in translation models. Clark et al. found BERT heads tracking syntax and coreference, and many heads parking most of their attention on `[SEP]` or punctuation, effectively a no-op when the head has nothing useful to do.
+
+Tools like BertViz, and methods like attention rollout and attention flow, let you inspect these patterns.
 
 Studies show 10-20% of heads can be pruned with &lt;1% quality loss—useful for model compression. Some heads are redundant, others critical.
 
@@ -88,91 +92,21 @@ Attention entropy as diagnostic: Low entropy (peaked) = focused on specific toke
 
 **References**: [3]
 
-Here's a subtle but important property: multi-head attention is permutation-equivariant. If you swap input positions, outputs swap accordingly. Mathematically, for any permutation matrix $P$:
+Here's a subtle but important property: self-attention without a causal mask is permutation-equivariant. If you swap input positions, outputs swap accordingly. Mathematically, for any permutation matrix $P$:
 
 $$
 \text{Attention}(PQ, PK, PV) = P \cdot \text{Attention}(Q, K, V)
 $$
 
-This means the attention mechanism itself has no inherent bias toward position—it treats all positions equally. This is why positional encodings are necessary for sequence order. The mechanism is extremely flexible, but requires careful position encoding design (which led to innovations like RoPE and other alternatives).
+This means the attention mechanism itself has no inherent bias toward position—it treats all positions equally. This is why positional encodings are necessary for sequence order. (A causal mask breaks the symmetry and leaks some positional information, which is why decoder-only models trained with no positional encoding at all still work, but explicit encodings remain the norm.) The mechanism is extremely flexible, but requires careful position encoding design (which led to innovations like RoPE and other alternatives).
 
 ### Implementation Insights
 
 **References**: [3, 4]
 
-```python
-import torch
-import torch.nn as nn
+**Attention dropout** (typically $p=0.1$) is applied to attention weights after softmax. This prevents overfitting to specific attention patterns and encourages robustness. During training, it randomly zeros out some attention connections, forcing the model to learn multiple paths to each value. Most large LLM pretraining runs (Llama, for example) set attention dropout to 0, since a single pass over trillions of tokens rarely overfits.
 
-class ScaledDotProductAttention(nn.Module):
-    def __init__(self, d_k, dropout=0.1):
-        super().__init__()
-        self.d_k = d_k
-        self.dropout = nn.Dropout(dropout)
-        
-    def forward(self, Q, K, V, mask=None):
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / torch.sqrt(torch.tensor(self.d_k, dtype=torch.float32))
-        
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, float('-inf'))
-        
-        attention_weights = torch.softmax(scores, dim=-1)
-        
-        # Dropout on attention weights, not output - forces learning redundant paths
-        attention_weights = self.dropout(attention_weights)
-        
-        output = torch.matmul(attention_weights, V)
-        
-        return output, attention_weights
-```
-
-**Attention dropout** (typically $p=0.1$) is applied to attention weights after softmax. This prevents overfitting to specific attention patterns and encourages robustness. During training, it randomly zeros out some attention connections, forcing the model to learn multiple paths to each value.
-
-```python
-
-class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
-        super().__init__()
-        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
-        
-        self.d_model = d_model
-        self.num_heads = num_heads
-        self.d_k = d_model // num_heads
-        
-        self.W_q = nn.Linear(d_model, d_model)
-        self.W_k = nn.Linear(d_model, d_model)
-        self.W_v = nn.Linear(d_model, d_model)
-        self.W_o = nn.Linear(d_model, d_model)
-        
-        self.attention = ScaledDotProductAttention(self.d_k)
-        
-    def split_heads(self, x, batch_size):
-        x = x.view(batch_size, -1, self.num_heads, self.d_k)
-        return x.transpose(1, 2)
-    
-    def forward(self, Q, K, V, mask=None):
-        batch_size = Q.size(0)
-        
-        Q = self.W_q(Q)
-        K = self.W_k(K)
-        V = self.W_v(V)
-        
-        Q = self.split_heads(Q, batch_size)
-        K = self.split_heads(K, batch_size)
-        V = self.split_heads(V, batch_size)
-        
-        attn_output, attn_weights = self.attention(Q, K, V, mask)
-        
-        # .contiguous() required before view() after transpose - triggers memory copy
-        attn_output = attn_output.transpose(1, 2).contiguous()
-        attn_output = attn_output.view(batch_size, -1, self.d_model)
-        
-        output = self.W_o(attn_output)
-        
-        return output, attn_weights
-```
-
-This implementation makes the parallel structure explicit—each head operates independently before concatenation.
+In practice, the per-head projections are fused: one $d_{model} \times d_{model}$ matrix each for $Q$, $K$, and $V$, whose outputs are reshaped into $h$ heads of size $d_k = d_{model}/h$. Multi-head attention therefore costs about the same as single-head attention at full width. Masks are applied to the scores before softmax by setting disallowed positions to $-\infty$.
 
 ### Cross-Attention vs Self-Attention
 
@@ -180,51 +114,14 @@ This implementation makes the parallel structure explicit—each head operates i
 
 While self-attention relates positions within a single sequence, cross-attention relates positions between two different sequences. This is fundamental for many architectures:
 
-In self-attention: $Q$, $K$, $V$ all come from the same sequence
-In cross-attention: $Q$ comes from one sequence (target), $K$ and $V$ come from another (source)
-
-```python
-class CrossAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
-        super().__init__()
-        self.num_heads = num_heads
-        self.d_k = d_model // num_heads
-        self.d_model = d_model
-        
-        self.W_q = nn.Linear(d_model, d_model)
-        self.W_k = nn.Linear(d_model, d_model)
-        self.W_v = nn.Linear(d_model, d_model)
-        self.W_o = nn.Linear(d_model, d_model)
-    
-    def forward(self, target, source, mask=None):
-        batch_size = target.size(0)
-        
-        # Q from target, K/V from source - this is the key difference
-        Q = self.W_q(target)
-        K = self.W_k(source)
-        V = self.W_v(source)
-        
-        Q = Q.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
-        K = K.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
-        V = V.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
-        
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, float('-inf'))
-        attention = torch.softmax(scores, dim=-1)
-        output = torch.matmul(attention, V)
-        
-        output = output.transpose(1, 2).contiguous()
-        output = output.view(batch_size, -1, self.d_model)
-        
-        return self.W_o(output)
-```
+- In self-attention: $Q$, $K$, $V$ all come from the same sequence
+- In cross-attention: $Q$ comes from one sequence (target), $K$ and $V$ come from another (source)
 
 **Applications:**
-- **Machine translation**: Decoder attends to encoder outputs (T5, BART)
-- **Vision-language models**: Text attends to image patches (CLIP, Flamingo)
-- **Speech-to-speech**: Target speech attends to source speech features
-- **Retrieval-augmented generation**: Query attends to retrieved documents
+- **Encoder-decoder models**: Decoder attends to encoder outputs (original Transformer, T5, BART)
+- **Vision-language models**: Text attends to image features (Flamingo, BLIP-2's Q-Former). CLIP is a dual encoder and has no cross-attention
+- **Speech**: A text decoder attends to audio encoder features (Whisper); speech-to-speech models attend to source speech features
+- **Retrieval-augmented generation**: The generator attends to encoded retrieved chunks (RETRO, Fusion-in-Decoder). Most production RAG simply concatenates documents into the prompt and uses self-attention
 
 The Transformer architecture uses both: self-attention in encoder and decoder, plus cross-attention connecting them.
 
@@ -234,37 +131,18 @@ The Transformer architecture uses both: self-attention in encoder and decoder, p
 
 Autoregressive models like GPT and Llama must generate tokens sequentially—each token can only depend on previous tokens, not future ones. Causal masking (also called autoregressive or look-ahead masking) enforces this constraint:
 
-$$$
+$$
 \text{mask}[i, j] = \begin{cases} 
 0 & \text{if } j \leq i \\
 {-\infty} & \text{if } j > i
 \end{cases}
-$$$
+$$
 
-This ensures token $i$ can only attend to positions $\leq i$. The mask is applied **before softmax**, setting future positions to $-\infty$ so they have zero weight after softmax:
-
-```python
-def create_causal_mask(seq_len):
-    # Upper triangle masks positions j > i
-    mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
-    return mask
-
-def causal_attention(Q, K, V):
-    d_k = Q.size(-1)
-    scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)
-    
-    # Mask applied BEFORE softmax - sets future to -inf
-    mask = create_causal_mask(Q.size(-2)).to(Q.device)
-    scores = scores.masked_fill(mask, float('-inf'))
-    
-    attention_weights = torch.softmax(scores, dim=-1)
-    output = torch.matmul(attention_weights, V)
-    return output
-```
+This ensures token $i$ can only attend to positions $\leq i$. The mask is applied **before softmax**, setting future positions to $-\infty$ so they have zero weight after softmax.
 
 **In production:**
 - **Training**: Can parallelize across sequence (teacher forcing with causal mask)
-- **Inference**: Must generate token-by-token (autoregressive), cannot parallelize
+- **Inference**: The prompt is processed in parallel (prefill), but output tokens are generated one at a time (decode)
 - **KV caching**: Essential for efficient inference—cache previous tokens' K, V to avoid recomputation
 
 **Bidirectional vs Causal:**
@@ -274,7 +152,7 @@ def causal_attention(Q, K, V):
 
 ## Memory & Compute Optimizations
 
-**References**: [5, 13, 14]
+**References**: [5, 14, 15]
 
 Modern transformer training faces significant memory bottlenecks. The following techniques address these challenges to enable efficient training at scale.
 
@@ -283,7 +161,7 @@ Modern transformer training faces significant memory bottlenecks. The following 
 Before diving into attention-specific optimizations, mixed precision training (FP16/BF16) is the foundational technique that enables all other optimizations. Instead of using 32-bit floating point (FP32) for all computations, mixed precision uses 16-bit formats for most operations while maintaining FP32 for critical accumulations.
 
 **Two main formats:**
-- **FP16 (Float16)**: Standard half precision, 2x memory savings, but prone to underflow/overflow
+- **FP16 (Float16)**: Standard half precision, halves activation memory, but prone to underflow/overflow
 - **BF16 (BFloat16)**: Same range as FP32 but lower precision, preferred for stability
 
 **BF16 advantages:**
@@ -291,38 +169,19 @@ Before diving into attention-specific optimizations, mixed precision training (F
 - No loss scaling required (unlike FP16)—the main practical benefit
 - Native hardware support on A100, H100, and newer GPUs
 - Pairs perfectly with FlashAttention and other optimizations
-- 2x memory savings (enables 2x larger batch sizes or longer sequences)
+- Roughly halves activation memory (optimizers still keep FP32 master weights, so total savings are smaller)
 - 2-3x training speedup from faster compute on Tensor Cores
-- Minimal quality degradation (&lt;0.1% on most benchmarks)
-
-```python
-# PyTorch automatic mixed precision
-from torch.cuda.amp import autocast, GradScaler
-
-# BF16 training (preferred - no loss scaling needed)
-with autocast(dtype=torch.bfloat16):
-    output = model(input)
-    loss = criterion(output, target)
-
-# FP16 training (requires loss scaling to prevent underflow)
-scaler = GradScaler()
-with autocast(dtype=torch.float16):
-    output = model(input)
-    loss = criterion(output, target)
-scaler.scale(loss).backward()
-scaler.step(optimizer)
-scaler.update()
-```
+- Negligible quality difference versus FP32 when done correctly
 
 Mixed precision is now standard in all production training pipelines—it's the first optimization to enable, not an optional extra.
 
 #### The Next Frontier: FP8 Training
 
-**References**: [19, 20]
+**References**: [20, 21]
 
 Modern hardware (NVIDIA H100/B200) natively supports FP8 (8-bit floating point), doubling throughput over BF16. FP8 uses two formats: E4M3 (higher precision) for forward pass, E5M2 (wider range) for gradients.
 
-Libraries like NVIDIA's Transformer Engine handle FP8 automatically with delayed scaling. For inference, FP8 is gaining ground for Llama-4 class models—2x faster weight loading than BF16 without INT4's quantization noise. Note that INT8 inference remains more common in production as of 2026, but FP8 is rapidly gaining adoption on newer hardware.
+Libraries like NVIDIA's Transformer Engine handle FP8 automatically with delayed scaling. For inference, FP8 is gaining ground for Llama-4 class models—2x faster weight loading than BF16 without INT4's quantization noise. On older GPUs without FP8 support, INT8 and INT4 weight quantization remain the common choices.
 
 **Trade-off**: Requires H100+ hardware. BF16 remains the safer default, but FP8 is the future for cutting-edge systems.
 
@@ -336,7 +195,7 @@ FlashAttention reformulates attention to minimize memory reads and writes betwee
 
 #### The Memory Hierarchy Problem
 
-Modern GPUs have a memory hierarchy:
+Modern GPUs have a memory hierarchy (A100 numbers from the FlashAttention paper):
 - **HBM (High-Bandwidth Memory)**: Large (40GB+) but slow (~1.5 TB/s)
 - **SRAM (On-chip memory)**: Small (~20MB) but fast (~19 TB/s)
 
@@ -347,11 +206,11 @@ Standard attention implementations:
 2. Load $QK^T$ from HBM → compute softmax → write to HBM  
 3. Load softmax output and $V$ from HBM → compute final output
 
-Each step involves expensive HBM reads/writes. For a sequence of length 4096 with hidden dimension 1024, the attention matrix alone requires 64MB—larger than SRAM capacity.
+Each step involves expensive HBM reads/writes. For a sequence of length 4096, the score matrix has 4096 × 4096 ≈ 16.8M entries, or 32MB in FP16, for a single head of a single sequence. Multiply by heads and batch size and it dwarfs SRAM.
 
 #### FlashAttention's Solution
 
-FlashAttention uses tiling and kernel fusiont:
+FlashAttention uses tiling and kernel fusion:
 
 1. **Tiling**: Split $Q$, $K$, $V$ into blocks that fit in SRAM
 2. **Online Softmax**: Compute softmax incrementally without materializing the full attention matrix
@@ -359,43 +218,13 @@ FlashAttention uses tiling and kernel fusiont:
 
 Result: 2-4x speedups and the ability to handle much longer sequences. This isn't just an optimization—it's what makes training on sequences of 16K+ tokens practical.
 
-```python
-# Conceptual pseudocode for FlashAttention's forward pass
-def flash_attention_forward(Q, K, V, block_size):
-    O = zeros_like(Q)
-    l = zeros(Q.shape[0])
-    m = full(Q.shape[0], -inf)
-    
-    for k_block, v_block in blocks(K, V, block_size):
-        for q_block in blocks(Q, block_size):
-            q_sram = load_to_sram(q_block)
-            k_sram = load_to_sram(k_block)
-            v_sram = load_to_sram(v_block)
-            
-            scores = q_sram @ k_sram.T / sqrt(d_k)
-            
-            # Online softmax - incrementally update statistics
-            m_old, l_old = m, l
-            m_new = max(m_old, max(scores))
-            l_new = exp(m_old - m_new) * l_old + sum(exp(scores - m_new))
-            
-            # Rescale old output and add new contribution
-            O_scaled = exp(m_old - m_new) * O
-            new_contribution = exp(scores - m_new) @ v_sram
-            O = (l_old * O_scaled + new_contribution) / l_new
-            
-            m, l = m_new, l_new
-    
-    return O
-```
-
 By recomputing attention during backpropagation rather than storing it, FlashAttention trades minimal extra compute for massive memory savings—a favorable tradeoff since modern GPUs are compute-rich but memory-bound.
 
 #### FlashAttention-2 and FlashAttention-3
 
-**FlashAttention-2** improved upon FA-1 by changing the parallelization strategy to reduce non-matmul FLOPs and improve GPU occupancy. FA-1's inner loop over K blocks was sequential, limiting parallelization. FA-2 reorganized work partitioning across threads—each warp handles contiguous rows, reducing shared memory bank conflicts and enabling better coalesced memory access. By minimizing rescaling operations and fusing softmax with matmul operations more efficiently, FA-2 achieved ~2x speedup over FA-1, especially on A100 GPUs.
+**FlashAttention-2** made three changes. It cut non-matmul FLOPs by deferring the softmax rescaling to the end of the loop, since GPUs run matmuls far faster than anything else. It made the outer loop run over query blocks so it could parallelize across the sequence dimension, not just batch and heads, which keeps the GPU busy for long sequences with small batches. And within each block it split work across warps by query rows instead of by keys, removing most of the shared-memory communication between warps. The result was ~2x over FA-1, reaching 50-73% of A100 peak FLOPs.
 
-**FlashAttention-3** targets H100's new architectural features: Tensor Memory Accelerator (TMA) for asynchronous memory transfers, Warp Group Matrix-Multiply-Accumulate (WGMMA) for cooperative matmuls, and asynchronous pipelines. FA-3 introduces warp specialization—producer warps handle memory operations while consumer warps focus on compute, overlapping three stages (load, compute, write) concurrently on different data. This software pipelining maximizes GPU utilization, achieving 1.5-2x speedup for FP16 and 2-3x for FP8 (with H100's native FP8 support) compared to FA-2, especially impactful for long sequences (8K-16K+). The evolution from FA-1 → FA-2 → FA-3 demonstrates how algorithms must co-evolve with hardware for optimal performance.
+**FlashAttention-3** targets H100's new hardware: the Tensor Memory Accelerator (TMA) for asynchronous memory transfers and WGMMA instructions for warpgroup-wide matmuls. It uses warp specialization, where producer warps load data while consumer warps compute, and it overlaps softmax with the matmuls both across warpgroups (ping-pong scheduling) and within a warpgroup. FA-3 is 1.5-2x faster than FA-2 in FP16, reaching ~75% of H100 peak (about 740 TFLOPs/s), and gets close to 1.2 PFLOPs/s in FP8, using block quantization and incoherent processing to keep FP8 error in check. The evolution from FA-1 → FA-2 → FA-3 demonstrates how algorithms must co-evolve with hardware for optimal performance.
 
 ### Gradient Checkpointing: Trading Compute for Memory
 
@@ -409,29 +238,11 @@ By recomputing attention during backpropagation rather than storing it, FlashAtt
 **With checkpointing:**
 - Forward: Only save inputs to checkpointed segments, discard internal activations
 - Backward: Recompute activations from saved checkpoints when needed
-- Memory: $O(\sqrt{L} \cdot S \cdot H)$ with optimal checkpointing, or $O(S \cdot H)$ if checkpointing every layer
-
-```python
-import torch.utils.checkpoint as checkpoint
-
-class CheckpointedTransformerLayer(nn.Module):
-    def forward(self, x, position_ids):
-        return checkpoint.checkpoint(
-            self._forward_impl,
-            x, position_ids,
-            use_reentrant=False  # Safer, modern approach
-        )
-    
-    def _forward_impl(self, x, position_ids):
-        # Internal activations discarded after forward
-        x = x + self.attention(self.norm1(x), position_ids)
-        x = x + self.ffn(self.norm2(x))
-        return x
-```
+- Memory: $O(\sqrt{L} \cdot S \cdot H)$ with a checkpoint every $\sqrt{L}$ layers. Checkpointing every layer still stores one input per layer, $O(L \cdot S \cdot H)$, but with a much smaller constant since none of the layer's internal activations are kept
 
 **Tradeoffs:**
 - Memory reduction: 60-80% for large models
-- Speed cost: 20-30% slower (forward pass runs twice per layer)
+- Speed cost: ~20-33% slower (each checkpointed forward pass runs again during backward, and the forward pass is roughly a third of training compute)
 - Gradient quality: Mathematically identical to standard backprop
 
 **When to use:** Training large models that don't fit in GPU memory, maximizing batch size or sequence length. 
@@ -440,64 +251,27 @@ class CheckpointedTransformerLayer(nn.Module):
 
 **Combined techniques:** FlashAttention + checkpointing enables 10x+ longer sequences. Works well with mixed precision and ZeRO optimizer for massive models.
 
-In production, inference latency and throughput directly impact user experience and cost.
-
 ## Inference Optimizations
 
-**References**: [6, 7, 8, 9, 10, 16]
+**References**: [6, 7, 8, 9, 10, 11, 17]
 
-Modern LLMs face unique challenges during inference—particularly around memory efficiency and latency. The following techniques address these bottlenecks to enable fast, cost-effective serving at scale.
+In production, inference latency and throughput directly drive user experience and cost. LLMs face unique challenges during inference—particularly around memory efficiency and latency. The following techniques address these bottlenecks to enable fast, cost-effective serving at scale.
 
 ### Grouped Query Attention (GQA): The KV Cache Solution
 
-During autoregressive generation, models cache key-value pairs from previous tokens to avoid recomputation. For a model with 32 attention heads and 128-dimensional head size, each token requires storing $32 \times 128 \times 2 = 8{,}192$ values per token. At 100K context length, this becomes approximately 819M values per layer—a massive memory bottleneck.
+During autoregressive generation, models cache key-value pairs from previous tokens to avoid recomputation. For a model with 32 attention heads and 128-dimensional head size, each token requires storing $32 \times 128 \times 2 = 8{,}192$ values per layer (keys and values). At 100K context length, this becomes approximately 819M values per layer—a massive memory bottleneck.
 
 ![Figure 3: Comparison of Multi-Head Attention (MHA), Multi-Query Attention (MQA), and Grouped Query Attention (GQA). GQA groups query heads to share KV heads, balancing quality and efficiency. Source: Ainslie et al. (2023)](https://media.anandmoghan.me/public/images/attention/gqa-comparison.png)
 
 Multi-Query Attention (MQA) proposed a radical solution: share a single key-value head across all query heads. This reduces KV cache by 32x but comes with potential quality degradation (~1-2% on benchmarks), which can be largely mitigated through uptraining (continuing training with MQA architecture).
 
-Grouped Query Attention (GQA) found the sweet spot. Instead of 32 separate KV heads (MHA) or 1 shared KV head (MQA), use 8 KV heads with 4 query heads per group:
+Grouped Query Attention (GQA) found the sweet spot. Instead of 32 separate KV heads (MHA) or 1 shared KV head (MQA), use, for example, 8 KV heads with 4 query heads per group.
 
-```python
-class GroupedQueryAttention(nn.Module):
-    def __init__(self, d_model, num_query_heads, num_kv_heads):
-        super().__init__()
-        assert num_query_heads % num_kv_heads == 0
-        
-        self.num_query_heads = num_query_heads
-        self.num_kv_heads = num_kv_heads
-        self.num_queries_per_kv = num_query_heads // num_kv_heads
-        self.d_k = d_model // num_query_heads
-        
-        self.W_q = nn.Linear(d_model, num_query_heads * self.d_k)
-        self.W_k = nn.Linear(d_model, num_kv_heads * self.d_k)
-        self.W_v = nn.Linear(d_model, num_kv_heads * self.d_k)
-        self.W_o = nn.Linear(d_model, d_model)
-    
-    def forward(self, x):
-        batch_size, seq_len, _ = x.shape
-        
-        Q = self.W_q(x).view(batch_size, seq_len, self.num_query_heads, self.d_k)
-        K = self.W_k(x).view(batch_size, seq_len, self.num_kv_heads, self.d_k)
-        V = self.W_v(x).view(batch_size, seq_len, self.num_kv_heads, self.d_k)
-        
-        # repeat_interleave copies memory - production uses expand() or custom kernels
-        K = K.repeat_interleave(self.num_queries_per_kv, dim=2)
-        V = V.repeat_interleave(self.num_queries_per_kv, dim=2)
-        
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
-        attn_weights = torch.softmax(scores, dim=-1)
-        output = torch.matmul(attn_weights, V)
-        
-        output = output.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
-        return self.W_o(output)
-```
-
-The results are remarkable: 4x reduction in KV cache size with minimal quality loss (&lt;0.1% on most benchmarks). Llama-2, Mistral, and Gemma all use GQA. Even better, existing MHA models can be "uptrained" to GQA using only 5% of original training compute.
+The results are remarkable: a 4x reduction in KV cache size in this configuration, with quality close to MHA and speed close to MQA. Llama 2 70B, all Llama 3 models, Mistral 7B, and Gemma 2 use GQA. Even better, existing MHA models can be "uptrained" to GQA using only 5% of original training compute.
 
 ### Multi-Head Latent Attention (MLA): Extreme Compression
 
-**References**: [17, 18]
+**References**: [18, 19]
 
 While GQA reduces memory by sharing KV heads, Multi-Head Latent Attention (MLA)—introduced in DeepSeek-V2 and refined in DeepSeek-V3—takes a more aggressive approach: low-rank key-value joint compression.
 
@@ -507,40 +281,14 @@ Instead of storing full Key and Value matrices (even shared ones), MLA projects 
 
 1. **Compression**: Inputs are projected down to a small latent dimension $d_c$ (e.g., 512) using a down-projection matrix $W_{DKV}$
 2. **Storage**: Only this tiny compressed latent vector $c_{KV}$ is stored in the KV cache, drastically reducing memory footprint
-3. **Decompression**: During attention computation, the latent vector is up-projected using $W_{UK}$ and $W_{UV}$ to generate the full heads on-the-fly
-4. **Decoupled RoPE**: To prevent positional information from interfering with compression, MLA uses a separate "pe" (positional embedding) vector that bypasses the compression bottleneck
-
-```python
-class MultiHeadLatentAttention(nn.Module):
-    def __init__(self, d_model, num_heads, d_latent, rope_dim):
-        super().__init__()
-        self.num_heads = num_heads
-        self.head_dim = d_model // num_heads
-        
-        self.w_dkv = nn.Linear(d_model, d_latent, bias=False)
-        
-        self.w_uk = nn.Linear(d_latent, num_heads * self.head_dim, bias=False)
-        self.w_uv = nn.Linear(d_latent, num_heads * self.head_dim, bias=False)
-        
-        self.w_kr = nn.Linear(d_model, rope_dim, bias=False)
-    
-    def forward(self, x, position_ids):
-        c_kv = self.w_dkv(x)
-        
-        k = self.w_uk(c_kv)
-        v = self.w_uv(c_kv)
-        
-        k_rope = apply_rope(self.w_kr(x), position_ids)
-        k = torch.cat([k, k_rope], dim=-1)
-        
-        return k, v
-```
+3. **Decompression**: During attention computation, the latent vector is up-projected using $W_{UK}$ and $W_{UV}$ to generate the full heads on-the-fly. At inference, $W_{UK}$ can be absorbed into the query projection and $W_{UV}$ into the output projection, so the full keys and values are never materialized
+4. **Decoupled RoPE**: RoPE's position-dependent rotation would block absorbing $W_{UK}$ into the query projection, so MLA carries position in a small separate key vector (64 dimensions in DeepSeek-V2) that bypasses the compression and is cached alongside $c_{KV}$
 
 **Impact**: MLA enables extreme KV cache compression—models with massive head counts (e.g., 128 heads) achieve KV cache sizes smaller than even GQA models, often compressing memory usage by 90%+ compared to standard MHA. 
 
 **Real-world deployment**: This breakthrough is why DeepSeek-V3 can efficiently serve a 671B parameter model at production scale. By compressing the KV cache to a fraction of what GQA would require, MLA makes serving massive MoE models economically viable—a critical enabler for the next generation of ultra-large language models.
 
-**Adoption note**: As of 2026, MLA remains primarily a DeepSeek innovation (V2 and V3) and has not yet been widely adopted by other model families. Most production systems still use GQA as the standard KV cache optimization.
+**Adoption note**: MLA started as a DeepSeek innovation (V2 and V3). Kimi K2 reuses the DeepSeek-V3 architecture including MLA, but most other model families still use GQA as the standard KV cache optimization.
 
 ### Beyond GQA: KV Cache Compression
 
@@ -551,19 +299,21 @@ While GQA reduces cache size through architectural changes, additional compressi
 3. **Streaming LLMs**: Keep only recent tokens plus "attention sinks" (initial tokens that accumulate disproportionate attention)
 4. **H2O (Heavy Hitters Oracle)**: Cache only high-attention tokens, evict low-attention ones
 
-**Example impact**: Combining INT8 quantization with GQA reduces cache from 32GB → 2GB for a 70B parameter model at 4K context.
+**Example impact**: For a Llama-2-70B-shaped model (80 layers, 64 query heads of dimension 128), a single 4K-token sequence needs ~10.7GB of KV cache with full MHA in FP16. GQA with 8 KV heads cuts that to ~1.3GB, and INT8 quantization halves it again to ~0.67GB.
 
 **Attention sinks**: Initial tokens accumulate disproportionate attention weight even when semantically irrelevant. Keeping these tokens in cache is critical for long-context generation quality—evicting them causes catastrophic degradation.
 
 ### Rotary Position Embedding (RoPE): Encoding Position Elegantly
 
-Remember the permutation equivariance property? We need positional information, but how we encode it matters enormously. The original Transformer used learned absolute position embeddings. RoPE took a different approach: encode position by rotating query and key vectors in high-dimensional space.
+Remember the permutation equivariance property? We need positional information, but how we encode it matters enormously. The original Transformer added fixed sinusoidal position encodings to the input (learned absolute embeddings, later used by BERT and GPT-2, performed about the same). RoPE took a different approach: encode position by rotating query and key vectors in high-dimensional space.
 
 Key insight: if we rotate $Q_m$ by angle $m\theta$ and $K_n$ by angle $n\theta$, their dot product naturally depends on the relative distance $(m-n)\theta$:
 
 $$
-\text{RoPE}(Q_m, K_n) = Q_m e^{im\theta} \cdot K_n e^{in\theta} = Q_m \cdot K_n e^{i(m-n)\theta}
+\langle q_m e^{im\theta}, k_n e^{in\theta} \rangle = \text{Re}\left[q_m \overline{k_n} e^{i(m-n)\theta}\right]
 $$
+
+Here each pair of dimensions is treated as a complex number, and the bar is complex conjugation.
 
 In practice, this complex rotation is implemented using sine and cosine operations on real-valued vectors. There are two common implementation variants:
 
@@ -573,7 +323,7 @@ $$
 \begin{pmatrix} q_{2i} \\ q_{2i+1} \end{pmatrix} \rightarrow \begin{pmatrix} \cos(m\theta_i) & -\sin(m\theta_i) \\ \sin(m\theta_i) & \cos(m\theta_i) \end{pmatrix} \begin{pmatrix} q_{2i} \\ q_{2i+1} \end{pmatrix}
 $$
 
-**Rotary Half (GPT-NeoX/PaLM)**: Splits the vector into two halves and rotates them against each other:
+**Rotary Half (GPT-NeoX-style)**: Splits the vector into two halves and rotates them against each other:
 
 $$
 \begin{pmatrix} q_{\text{first half}} \\ q_{\text{second half}} \end{pmatrix} \rightarrow \begin{pmatrix} q_{\text{first half}} \cdot \cos - q_{\text{second half}} \cdot \sin \\ q_{\text{first half}} \cdot \sin + q_{\text{second half}} \cdot \cos \end{pmatrix}
@@ -581,42 +331,9 @@ $$
 
 where $\theta_i = 10000^{-2i/d}$ for the $i$-th dimension pair.
 
-**Critical**: Both variants are mathematically valid and produce equivalent relative position encoding, but they are incompatible when loading pre-trained weights. Llama models expect interleaved, while GPT-NeoX/PaLM expect rotary half. Using the wrong variant will produce garbage outputs.
+**Critical**: Both variants are mathematically valid and produce equivalent relative position encoding, but they are incompatible when loading pre-trained weights. Meta's original Llama checkpoints expect interleaved, while GPT-NeoX expects rotary half. Hugging Face's Llama port uses rotary half and permutes the Q/K projection weights at conversion time to compensate, which is exactly the detail that bites when you mix checkpoints and code from different sources. Using the wrong variant produces garbage outputs.
 
-```python
-def apply_rotary_pos_emb(q, k, position_ids):
-    """Rotary Half variant (GPT-NeoX/PaLM style).
-    
-    WARNING: This implements the 'Rotary Half' variant which splits the vector
-    into two halves. Llama models use the 'Interleaved' variant which rotates
-    adjacent pairs. Both are mathematically valid but INCOMPATIBLE when loading
-    pre-trained weights. Always verify which variant your model expects!
-    """
-    def rotate_half(x):
-        # Split into first half and second half
-        x1 = x[..., :x.shape[-1] // 2]
-        x2 = x[..., x.shape[-1] // 2:]
-        # Rotate: (-x2, x1) implements the 90-degree rotation
-        return torch.cat((-x2, x1), dim=-1)
-    
-    seq_len = position_ids.shape[1]
-    d_model = q.shape[-1]
-    device = q.device
-    
-    inv_freq = 1.0 / (10000 ** (torch.arange(0, d_model, 2).float().to(device) / d_model))
-    freqs = torch.outer(position_ids.float(), inv_freq)
-    emb = torch.cat((freqs, freqs), dim=-1)
-    
-    cos = emb.cos()
-    sin = emb.sin()
-    
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-    
-    return q_embed, k_embed
-```
-
-**Note**: In practice, libraries like Hugging Face Transformers handle RoPE implementation automatically and correctly for each model architecture. The code above is for educational purposes—you typically don't need to implement this yourself.
+**Note**: In practice, libraries like Hugging Face Transformers handle RoPE automatically for each model architecture, so you rarely implement it yourself.
 
 RoPE advantages:
 - **Zero parameters**: No learned embeddings to store
@@ -624,7 +341,7 @@ RoPE advantages:
 - **Extrapolation**: Can handle sequences longer than training length with proper scaling
 - **Universal adoption**: Llama, GPT-NeoX, PaLM, Mistral all use RoPE
 
-For extending to ultra-long contexts (100K+ tokens), techniques like linear interpolation, NTK-aware scaling, and YaRN modify the frequency base to maintain performance.
+For extending to ultra-long contexts (100K+ tokens), techniques either rescale positions (linear position interpolation) or rescale the rotation frequencies (NTK-aware scaling, YaRN) so that longer sequences map into the range seen during training.
 
 #### ALiBi: Simpler Position Encoding
 
@@ -634,66 +351,28 @@ $$
 \text{attention\_score}[i,j] = \frac{QK^T}{\sqrt{d_k}} - m \cdot |i - j|
 $$
 
-where $m$ is a head-specific slope (e.g., $m = 2^{-8/h}$ for head $h$).
+where $m$ is a fixed, head-specific slope. For $H$ heads, the slopes form a geometric sequence $m_h = 2^{-8h/H}$ for $h = 1, \ldots, H$.
 
 **Even simpler than RoPE:**
 - No position embeddings to compute or apply
 - Just subtract distance penalty from attention scores
 - Used in: BLOOM, MPT models
 
-**Trade-off**: RoPE provides slightly better quality on most benchmarks, but ALiBi offers simpler implementation and competitive performance. The choice often depends on engineering constraints and specific use cases.
+**Trade-off**: ALiBi's main selling point was length extrapolation: trained on short sequences, it degrades gracefully on longer ones. RoPE with scaling has since won out in most new models, but ALiBi offers a simpler implementation and competitive performance. The choice often depends on engineering constraints and specific use cases.
 
 ### PagedAttention: Virtual Memory for KV Cache
 
-Even with GQA reducing cache size, managing memory efficiently during inference remains challenging. Consider serving multiple requests with varying sequence lengths—traditional approaches pre-allocate maximum memory per request, leading to ~60% memory waste from fragmentation.
+Even with GQA reducing cache size, managing memory efficiently during inference remains challenging. Consider serving multiple requests with varying sequence lengths—traditional approaches pre-allocate maximum memory per request, leaving 60-80% of KV cache memory wasted on over-reservation and fragmentation.
 
-PagedAttention, implemented in the vLLM serving framework, applies operating system virtual memory concepts to KV cache management. Instead of contiguous memory allocation, it stores KV cache in fixed-size blocks (e.g., 16 tokens) with a logical-to-physical mapping:
-
-```python
-# Conceptual PagedAttention structure
-class PagedKVCache:
-    def __init__(self, block_size=16, num_blocks=1000):
-        self.block_size = block_size
-        # Physical memory: pre-allocated blocks
-        self.physical_blocks = torch.zeros(num_blocks, block_size, d_model)
-        self.free_blocks = list(range(num_blocks))
-        
-        # Logical to physical mapping per sequence
-        self.block_tables = {}  # seq_id -> [physical_block_ids]
-    
-    def allocate_sequence(self, seq_id, num_tokens):
-        """Allocate blocks for a new sequence"""
-        num_blocks_needed = (num_tokens + self.block_size - 1) // self.block_size
-        allocated = [self.free_blocks.pop() for _ in range(num_blocks_needed)]
-        self.block_tables[seq_id] = allocated
-        return allocated
-    
-    def append_tokens(self, seq_id, kv_data):
-        """Append new tokens to sequence cache"""
-        blocks = self.block_tables[seq_id]
-        # Write to physical blocks via mapping
-        # If current block is full, allocate new block
-        if self._is_block_full(blocks[-1]):
-            new_block = self.free_blocks.pop()
-            blocks.append(new_block)
-        
-        self._write_to_block(blocks[-1], kv_data)
-    
-    def share_prefix(self, seq_id_1, seq_id_2, prefix_length):
-        """Share common prefix blocks between sequences (for beam search)"""
-        prefix_blocks = prefix_length // self.block_size
-        # Both sequences point to same physical blocks for prefix
-        shared = self.block_tables[seq_id_1][:prefix_blocks]
-        self.block_tables[seq_id_2] = shared + self._allocate_new_blocks(...)
-```
+PagedAttention, implemented in the vLLM serving framework, applies operating system virtual memory concepts to KV cache management. Instead of contiguous memory allocation, it stores KV cache in fixed-size blocks (e.g., 16 tokens) with a logical-to-physical mapping, much like OS page tables.
 
 Advantages:
 - **Dynamic allocation**: Allocate memory as sequences grow
-- **Memory sharing**: Multiple sequences can share prefix blocks (critical for beam search)
-- **Defragmentation**: Move blocks to consolidate free space
+- **Memory sharing**: Multiple sequences can share prefix blocks (critical for parallel sampling and beam search), with copy-on-write when they diverge
+- **No external fragmentation**: Any free block can serve any sequence, and waste is limited to each sequence's partially filled last block
 - **Continuous batching**: Efficiently batch requests of different lengths
 
-Result: 2-4x higher throughput than alternatives, reducing memory waste from ~60% to ~20%. vLLM has become the de facto standard for LLM serving.
+Result: 2-4x higher throughput than FasterTransformer and Orca at the same latency. Earlier systems used only 20-40% of KV cache memory for actual token states; vLLM wastes under 4%. vLLM has become the de facto standard for LLM serving.
 
 ### Continuous Batching: Maximizing GPU Utilization
 
@@ -705,37 +384,14 @@ Batch 1: [Request A (1000 tokens), Request B (100 tokens), Request C (500 tokens
 → GPU idle waiting for longest request
 ```
 
-**Continuous batching** (Orca, implemented in vLLM) adds new requests as soon as capacity is available:
-
-```python
-class ContinuousBatcher:
-    def __init__(self, max_batch_size, max_tokens):
-        self.running_requests = []
-        self.waiting_queue = []
-    
-    def step(self):
-        # Generate one token for each running request
-        for req in self.running_requests:
-            token = model.generate_next_token(req)
-            req.append(token)
-            
-            # Remove completed requests
-            if req.is_complete():
-                self.running_requests.remove(req)
-        
-        # Fill available capacity with waiting requests
-        while (len(self.running_requests) < self.max_batch_size and 
-               self.waiting_queue):
-            new_req = self.waiting_queue.pop(0)
-            self.running_requests.append(new_req)
-```
+**Continuous batching** (Orca, implemented in vLLM) adds new requests as soon as capacity is available.
 
 **Advantages:**
-- Near-100% GPU utilization vs ~60% with static batching
+- Much higher GPU utilization than static batching, since slots freed by finished requests are refilled immediately
 - Lower latency for short requests (don't wait for long requests)
 - Better throughput overall
 
-**Enabler:** PagedAttention's non-contiguous memory allocation allows mixing requests at different generation stages.
+**Enabler:** Orca's iteration-level scheduling predates PagedAttention, but paged KV memory is what lets a server pack many requests of different lengths into a batch without reserving worst-case memory for each.
 
 ### Speculative Decoding: Accelerating Inference 2-3x
 
@@ -746,51 +402,16 @@ Autoregressive generation is inherently sequential—each token requires a full 
 **Algorithm:**
 1. **Draft phase**: Small model generates $k$ candidate tokens (fast, lower quality)
 2. **Verification phase**: Large model processes all $k$ candidates in parallel (single forward pass)
-3. **Acceptance**: Accept tokens where draft and target distributions agree
-4. **Rejection sampling**: Use modified rejection sampling to maintain exact target distribution
-
-```python
-def speculative_decode(target_model, draft_model, prompt, k=4):
-    """Speculative decoding maintains exact target distribution
-    
-    Note: This is a simplified version. Production implementations
-    use modified rejection sampling to maintain exact distribution.
-    See Leviathan et al. (2023) for complete algorithm.
-    """
-    tokens = prompt
-    
-    while not done:
-        # Draft: small model generates k candidates (10-100x faster)
-        draft_tokens = draft_model.generate(tokens, num_tokens=k)
-        
-        # Verify: target model scores all candidates in parallel
-        target_probs = target_model.forward(tokens + draft_tokens)
-        draft_probs = draft_model.forward(tokens + draft_tokens)
-        
-        # Accept/reject with modified rejection sampling
-        for i in range(k):
-            p_target = target_probs[i]
-            p_draft = draft_probs[i]
-            
-            # Accept if draft probability ≥ target (common case)
-            if random.random() < min(1, p_target / p_draft):
-                tokens.append(draft_tokens[i])
-            else:
-                # Reject: sample from adjusted distribution (renormalize before sampling)
-                adjusted_prob = max(0, p_target - p_draft)
-                tokens.append(sample_from(adjusted_prob))
-                break  # Stop at first rejection
-    
-    return tokens
-```
+3. **Acceptance**: Accept each draft token with probability $\min(1, p(x)/q(x))$, where $p$ and $q$ are the target and draft probabilities
+4. **Correction**: At the first rejection, sample a replacement from the normalized residual $\max(0, p - q)$. If all $k$ are accepted, sample one bonus token from the target. This keeps the output distribution exactly equal to the target model's
 
 **How this works:**
 - Draft model is 10-100x faster (smaller, quantized, or distilled)
-- Even 50% acceptance rate gives 2x speedup (process multiple tokens per target pass)
+- With a 50% per-token acceptance rate and $k=4$, each target pass yields ~1.9 tokens on average, before subtracting the draft model's cost
 - Mathematically guaranteed to match target model's distribution exactly
 - No retraining or architecture changes required
 
-**Production adoption**: Google PaLM (2-3x speedup), Meta Llama serving, Medusa (multiple draft heads), and various inference frameworks. Works best when:
+**Production adoption**: Google has reported using it in production, and vLLM, TensorRT-LLM, and SGLang all support it. Variants like Medusa (extra decoding heads instead of a separate draft model) and EAGLE push acceptance rates higher. Works best when:
 - Draft model is 10x+ faster than target
 - Acceptance rate > 60% (predictable text, code, structured output)
 - Batch size is small (latency-sensitive applications)
@@ -805,7 +426,7 @@ Many LLM requests share common prefixes—system prompts, few-shot examples, or 
 1. Compute KV cache for prompt prefix during first request
 2. Store cached KV pairs with hash of prefix tokens
 3. For subsequent requests with same prefix, load cached KV and only compute new tokens
-4. Cache expires after 5 minutes of inactivity (Anthropic) or uses LRU eviction
+4. Entries expire after a period of inactivity (5 minutes by default on Anthropic, with an optional 1-hour TTL) or are evicted LRU-style in self-hosted servers
 
 **Example scenario:**
 ```
@@ -814,38 +435,23 @@ Request 1: [System Prompt (1000 tokens)] + [User Query A (50 tokens)]
 
 Request 2: [System Prompt (1000 tokens)] + [User Query B (50 tokens)]  
 → Load cached 1000 tokens, compute only 50 new tokens
-→ 20x faster time-to-first-token, 90% cost reduction
+→ ~20x less prefill work for this request; cached tokens are billed at a discount
 ```
 
 **Advantages:**
-- **Latency**: 5-10x faster time-to-first-token for cached prefixes (85% reduction)
-- **Cost**: 90% reduction on cached tokens (providers charge 10% of normal rate)
+- **Latency**: Anthropic reports up to 85% lower time-to-first-token on long cached prompts
+- **Cost**: Anthropic bills cache reads at 10% of the base input price (cache writes cost 25% more than base); OpenAI also discounts cached input tokens, by an amount that varies by model
 - **Longer context**: Enables longer system prompts without latency penalty
 - **RAG optimization**: Cache document context across multiple queries
 
 **Implementation details:**
-- **Cache granularity**: Minimum 1024 tokens (Anthropic), 128 tokens (others)
+- **Cache granularity**: Minimum cacheable prefix of around 1024 tokens on both Anthropic (higher for some models) and OpenAI, with OpenAI matching in 128-token increments
 - **Cache points**: Up to 4 breakpoints per prompt
 - **Scope**: Caching applies to entire prefix up to cache_control block
 - **Automatic**: vLLM, TensorRT-LLM detect and cache common prefixes
 
-**Design patterns:**
-```python
-# Stable prefix, variable suffix
-messages = [
-    {"role": "system", "content": long_system_prompt, 
-     "cache_control": {"type": "ephemeral"}},  # Cache this
-    {"role": "user", "content": "What is 2+2?"}  # Variable part
-]
-
-# Variable content before stable content breaks caching
-messages = [
-    {"role": "user", "content": user_specific_context},  # Breaks caching
-    {"role": "system", "content": system_prompt}  # Won't be cached
-]
-```
-
-**Note**: Syntax shown is Anthropic's API format. Other providers have different APIs but same concept. vLLM handles caching automatically based on prefix matching without explicit `cache_control` markers.
+**Design pattern:** Put the stable content (system prompt, tool definitions, few-shot examples, shared documents) first and mark the end of it as a cache breakpoint; put per-request content after it. Anything variable placed before the stable content changes the prefix and invalidates the cache for everything after it.
+**Note**: Anthropic requires explicit `cache_control` breakpoints; OpenAI caches eligible prefixes automatically, and vLLM's automatic prefix caching matches shared prefix blocks without any markers.
 
 **Production considerations:**
 - Structure prompts with stable prefixes first, variable content last
@@ -853,11 +459,11 @@ messages = [
 - Particularly effective for: RAG systems, multi-turn conversations with system prompts, code generation with examples
 - Provider support: Anthropic Claude, OpenAI GPT-4, Google Gemini, AWS Bedrock
 
-**Real-world impact**: Anthropic reports customers achieving 90% cost reduction and 85% latency reduction for long-context applications with stable prefixes.
+**Real-world impact**: Anthropic reports up to 90% cost reduction and 85% latency reduction for long-context applications with stable prefixes.
 
 ## Long-Context Solutions
 
-**References**: [11, 12, 15]
+**References**: [12, 13, 16]
 
 As context windows extend beyond 10K-20K tokens, full $O(N^2)$ attention becomes prohibitive. These techniques enable efficient processing of ultra-long sequences.
 
@@ -865,30 +471,9 @@ As context windows extend beyond 10K-20K tokens, full $O(N^2)$ attention becomes
 
 Full $O(N^2)$ attention becomes prohibitive beyond 10K-20K tokens. Sparse attention patterns offer linear or near-linear complexity by restricting which positions can attend to each other.
 
-Sliding Window Attention restricts each token to attend only to the $W$ nearest neighbors:
+Sliding Window Attention restricts each token to attend only to the previous $W$ tokens.
 
-```python
-def sliding_window_attention(Q, K, V, window_size):
-    """Attention with sliding window mask"""
-    seq_len = Q.shape[1]
-    
-    # Create sliding window mask
-    mask = torch.ones(seq_len, seq_len, dtype=torch.bool)
-    for i in range(seq_len):
-        # Token i can attend to [i-window_size, i]
-        start = max(0, i - window_size)
-        mask[i, start:i+1] = False
-    
-    # Standard attention with mask
-    scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)
-    scores = scores.masked_fill(mask, float('-inf'))
-    attn_weights = torch.softmax(scores, dim=-1)
-    output = torch.matmul(attn_weights, V)
-    
-    return output
-```
-
-Mistral 7B uses a 4096-token sliding window, enabling 100K+ context processing with ~8B parameters. Key insight: stacking layers provides global context through composition—layer $L$ sees information from $L \times W$ tokens away. For example, with a 4K window and 32 layers, the effective receptive field is 128K tokens through layer composition.
+Mistral 7B (v0.1) uses a 4096-token sliding window. Key insight: stacking layers provides global context through composition, since layer $L$ can see information from up to $L \times W$ tokens away. With a 4K window and 32 layers, the theoretical receptive field is ~131K tokens, although information degrades over that many hops, and later Mistral releases dropped the sliding window in favor of full attention.
 
 Longformer combines sliding window with global attention tokens—certain positions (e.g., $\text{[CLS]}$) attend to all positions and are attended to by all positions. This hybrid approach balances efficiency with global reasoning.
 
@@ -900,10 +485,10 @@ While FlashAttention optimizes memory on a single device, Ring Attention tackles
 
 This works because blockwise attention computation is permutation-invariant: blocks can be processed in any order as long as statistics are combined correctly. When block size is large enough (≥ FLOPS/Bandwidth), communication is fully hidden by computation, resulting in near-zero overhead.
 
-**Memory per device**: $O(b \cdot c \cdot h)$ per block where:
-- $b$ = block size (e.g., 1024 tokens)
-- $c$ = number of channels (hidden dimension)
-- $h$ = number of heads
+**Memory per device**: $O(b \cdot c \cdot h)$ per block, in the paper's notation:
+- $b$ = batch size
+- $c$ = block size (tokens per device, e.g., 1024)
+- $h$ = hidden dimension
 
 Each device stores:
 1. Local query block ($b \cdot c \cdot h$)
@@ -918,7 +503,7 @@ Total: ~$6 \cdot b \cdot c \cdot h$ bytes, independent of total sequence length 
 **Comparison with alternatives**:
 - **vs FlashAttention**: FlashAttention optimizes single-device memory; Ring Attention distributes across devices. They're complementary—Ring Attention uses FlashAttention for local computation.
 - **vs Sparse attention**: Ring Attention computes exact attention without approximations, while sparse methods sacrifice some interactions for efficiency.
-- **vs Traditional sequence parallelism**: Ring Attention only communicates with neighbors (not all-to-all), overlaps communication with computation, and achieves near-zero overhead vs 20-40% for traditional approaches.
+- **vs Traditional sequence parallelism**: Ring Attention only communicates with neighbors (not all-to-all), overlaps communication with computation, and can hide communication entirely when blocks are large enough.
 
 Ring Attention demonstrates that when single-device memory is the bottleneck, clever distributed algorithms can unlock orders of magnitude improvements without sacrificing accuracy.
 
@@ -926,68 +511,25 @@ Ring Attention demonstrates that when single-device memory is the bottleneck, cl
 
 Production systems combine these innovations:
 
-```python
-class ModernTransformerLayer(nn.Module):
-    """State-of-the-art transformer layer combining modern techniques"""
-    def __init__(self, d_model, num_query_heads, num_kv_heads, window_size=None):
-        super().__init__()
-        
-        # GQA for efficient KV caching
-        self.attention = GroupedQueryAttention(d_model, num_query_heads, num_kv_heads)
-        
-        # RoPE for position encoding
-        self.rope = RotaryPositionEmbedding(d_model // num_query_heads)
-        
-        # Optional sliding window
-        self.window_size = window_size
-        
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.ffn = FeedForward(d_model)
-    
-    def forward(self, x, position_ids, kv_cache=None):
-        # Pre-norm
-        residual = x
-        x = self.norm1(x)
-        
-        # Apply RoPE to queries and keys
-        q, k, v = self.attention.project_qkv(x)
-        q, k = self.rope(q, k, position_ids)
-        
-        # Use cached KV if available (for autoregressive generation)
-        if kv_cache is not None:
-            k, v = kv_cache.update(k, v)
-        
-        # Attention with optional sliding window
-        attn_out = self.attention.compute(q, k, v, window_size=self.window_size)
-        
-        x = residual + attn_out
-        
-        # FFN with pre-norm
-        x = x + self.ffn(self.norm2(x))
-        
-        return x
-```
-
 **The Complete Stack:**
 - **Training**: FlashAttention for memory efficiency, RoPE for position encoding
 - **Architecture**: GQA for reduced KV cache, optional sliding window for long context
 - **Serving**: PagedAttention (vLLM) for memory management, continuous batching for throughput
-- **Inference acceleration**: Speculative decoding for 2-3x speedup, prompt caching for 90% cost reduction
+- **Inference acceleration**: Speculative decoding for 2-3x speedup, prompt caching for up to 90% cost reduction
 
-This is how GPT-4, Claude, Llama-3, and Mistral achieve their performance. Each innovation solves a specific bottleneck:
+Open-weight models like Llama 3 and Mistral document most of this stack publicly; closed labs don't publish theirs, but the same bottlenecks apply. Each innovation solves a specific bottleneck:
 
 | Technique | Problem Solved | Impact | Memory Impact | When to Use | Adoption |
 |-----------|---------------|---------|---------------|-------------|----------|
 | FlashAttention | Memory I/O bottleneck | 2-4x training speed | $O(N)$ vs $O(N^2)$ space* | Always (training) | Universal |
-| Mixed Precision | Memory & compute | 2-3x speedup, 2x memory | 50% reduction | Always (training) | Universal |
-| GQA | KV cache size | 4x inference memory | 4x reduction | Always (inference) | Llama-2, Mistral, Gemma |
+| Mixed Precision | Memory & compute | 2-3x speedup | ~50% activation memory | Always (training) | Universal |
+| GQA | KV cache size | 4x inference memory (typical config) | 4x reduction | Always (inference) | Llama 3, Mistral, Gemma 2 |
 | RoPE | Position encoding | Better extrapolation | Zero parameters | Default choice | Most modern LLMs |
 | PagedAttention | Memory fragmentation | 2-4x serving throughput | ~60% less waste | Serving at scale | vLLM standard |
-| Sliding Window | Long context compute | Linear vs quadratic | Constant per layer | 100K+ contexts | Mistral, Longformer |
-| Ring Attention | Single-device memory limit | 500x longer sequences | Linear with devices | Ultra-long context (research) | Research/Ultra-long context |
-| Speculative Decoding | Sequential generation | 1.5-2x inference speedup | +small model overhead | Latency-critical apps | Google PaLM, Meta Llama |
-| Prompt Caching | Redundant computation | 2-10x TTFT, 90% cost reduction | +cache storage | Shared prompts/RAG | Claude, GPT-4, Gemini |
+| Sliding Window | Long context compute | Linear vs quadratic | KV cache bounded by window | 100K+ contexts | Mistral, Longformer |
+| Ring Attention | Single-device memory limit | Device-count× longer sequences | Linear with devices | Ultra-long context (research) | Research/Ultra-long context |
+| Speculative Decoding | Sequential generation | 2-3x lower latency at small batch | +small model overhead | Latency-critical apps | Google PaLM, Meta Llama |
+| Prompt Caching | Redundant computation | Up to 85% lower TTFT, up to 90% lower cost | +cache storage | Shared prompts/RAG | Claude, GPT-4, Gemini |
 
 *Note: FlashAttention reduces memory usage from $O(N^2)$ to $O(N)$ but maintains $O(N^2)$ computational complexity (FLOPs). The speedup comes from optimizing memory I/O (HBM ↔ SRAM), not reducing arithmetic operations.
 
@@ -997,7 +539,7 @@ This is how GPT-4, Claude, Llama-3, and Mistral achieve their performance. Each 
 Mixed Precision (BF16, or FP8 on H100+), FlashAttention, Gradient Checkpointing (if memory-constrained), GQA in architecture, RoPE for position encoding
 
 **Fine-tuning:**
-Mixed Precision (BF16, or FP8 on H100+), FlashAttention, Gradient Checkpointing, LoRA/QLoRA if parameters frozen
+Mixed Precision (BF16, or FP8 on H100+), FlashAttention, Gradient Checkpointing, LoRA/QLoRA for parameter-efficient fine-tuning
 
 **Serving (latency-critical, chatbots):**
 FP8 inference (H100+) or BF16, GQA or MQA, PagedAttention (vLLM), Continuous Batching, Speculative Decoding (with draft model), Prompt Caching (with common prefixes), KV cache quantization (INT8)
@@ -1051,11 +593,11 @@ For most production LLMs, standard attention + modern optimizations (FlashAttent
 
 ## Key Takeaways
 
-1. **Scaled dot-product attention** uses $\sqrt{d_k}$ scaling to maintain gradient health as dimensionality increases—a mathematically solution to variance growth.
+1. **Scaled dot-product attention** uses $\sqrt{d_k}$ scaling to maintain gradient health as dimensionality increases—a simple fix for variance growth.
 
 2. **Multi-head attention** provides parallel representational subspaces, allowing the model to capture diverse relationships simultaneously. Research shows heads develop distinct patterns (positional, syntactic, semantic), and 10-20% can be pruned with minimal loss.
 
-3. **Attention dropout** is a fundamental regularization technique that prevents overfitting to specific attention patterns by randomly zeroing connections during training.
+3. **Attention dropout** regularizes against overfitting to specific attention patterns by randomly zeroing connections during training. It matters most for smaller models and datasets; large LLM pretraining runs usually disable it.
 
 4. **Cross-attention vs self-attention**: Self-attention relates positions within a sequence; cross-attention relates positions between sequences (critical for translation, multimodal models, retrieval-augmented generation).
 
@@ -1063,23 +605,23 @@ For most production LLMs, standard attention + modern optimizations (FlashAttent
 
 6. **Permutation equivariance** means attention has no inherent position bias, necessitating explicit positional encodings (RoPE, ALiBi) but providing maximum flexibility.
 
-7. **Mixed precision training** (BF16) is the foundational optimization that enables all others—2x memory savings, 2-3x speedup, with minimal quality loss. Always enable this first.
+7. **Mixed precision training** (BF16) is the foundational optimization that enables all others—about half the activation memory, 2-3x speedup, with minimal quality loss. Always enable this first.
 
 8. **FlashAttention** solved the "how" of efficient computation through IO-aware tiling, achieving 2-4x speedups and enabling long-context training by minimizing memory bandwidth bottlenecks.
 
-9. **GQA** solved the "what to cache" problem by reducing KV cache size 4x with minimal quality loss—critical for inference at scale. Further compression via quantization and eviction policies pushes efficiency even further.
+9. **GQA** solved the "what to cache" problem by reducing KV cache size (4x in a typical configuration) with minimal quality loss—critical for inference at scale. Further compression via quantization and eviction policies pushes efficiency even further.
 
 10. **RoPE** solved the "where" of position encoding with zero parameters and inherent relative positioning, becoming the de facto standard. ALiBi offers a simpler alternative with competitive performance.
 
-11. **PagedAttention** solved the "where to store" problem by applying virtual memory concepts to KV cache management, achieving 2-4x serving throughput and enabling continuous batching.
+11. **PagedAttention** solved the "where to store" problem by applying virtual memory concepts to KV cache management, achieving 2-4x serving throughput and making continuous batching far more memory-efficient.
 
 12. **Sparse patterns** (sliding window, block-sparse) solve the "when to attend" problem for ultra-long contexts, enabling 100K+ token processing with linear complexity through layer composition.
 
-13. **Ring Attention** solves the "how to distribute" problem by enabling context length to scale linearly with device count. By organizing devices in a ring and overlapping communication with computation, it achieves near-zero overhead while training sequences 500× longer than single-device methods—enabling 100M+ token contexts.
+13. **Ring Attention** solves the "how to distribute" problem by enabling context length to scale linearly with device count. By organizing devices in a ring and overlapping communication with computation, it achieves near-zero overhead and supports sequences up to device-count times longer than single-device memory-efficient Transformers, enabling 100M+ token contexts.
 
-14. **Speculative Decoding** achieves 1.5-2x inference speedup by using a fast draft model to generate candidate tokens, then verifying them in parallel with the target model. Maintains exact output distribution without retraining.
+14. **Speculative Decoding** achieves 2-3x lower latency in small-batch serving by using a fast draft model to generate candidate tokens, then verifying them in parallel with the target model. Maintains exact output distribution without retraining.
 
-15. **Prompt Caching** eliminates redundant computation by caching and reusing KV pairs from identical prefixes, achieving 90% cost reduction and 85% latency reduction for requests with stable system prompts or document context.
+15. **Prompt Caching** eliminates redundant computation by caching and reusing KV pairs from identical prefixes, with Anthropic reporting up to 90% cost reduction and 85% latency reduction for requests with stable system prompts or document context.
 
 ## References
 
@@ -1113,7 +655,7 @@ For most production LLMs, standard attention + modern optimizations (FlashAttent
 
 15. Shah, J., et al. (2024). [FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision](https://tridao.me/publications/flash3/flash3.pdf).
 
-16. Liu, H., & Abbeel, P. (2023). [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889). NeurIPS 2023.
+16. Liu, H., Zaharia, M., & Abbeel, P. (2023). [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889). ICLR 2024.
 
 17. Leviathan, Y., Kalman, M., & Matias, Y. (2023). [Fast Inference from Transformers via Speculative Decoding](https://arxiv.org/abs/2211.17192). ICML 2023.
 
@@ -1124,3 +666,7 @@ For most production LLMs, standard attention + modern optimizations (FlashAttent
 20. Micikevicius, P., et al. (2022). [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433). arXiv preprint.
 
 21. NVIDIA. (2023). [Transformer Engine: FP8 Training for Transformers](https://github.com/NVIDIA/TransformerEngine).
+
+22. Voita, E., et al. (2019). [Analyzing Multi-Head Self-Attention: Specialized Heads Do the Heavy Lifting, the Rest Can Be Pruned](https://arxiv.org/abs/1905.09418). ACL 2019.
+
+23. Clark, K., et al. (2019). [What Does BERT Look At? An Analysis of BERT's Attention](https://arxiv.org/abs/1906.04341). BlackboxNLP 2019.

@@ -10,7 +10,7 @@ author: "Anand Mohan"
 
 Pre-training on trillions of tokens gets you a model that's really good at predicting the next word. But that's about it. You still get hallucinations, toxic outputs, models that ignore your instructions, and zero ability to reason through complex problems. Turns out, optimizing for next-token prediction doesn't give you a helpful AI—it gives you a very expensive autocomplete.
 
-RLHF changed that. It's what made ChatGPT actually useful instead of just impressive. Then DPO came along and made the whole process simpler and cheaper, which is why every open-source model now uses it. And in the last year or so, we've seen outcome-based methods like GRPO unlock reasoning capabilities that can compete with human experts on competition math and coding problems.
+RLHF changed that. It's what made ChatGPT actually useful instead of just impressive. Then DPO came along and made the whole process simpler and cheaper, which is why most open-weight models now use it or one of its variants. And in the last year or so, we've seen outcome-based methods like GRPO unlock reasoning capabilities that can compete with human experts on competition math and coding problems.
 
 This post covers the full stack—from the RLHF foundations everyone's using to the newer techniques powering reasoning models. If you've already shipped RLHF in production, we'll get through that quickly and focus on what's changed: iterative methods, constitutional AI, and the cold start + RL recipe that's become standard for reasoning systems.
 
@@ -60,10 +60,10 @@ RLHF is the technique that made ChatGPT possible. The key insight: instead of ju
 - Train a reward model to predict human preferences using the Bradley-Terry model:
 
 $$
-P(y_w \succ y_l | x) = \frac{\exp(r_\theta(x, y_w))}{\exp(r_\theta(x, y_w)) + \exp(r_\theta(x, y_l))}
+P(y_w \succ y_l | x) = \frac{\exp(r_\phi(x, y_w))}{\exp(r_\phi(x, y_w)) + \exp(r_\phi(x, y_l))}
 $$
 
-where $y_w$ is the preferred (winning) output, $y_l$ is the rejected (losing) output, and $r_\theta$ is the learned reward function.
+where $y_w$ is the preferred (winning) output, $y_l$ is the rejected (losing) output, and $r_\phi$ is the learned reward function.
 
 **Why Bradley-Terry?** This model assumes that if output A is preferred to B, the probability of that preference depends on the difference in their reward scores. It's mathematically elegant: the probability of preferring $y_w$ over $y_l$ is a sigmoid function of their reward difference. This makes it easy to train with gradient descent and naturally handles the relative nature of human preferences (we're better at comparing than absolute scoring).
 
@@ -72,10 +72,10 @@ where $y_w$ is the preferred (winning) output, $y_l$ is the rejected (losing) ou
 - Add a KL penalty to prevent the model from drifting too far from the SFT initialization:
 
 $$
-\text{objective}(\theta) = \mathbb{E}_{(x,y) \sim \pi_\theta} [r_\theta(x, y) - \beta \log \frac{\pi_\theta(y|x)}{\pi_{\text{ref}}(y|x)}]
+\text{objective}(\theta) = \mathbb{E}_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot|x)} [r_\phi(x, y) - \beta \log \frac{\pi_\theta(y|x)}{\pi_{\text{ref}}(y|x)}]
 $$
 
-The KL penalty ($\beta$ term) is crucial—without it, the model exploits the reward model by generating nonsensical outputs that happen to score high.
+Here $r_\phi$ is the frozen reward model from Stage 2. The KL penalty ($\beta$ term) is crucial—without it, the model exploits the reward model by generating nonsensical outputs that happen to score high.
 
 PPO uses a clipped objective to prevent large policy updates:
 
@@ -125,66 +125,15 @@ Starting with a helpful-only RLHF model (trained to be maximally helpful but pot
 3. **Self-revision** to address critiques while maintaining helpfulness
 4. **Fine-tune** on revised responses (not originals)
 
-Here's a simplified implementation of the critique-revision loop:
+Each critique and revision samples one principle at random from the constitution rather than applying all of them at once. The key detail is step 4: the model is fine-tuned on the revised responses, so the original harmful drafts never become training targets.
 
-```python
-def constitutional_sl_stage(model, prompts, constitution):
-    """
-    Stage 1: Supervised learning with critique and revision.
-    
-    Args:
-        model: Initial helpful-only model
-        prompts: List of input prompts
-        constitution: List of principle strings
-    """
-    revised_dataset = []
-    
-    for prompt in prompts:
-        response = model.generate(prompt)
-        
-        critique_prompt = f"""
-        Original prompt: {prompt}
-        Response: {response}
-        
-        Constitutional principle: {random.choice(constitution)}
-        
-        Identify ways in which the response is harmful, unethical, 
-        racist, sexist, toxic, dangerous, or illegal.
-        """
-        critique = model.generate(critique_prompt)
-        
-        revision_prompt = f"""
-        Original response: {response}
-        Critique: {critique}
-        
-        Please rewrite the response to remove any harmful, unethical,
-        racist, sexist, toxic, dangerous, or illegal content while
-        maintaining helpfulness.
-        """
-        revised_response = model.generate(revision_prompt)
-        
-        # Critical: train on revised responses, not originals
-        revised_dataset.append({
-            'prompt': prompt,
-            'response': revised_response
-        })
-    
-    model_v2 = finetune(model, revised_dataset)
-    return model_v2
-```
+**Example principles** (in the style of Anthropic's published constitution):
 
-**Example Constitution Principles:**
-
-```python
-CONSTITUTION = [
-    "Choose the response that is most helpful, honest, and harmless.",
-    "Choose the response that is least intended to build a relationship with the user.",
-    "Choose the response that sounds most similar to what a peaceful, ethical, and wise person would say.",
-    "Choose the response that is least threatening, aggressive, or violent.",
-    "Choose the response that is most respectful of human rights and dignity.",
-    "Choose the response that best demonstrates ethical reasoning and consideration of consequences.",
-]
-```
+- Choose the response that is most helpful, honest, and harmless.
+- Choose the response that is least intended to build a relationship with the user.
+- Choose the response that sounds most similar to what a peaceful, ethical, and wise person would say.
+- Choose the response that is least threatening, aggressive, or violent.
+- Choose the response that is most respectful of human rights and dignity.
 
 **Real Example of Critique → Revision:**
 
@@ -209,97 +158,15 @@ If you're interested in chemistry, I can suggest safe experiments instead."
 
 ##### Stage 2: RL from AI Feedback (RLAIF)
 
-The second stage replaces human preferences with AI-generated preferences:
-
-```python
-def constitutional_rl_stage(model_v2, prompts, constitution, reward_model):
-    """
-    Stage 2: RL from AI Feedback.
-    
-    Args:
-        model_v2: Model from Stage 1 (helpful & harmless)
-        prompts: List of input prompts
-        constitution: List of principle strings
-        reward_model: Preference model to train
-    """
-    preference_data = []
-    
-    for prompt in prompts:
-        responses = [model_v2.generate(prompt) for _ in range(4)]
-        
-        for i in range(len(responses)):
-            for j in range(i + 1, len(responses)):
-                eval_prompt = f"""
-                Prompt: {prompt}
-                
-                Response A: {responses[i]}
-                Response B: {responses[j]}
-                
-                Constitutional principles: {constitution}
-                
-                Which response better follows the constitution?
-                Consider helpfulness, harmlessness, honesty, and ethical reasoning.
-                Answer: A or B
-                """
-                
-                preference = model_v2.generate(eval_prompt)
-                
-                if preference == "A":
-                    preferred, rejected = responses[i], responses[j]
-                else:
-                    preferred, rejected = responses[j], responses[i]
-                
-                preference_data.append({
-                    'prompt': prompt,
-                    'preferred': preferred,
-                    'rejected': rejected
-                })
-    
-    reward_model = train_preference_model(preference_data)
-    
-    policy = ppo_optimize(
-        model=model_v2,
-        reward_model=reward_model,
-        kl_penalty=0.1
-    )
-    
-    return policy
-```
-
-**Training the Preference Model:**
-
-```python
-def train_preference_model(preference_data, model):
-    """
-    Train reward model using Bradley-Terry model on AI preferences.
-    """
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-    
-    for batch in preference_data:
-        prompts = batch['prompt']
-        preferred = batch['preferred']
-        rejected = batch['rejected']
-        
-        r_preferred = model(prompts, preferred)
-        r_rejected = model(prompts, rejected)
-        
-        # Bradley-Terry: P(preferred) = sigmoid(r_preferred - r_rejected)
-        loss = -torch.log(torch.sigmoid(r_preferred - r_rejected)).mean()
-        
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-    
-    return model
-```
+The second stage replaces human harmlessness labels with AI-generated preferences. The Stage 1 model samples pairs of responses to each prompt, and a feedback model is asked which response better satisfies a randomly chosen principle. The normalized probabilities it assigns to each answer become soft preference labels. A preference model is trained on these labels (mixed with human helpfulness labels) using the same Bradley-Terry loss as RLHF reward models, and the policy is then optimized against it with RL, exactly as in RLHF. Only the source of the labels changes.
 
 #### Key Insights
 
-**Scalability**: AI feedback costs must less than human feedback. This enables millions of preferences instead of thousands, with daily iteration instead of weekly cycles.
+**Scalability**: AI feedback costs much less than human feedback. This enables millions of preferences instead of thousands, with daily iteration instead of weekly cycles.
 
 **Transparency**: The constitution makes values explicit and auditable. Stakeholders can review and update principles as societal norms evolve, unlike implicit values in human feedback.
 
-**Consistency**: AI evaluators are deterministic—same input always produces same output. This eliminates the 20-30% inter-labeler disagreement typical in human annotation.
+**Consistency**: A single AI evaluator applies the same principles to every comparison, which removes much of the 20-30% inter-labeler disagreement typical in human annotation. It isn't perfectly consistent, though: LLM judges are sensitive to response order and phrasing, and sampled judgments vary between runs.
 
 **Constructive Engagement**: Traditional safety training creates evasive models that refuse innocuous queries. Constitutional AI teaches models to explain objections and engage constructively with sensitive topics.
 
@@ -324,7 +191,7 @@ This parallel work from Anthropic (published around the same time as InstructGPT
 Key findings:
 - **Iterated online training**: Update preference models and policies weekly with fresh human feedback
 - **Linear relation**: Roughly linear relationship between RL reward and $\sqrt{\text{KL}}$ divergence
-- **Compatibility**: RLHF improves performance on almost all NLP tasks and is compatible with specialized skills (coding, summarization)
+- **Compatibility**: For large models, RLHF improves performance on almost all NLP evaluations and is compatible with specialized skills (coding, summarization). Smaller models paid an alignment tax
 
 The work also explored robustness, calibration, and compared model outputs with human writers—providing valuable insights for production deployment.
 
@@ -358,39 +225,14 @@ This is just a binary cross-entropy loss! No reward model, no RL—just supervis
 
 **DPO in Practice**
 
-Here's the complete DPO algorithm in simplified PyTorch:
-
-```python
-def dpo_loss(policy_logps_chosen, policy_logps_rejected,
-             ref_logps_chosen, ref_logps_rejected, beta=0.1):
-    """
-    Compute DPO loss from log probabilities.
-    
-    Args:
-        policy_logps_chosen: log π_θ(y_w | x)
-        policy_logps_rejected: log π_θ(y_l | x)
-        ref_logps_chosen: log π_ref(y_w | x)
-        ref_logps_rejected: log π_ref(y_l | x)
-        beta: KL penalty coefficient
-    """
-    policy_ratio = policy_logps_chosen - policy_logps_rejected
-    ref_ratio = ref_logps_chosen - ref_logps_rejected
-    
-    # DPO objective
-    logits = beta * (policy_ratio - ref_ratio)
-    loss = -torch.nn.functional.logsigmoid(logits).mean()
-    
-    return loss
-```
-
-This single function captures the entire DPO algorithm—no reward model, no PPO, just supervised learning!
+The whole algorithm fits in a few lines. Compute the sequence log-probabilities of the chosen and rejected responses under the policy and the frozen reference model, take the difference of the two log-ratios, scale by $\beta$, and apply a log-sigmoid loss. The reference log-probabilities never change, so many implementations precompute them once and drop the reference model from GPU memory during training.
 
 **Advantages of DPO**
 
 1. **Simplicity**: Single training stage, no reward model, no PPO hyperparameters
-2. **Stability**: No reward hacking, no KL penalty tuning
-3. **Efficiency**: Faster training, less memory (no need to store reward model)
-4. **Performance**: Matches or exceeds PPO on many benchmarks
+2. **Stability**: No reward model to exploit during training and none of PPO's instabilities. It still has a $\beta$ to tune, and it can still over-optimize: quality degrades if you train too long against the same preference data
+3. **Efficiency**: Faster training and less memory (no reward model or critic; reference log-probabilities can be precomputed)
+4. **Performance**: Matches or exceeds PPO on the summarization and dialogue tasks in the original paper, though later comparisons [8] found well-tuned PPO ahead on harder tasks like code generation
 
 **When DPO Works Best**
 
@@ -401,9 +243,9 @@ This single function captures the entire DPO algorithm—no reward model, no PPO
 
 **When PPO Wins Over DPO**
 
-- Complex alignment (safety-critical applications)
+- Tasks with a reliable reward signal where on-policy exploration pays off (Xu et al. [8] found well-tuned PPO beat DPO on code generation)
 - Tasks requiring fine-grained control
-- Very large models where stability matters
+- When the policy has drifted far from the distribution of your preference data
 - When you need maximum flexibility in reward shaping
 
 #### Iterative DPO
@@ -435,7 +277,7 @@ The success of DPO spawned several variants:
 
 **References**: Meng et al. [18]
 
-While DPO removed the reward model, it still required loading a reference model into memory to calculate KL divergence, effectively doubling GPU memory requirements. SimPO removes the reference model entirely.
+While DPO removed the reward model, it still needs reference-model log-probabilities for every training pair, either from a second model held in memory or from a precomputation pass. SimPO removes the reference model entirely.
 
 It introduces a length-normalized reward formulation:
 
@@ -449,7 +291,7 @@ $$
 \mathcal{L}_{\text{SimPO}} = -\log \sigma(r(x, y_w) - r(x, y_l) - \gamma)
 $$
 
-**Why it matters**: More memory-efficient than DPO, enabling 70B+ models to be trained on consumer hardware. The margin $\gamma$ ensures the winning response is significantly better than the loser, not just marginally better. Length normalization prevents the model from gaming the reward by generating longer responses.
+**Why it matters**: Cheaper than DPO (no reference model to run or store), and the reward it optimizes matches the length-normalized likelihood that drives generation. The margin $\gamma$ ensures the winning response is significantly better than the loser, not just marginally better. Length normalization prevents the model from gaming the reward by generating longer responses.
 
 **IPO (Identity Preference Optimization)**
 - Addresses DPO's tendency to overfit to preference data
@@ -463,7 +305,7 @@ $$
 **ORPO (Odds Ratio Preference Optimization)**
 - Combines SFT and preference learning in a single stage
 - Adds a penalty for generating dispreferred responses during SFT
-- Simpler pipeline: skip SFT, go straight to preference optimization
+- Simpler pipeline: no separate SFT stage and no reference model
 
 These variants are gaining traction in the open-source community, but RLHF and DPO remain the dominant production methods.
 
@@ -477,13 +319,13 @@ For tasks like mathematics and coding, we don't need human preferences—we can 
 
 **References**: OpenAI Blog [10], OpenAI System Card [11]
 
-While OpenAI hasn't published a full technical paper on o1, we know the key principles from their announcements and system card.
+While OpenAI hasn't published a full technical paper on o1, we know the broad principles from their announcements and system card. (The term RLVR itself was coined later, in AI2's Tülu 3 work, but it describes the same idea.)
 
 **The core idea:** train models to "think" through problems using chain-of-thought reasoning, with rewards based on verifiable outcomes.
 
 **Key differences from preference-based RLHF:**
 - **Verifiable rewards**: Math correctness, code execution, not human preferences
-- **Process rewards**: Reward intermediate reasoning steps, not just final answers
+- **Large-scale RL on chain of thought**: OpenAI says the model learns to refine its reasoning through RL, without disclosing whether rewards target steps or only outcomes
 - **Test-time compute**: Models can "think longer" for harder problems
 
 **Outcome rewards**: Only reward the final answer
@@ -494,16 +336,16 @@ While OpenAI hasn't published a full technical paper on o1, we know the key prin
 **Process rewards**: Reward each reasoning step
 - More expensive (requires labeling intermediate steps)
 - Better credit assignment
-- Prevents reward hacking
+- Reduces (but doesn't eliminate) reward hacking
 - Leads to more reliable reasoning
 
-OpenAI's approach uses process supervision—rewarding correct reasoning steps, not just correct answers.
+OpenAI hasn't said which of these o1 uses. Its earlier process supervision work [7] is often cited as a likely ingredient, but that is speculation. DeepSeek-R1 later showed that outcome rewards alone are enough to get strong reasoning.
 
 **Test-Time Compute Scaling**
 
 A key insight: reasoning models can trade compute for accuracy at inference time. Generate multiple reasoning traces, verify them, and select the best one.
 
-This is fundamentally different from traditional LLMs, where more compute during inference doesn't improve quality (beyond sampling multiple outputs).
+Traditional LLMs also benefit from extra inference compute through best-of-N sampling or majority voting. Reasoning models scale it more directly: a longer chain of thought on a single sample keeps improving accuracy.
 
 **Deliberative Alignment**
 
@@ -525,10 +367,10 @@ GRPO is a memory-efficient alternative to PPO that removes the critic network en
 Standard PPO uses an actor-critic architecture where the critic (value function) estimates expected rewards to reduce variance in policy gradients. However, the critic is memory-intensive and adds training complexity. GRPO replaces it with group-based advantage estimation.
 
 **Algorithm**:
-1. Sample $N$ outputs per prompt (typically $N=64$, range 16-128)
+1. Sample a group of $N$ outputs per prompt (DeepSeekMath used 64; DeepSeek-R1 used 16)
 2. Evaluate each output (e.g., check math correctness)
 3. Compute group-relative advantage: $A_i = \frac{r_i - \mu_{\text{group}}}{\sigma_{\text{group}}}$
-4. Update policy using standard policy gradient
+4. Update the policy with PPO's clipped objective using these advantages, adding the KL penalty to the reference model directly to the loss instead of folding it into the reward
 
 **Advantages**: No critic network (saves memory, simplifies training); group normalization reduces variance without a value function; ideal for outcome-based rewards in verifiable tasks (math, code).
 
@@ -536,24 +378,24 @@ Standard PPO uses an actor-critic architecture where the critic (value function)
 
 **When to Use**: Outcome-based rewards (math correctness, code execution, game scores); memory constraints (large models where critic doesn't fit); simpler pipeline (fewer hyperparameters than PPO).
 
-**When PPO Wins Over GRPO**: Preference-based tasks (human feedback); complex reward shaping (fine-grained credit assignment); online learning scenarios.
+**When PPO Wins Over GRPO**: Fine-grained credit assignment (a learned critic gives per-token value estimates, while GRPO gives every token in a response the same advantage); settings where sampling a whole group per prompt is too expensive. GRPO isn't limited to verifiable rewards, though: DeepSeekMath ran it against a learned reward model, and DeepSeek-R1's final stage used reward models for helpfulness and harmlessness.
 
-**Production Adoption**: DeepSeek-R1 (reasoning capabilities), Qwen-QwQ (Qwen's reasoning model), Kimi. Proven effective for training reasoning models at scale.
+**Production Adoption**: DeepSeek-R1, Qwen3's reasoning RL stage, and most open-source reasoning recipes. Proven effective for training reasoning models at scale.
 
 
 ### Rule-Based Rewards (RBR)
 
-**References**: DeepSeek-AI [6], Mu et al. [16], Lyu et al. [17]
+**References**: DeepSeek-AI [6], Mu et al. [16], Xie et al. [17]
 
 While outcome rewards (correctness) are the primary signal for reasoning models, production systems augment them with rule-based rewards to enforce desirable behaviors.
 
 RBR are programmatic checks that reward or penalize specific patterns in model outputs. Unlike learned reward models, these are explicit rules that enforce constraints.
 
-**Common RBR Categories**: Format enforcers (regex for required tags, JSON schema validation, markdown formatting, penalty -0.5 to -1.0); Language consistency (detect mid-response switching, penalize language mixing, critical for R1-Zero issue); Safety constraints (block prohibited content, enforce refusal patterns, penalty -5.0+ for violations); Reasoning quality heuristics (minimum length, maximum repetition, step diversity, verification checks).
+**Common RBR Categories** (penalty values here are illustrative, not from a specific paper): Format enforcers (regex for required tags, JSON schema validation, markdown formatting, small penalties such as -0.5 to -1.0); Language consistency (detect mid-response switching, penalize language mixing, critical for R1-Zero issue); Safety constraints (block prohibited content, enforce refusal patterns, larger penalties for violations); Reasoning quality heuristics (minimum length, maximum repetition, step diversity, verification checks).
 
 **Why RBR Matter**: Stability—hard constraints prevent catastrophic failures and unparseable outputs during training. Efficiency—instant regex checks vs. minutes for human evaluation. Composability—combine multiple RBR with outcome rewards: $r_{\text{total}} = r_{\text{outcome}} + \sum_i w_i \cdot r_{\text{rule}_i}$ where $w_i$ are typically 0.1-0.5.
 
-**Production Examples**: DeepSeek-R1 uses RBR for language consistency and format validation; Logic-RL [17] uses formal logic rules as rewards for mathematical reasoning; Safety-focused RBR [16] significantly improve robustness to adversarial attacks and jailbreaking.
+**Production Examples**: DeepSeek-R1 uses RBR for language consistency and format validation; Logic-RL [17] trains on synthetic Knights-and-Knaves logic puzzles with only rule-based format and answer rewards, and the gains transfer to math benchmarks like AIME and AMC; OpenAI's safety RBR [16] uses an LLM grader to score responses against fine-grained rules about how to refuse or comply, reaching a better safety vs. over-refusal balance than a human-feedback baseline.
 
 **Design Principles**: Keep rules simple (complex rules are hard to debug); weight carefully (RBR should guide, not dominate outcome rewards); monitor rule violations (high rates indicate overly strict rules or poor initialization); iterate (start with critical rules, add more as failure modes emerge).
 
@@ -578,7 +420,7 @@ Instead of training a scalar reward model (which outputs a single number like 0.
 2. Generates a "reasoning trace" (critique) explaining why the response is good or bad
 3. Assigns a score based on that reasoning
 
-**Why it matters**: Standard reward models are black boxes—we don't know why they scored something high. GenRMs force the reward signal to be interpretable. DeepSeek and others use this to verify reasoning steps in domains where simple rule-based checks fail (e.g., essay quality, creative problem-solving, open-ended reasoning).
+**Why it matters**: Standard reward models are black boxes—we don't know why they scored something high. GenRMs force the reward signal to be interpretable. DeepSeek-R1, for example, used DeepSeek-V3 as a generative judge during rejection sampling for data that rule-based checks can't grade. The same approach extends to domains like essay quality, creative problem-solving, and open-ended reasoning.
 
 **In practice**: The generative verifier acts as an LLM-as-a-Judge during RL training, providing both a score and an explanation. This is particularly useful for distillation and data synthesis, where you need to understand why certain reasoning paths are better.
 
@@ -590,21 +432,22 @@ DeepSeek-R1 demonstrated something remarkable: reasoning capabilities can emerge
 
 ![DeepSeek-R1 training pipeline showing cold start and RL phases](https://media.anandmoghan.me/public/images/reinforcement-learning/deepseek-r1-pipeline.png)
 
-Previous reasoning models (like OpenAI's o1) required extensive human demonstrations of chain-of-thought reasoning. DeepSeek-R1 showed a more efficient path.
+OpenAI never disclosed how much human-written chain-of-thought data o1 needed. DeepSeek-R1 was the first openly documented recipe showing that RL with simple rewards does most of the work.
 
 **Training approach:**
-1. Start with a strong base model (DeepSeek-V3)
-2. Cold start phase: Use a small amount of high-quality chain-of-thought examples to stabilize training and prevent collapse issues (language mixing, repetition)
-3. Apply GRPO with simple correctness rewards (right answer = +1, wrong = 0)
-4. Let reasoning patterns emerge naturally
+1. Start with a strong base model (DeepSeek-V3-Base)
+2. Cold start: SFT on a few thousand long chain-of-thought examples to fix readability and language mixing
+3. Reasoning RL: GRPO with rule-based accuracy and format rewards, plus a language-consistency reward
+4. Rejection sampling: generate ~600K reasoning samples from the RL checkpoint, add ~200K non-reasoning samples, and run SFT again on the ~800K total
+5. Final RL across all scenarios: rule-based rewards for reasoning, reward models for helpfulness and harmlessness
 
-**The Cold Start Challenge**: While DeepSeek-R1-Zero was trained with pure RL from scratch, it suffered from training instabilities—language mixing, readability collapse, and format violations. The production DeepSeek-R1 addresses this with a "cold start" approach: a few thousand examples of well-formatted reasoning traces that teach the model how to format its reasoning (not how to reason). This provides guardrails that constrain the format space, allowing RL to focus on improving reasoning quality rather than discovering basic formatting conventions. This has become standard practice for training reasoning models.
+**The Cold Start Challenge**: DeepSeek-R1-Zero was trained with pure RL directly on the base model, with no SFT at all. It worked (AIME 2024 pass@1 rose from 15.6% to 71.0%), but its outputs had poor readability and mixed languages. The production DeepSeek-R1 addresses this with a "cold start" approach: a few thousand examples of well-formatted reasoning traces that teach the model how to format its reasoning (not how to reason). This provides guardrails that constrain the format space, allowing RL to focus on improving reasoning quality rather than discovering basic formatting conventions. This has become standard practice for training reasoning models.
 
-**Emergent Capabilities**: DeepSeek observed several emergent behaviors from RL training after cold start: self-reflection (checking own work), verification (validating intermediate steps), dynamic strategy adaptation (trying different approaches when stuck), and "aha moments" (recognizing the right path mid-generation). These patterns weren't explicitly programmed—they emerged from the training process.
+**Emergent Capabilities**: DeepSeek observed several emergent behaviors during RL, most clearly in R1-Zero, which had no cold start data to imitate: self-reflection (checking own work), verification (validating intermediate steps), dynamic strategy adaptation (trying different approaches when stuck), and an "aha moment" (an intermediate checkpoint learned to stop, re-evaluate its approach, and spend more thinking time). Response length also grew on its own as training progressed. These patterns weren't explicitly programmed—they emerged from the training process.
 
-**Results**: DeepSeek-R1 matched OpenAI's o1-preview on mathematical reasoning benchmarks despite simpler training. Excels at mathematics (MATH, GSM8K, AIME), coding competitions (Codeforces, LeetCode), and STEM reasoning tasks.
+**Results**: DeepSeek-R1 performed comparably to OpenAI-o1-1217 on reasoning benchmarks: 79.8% pass@1 on AIME 2024, 97.3% on MATH-500, and a 2,029 Codeforces rating, with strong results on GPQA Diamond and LiveCodeBench.
 
-**Distillation**: Once trained, reasoning capabilities can be distilled into smaller models by generating reasoning traces from the large model and fine-tuning smaller models on these traces, enabling lower-cost deployment.
+**Distillation**: Once trained, reasoning capabilities can be distilled into smaller models by generating reasoning traces from the large model and fine-tuning smaller models on these traces, enabling lower-cost deployment. DeepSeek found that distilling into Qwen and Llama models beat running RL directly on those small models.
 
 ## Hybrid Approach: Process Supervision
 
@@ -616,15 +459,15 @@ Train two reward models:
 1. **Outcome-based**: Trained on final answer correctness
 2. **Process-based**: Trained on step-by-step correctness (800K human labels)
 
-Then use each to train policies via RL.
+They evaluated each reward model by using it to pick the best of many sampled solutions (best-of-N), not by running RL against it.
 
 
-Process supervision significantly outperformed outcome supervision on the MATH dataset. The process-supervised model solved 78% of problems from a representative test subset.
+Process supervision significantly outperformed outcome supervision on the MATH dataset. Using the process reward model to pick the best of 1,860 samples solved 78% of problems from a representative test subset.
 
 **Why Process Supervision Works**
 
 1. **Better credit assignment**: Knows which steps were correct/incorrect
-2. **Prevents reward hacking**: Can't get lucky with a right answer from wrong reasoning
+2. **Harder to game**: A right answer reached through wrong reasoning still gets penalized
 3. **More reliable**: Catches errors early in the reasoning chain
 4. **Interpretable**: Can see where the model went wrong
 
@@ -634,7 +477,7 @@ The work also showed that active learning significantly improves process supervi
 
 ## The Modern LLM Stack
 
-By recent years, a clear pattern has emerged for training state-of-the-art reasoning models. Rather than treating cold start, rule-based rewards, and iterative optimization as separate techniques, production systems combine them into a unified workflow.
+Since DeepSeek-R1's release in early 2025, a clear pattern has emerged for training state-of-the-art reasoning models. Rather than treating cold start, rule-based rewards, and iterative optimization as separate techniques, production systems combine them into a unified workflow.
 
 This "modern recipe" synthesizes lessons from DeepSeek-R1, Llama 3, and the broader shift toward iterative methods. Here's how the pieces fit together:
 
@@ -646,7 +489,7 @@ This "modern recipe" synthesizes lessons from DeepSeek-R1, Llama 3, and the broa
 
 **Critical for reasoning models**: If you want the model to learn self-correction during RL, the cold start data must include failed attempts and backtracking. Perfect, straight-line reasoning teaches format but makes it harder for RL to learn error recovery. Include examples like "Wait, that's wrong because..." or "Let me try a different approach..."
 
-**Why it matters**: Without initialization, pure RL training collapses into unreadable outputs (see DeepSeek-R1's cold start challenge). The cold start provides guardrails that constrain the format space, allowing RL to focus on improving reasoning quality.
+**Why it matters**: Without it, pure RL can still learn to reason, but the outputs drift into hard-to-read, language-mixed text (see DeepSeek-R1-Zero above). The cold start provides guardrails that constrain the format space, allowing RL to focus on improving reasoning quality.
 
 **Implementation**: Standard supervised fine-tuning (SFT) on the CoT dataset. Typically takes a few hours on a single node.
 
@@ -671,7 +514,7 @@ Instead of collecting expensive human preferences, define explicit principles (a
 2. **RLAIF**: Generate response pairs, have an AI evaluator judge which better follows the constitution, train a preference model from these AI preferences.
 3. **Proceed to RL**: Use the AI-trained preference model in Stage 3 (PPO/DPO)
 
-**Why it works**: AI feedback is cheaper, perfectly consistent, and transparent (explicit principles). Claude uses this approach for scalable, principle-based alignment.
+**Why it works**: AI feedback is cheaper, more consistent, and transparent (explicit principles). Claude uses this approach for scalable, principle-based alignment.
 
 **When to use**: Choose Constitutional AI for chatbots when you need transparent alignment, fast iteration, and can articulate clear principles. Use traditional RLHF when tasks are highly subjective or you have abundant human feedback.
 
@@ -697,9 +540,9 @@ This recipe is optimized for reasoning models with verifiable outcomes. For othe
 - **Online vs Offline RLHF**: Online RLHF continuously generates new data from the current policy with fresh feedback (used by ChatGPT, Claude), while offline RLHF trains on fixed datasets—simpler but can overfit.
 - **Production Metrics**: Monitor reward model health (distribution drift, preference agreement), policy performance (KL divergence, win rate), and safety (refusal rates, jailbreak attempts, toxic outputs).
 - **Rejection Sampling**: Sample N outputs (16-64), score with reward model, return best—provides inference-time alignment without training but costs N× at inference.
-- **Alignment Tax**: RLHF can hurt performance on some tasks (\<1-2%) as model shifts from pre-training distribution. Mitigate with PPO-ptx, careful KL tuning, and monitoring.
+- **Alignment Tax**: RLHF can hurt performance on some tasks as the model shifts from pre-training distribution. Mitigate with PPO-ptx, careful KL tuning, and monitoring.
 - **Reward Hacking**: Models exploit reward model weaknesses (verbosity, high-scoring phrases). Prevent with ensemble models, adversarial training, iterative updates, and process supervision.
-- **Scaling Laws**: More preference data improves quality with diminishing returns. Larger reward models are more robust. Policy size matters more than reward model size. Online learning scales better.
+- **Scaling Laws**: More preference data improves quality with diminishing returns. Larger reward models are more robust. Online learning scales better.
 
 ### Techniques Simplified: What to use?
 
@@ -707,7 +550,7 @@ This recipe is optimized for reasoning models with verifiable outcomes. For othe
 
 **RLHF (PPO)**: Upgrade when you need maximum control, have 70B+ models, can invest in online learning infrastructure, or have safety-critical applications. Requires significant engineering investment.
 
-**GRPO**: Use for math, coding, or verifiable domains with outcome-based rewards. Memory-efficient alternative to PPO, but not suitable for preference-based alignment.
+**GRPO**: Use for math, coding, or verifiable domains with outcome-based rewards. Memory-efficient alternative to PPO. It also works with learned reward models, but its sweet spot is cheap, reliable rewards.
 
 **Constitutional AI**: Adopt when you need transparent, auditable alignment and want to scale beyond human feedback bottlenecks. Requires careful principle design.
 
@@ -719,9 +562,9 @@ This recipe is optimized for reasoning models with verifiable outcomes. For othe
 | Dimension | RLHF (PPO) | DPO (Offline) | Iterative DPO | GRPO | Constitutional AI |
 |-----------|------------|---------------|---------------|------|-------------------|
 | **Training Stages** | 3 (SFT → RM → PPO) | 1 (direct) | Multiple iterations | 2 (SFT → GRPO) | 2 (SL → RLAIF) |
-| **Reward Model** | Explicit | Implicit | Implicit or LLM-as-Judge | Not needed | AI-based |
+| **Reward Model** | Explicit | Implicit | Implicit or LLM-as-Judge | Rule-based or learned | AI-based |
 | **Stability** | Moderate | High | High | High | High |
-| **Memory** | High (actor+critic+ref) | Low | Low-Medium | Medium (actor+ref) | Medium |
+| **Memory** | High (actor+critic+ref+RM) | Low-Medium (policy+ref) | Low-Medium | Medium (actor+ref) | Medium |
 | **Hyperparameters** | Many (10+) | Few (2-3) | Few (3-5) | Medium (5-7) | Medium |
 | **Iteration Speed** | Slow | Fast | Medium | Medium | Medium |
 | **Best For** | General alignment | Simple tasks | Bridging stability & performance | Math/code | Safety-focused |
@@ -765,23 +608,23 @@ This recipe is optimized for reasoning models with verifiable outcomes. For othe
 
 5. **Outcome-based RL vs preference-based RL**: For verifiable tasks (math, code), outcome rewards (correctness) are more effective than preference learning. For general alignment (helpfulness, safety), preference-based methods remain essential.
 
-6. **Process supervision** rewards intermediate reasoning steps rather than just final answers, leading to more reliable reasoning and preventing reward hacking. It significantly outperforms outcome supervision but requires expensive step-level labeling.
+6. **Process supervision** rewards intermediate reasoning steps rather than just final answers, leading to more reliable reasoning and preventing reward hacking. Process-supervised reward models significantly outperformed outcome-supervised ones for best-of-N selection on MATH, but require expensive step-level labeling.
 
-7. **Online vs offline RLHF**: Production systems use online learning with weekly updates to reward models and policies. Offline training on fixed datasets is simpler but less effective at maintaining quality over time.
+7. **Online vs offline RLHF**: Production systems favor online learning, regularly refreshing reward models and policies with new data. Offline training on fixed datasets is simpler but less effective at maintaining quality over time.
 
 8. **Reward hacking** is a persistent challenge where models exploit weaknesses in reward models. Mitigation strategies include ensemble reward models, iterative updates, process supervision, and human-in-the-loop auditing.
 
-9. **The alignment tax** (performance degradation on some tasks) is usually small (\<1-2%) and can be mitigated through PPO-ptx (mixing pre-training data), careful KL tuning, and monitoring diverse benchmarks.
+9. **The alignment tax** (performance degradation on some tasks) is usually small for large models and can be mitigated through PPO-ptx (mixing pre-training data), careful KL tuning, and monitoring diverse benchmarks.
 
 10. **Method selection guide**: Use RLHF/PPO for maximum control and complex alignment; DPO for simplicity and smaller models; GRPO for reasoning tasks with verifiable outcomes; Constitutional AI for transparent, principle-based alignment.
 
-11. **Reasoning models** (o1, DeepSeek-R1) use outcome-based RL with verifiable rewards. DeepSeek observed emergent capabilities like self-reflection, verification, and dynamic strategy adaptation. While DeepSeek-R1-Zero used pure RL, production DeepSeek-R1 uses a "cold start" with small amounts of high-quality CoT data to prevent training collapse before RL takes over.
+11. **Reasoning models** (o1, DeepSeek-R1) use outcome-based RL with verifiable rewards. DeepSeek observed emergent capabilities like self-reflection, verification, and dynamic strategy adaptation. While DeepSeek-R1-Zero used pure RL, production DeepSeek-R1 uses a "cold start" with small amounts of high-quality CoT data to fix readability and language mixing before RL takes over.
 
-12. **Test-time compute scaling** is unique to reasoning models: they can trade inference compute for accuracy by generating and verifying multiple reasoning traces, unlike traditional LLMs where more compute doesn't improve quality.
+12. **Test-time compute scaling** is where reasoning models shine: they trade inference compute for accuracy through longer chains of thought and by generating and verifying multiple traces. Traditional LLMs gain from best-of-N too, but scale far less smoothly.
 
 13. **Distillation from reasoning models** enables transferring reasoning capabilities to smaller, faster models by fine-tuning them on traces generated by larger reasoning models—making reasoning more accessible and cost-effective.
 
-14. **Industry adoption patterns**: RLHF/PPO dominates frontier labs (OpenAI, Anthropic, Google); DPO powers open-source (Llama, Mistral); GRPO enables reasoning models (DeepSeek, Qwen); Constitutional AI is Anthropic's signature approach.
+14. **Industry adoption patterns**: RLHF with PPO-style methods is the reported approach at frontier labs (OpenAI, Anthropic, Google), though their current recipes aren't public; DPO powers open-source (Llama, Mistral); GRPO enables reasoning models (DeepSeek, Qwen); Constitutional AI is Anthropic's signature approach.
 
 15. **Open problems remain**: Scalable oversight for superhuman tasks, reasoning generalization beyond verifiable domains, multi-objective alignment, efficiency improvements, adversarial robustness, and multi-modal alignment are active research areas.
 
@@ -819,7 +662,7 @@ This recipe is optimized for reasoning models with verifiable outcomes. For othe
 
 16. Mu, J., et al. (2024). [Rule Based Rewards for Language Model Safety](https://arxiv.org/abs/2411.01111). NeurIPS 2024.
 
-17. Lyu, D., et al. (2025). [Logic-RL: Reinforcement Learning with Logical Constraints for Mathematical Reasoning](https://arxiv.org/abs/2502.14768). arXiv:2502.14768.
+17. Xie, T., et al. (2025). [Logic-RL: Unleashing LLM Reasoning with Rule-Based Reinforcement Learning](https://arxiv.org/abs/2502.14768). arXiv:2502.14768.
 
 18. Meng, Y., et al. (2024). [SimPO: Simple Preference Optimization with a Reference-Free Reward](https://arxiv.org/abs/2405.14734). arXiv:2405.14734.
 
