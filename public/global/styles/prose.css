@@ -279,6 +279,17 @@ html {
   margin-bottom: 1.5em;
 }
 
+/* Consecutive display equations share one small gap instead of two full margins. */
+.prose .katex-display:has(+ .katex-display) {
+  margin-bottom: 0;
+  padding-bottom: 0.25em;
+}
+
+.prose .katex-display + .katex-display {
+  margin-top: 0;
+  padding-top: 0.25em;
+}
+
 /* KaTeX's hidden MathML copy is position: absolute. Anchor it to its formula so that, inside a
    sideways-scrolling table or display block, it cannot widen the page at phone width. */
 .prose .katex {

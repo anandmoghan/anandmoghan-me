@@ -80,7 +80,7 @@ See [docs/MEDIA-SYSTEM.md](docs/MEDIA-SYSTEM.md) for complete documentation.
 
 ## Deployment
 
-The site is one Next.js static export hosted on Firebase Hosting (project `anandmoghan-me`). The private apps under `/apps/**` ship in the same export, `/api/**` is served by the Firebase Function `api` (europe-west2), and DNS stays at Cloudflare.
+The site is one Next.js static export hosted on Firebase Hosting (project `anandmoghan-me`). The private apps under `/apps/**` ship in the same export, `/api/**` is served by the Firebase Function `api` (us-central1), and DNS stays at Cloudflare.
 
 ```bash
 npm run deploy          # build + hosting

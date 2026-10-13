@@ -26,7 +26,7 @@ Repository secrets (Settings, Secrets and variables, Actions):
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase web app config |
 | `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | Firebase web app config |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | `anandmoghan-me` |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | `anandmoghan-me.firebasestorage.app` |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | `anandmoghan-me.appspot.com` |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase web app config |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web app config |
 | `NEXT_PUBLIC_GA_ID` | Google Analytics measurement ID |

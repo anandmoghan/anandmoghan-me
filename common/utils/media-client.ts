@@ -3,7 +3,7 @@
  * These functions don't use Node.js APIs and can be used in client components
  */
 
-const DEFAULT_STORAGE_BUCKET = 'anandmoghan-me.firebasestorage.app';
+const DEFAULT_STORAGE_BUCKET = 'anandmoghan-me.appspot.com';
 
 /**
  * Name of the Firebase Storage bucket that holds the media.

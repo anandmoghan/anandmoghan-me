@@ -82,7 +82,10 @@ jobs:
       - name: Write service account
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/sa.json"
 
-      - name: Deploy hosting, functions, and rules
+      # Functions (the Trading212 api) stay off until ENCRYPTION_SECRET is set;
+      # set the repository variable DEPLOY_FUNCTIONS=true to include them.
+      - name: Deploy hosting and rules (and functions when enabled)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
-        run: npx firebase deploy --project anandmoghan-me --only hosting,functions,firestore,storage --non-interactive
+          TARGETS: ${{ vars.DEPLOY_FUNCTIONS == 'true' && 'hosting,functions,firestore,storage' || 'hosting,firestore,storage' }}
+        run: npx firebase deploy --project anandmoghan-me --only "$TARGETS" --non-interactive

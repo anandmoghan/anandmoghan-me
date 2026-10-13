@@ -1,6 +1,6 @@
 # Media System
 
-Media is stored in the default Firebase Storage bucket (`anandmoghan-me.firebasestorage.app`), not in the repo. Storage is the source of truth.
+Media is stored in the default Firebase Storage bucket (`anandmoghan-me.appspot.com`), not in the repo. Storage is the source of truth.
 
 ## Layout and access
 
@@ -24,7 +24,7 @@ gcloud auth application-default login
 # or: GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 ```
 
-`NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` selects the bucket (default `anandmoghan-me.firebasestorage.app`).
+`NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` selects the bucket (default `anandmoghan-me.appspot.com`).
 
 ## Scripts
 

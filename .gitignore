@@ -39,3 +39,6 @@ next-env.d.ts
 
 # Admin scripts (service account keys + one-off scripts)
 /scripts/
+
+# Firebase CLI cache
+.firebase/

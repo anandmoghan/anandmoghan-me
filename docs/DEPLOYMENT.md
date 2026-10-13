@@ -3,7 +3,7 @@
 ## Architecture
 
 - **Firebase Hosting** (project `anandmoghan-me`, Blaze) serves the Next.js static export in `out/`, including the apps under `/apps/**`.
-- **Firebase Function `api`** (region `europe-west2`, source in `functions/`) serves `/api/**` through a Hosting rewrite.
+- **Firebase Function `api`** (region `us-central1`, source in `functions/`) serves `/api/**` through a Hosting rewrite.
 - **Firestore and Storage** rules live in `firestore.rules` and `storage.rules`.
 - **Media** lives in the default Storage bucket under `public/**` (see [MEDIA-SYSTEM.md](MEDIA-SYSTEM.md)).
 - **Cloudflare** is DNS only.

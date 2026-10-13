@@ -42,7 +42,7 @@
         "source": "/api/**",
         "function": {
           "functionId": "api",
-          "region": "europe-west2"
+          "region": "us-central1"
         }
       }
     ],
