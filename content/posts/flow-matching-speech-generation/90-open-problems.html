@@ -1,0 +1,17 @@
+<section id="open-problems">
+  <h2>Open Problems</h2>
+  <ul>
+    <li>
+      <strong>Rewards for the flow stage</strong>: A deterministic ODE sampler has no likelihood for a policy gradient, so current practice rewards the token model or duration predictor instead.
+      One route turns the ODE into an SDE, which also changes the sampler.
+    </li>
+    <li>
+      <strong>The few-step floor</strong>: Schedules are usable to about 7 steps and break below about 6.
+      Students go further but lose diversity and can learn to game the evaluator.
+    </li>
+    <li>
+      <strong>Evaluation that saturates</strong>: Some top systems already beat ground-truth recordings on WER, and predicted MOS stops agreeing with listeners once both clips are clean.
+      Neither WER nor SIM measures diversity.
+    </li>
+  </ul>
+</section>

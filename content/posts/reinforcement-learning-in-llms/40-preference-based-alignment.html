@@ -3,7 +3,6 @@
 
   <!-- == RLHF == -->
   <h3 id="rlhf-the-foundation">RLHF: The Foundation</h3>
-  <p><strong>References</strong>: Ouyang et al. [1], Bai et al. [3]</p>
   <p>
     RLHF is the technique that made ChatGPT possible.
     The key insight: instead of just predicting what humans write, optimize for what humans prefer.
@@ -80,13 +79,12 @@
 
   <!-- == Constitutional AI == -->
   <h3 id="constitutional-ai-claude">Constitutional AI: Claude</h3>
-  <p><strong>References</strong>: Bai et al. [2], Anthropic Research [12]</p>
   <p>
     Anthropic developed Constitutional AI to scale alignment beyond human feedback bottlenecks by using AI-generated feedback guided by explicit principles.
     This powers Claude and represents a fundamental rethinking of alignment.
   </p>
   <figure>
-    <img src="https://media.anandmoghan.me/public/images/reinforcement-learning/constitutional-ai.png" alt="Constitutional AI training process showing critique and revision stages">
+    <img src="https://firebasestorage.googleapis.com/v0/b/anandmoghan-me.firebasestorage.app/o/public%2Fimages%2Freinforcement-learning%2Fconstitutional-ai.png?alt=media" alt="Constitutional AI training process showing critique and revision stages">
     <figcaption>Constitutional AI training process showing critique and revision stages</figcaption>
   </figure>
   <p>
@@ -179,7 +177,6 @@ If you're interested in chemistry, I can suggest safe experiments instead."</cod
     Despite these limitations, Constitutional AI has become a cornerstone of modern alignment, particularly for production systems where transparency, scalability, and constructive engagement are essential.
   </p>
   <h4>Training a Helpful and Harmless Assistant</h4>
-  <p><strong>References</strong>: Bai et al. [3]</p>
   <p>
     This parallel work from Anthropic (published around the same time as InstructGPT) focused on the tension between helpfulness and harmlessness.
   </p>
@@ -195,7 +192,6 @@ If you're interested in chemistry, I can suggest safe experiments instead."</cod
 
   <!-- == DPO == -->
   <h3 id="direct-preference-optimization">Direct Preference Optimization</h3>
-  <p><strong>References</strong>: Rafailov et al. [4]</p>
   <p>DPO was a breakthrough: what if we could skip the reward model and RL entirely?</p>
   <p>The optimal policy for RLHF can be derived in closed form:</p>
   \[
@@ -249,7 +245,6 @@ If you're interested in chemistry, I can suggest safe experiments instead."</cod
     <li>When you need maximum flexibility in reward shaping</li>
   </ul>
   <h4>Iterative DPO</h4>
-  <p><strong>References</strong>: Yuan et al. [13], Pang et al. [14], Dong et al. [15]</p>
   <p>
     While standard DPO is offline (training on a fixed dataset), production systems have largely moved to <strong>Iterative DPO</strong> (also called Online DPO).
     This shift addresses a critical limitation: distribution shift.
@@ -279,7 +274,6 @@ If you're interested in chemistry, I can suggest safe experiments instead."</cod
   <h4>DPO Variants</h4>
   <p>The success of DPO spawned several variants:</p>
   <p><strong>SimPO (Simple Preference Optimization)</strong></p>
-  <p><strong>References</strong>: Meng et al. [18]</p>
   <p>
     While DPO removed the reward model, it still needs reference-model log-probabilities for every training pair, either from a second model held in memory or from a precomputation pass.
     SimPO removes the reference model entirely.

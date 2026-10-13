@@ -1,6 +1,5 @@
 <section id="inference-optimizations">
   <h2>Inference Optimizations</h2>
-  <p><strong>References</strong>: [6, 7, 8, 9, 10, 11, 17]</p>
   <p>
     In production, inference latency and throughput directly drive user experience and cost.
     LLMs face unique challenges during inference, particularly around memory efficiency and latency.
@@ -15,7 +14,7 @@
     At 100K context length, this becomes approximately 819M values per layer, a massive memory bottleneck.
   </p>
   <figure>
-    <img src="https://media.anandmoghan.me/public/images/attention/gqa-comparison.png" alt="Figure 3: Comparison of Multi-Head Attention (MHA), Multi-Query Attention (MQA), and Grouped Query Attention (GQA). GQA groups query heads to share KV heads, balancing quality and efficiency. Source: Ainslie et al. (2023)">
+    <img src="https://firebasestorage.googleapis.com/v0/b/anandmoghan-me.firebasestorage.app/o/public%2Fimages%2Fattention%2Fgqa-comparison.png?alt=media" alt="Figure 3: Comparison of Multi-Head Attention (MHA), Multi-Query Attention (MQA), and Grouped Query Attention (GQA). GQA groups query heads to share KV heads, balancing quality and efficiency. Source: Ainslie et al. (2023)">
     <figcaption>Figure 3: Comparison of Multi-Head Attention (MHA), Multi-Query Attention (MQA), and Grouped Query Attention (GQA). GQA groups query heads to share KV heads, balancing quality and efficiency. Source: Ainslie et al. (2023)</figcaption>
   </figure>
   <p>
@@ -36,7 +35,6 @@
   </p>
 
   <h3 id="mla">Multi-Head Latent Attention (MLA): Extreme Compression</h3>
-  <p><strong>References</strong>: [18, 19]</p>
   <p>
     While GQA reduces memory by sharing KV heads,
     Multi-Head Latent Attention (MLA), introduced in DeepSeek-V2 and refined in DeepSeek-V3,

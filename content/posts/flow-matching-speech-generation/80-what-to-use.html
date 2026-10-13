@@ -1,0 +1,44 @@
+<section id="what-to-use">
+  <h2>Techniques Simplified: What to Use?</h2>
+  <p>
+    Start from the constraint you face first; each row gives a common choice and what it costs.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Situation</th>
+          <th>What to use</th>
+          <th>What it costs</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Zero-shot TTS from scratch</td>
+          <td>Non-autoregressive flow on mel, masked infilling, padded characters, total length only</td>
+          <td>Slow convergence, fragile alignment, a separate vocoder</td>
+        </tr>
+        <tr>
+          <td>Decoder under a speech LLM</td>
+          <td>AR semantic tokens, then a flow decoder to mel, a common choice among shipped systems</td>
+          <td>A second model to train and serve; token sampling variance</td>
+        </tr>
+        <tr>
+          <td>Streaming under a latency budget</td>
+          <td>One decoder trained under chunk-aware causal masks, with a few tokens of look-ahead</td>
+          <td>Seams at chunk edges; every look-ahead frame paid in first-packet time</td>
+        </tr>
+        <tr>
+          <td>Cutting serving cost</td>
+          <td>A warped or pruned schedule with Euler, which holds quality down to about 7 steps; then a distilled student with guidance folded in</td>
+          <td>Lost diversity, metrics that flatter the student, and the vocoder, often the next bottleneck</td>
+        </tr>
+        <tr>
+          <td>Hardening quality</td>
+          <td>Fixed evaluators, rewards on the token model or duration predictor, human preferences for prosody</td>
+          <td>Reward hacking, slipping speaker similarity, human labelling</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

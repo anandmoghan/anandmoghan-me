@@ -1,0 +1,8 @@
+{
+  "title": "Flow Matching for Speech Generation",
+  "excerpt": "From diffusion to flow matching: how modern TTS models are trained, how they sample fast enough to stream, and where they still break.",
+  "publishedAt": "2026-10-13",
+  "tags": ["machine-learning", "deep-learning", "speech"],
+  "author": "Anand Mohan",
+  "published": false
+}

@@ -1,0 +1,17 @@
+<p>
+  Conditional flow matching on the optimal-transport (OT) path moves noise to data in a straight line.
+  Draw noise \( x_0 \sim \mathcal{N}(0, I) \), a data sample \( x_1 \) and a time \( t \in [0, 1] \):
+</p>
+\[
+  x_t = \big(1 - (1 - \sigma_{\min})\,t\big)\,x_0 + t\,x_1
+\]
+\[
+  \mathcal{L}_{\text{CFM}} = \mathbb{E}_{t,\,x_0,\,x_1} \big\|v_\theta(x_t, t) - \big(x_1 - (1 - \sigma_{\min})\,x_0\big)\big\|^2
+\]
+<p>
+  The original formulation samples \( t \) uniformly.
+  \( \sigma_{\min} \) is a small constant, so the path ends in a narrow Gaussian around \( x_1 \).
+  The target depends only on the endpoints, so each path runs at constant speed.
+  With \( \sigma_{\min} = 0 \) the target is simply \( x_1 - x_0 \).
+  Sampling integrates \( \mathrm{d}x/\mathrm{d}t = v_\theta(x, t) \) from \( t = 0 \) to \( t = 1 \).
+</p>

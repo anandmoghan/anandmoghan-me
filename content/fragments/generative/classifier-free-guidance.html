@@ -1,0 +1,16 @@
+<p>
+  Classifier-free guidance trains one network both with and without the condition \( c \).
+  During training, \( c \) is replaced by a null token \( \varnothing \) at a small rate.
+  At sampling time it sees the noisy input \( x_t \) twice, with \( c \) and without.
+  The guidance scale \( w \) extrapolates away from the unconditional prediction:
+</p>
+\[
+  \tilde\epsilon = (1 + w)\,\epsilon_\theta(x_t, t, c) - w\,\epsilon_\theta(x_t, t, \varnothing)
+\]
+\[
+  \hat v = v_\theta(x_t, t, c) + w\,\big(v_\theta(x_t, t, c) - v_\theta(x_t, t, \varnothing)\big)
+\]
+<p>
+  \( w = 0 \) is the plain conditional model, and the velocity form is the same rule.
+  Two forward passes per step means guidance doubles the network calls.
+</p>

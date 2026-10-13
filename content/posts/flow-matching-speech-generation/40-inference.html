@@ -1,0 +1,221 @@
+<section id="inference">
+  <h2>Inference: Solving the ODE</h2>
+  <p>
+    To get speech you integrate \( \mathrm{d}x_t/\mathrm{d}t = v_\theta(x_t, t, c) \) from Gaussian noise at \( t = 0 \) to a mel spectrogram at \( t = 1 \).
+    Every solver step is a full network pass over the whole utterance, so the cost of inference is the <strong>number of function evaluations (NFE)</strong>, multiplied by the guidance passes.
+    A common recipe in recent open and published systems is Euler at roughly 10 to 32 steps, a warped time grid and batched guidance passes, with a vocoder that becomes the bottleneck once the flow model is cheap.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img"
+      aria-label="Guided flow matching sampling loop: Gaussian noise and the text and prompt
+        condition enter N solver steps; each step runs the network with the condition and
+        with a null condition in one batched call, combines the two velocities with
+        classifier-free guidance, and applies an Euler update to the current x, looping back
+        for the next time step; after N steps the mel goes to the vocoder, which outputs a
+        waveform">
+      <defs>
+        <marker id="inference-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Loop group == -->
+      <rect class="d-group" x="160" y="14" width="550" height="186" rx="8"/>
+      <text class="d-text--small" x="172" y="194">
+        repeat N times (NFE = N, or 2N with the CFG pass)
+      </text>
+
+      <!-- == Blocks == -->
+      <rect class="d-box" x="10" y="8" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="30" text-anchor="middle"
+        dominant-baseline="middle">Text + prompt</text>
+
+      <rect class="d-box" x="10" y="82" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="104" text-anchor="middle"
+        dominant-baseline="middle">Noise x₀</text>
+
+      <rect class="d-box" x="184" y="50" width="140" height="44" rx="8"/>
+      <text class="d-text" x="254" y="72" text-anchor="middle"
+        dominant-baseline="middle">Pass with c</text>
+
+      <rect class="d-box" x="184" y="118" width="140" height="44" rx="8"/>
+      <text class="d-text" x="254" y="140" text-anchor="middle"
+        dominant-baseline="middle">Pass with ∅</text>
+
+      <text class="d-text--small" x="254" y="110" text-anchor="middle">one batched call</text>
+
+      <rect class="d-box" x="372" y="84" width="130" height="44" rx="8"/>
+      <text class="d-text" x="437" y="106" text-anchor="middle"
+        dominant-baseline="middle">CFG combine</text>
+
+      <rect class="d-box d-box--accent" x="550" y="84" width="136" height="44" rx="8"/>
+      <text class="d-text" x="618" y="106" text-anchor="middle"
+        dominant-baseline="middle">Euler update</text>
+
+      <rect class="d-box" x="550" y="230" width="136" height="44" rx="8"/>
+      <text class="d-text" x="618" y="252" text-anchor="middle"
+        dominant-baseline="middle">Mel x₁</text>
+
+      <rect class="d-box" x="372" y="230" width="130" height="44" rx="8"/>
+      <text class="d-text" x="437" y="252" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+
+      <rect class="d-box" x="184" y="230" width="140" height="44" rx="8"/>
+      <text class="d-text" x="254" y="252" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+
+      <!-- == Arrows == -->
+      <path class="d-arrow" d="M 130 30 L 240 30 L 240 48" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 130 104 L 170 104"/>
+      <path class="d-arrow" d="M 170 72 L 170 180"/>
+      <path class="d-arrow" d="M 170 72 L 182 72" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 170 140 L 182 140" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 324 72 L 370 98" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 324 140 L 370 114" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 502 106 L 548 106" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 170 180 L 618 180 L 618 130" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 618 84 L 618 40 L 170 40 L 170 68"
+        marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 686 106 L 700 106 L 700 252 L 688 252"
+        marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 550 252 L 504 252" marker-end="url(#inference-arrow)"/>
+      <path class="d-arrow" d="M 372 252 L 326 252" marker-end="url(#inference-arrow)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="200" y="24" text-anchor="middle">c</text>
+      <text class="d-text--muted" x="150" y="96" text-anchor="middle">xₜ</text>
+      <text class="d-text--muted" x="350" y="68" text-anchor="middle">v(c)</text>
+      <text class="d-text--muted" x="352" y="156" text-anchor="middle">v(∅)</text>
+      <text class="d-text--muted" x="526" y="98" text-anchor="middle">v̂</text>
+      <text class="d-text--small" x="437" y="78" text-anchor="middle">weight w</text>
+      <text class="d-text--muted" x="430" y="34" text-anchor="middle">x at the next t</text>
+      <text class="d-text--muted" x="394" y="174" text-anchor="middle">xₜ</text>
+      <text class="d-text--muted" x="694" y="218" text-anchor="end">after N steps</text>
+      <text class="d-text--muted" x="527" y="244" text-anchor="middle">mel</text>
+      <text class="d-text--muted" x="349" y="244" text-anchor="middle">audio</text>
+    </svg>
+    <figcaption>
+      Figure: the guided sampling loop.
+      Each step evaluates the network with the condition \( c \) and with the null condition \( \varnothing \), batched into one call.
+      The two velocities combine into \( \hat v \) with guidance strength \( w \), and an Euler step moves \( x_t \) forward.
+      After N steps the mel spectrogram goes to the vocoder.
+    </figcaption>
+  </figure>
+
+  <h3 id="inference-solvers-and-nfe">Solvers and NFE</h3>
+  <p>
+    The simplest solver is first-order <strong>Euler</strong>: one network evaluation per step, moving \( x_t \) along the guided velocity \( \hat v \) (defined in the next subsection):
+  </p>
+  \[
+    x_{t + \Delta t} = x_t + \Delta t\, \hat v.
+  \]
+  <p>
+    If the path from noise to data were perfectly straight, a single Euler step would be exact.
+    Flow-matching paths are straighter than diffusion paths but not straight (<a href="#from-diffusion-to-flow-matching">From Diffusion to Flow Matching</a>), so Euler needs a handful of steps.
+    Higher-order solvers such as midpoint and Heun-3 spend two and three evaluations per step to cancel the curvature.
+    Most recent flow decoders (CosyVoice 2, F5-TTS, ZipVoice) run Euler anyway, at roughly 10 to 32 steps.
+    The extra spend rarely pays, and the schedule matters more than the solver.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Solver</th>
+          <th>Cost per step</th>
+          <th>When it pays off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Euler</td>
+          <td>One evaluation</td>
+          <td>The default; pair it with a warped schedule.</td>
+        </tr>
+        <tr>
+          <td>Midpoint</td>
+          <td>Two evaluations</td>
+          <td>When the step count is capped but wall-clock time is not.</td>
+        </tr>
+        <tr>
+          <td>Heun-3</td>
+          <td>Three evaluations</td>
+          <td>Rarely; a small WER gain for a large time cost.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    In one widely used zero-shot model with a warped schedule, doubling Euler from 16 to 32 steps lowered WER from 2.53 to 2.42 and doubled real-time factor, while Heun-3 at 16 steps reached 2.39 at nearly three times Euler's cost [3].
+    The same step count hides very different compute across solvers.
+  </p>
+  <p>
+    Quality degrades slowly as steps drop, which is why teams keep pushing the count down.
+    A small acoustic model loses little going from 10 steps to 2 (WER 2.09 to 2.34) [7].
+    The trap is that WER flatters low-step samples, which are easier for ASR to transcribe, and what they lose is diversity, which WER does not measure.
+  </p>
+
+  <h3 id="inference-the-cost-of-guidance">The cost of guidance</h3>
+  <p>
+    Most zero-shot flow decoders run <strong>classifier-free guidance</strong> at every step.
+    Each step evaluates the network twice, once with the text and prompt \( c \) and once with the null condition \( \varnothing \), and extrapolates away from the unconditional prediction:
+  </p>
+  \[
+    \hat v = v_\theta(x_t, t, c) + w\,\big(v_\theta(x_t, t, c) - v_\theta(x_t, t, \varnothing)\big).
+  \]
+  <p>
+    Here \( w \) is the guidance strength: \( w = 0 \) is the plain conditional model, and a strength of 2 puts a weight of 3 on the conditional velocity.
+    The derivation is in <a href="#from-diffusion-to-flow-matching">From Diffusion to Flow Matching</a>.
+  </p>
+  <p>
+    The price is a doubled network cost per step.
+    A common implementation batches the two passes into one call, as in the diagram.
+    That saves a sequential launch but not the doubled FLOPs and activation memory, so it helps only when the GPU has headroom.
+    Papers differ on whether NFE counts solver steps or network calls, but a guided sampler at 10 Euler steps runs 20 network passes however a paper counts.
+  </p>
+  <p>
+    Guidance and step count are not independent knobs.
+    In one large zero-shot model, at 4 steps or fewer, weaker guidance (\( w = 0 \) or 0.3) gave higher speaker similarity, while from 8 steps up stronger guidance helped [1].
+    That makes an easy regression in speed-up work: cut the steps on a model tuned at 32 and forget to retune \( w \).
+    The usual fix is to remove the second pass by folding guidance into a distilled model, covered in <a href="#fast-and-streaming">Making It Fast and Streaming</a>.
+  </p>
+
+  <h3 id="inference-time-step-schedules">Time-step schedules</h3>
+  <p>
+    The solver decides how each step is taken; the schedule decides where the steps go.
+    A uniform grid spends as many steps near the data as near the noise.
+    Every schedule in common use moves steps toward \( t = 0 \), the noise end, and does it at inference only, with no retraining.
+  </p>
+  <p>
+    <strong>Sway Sampling</strong> warps a uniform grid \( u \in [0, 1] \) with a single coefficient \( s \):
+  </p>
+  \[
+    t = u + s\Big(\cos\big(\tfrac{\pi}{2}u\big) - 1 + u\Big).
+  \]
+  <p>
+    With \( s = 0 \) the grid stays uniform, and negative \( s \) packs steps at small \( t \).
+    The usual setting, \( s = -1 \), reduces to the cosine schedule \( t = 1 - \cos(\tfrac{\pi}{2}u) \) that CosyVoice 2 ships.
+    With the midpoint solver at 32 steps on LibriSpeech-PC, it lowered WER from 2.84 to 2.41 at zero extra cost [3].
+    Without the schedule, Euler degrades; the two ship together.
+  </p>
+  <p>
+    Pruning goes one step further.
+    <strong>Empirically Pruned Step Sampling (EPSS)</strong> keeps the dense early steps and drops late ones.
+    At 7 steps it reached WER 2.45, against 4.16 for an unscheduled 7-step run [8].
+    The floor is hard: below about 6 steps quality falls sharply, and only a model trained to take big steps goes further.
+  </p>
+
+  <h3 id="inference-the-vocoder">The vocoder</h3>
+  <p>
+    The ODE ends at a mel spectrogram, and a separately trained <strong>vocoder</strong> turns it into a waveform.
+    It sits outside every NFE number above, yet it can move quality more than the solver does.
+    In the same model, swapping the default vocoder for BigVGAN lowered WER from 2.42 to 2.11 at 32 steps [3].
+  </p>
+  <p>
+    Streaming systems budget the vocoder as its own term in first-packet latency, alongside the language model and the flow decoder.
+    Its right context costs time too: in one production system the vocoder's look-ahead alone adds 130 ms [9].
+    Once distillation cuts the flow model to 2 to 4 steps, my read is that the vocoder and its look-ahead become the larger cost, because the flow cost shrank and the vocoder cost did not.
+    <a href="#fast-and-streaming">Making It Fast and Streaming</a> picks up from there.
+  </p>
+</section>

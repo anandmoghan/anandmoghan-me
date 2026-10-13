@@ -8,7 +8,6 @@
 
   <!-- == RLVR == -->
   <h3 id="rl-with-verifiable-rewards-rlvr-openais-o1">RL with Verifiable Rewards (RLVR): OpenAI's o1</h3>
-  <p><strong>References</strong>: OpenAI Blog [10], OpenAI System Card [11]</p>
   <p>
     While OpenAI hasn't published a full technical paper on o1, we know the broad principles from their announcements and system card.
     (The term RLVR itself was coined later, in AI2's Tülu 3 work, but it describes the same idea.)
@@ -61,10 +60,9 @@
 
   <!-- == GRPO == -->
   <h3 id="group-relative-policy-optimization-grpo">Group Relative Policy Optimization (GRPO)</h3>
-  <p><strong>References</strong>: Shao et al. [5]</p>
   <p>GRPO is a memory-efficient alternative to PPO that removes the critic network entirely.</p>
   <figure>
-    <img src="https://media.anandmoghan.me/public/images/reinforcement-learning/ppo-grpo-demonstration.png" alt="Comparison of PPO and GRPO architectures showing the removal of the critic network">
+    <img src="https://firebasestorage.googleapis.com/v0/b/anandmoghan-me.firebasestorage.app/o/public%2Fimages%2Freinforcement-learning%2Fppo-grpo-demonstration.png?alt=media" alt="Comparison of PPO and GRPO architectures showing the removal of the critic network">
     <figcaption>Comparison of PPO and GRPO architectures showing the removal of the critic network</figcaption>
   </figure>
   <p><strong>The Core Idea</strong></p>
@@ -101,7 +99,6 @@
 
   <!-- == RBR == -->
   <h3 id="rule-based-rewards-rbr">Rule-Based Rewards (RBR)</h3>
-  <p><strong>References</strong>: DeepSeek-AI [6], Mu et al. [16], Xie et al. [17]</p>
   <p>
     While outcome rewards (correctness) are the primary signal for reasoning models, production systems augment them with rule-based rewards to enforce desirable behaviors.
   </p>
@@ -149,7 +146,6 @@
 
   <!-- == GenRM == -->
   <h3 id="generative-reward-models-genrm">Generative Reward Models (GenRM)</h3>
-  <p><strong>References</strong>: Zhang et al. [19], DeepSeek-AI [6]</p>
   <p>
     What happens when we can't verify the outcome with a compiler or calculator?
     We use generative verifiers.
@@ -176,12 +172,11 @@
 
   <!-- == DeepSeek-R1 == -->
   <h3 id="deepseek-r1">DeepSeek-R1</h3>
-  <p><strong>References</strong>: DeepSeek-AI [6]</p>
   <p>
     DeepSeek-R1 demonstrated something remarkable: reasoning capabilities can emerge from reinforcement learning without extensive human-labeled reasoning trajectories.
   </p>
   <figure>
-    <img src="https://media.anandmoghan.me/public/images/reinforcement-learning/deepseek-r1-pipeline.png" alt="DeepSeek-R1 training pipeline showing cold start and RL phases">
+    <img src="https://firebasestorage.googleapis.com/v0/b/anandmoghan-me.firebasestorage.app/o/public%2Fimages%2Freinforcement-learning%2Fdeepseek-r1-pipeline.png?alt=media" alt="DeepSeek-R1 training pipeline showing cold start and RL phases">
     <figcaption>DeepSeek-R1 training pipeline showing cold start and RL phases</figcaption>
   </figure>
   <p>

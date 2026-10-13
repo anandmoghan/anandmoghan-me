@@ -1,0 +1,28 @@
+<section id="introduction">
+  <h2>Introduction</h2>
+  <p>
+    Codec-token language models made zero-shot voice cloning work,
+    but they decode token by token, and in Voicebox's comparison they lost on word error rate.
+    Voicebox showed the alternative: generate a <strong>continuous</strong> mel spectrogram
+    for the whole utterance in parallel, trained by <strong>masked infilling</strong>,
+    and cut word error rate on LibriSpeech test-clean from VALL-E's 5.9 to 1.9 [1].
+    Since then flow matching has become the workhorse acoustic generator,
+    either on its own, as in F5-TTS, or behind an autoregressive token model, as in CosyVoice 2.
+    The catch is that every solver step is a full forward pass of a large network,
+    so the real game is keeping quality while cutting steps.
+  </p>
+  <p>
+    This post goes from diffusion to flow matching, then through how these models are trained,
+    sampled and made fast enough to stream.
+    It ends with the papers that matter, where they still break, and what to use.
+  </p>
+  <div class="callout callout--note">
+    <strong>Disclaimer:</strong>
+    <p>
+      This post was written with the help of LLMs,
+      with content carefully curated based on papers I've read and systems I've used.
+      If you notice any errors,
+      please send a note to <a href="mailto:moghan.anand@gmail.com">moghan.anand@gmail.com</a>.
+    </p>
+  </div>
+</section>

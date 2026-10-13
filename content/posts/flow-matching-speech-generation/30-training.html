@@ -1,0 +1,229 @@
+<section id="training">
+  <h2>Training a Flow Matching TTS Model</h2>
+  <p>
+    The objective in <a href="#from-diffusion-to-flow-matching">the previous section</a> turns noise into samples.
+    TTS needs specific words, in a specific voice, over a specific number of frames.
+    The default recipe, which came from Voicebox, is to hide most of an utterance and train the flow to fill it back in, given the text.
+    What separates shipped systems is what the flow generates, how the text reaches it, and who decides the length.
+  </p>
+
+  <!-- == What to generate == -->
+  <h3 id="training-what-to-generate">What to generate</h3>
+  <p>
+    Most shipped flow decoders still generate a <strong>log mel spectrogram</strong> and hand it to a separately trained vocoder; CosyVoice's decoder writes a mel for HiFi-GAN.
+    <strong>Continuous latents</strong> from an audio codec show up when the model must also render music and sound effects, and in at least one large production stack.
+  </p>
+  <p>
+    The mel choice makes the vocoder a separate project with its own ceiling: Voicebox's alone took 7.5 days on 8 GPUs [1].
+    The price, as I see it, is that the flow can never repair what the vocoder smears.
+  </p>
+
+  <!-- == Masked infilling == -->
+  <h3 id="training-masked-infilling-and-prompting">Masked infilling and prompting</h3>
+  <p>
+    Each training example hides one contiguous span covering 70 to 100% of the target mel \( x_1 \).
+    A binary frame mask \( m \) zeroes those frames to give the <strong>context</strong> \( x_{ctx} = (1-m) \odot x_1 \).
+    With \( x_0 \) as Gaussian noise, the path and target are the straight ones from <a href="#from-diffusion-to-flow-matching">the previous section</a>, with \( \sigma_{\min} \) a small constant:
+  </p>
+  \[
+    x_t = \psi_t(x_0) = \big(1 - (1 - \sigma_{\min})\,t\big)\,x_0 + t\,x_1
+  \]
+  \[
+    u_t = x_1 - (1 - \sigma_{\min})\,x_0
+  \]
+  <p>
+    The network predicts a velocity from the noisy mel, the context, the text \( c \) and the flow step.
+    In Voicebox the loss is graded only on masked frames:
+  </p>
+  \[
+    \mathcal{L}(\theta) = \mathbb{E}_{t,\, m,\, x_0,\, x_1}
+      \Big[ \big\lVert m \odot \big( u_t - v_\theta(x_t, x_{ctx}, c, t) \big) \big\rVert^2 \Big]
+  \]
+  <p>
+    The model sees every frame but is graded only on the frames it had to invent.
+    It pays for itself: in a reduced Voicebox setup (1K hours, 12 layers), masking the loss raised speaker similarity from 0.528 to 0.597, while WER moved only from 2.0 to 2.1 [1].
+    My read is that scoring visible frames rewards copying, which is not the skill you need at inference.
+  </p>
+  <p>
+    <strong>Prompting</strong> falls out for free, and that is a large part of why the recipe spread.
+    At inference you lay down a reference clip, zeros for the speech to generate, and the text "reference transcript, target text".
+    The voice is the visible context, so there is no speaker encoder to train, and the 70 to 100% mask matches that shape: a short prompt, then a long blank.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 340" role="img"
+      aria-label="Schematic training input in the inference-time shape: along a frame-time
+        axis, the prompt mel is visible and the rest is zeroed; a noisy mel covers all
+        frames; the character text is packed left and padded with filler tokens to the same
+        length; all three are concatenated per frame into a DiT conditioned on the flow
+        step; the loss compares its velocity with the target on masked frames only">
+      <defs>
+        <marker id="training-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Time axis == -->
+      <path class="d-arrow" d="M 100 16 L 698 16" marker-end="url(#training-arrow)"/>
+      <text class="d-text--muted" x="400" y="10" text-anchor="middle">frame time</text>
+
+      <!-- == Stacked inputs == -->
+      <rect class="d-group" x="92" y="30" width="616" height="192" rx="8"/>
+
+      <text class="d-text--small" x="10" y="62" dominant-baseline="middle">context</text>
+      <rect class="d-lane" x="100" y="40" width="600" height="44" rx="8"/>
+      <rect class="d-box" x="100" y="40" width="160" height="44" rx="8"/>
+      <text class="d-text" x="180" y="62" text-anchor="middle"
+        dominant-baseline="middle">prompt mel</text>
+      <text class="d-text--small" x="480" y="62" text-anchor="middle"
+        dominant-baseline="middle">masked span: zeros, to generate</text>
+
+      <text class="d-text--small" x="10" y="126" dominant-baseline="middle">noisy input</text>
+      <rect class="d-lane" x="100" y="104" width="600" height="44" rx="8"/>
+      <text class="d-text--small" x="400" y="126" text-anchor="middle"
+        dominant-baseline="middle">noisy mel x_t over all frames</text>
+
+      <text class="d-text--small" x="10" y="190" dominant-baseline="middle">text</text>
+      <rect class="d-lane" x="100" y="168" width="600" height="44" rx="8"/>
+      <rect class="d-box" x="100" y="168" width="120" height="44" rx="8"/>
+      <text class="d-text" x="160" y="190" text-anchor="middle"
+        dominant-baseline="middle">prompt text</text>
+      <rect class="d-box" x="244" y="168" width="120" height="44" rx="8"/>
+      <text class="d-text" x="304" y="190" text-anchor="middle"
+        dominant-baseline="middle">target text</text>
+      <text class="d-text--small" x="532" y="190" text-anchor="middle"
+        dominant-baseline="middle">filler tokens to mel length</text>
+
+      <!-- == Network and loss == -->
+      <rect class="d-box" x="100" y="258" width="140" height="44" rx="8"/>
+      <text class="d-text" x="170" y="280" text-anchor="middle"
+        dominant-baseline="middle">flow step t</text>
+      <rect class="d-box d-box--accent" x="280" y="258" width="160" height="44" rx="8"/>
+      <text class="d-text" x="360" y="280" text-anchor="middle"
+        dominant-baseline="middle">DiT</text>
+      <rect class="d-box" x="530" y="258" width="160" height="44" rx="8"/>
+      <text class="d-text" x="610" y="280" text-anchor="middle"
+        dominant-baseline="middle">masked-frame loss</text>
+
+      <path class="d-arrow" d="M 360 222 L 360 256" marker-end="url(#training-arrow)"/>
+      <path class="d-arrow" d="M 240 280 L 278 280" marker-end="url(#training-arrow)"/>
+      <path class="d-arrow" d="M 440 280 L 528 280" marker-end="url(#training-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 700 62 L 714 62 L 714 320 L 610 320 L 610 304"
+        marker-end="url(#training-arrow)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="370" y="242">concatenated per frame</text>
+      <text class="d-text--muted" x="259" y="272" text-anchor="middle">adaLN</text>
+      <text class="d-text--muted" x="484" y="272" text-anchor="middle">v_θ</text>
+      <text class="d-text--muted" x="560" y="334" text-anchor="middle">mask m; u_t from x_0, x_1</text>
+    </svg>
+    <figcaption>
+      Figure: a schematic training example with character-text inputs and a masked-frame loss, drawn in the inference-time shape (prompt, then the span to generate).
+      The characters are packed left and padded to the mel length, not aligned frame by frame; the model learns the alignment.
+    </figcaption>
+  </figure>
+  <p>
+    The catch is that the prompt transfers everything at once: voice, style and recording conditions come as a bundle.
+    I would expect a reverberant prompt to come back as reverberant output.
+    When the prompt is instead a separate input, the opposite failure appears: unless the loss excludes the prompt segment, the model learns to copy-paste it.
+  </p>
+
+  <!-- == Text conditioning == -->
+  <h3 id="training-text-conditioning-and-alignment">Text conditioning and alignment</h3>
+  <p>
+    The hard part of TTS is deciding which frames say which sounds.
+    There are three places to put that decision, and each moves the cost somewhere else.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Text condition</th>
+          <th>Who aligns</th>
+          <th>What you gain</th>
+          <th>What you pay</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Phones expanded to frame level</td>
+          <td>An external forced aligner</td>
+          <td>Fast convergence</td>
+          <td>A phonemizer and aligner pipeline that misses context-dependent pronunciation</td>
+        </tr>
+        <tr>
+          <td>Characters padded with filler tokens</td>
+          <td>The flow network, implicitly</td>
+          <td>No aligner, no phonemizer, no phone durations</td>
+          <td>Slow convergence and a prompt-to-target boundary the model must find</td>
+        </tr>
+        <tr>
+          <td>Semantic tokens from an AR model</td>
+          <td>The AR model</td>
+          <td>Content and length fixed before the flow runs</td>
+          <td>A second, autoregressive model to train and serve</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Large production stacks such as Seed-TTS and the CosyVoice family take the third row.
+    An AR model writes semantic tokens, and a diffusion or flow decoder adds the acoustic detail.
+  </p>
+  <p>
+    The character route pays in convergence.
+    In one comparison, the aligned model had good WER at 10% of training, while the character model needed significantly more training before it finished ahead [6].
+    A group reproducing a character model on small Mandarin models saw 7% of test samples fail (WER above 50%) throughout training, and re-ranking could not fix them [3].
+    They attribute it to entangled semantic and acoustic features.
+  </p>
+  <p>
+    The token route has its own leak.
+    CosyVoice 2 removed the speaker embedding from its language model because that vector carried language and paralinguistic information that hurt prosody naturalness and cross-lingual ability.
+    My read: a conditioning vector is rarely only the thing you named it.
+  </p>
+
+  <!-- == Duration == -->
+  <h3 id="training-duration">Duration</h3>
+  <p>
+    A non-autoregressive model must know how many frames to generate before it starts.
+    The older answer is a separate per-phone duration model.
+    Newer character-based recipes predict only the total length, often with an estimate from the character counts of the prompt and target text.
+    In AR-plus-flow stacks the question disappears, because the tokens already fix the length.
+  </p>
+  <p>
+    Tradeoff: one total length doubles as a speech-rate control; one model scaled it from 0.7 to 1.3 with only a moderate WER increase [6].
+    The cost is that the network must place every phone itself, with no timing hint beyond the total.
+  </p>
+
+  <!-- == Time sampling and CFG == -->
+  <h3 id="training-time-sampling-and-guidance-dropout">Time sampling and guidance dropout</h3>
+  <p>
+    Speech flow models almost all sample \( t \sim \mathcal{U}[0, 1] \) in training, not the logit-normal sampling image models use.
+    The non-uniformity goes into the <a href="#inference-time-step-schedules">inference schedule</a>, which can change without retraining.
+  </p>
+  <p>
+    Classifier-free guidance needs the same network to work without its condition, so training drops the conditions at random, about 20% of the time in most recipes.
+    What you drop decides what you can guide.
+    Dropping text and audio together gives one guidance direction for everything.
+    My read is that adding a separate drop of only the audio context also teaches the model a text-only mode.
+    With \( v_c \) and \( v_u \) the conditional and unconditional velocities, the two common ways of writing guidance, \( (1+w)v_c - w v_u \) and \( v_c + w(v_c - v_u) \), are algebraically the same, so strengths read on one scale.
+    Guidance doubles the cost per step; see <a href="#inference-the-cost-of-guidance">the inference section</a>.
+  </p>
+
+  <!-- == Architectures and scale == -->
+  <h3 id="training-architectures-and-scale">Architectures and scale</h3>
+  <p>
+    The open zero-shot recipes (Voicebox, E2 TTS, F5-TTS) are Transformers of about 330M parameters, trained on tens of thousands of hours.
+    Newer ones use a DiT that injects the flow step through adaLN.
+    Streaming decoders such as CosyVoice 2's train one network under several attention masks, from full to chunk-causal, so the same weights serve offline and streaming.
+  </p>
+  <p>
+    The pieces are coupled.
+    In one set of ablations, a plain adaLN DiT without the convolutional text branch failed to learn alignment from padded characters [3].
+    An MMDiT "learned fast and collapsed fast" into repeated utterances with wild timbre and prosody.
+  </p>
+  <p>
+    Scale is less of a barrier than the big models suggest.
+    The same group trained 158M models stably on LibriTTS (585 hours) and on single-speaker LJSpeech (24 hours), learning alignment from characters with no phonemizer [3].
+  </p>
+</section>

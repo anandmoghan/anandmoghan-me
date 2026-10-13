@@ -1,0 +1,120 @@
+<section id="failure-modes-and-evaluation">
+  <h2>Failure Modes and Evaluation</h2>
+  <p>
+    Most zero-shot TTS teams report the same two numbers, and at the top of the field neither separates a good system from a very good one.
+    The failures that reach users (skipped words, odd pacing, flat delivery, degraded output from a noisy prompt) barely move a corpus-level average.
+  </p>
+
+  <!-- == Scoring == -->
+  <h3 id="failure-modes-and-evaluation-how-these-models-are-scored">How these models are scored</h3>
+  <p>
+    The standard harness is cheap and automatic.
+    <strong>WER</strong> comes from transcribing the generated audio with an off-the-shelf ASR model, Whisper for English and Paraformer for Mandarin.
+    <strong>SIM</strong> is the cosine similarity between speaker-verification embeddings of the prompt and the output, usually from a WavLM-based encoder.
+    Most labs run it on a LibriSpeech-PC test-clean subset and on the English and Mandarin sets in ByteDance's seed-tts-eval repository, then add a small listening test for naturalness.
+  </p>
+  <p>
+    The harness saturates first.
+    On the seed-tts-eval English set, F5-TTS at 32 NFE scores 1.83 WER against 2.06 for the ground-truth recordings [3].
+    A model is not more intelligible than a person; my read is that it produces cleaner, more canonical speech that the ASR model finds easier to transcribe.
+    At that level WER measures fit to the evaluator more than quality, and a few tenths of a point between two systems tells you little about which one listeners prefer.
+  </p>
+  <p>
+    The evaluator is also part of the result.
+    If you rerank samples with one ASR model and score with another, the winner changes with the ASR family, and a same-family pair flatters itself.
+    SIM scores from different speaker encoders do not compare, so a SIM number only means something next to a baseline scored with the same encoder.
+    Predicted MOS models such as UTMOS and DNSMOS catch audible defects but stop agreeing with listeners once both clips are clean, which is exactly where a mature system lives.
+    In practice that means holding the ASR model and speaker encoder fixed across every comparison, and keeping human listening tests for the decisions that matter.
+  </p>
+
+  <!-- == Failure modes == -->
+  <h3 id="failure-modes-and-evaluation-where-they-break">Where they break</h3>
+  <p>
+    Most failures trace back to one root.
+    The model discovers text alignment and total duration implicitly, must find where the prompt ends on its own, and inherits everything in the prompt.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Failure</th>
+          <th>What you see</th>
+          <th>Cause</th>
+          <th>What teams do about it</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Skipping and repetition</td>
+          <td>Dropped words on runs of repeated words; repeated utterances</td>
+          <td>Weak implicit text alignment</td>
+          <td>Refine text features before alignment; train on skip and repeat augmentations</td>
+        </tr>
+        <tr>
+          <td>Speaking rate</td>
+          <td>Mismatched pacing</td>
+          <td>F5-TTS-style models set total length from the text's character count</td>
+          <td>Fine-tune a duration predictor with RL</td>
+        </tr>
+        <tr>
+          <td>Flat prosody</td>
+          <td>Correct words, monotone delivery</td>
+          <td>RL on error-rate rewards (shown on non-flow TTS)</td>
+          <td>Preference optimisation on human-labelled pairs</td>
+        </tr>
+        <tr>
+          <td>Text versus speaker</td>
+          <td>Raising the text branch trades off speaker similarity</td>
+          <td>One guidance weight shared by text and speaker conditioning</td>
+          <td>Reweight text, speaker and joint guidance terms separately</td>
+        </tr>
+        <tr>
+          <td>Noisy prompts</td>
+          <td>Degraded zero-shot quality</td>
+          <td>Noise in the prompt hurts a model conditioned on it</td>
+          <td>Noise-robust pre-training and fine-tuning, which beat cleaning the prompt first; a control to keep or remove background</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>Skipping and repetition</strong> shows up in training before it shows up in production, so watch per-sample WER, not just the mean.
+    In F5-TTS's reproduction of E2 TTS, about 7% of Mandarin test samples failed with WER above 50% during training, and re-ranking could not rescue them [3].
+    The F5-TTS authors also found that an MMDiT variant collapsed into repeated utterances [3].
+  </p>
+
+  <!-- == Post-training == -->
+  <h3 id="failure-modes-and-evaluation-post-training-with-rewards">Post-training with rewards</h3>
+  <p>
+    Because WER and SIM are cheap to compute, a common recent practice is to turn them into rewards and post-train with RL.
+    The catch is that a deterministic ODE sampler gives no likelihood for a policy gradient.
+    One route turns the ODE into an SDE so GRPO has a likelihood to work with.
+    The other leaves the flow decoder alone and puts the reward where likelihoods are natural: a differentiable reward on the speech-token language model, or RL on the duration predictor alone.
+    The token-level route pays off: CosyVoice 3's 0.5B model drops Mandarin CER on seed-tts-eval from 1.16 to 0.75 [26].
+  </p>
+  <h4>Reward hacking</h4>
+  <p>
+    The reward is an ASR model or a quality predictor, and the policy learns to satisfy it rather than the listener.
+    CosyVoice 3 already shows the cost, with speaker similarity dropping slightly after RL.
+    A single quality predictor as the reward makes human ratings worse, while an equal-weighted ensemble of predictors resists it.
+  </p>
+  <p>
+    Prosody is where this bites hardest.
+    GRPO on error-rate and likelihood rewards lowered error rates but made speech flat, in a study on a non-flow TTS model.
+    A few hundred human preference pairs per round of iterative DPO recovered the naturalness.
+    There is no verifiable reward for prosody, so the policy trades it away for what is measured.
+  </p>
+
+  <!-- == Safety == -->
+  <h3 id="failure-modes-and-evaluation-safety">Safety</h3>
+  <p>
+    A model that clones a voice from a few seconds of audio is a spoofing tool by construction, and shipped systems use two defences.
+    The first is an audio watermark trained jointly with a detector, which can localise the mark down to individual samples.
+    It is accurate: Audiobox reports a false positive rate of 0.001 and a worst-case false negative rate of 0.003 across its augmentations [22].
+  </p>
+  <p>
+    A watermark only protects outputs of a model that applies it, and anyone running released weights can skip that step.
+    That is the case for the second defence, keeping weights in-house: ByteDance releases seed-tts-eval but withholds the Seed-TTS model "due to considerations for AI safety".
+    Tradeoff: one of the most-reported benchmarks comes from a model outsiders cannot run.
+  </p>
+</section>

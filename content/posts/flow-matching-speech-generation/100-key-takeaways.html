@@ -1,0 +1,29 @@
+<section id="key-takeaways">
+  <h2>Key Takeaways</h2>
+  <ol>
+    <li>
+      <strong>Straight training paths cut steps, not to one</strong>: the learned field averages crossing paths, so trajectories still bend.
+    </li>
+    <li>
+      <strong>Masked infilling gives prompting for free</strong>: scoring only the hidden frames turns the reference clip into the voice condition, with no speaker encoder.
+    </li>
+    <li>
+      <strong>Alignment and length are the hard part</strong>: phones need an aligner, padded characters converge slowly, and the large stacks hand both to an AR token model.
+    </li>
+    <li>
+      <strong>Cut cost in order</strong>: a warped or pruned schedule with Euler is usable to about 7 steps and breaks below about 6, and past that a distilled student with guidance folded in runs several-fold faster.
+    </li>
+    <li>
+      <strong>Retune guidance when you cut steps</strong>: the best strength shifts with step count, and weaker guidance wins at 4 steps or fewer.
+    </li>
+    <li>
+      <strong>Benchmark where you serve</strong>: RTF does not transfer across papers, and the decoder that wins at one stream can lose at six.
+    </li>
+    <li>
+      <strong>WER and SIM saturate, and rewards get hacked</strong>: hold evaluators fixed, keep listening tests, and use human preferences to protect prosody.
+    </li>
+    <li>
+      <strong>Watermarks are not enough</strong>: they protect only outputs of models that apply them, which is why at least one lab withholds its weights.
+    </li>
+  </ol>
+</section>

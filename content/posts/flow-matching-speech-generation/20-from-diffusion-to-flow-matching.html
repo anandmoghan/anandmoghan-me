@@ -1,0 +1,229 @@
+<section id="from-diffusion-to-flow-matching">
+  <h2>From Diffusion to Flow Matching</h2>
+  <p>
+    The original diffusion sampler spends a thousand network calls on one sample.
+    A real-time TTS system can afford tens.
+    Several recent open and shipped TTS systems closed that gap with flow matching.
+    It regresses a velocity along a straight path from noise to data.
+    Voicebox, F5-TTS and CosyVoice 2 all use it and sample with classifier-free guidance.
+  </p>
+  <div class="callout callout--warn">
+    <strong>Time runs the other way:</strong>
+    <p>
+      In DDPM, \( x_0 \) is data and noise sits at \( t = T \).
+      In flow matching, \( x_0 \) is noise at \( t = 0 \) and \( x_1 \) is data at \( t = 1 \).
+      Convert before mixing equations or code.
+    </p>
+  </div>
+
+  <!-- == Denoising diffusion == -->
+  <h3 id="from-diffusion-to-flow-matching-denoising-diffusion">Denoising diffusion</h3>
+  <p>
+    <strong>Denoising diffusion</strong> learns to undo a fixed noising process.
+  </p>
+  <!-- @include content/fragments/generative/diffusion-objective.html -->
+  <p>
+    The standard setup uses \( T = 1000 \) steps [2].
+    Sampling applies the learned reverse step once per level: a thousand sequential calls.
+    The noise predictor is also a score model.
+    The score \( \nabla \log p_t \) points uphill in the noisy data density.
+    A short derivation gives \( \epsilon_\theta \approx -\sigma_t\,\nabla \log p_t \).
+  </p>
+
+  <!-- == SDE view == -->
+  <h3 id="from-diffusion-to-flow-matching-the-sde-view-and-the-probability-flow-ode">
+    The SDE view and the probability flow ODE
+  </h3>
+  <p>
+    Take \( T \to \infty \) and the noising chain becomes a stochastic differential equation (SDE).
+    DDPM's chain is a discretisation of the variance-preserving (VP) SDE.
+    Every such SDE also has a deterministic twin with the same marginals \( p_t(x) \).
+    It is the <strong>probability flow ODE</strong>:
+  </p>
+  \[
+    \mathrm{d}x = \big[f(x, t) - \tfrac{1}{2}\,g(t)^2\,\nabla_x \log p_t(x)\big]\,\mathrm{d}t
+  \]
+  <p>
+    Here \( f \) is the drift and \( g \) the noise scale of the forward SDE.
+    Same marginals means you can use any ODE solver, with error set by the step count.
+    My read is that the ODE removes randomness, not curvature.
+    Diffusion trajectories bend, and the conditional path can overshoot the sample and backtrack.
+    Every bend forces the solver into short steps.
+  </p>
+  <p>
+    Diffusion can also regress \( x_0 \) or \( v = \alpha_t\epsilon - \sigma_t x_0 \).
+    Noise prediction ignores data errors at pure noise, so distillation uses v- or x-prediction.
+    This \( v \) is a derivative along an angle on a circle, not the flow-matching velocity.
+  </p>
+
+  <!-- == Flow matching == -->
+  <h3 id="from-diffusion-to-flow-matching-flow-matching">Flow matching</h3>
+  <p>
+    <strong>Flow matching</strong> starts from the ODE.
+    It picks a path from noise to data and regresses the velocity field that generates it.
+    The field of the whole distribution is intractable, so training regresses per-sample fields.
+    That gives the same gradient, with no ODE simulation.
+    The straight path gives <strong>conditional flow matching</strong>.
+    It is the objective most flow-matching TTS systems use:
+  </p>
+  <!-- @include content/fragments/generative/flow-matching-objective.html -->
+  <p>
+    Voicebox trains with exactly this path and target [1].
+    Fewer than 10 steps already gives it high quality, though it defaults to 32.
+    <a href="#inference-time-step-schedules">Time-step schedules</a> covers where to spend the steps.
+  </p>
+  <h4>Classifier-free guidance</h4>
+  <p>
+    Every system above samples with guidance.
+  </p>
+  <!-- @include content/fragments/generative/classifier-free-guidance.html -->
+  <p>
+    Settings vary: Voicebox uses \( w = 0.7 \) [1], F5-TTS \( w = 2 \) at 16 or 32 steps [3].
+    <a href="#inference-the-cost-of-guidance">The cost of guidance</a> covers serving and removal.
+  </p>
+
+  <!-- == Rectified flow == -->
+  <h3 id="from-diffusion-to-flow-matching-rectified-flow-and-straight-paths">
+    Rectified flow and straight paths
+  </h3>
+  <p>
+    <strong>Rectified flow</strong> reaches the same loss from another side.
+    It is conditional flow matching with \( \sigma_{\min} = 0 \), regressing onto \( x_1 - x_0 \).
+    Straight paths matter because one Euler step follows a straight, constant-speed flow exactly.
+    The evidence is on ImageNet-32 images, against a 1000-step reference solution.
+    The straight path reaches the same error with about 60% of the solver steps [4].
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 400" role="img"
+      aria-label="Two panels from noise at t equals 0 to data at t equals 1. Top: diffusion
+      probability-flow trajectories bend without crossing, and the conditional diffusion path
+      overshoots its sample. Bottom: flow matching trains on straight lines between random pairs,
+      and the lines cross.">
+      <defs>
+        <marker id="from-diffusion-to-flow-matching-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Diffusion panel == -->
+      <text class="d-text" x="360" y="18" text-anchor="middle">Diffusion: probability flow ODE</text>
+      <rect class="d-lane" x="30" y="36" width="100" height="130" rx="8"/>
+      <rect class="d-lane" x="590" y="36" width="100" height="130" rx="8"/>
+      <circle class="d-box" cx="80" cy="61" r="4"/>
+      <circle class="d-box" cx="80" cy="101" r="4"/>
+      <circle class="d-box" cx="80" cy="141" r="4"/>
+      <circle class="d-box" cx="640" cy="71" r="4"/>
+      <circle class="d-box" cx="640" cy="101" r="4"/>
+      <circle class="d-box" cx="640" cy="131" r="4"/>
+      <path class="d-arrow" d="M 84 61 C 250 26, 450 36, 634 71"
+        marker-end="url(#from-diffusion-to-flow-matching-arrow)"/>
+      <path class="d-arrow" d="M 84 101 C 250 76, 450 88, 634 101"
+        marker-end="url(#from-diffusion-to-flow-matching-arrow)"/>
+      <path class="d-arrow" d="M 84 141 C 260 161, 520 166, 672 146 S 662 129, 646 131"
+        marker-end="url(#from-diffusion-to-flow-matching-arrow)"/>
+      <text class="d-text--small" x="80" y="184" text-anchor="middle">noise, t = 0</text>
+      <text class="d-text--muted" x="420" y="184" text-anchor="middle">
+        conditional diffusion path
+      </text>
+      <text class="d-text--small" x="640" y="184" text-anchor="middle">data, t = 1</text>
+
+      <!-- == Flow matching panel == -->
+      <text class="d-text" x="360" y="222" text-anchor="middle">Flow matching: OT path</text>
+      <rect class="d-lane" x="30" y="240" width="100" height="130" rx="8"/>
+      <rect class="d-lane" x="590" y="240" width="100" height="130" rx="8"/>
+      <circle class="d-box" cx="80" cy="265" r="4"/>
+      <circle class="d-box" cx="80" cy="305" r="4"/>
+      <circle class="d-box" cx="80" cy="345" r="4"/>
+      <circle class="d-box" cx="640" cy="275" r="4"/>
+      <circle class="d-box" cx="640" cy="305" r="4"/>
+      <circle class="d-box" cx="640" cy="335" r="4"/>
+      <path class="d-arrow" d="M 84 265 L 634 334"
+        marker-end="url(#from-diffusion-to-flow-matching-arrow)"/>
+      <path class="d-arrow" d="M 84 305 L 634 276"
+        marker-end="url(#from-diffusion-to-flow-matching-arrow)"/>
+      <path class="d-arrow" d="M 84 345 L 634 306"
+        marker-end="url(#from-diffusion-to-flow-matching-arrow)"/>
+      <text class="d-text--small" x="80" y="388" text-anchor="middle">noise, t = 0</text>
+      <text class="d-text--muted" x="360" y="388" text-anchor="middle">
+        training lines cross; the field averages them
+      </text>
+      <text class="d-text--small" x="640" y="388" text-anchor="middle">data, t = 1</text>
+    </svg>
+    <figcaption>
+      Figure: probability flow ODE paths bend without crossing (top).
+      Flow matching trains on straight lines between random pairs, which cross (bottom).
+    </figcaption>
+  </figure>
+  <p>
+    The regression has a closed-form minimiser, \( v(x, t) = \mathbb{E}[x_1 - x_0 \mid x_t = x] \).
+    That is the average direction of every training line through \( x \).
+    Random pairs cross, the field averages them where they do, and trajectories bend.
+    Learned flows come out straighter than diffusion, not straight.
+  </p>
+  <p>
+    <strong>Reflow</strong> straightens them by re-pairing.
+    Run the trained ODE, record each noise sample with its output, and fit a new rectified flow.
+    Those pairs come from one deterministic ODE, so their lines cross less.
+    Straightness is the mean squared gap between velocity and the endpoint direction.
+    The guarantee covers the best of \( K \) rounds: its straightness is bounded by a \( 1/K \) term.
+    On images, one round gives nearly straight flows that work with one Euler step [5].
+    <strong>Tradeoff:</strong> each round fits the last model's outputs, so errors accumulate.
+    The authors advise against many rounds.
+    <a href="#fast-and-streaming-few-step-generation">Few-step generation</a> covers the alternatives.
+  </p>
+
+  <!-- == How they relate == -->
+  <h3 id="from-diffusion-to-flow-matching-how-the-two-families-relate">
+    How the two families relate
+  </h3>
+  <p>
+    <strong>Stochastic interpolants</strong> make both families one framework.
+    Each path comes with an ODE and a family of SDEs, all with the same marginals.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Aspect</th>
+          <th>Diffusion (DDPM, VP SDE)</th>
+          <th>Flow matching (OT path)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Path</td>
+          <td>Variance-preserving; reaches noise only asymptotically</td>
+          <td>Straight; reaches noise in finite time</td>
+        </tr>
+        <tr>
+          <td>Target</td>
+          <td>\( \epsilon \), \( x_0 \) or \( v \)</td>
+          <td>\( x_1 - (1 - \sigma_{\min})\,x_0 \)</td>
+        </tr>
+        <tr>
+          <td>Loss weighting</td>
+          <td>Set by the noise schedule and the target</td>
+          <td>None in the loss</td>
+        </tr>
+        <tr>
+          <td>Sampler</td>
+          <td>Reverse SDE or probability flow ODE</td>
+          <td>ODE</td>
+        </tr>
+        <tr>
+          <td>Trajectories</td>
+          <td>Curved; can overshoot</td>
+          <td>Less curved</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>Tradeoff:</strong> the straight path buys fewer steps and a target with a stable scale.
+    It gives up the stochastic sampler, which plain flow matching does not have.
+    Stochastic interpolants restore one, but it needs the score as a second learned field.
+    Several recent open and shipped TTS systems take the deterministic side of that trade.
+    Guidance, solvers and distillation built for diffusion carry over to it.
+  </p>
+</section>

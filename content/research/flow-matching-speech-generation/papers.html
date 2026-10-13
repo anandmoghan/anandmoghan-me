@@ -77,7 +77,7 @@
         (path and target: Audiobox, arXiv 2312.15821, and CosyVoice 2, arXiv 2412.10117, Eq. 3 to 4).
         Classifier-free guidance (CFG) runs the model with and without the condition, which doubles the cost per step.
         <span class="tag tag--confirmed">Confirmed</span>
-        (Voicebox, arXiv 2306.15687; Audiobox states 64 solver calls become 128 forward passes with CFG).
+        (Voicebox, arXiv 2306.15687; Audiobox, arXiv 2312.15821, Section 5.3: midpoint at step 0.0625 evaluates the derivative 32 times, which is 64 model calls with CFG; corrected by the section verifier).
       </p>
     </section>
 

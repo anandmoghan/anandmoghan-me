@@ -1,0 +1,18 @@
+<p>
+  DDPM noises clean data \( x_0 \) over \( T \) steps, and any step has a closed form.
+  A network \( \epsilon_\theta \) learns to recover the added noise:
+</p>
+\[
+  x_t = \alpha_t\,x_0 + \sigma_t\,\epsilon
+\]
+\[
+  \mathcal{L} = \mathbb{E}_{t,\,x_0,\,\epsilon}\big\|\epsilon - \epsilon_\theta(x_t, t)\big\|^2
+\]
+<p>
+  Here \( \epsilon \sim \mathcal{N}(0, I) \) is the noise.
+  \( \beta_s \) is the noise variance added at step \( s \).
+  \( \alpha_t^2 = \bar\alpha_t = \prod_{s \le t}(1 - \beta_s) \) is the signal variance left.
+  \( \sigma_t^2 = 1 - \bar\alpha_t \) is the noise variance.
+  The loss is plain regression, with \( t \) uniform over the steps.
+  It drops the weights of the variational bound, which gave better samples.
+</p>

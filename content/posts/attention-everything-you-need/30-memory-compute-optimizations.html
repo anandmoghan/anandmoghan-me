@@ -1,6 +1,5 @@
 <section id="memory-compute-optimizations">
   <h2>Memory &amp; Compute Optimizations</h2>
-  <p><strong>References</strong>: [5, 14, 15]</p>
   <p>
     Modern transformer training faces significant memory bottlenecks.
     The following techniques address these challenges to enable efficient training at scale.
@@ -34,7 +33,6 @@
   </p>
 
   <h4>The Next Frontier: FP8 Training</h4>
-  <p><strong>References</strong>: [20, 21]</p>
   <p>
     Modern hardware (NVIDIA H100/B200) natively supports FP8 (8-bit floating point), doubling throughput over BF16.
     FP8 uses two formats: E4M3 (higher precision) for forward pass, E5M2 (wider range) for gradients.
@@ -77,7 +75,7 @@
     <li><strong>SRAM (On-chip memory)</strong>: Small (~20MB) but fast (~19 TB/s)</li>
   </ul>
   <figure>
-    <img src="https://media.anandmoghan.me/public/images/attention/flashattention-memory.png" alt="Figure 2: GPU memory hierarchy showing the speed-capacity tradeoff between HBM and SRAM. FlashAttention optimizes data movement between these levels. Source: Dao et al. (2022)">
+    <img src="https://firebasestorage.googleapis.com/v0/b/anandmoghan-me.firebasestorage.app/o/public%2Fimages%2Fattention%2Fflashattention-memory.png?alt=media" alt="Figure 2: GPU memory hierarchy showing the speed-capacity tradeoff between HBM and SRAM. FlashAttention optimizes data movement between these levels. Source: Dao et al. (2022)">
     <figcaption>Figure 2: GPU memory hierarchy showing the speed-capacity tradeoff between HBM and SRAM. FlashAttention optimizes data movement between these levels. Source: Dao et al. (2022)</figcaption>
   </figure>
   <p>Standard attention implementations:</p>
