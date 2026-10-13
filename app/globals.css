@@ -432,6 +432,13 @@ aside nav::-webkit-scrollbar-thumb:hover {
   transition: all 0.2s ease;
 }
 
+/* TOC rows: compact with a mouse; the global 44px button height applies only on touch. */
+@media (pointer: fine) {
+  aside nav button {
+    min-height: 0;
+  }
+}
+
 /* TOC rows: 44px tap targets on touch screens. */
 @media (pointer: coarse) {
   aside nav button,

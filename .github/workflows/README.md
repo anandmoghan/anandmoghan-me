@@ -1,110 +1,20 @@
 # GitHub Actions Workflows
 
-This directory contains automated workflows for the unified digital platform.
+## deploy.yml (Deploy to Firebase)
 
-## Workflows Overview
+- **Pull request to main**: builds the static export and deploys it to a Firebase Hosting preview channel (`FirebaseExtended/action-hosting-deploy@v0`). The preview URL is commented on the PR and expires after 7 days.
+- **Push to main** (or manual run): builds the site and the `functions/` codebase, then runs `firebase deploy --only hosting,functions,firestore,storage` using the service account in `GOOGLE_APPLICATION_CREDENTIALS`.
 
-### 🚀 deploy.yml
-**Main deployment workflow**
-- Builds and deploys to production (main branch)
-- Creates preview deployments for pull requests
-- Automatic rollback on failure
-- Deployment verification and health checks
+Secrets: `FIREBASE_SERVICE_ACCOUNT`, `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_DATABASE_URL`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`, `NEXT_PUBLIC_GA_ID`.
 
-**Triggers**: Push to main, pull requests, manual
+## health-check.yml
 
-### 🧪 staging.yml
-**Staging environment deployment**
-- Deploys to staging environment
-- Runs automated smoke tests
-- Pre-production testing
+Hourly check of `anandmoghan.me` (homepage, `/posts`, `/media`, `/profile`, sitemap, robots, response time, SSL expiry). Also runs after the "Deploy to Firebase" workflow completes, and on manual dispatch.
 
-**Triggers**: Push to staging/develop, manual
+## dependabot.yml (one level up)
 
-### 🔄 rollback.yml
-**Manual rollback workflow**
-- Rollback to previous or specific deployment
-- Supports production and staging environments
-- Requires reason for rollback
+Dependency update PRs.
 
-**Triggers**: Manual only
+## Rollback
 
-### 💚 health-check.yml
-**Continuous health monitoring**
-- Checks site accessibility
-- Monitors response times
-- Validates SSL certificates
-- Runs hourly and after deployments
-
-**Triggers**: Scheduled (hourly), after deployments, manual
-
-## Quick Start
-
-### Deploy to Production
-```bash
-# Push to main branch
-git push origin main
-
-# Or deploy manually
-npm run deploy:production
-```
-
-### Create Preview Deployment
-```bash
-# Create pull request
-# Preview deployment is automatic
-```
-
-### Manual Rollback
-1. Go to Actions tab
-2. Select "Manual Rollback"
-3. Click "Run workflow"
-4. Fill in environment and reason
-5. Execute
-
-### Check Site Health
-```bash
-# Automatic: Runs every hour
-# Manual: Go to Actions → Health Check → Run workflow
-```
-
-## Required Secrets
-
-Configure in Repository Settings → Secrets and Variables → Actions:
-
-- `CLOUDFLARE_API_TOKEN`: Cloudflare API token
-- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID
-- `CLOUDFLARE_PROJECT_NAME`: Pages project name
-- `NEXT_PUBLIC_MEDIA_URL`: Media CDN URL
-
-## Workflow Status Badges
-
-Add to README.md:
-
-```markdown
-![Deploy](https://github.com/anandmoghan/anandmoghan-me/workflows/Deploy%20to%20Cloudflare%20Pages/badge.svg)
-![Health Check](https://github.com/anandmoghan/anandmoghan-me/workflows/Health%20Check/badge.svg)
-```
-
-## Troubleshooting
-
-### Build Failures
-- Check build logs in Actions tab
-- Verify dependencies are up to date
-- Run build locally: `npm run build`
-
-### Deployment Failures
-- Verify Cloudflare credentials
-- Check Cloudflare status page
-- Review deployment logs
-
-### Health Check Failures
-- Check site accessibility manually
-- Review Cloudflare CDN status
-- Verify DNS configuration
-
-## Documentation
-
-For detailed documentation, see:
-- [CI/CD Documentation](../../docs/CI-CD.md)
-- [Deployment Guide](../../docs/DEPLOYMENT.md)
+There is no rollback workflow. Firebase Hosting keeps release history: roll back in the console (Hosting, Release history, Rollback) or run `firebase hosting:clone anandmoghan-me:<channel-or-live> anandmoghan-me:live`. See [docs/CI-CD.md](../../docs/CI-CD.md).

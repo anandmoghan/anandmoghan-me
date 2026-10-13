@@ -155,7 +155,7 @@ export default function TableOfContents({ headings }: TableOfContentsProps) {
     };
     
     return (
-      <ul className="space-y-1 relative">
+      <ul className="space-y-0.5 relative">
         {/* Main vertical line for H2 headings - always light */}
         {parentLevel === 1 && items.length > 0 && (
           <div
@@ -245,8 +245,8 @@ export default function TableOfContents({ headings }: TableOfContentsProps) {
                   color: activeId === item.id ? 'var(--accent)' : 'var(--muted)',
                   paddingLeft: item.level === 2 ? '0.75rem' : `${(item.level - 2) * 0.75 + 1.25}rem`,
                   fontSize: getFontSize(item.level),
-                  paddingTop: '0.375rem',
-                  paddingBottom: '0.375rem',
+                  paddingTop: '0.1875rem',
+                  paddingBottom: '0.1875rem',
                   marginLeft: item.level === 2 ? '4px' : `${(item.level - 3) * 0.75 + 1}rem`,
                   lineHeight: '1.4'
                 }}

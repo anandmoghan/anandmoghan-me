@@ -10,7 +10,7 @@ on:
   
   # Run after deployments
   workflow_run:
-    workflows: ["Deploy to Cloudflare Pages"]
+    workflows: ["Deploy to Firebase"]
     types:
       - completed
 

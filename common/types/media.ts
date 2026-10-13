@@ -12,14 +12,6 @@ export interface MediaAsset {
   metadata: Record<string, any>;
 }
 
-export interface ImageOptions {
-  width?: number;
-  height?: number;
-  quality?: number;
-  format?: 'webp' | 'jpeg' | 'png';
-  fit?: 'cover' | 'contain' | 'fill';
-}
-
 export interface ResponsiveImageProps {
   src: string;
   alt: string;

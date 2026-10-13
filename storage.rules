@@ -2,11 +2,12 @@ rules_version = '2';
 
 // Storage rules for the default bucket of Firebase project anandmoghan-me.
 //
-// The bucket anandmoghan-me.appspot.com was empty when these rules were written (checked
-// 2026-10-05) and no app uses Storage: anandmoghan-me keeps its media in Cloudflare R2 and its web
-// apps only carry the storageBucket config value. So these rules own the bucket and everything
-// outside family/ is denied. If another app ever needs Storage, add its paths here.
+// The default bucket of anandmoghan-me holds the site media (public/**, migrated from Cloudflare R2)
+// and the family app files (family/**). Everything else is denied. If another app ever needs
+// Storage, add its paths here.
 //
+// public/**                   site media (images, docs): world-readable, never writable from clients
+//                             (uploads go through firebase-admin, which bypasses rules)
 // family/<person>/media/**    thumbnails and images written by the Mac bridge (admin SDK, bypasses rules)
 // family/<person>/uploads/**  photos uploaded from the app by members (create only, no overwrite), e.g. uploads/<date>/<file>
 //
@@ -18,6 +19,10 @@ service firebase.storage {
       return request.auth != null
         && request.auth.token.email_verified == true
         && request.auth.token.email in firestore.get(/databases/(default)/documents/family/household).data.members;
+    }
+
+    match /public/{allPaths=**} {
+      allow read: if true;
     }
 
     match /family/{person}/{allPaths=**} {

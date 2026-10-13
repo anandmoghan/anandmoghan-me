@@ -389,7 +389,7 @@ export default function AboutPage() {
               Get in Touch
             </a>
             <a 
-              href="https://media.anandmoghan.me/public/docs/Anand%20Mohan%20-%20Resume.pdf" 
+              href="https://firebasestorage.googleapis.com/v0/b/anandmoghan-me.firebasestorage.app/o/public%2Fdocs%2FAnand%20Mohan%20-%20Resume.pdf?alt=media" 
               target="_blank"
               className="btn btn--outline"
             >

@@ -144,6 +144,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── t212 rate limit counters (Functions only, Admin SDK bypasses rules) ───
+
+    match /t212RateLimits/{uid} {
+      allow read, write: if false;
+    }
+
     // ── t212 snapshots ────────────────────────────────────────────────────────
 
     match /t212Snapshots/{uid} {

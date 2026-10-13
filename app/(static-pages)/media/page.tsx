@@ -50,7 +50,7 @@ export default async function MediaPage() {
               ⚠️ Error loading media: {error}
             </p>
             <p className="text-sm text-muted mt-2">
-              Try refreshing the page or check your R2 configuration.
+              Try refreshing the page or check your Firebase Storage configuration.
             </p>
           </Card>
         )}
@@ -65,7 +65,7 @@ export default async function MediaPage() {
           ) : (
             <Card>
               <p className="text-muted">
-                No images available yet. Upload images to R2 using: npm run upload-media
+                No images available yet. Upload images to Firebase Storage using: npm run upload-media
               </p>
             </Card>
           )}
@@ -119,7 +119,7 @@ export default async function MediaPage() {
           ) : (
             <Card>
               <p className="text-muted">
-                No documents available yet. Upload documents to R2 using: npm run upload-media
+                No documents available yet. Upload documents to Firebase Storage using: npm run upload-media
               </p>
             </Card>
           )}

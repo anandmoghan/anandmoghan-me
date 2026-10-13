@@ -20,7 +20,7 @@ Complete guide to the media management system, including:
 
 ### [Deployment Guide](DEPLOYMENT.md)
 
-Instructions for deploying the platform to Cloudflare Pages:
+Instructions for deploying the platform to Firebase Hosting:
 - Build configuration
 - Automatic and manual deployment
 - Custom domain setup

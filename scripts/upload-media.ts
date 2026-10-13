@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * Media Upload Script for Cloudflare R2
+ * Media Upload Script for Firebase Storage
  * 
- * Uploads media files from local content/media directory to Cloudflare R2
+ * Uploads media files from local content/media directory to Firebase Storage (default bucket)
  * Supports both public and private media with access control
  * 
  * Usage:
@@ -15,7 +15,7 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { getMediaBucket, hasStorageCredentials, type MediaBucket } from '../common/utils/storage-admin';
 import { createHash } from 'crypto';
 
 interface UploadOptions {
@@ -35,8 +35,7 @@ interface UploadResult {
 }
 
 class MediaUploadScript {
-  private s3Client: S3Client;
-  private bucketName: string;
+  private bucket: MediaBucket;
   private stats = {
     uploaded: 0,
     updated: 0,
@@ -46,40 +45,24 @@ class MediaUploadScript {
   };
 
   constructor() {
-    // Initialize R2 client with S3-compatible API
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    this.bucketName = process.env.R2_BUCKET_NAME || 'anandmoghan-media';
-
-    if (!accountId || !accessKeyId || !secretAccessKey) {
+    if (!hasStorageCredentials()) {
       throw new Error(
-        'Missing required environment variables:\n' +
-        '  CLOUDFLARE_ACCOUNT_ID\n' +
-        '  R2_ACCESS_KEY_ID\n' +
-        '  R2_SECRET_ACCESS_KEY\n' +
-        '  R2_BUCKET_NAME (optional, defaults to "anandmoghan-media")'
+        'No Google credentials found. Either:\n' +
+        '  gcloud auth application-default login\n' +
+        '  export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json'
       );
     }
-
-    this.s3Client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-    });
+    this.bucket = getMediaBucket();
   }
 
   /**
    * Main upload function
    */
   async uploadMedia(options: UploadOptions): Promise<void> {
-    console.log('🚀 Starting media upload to Cloudflare R2...\n');
+    console.log('🚀 Starting media upload to Firebase Storage...\n');
     console.log(`Source: ${options.source}`);
     console.log(`Type: ${options.type}`);
-    console.log(`Bucket: ${this.bucketName}`);
+    console.log(`Bucket: ${this.bucket.name}`);
     console.log(`Overwrite: ${options.overwrite}`);
     console.log(`Delete after upload: ${options.deleteAfterUpload}`);
     console.log(`Dry run: ${options.dryRun}\n`);
@@ -165,7 +148,7 @@ class MediaUploadScript {
   }
 
   /**
-   * Upload a single file to R2
+   * Upload a single file to Storage
    */
   private async uploadFile(
     filePath: string,
@@ -175,12 +158,12 @@ class MediaUploadScript {
       const stats = fs.statSync(filePath);
       const fileBuffer = fs.readFileSync(filePath);
       
-      // Generate R2 key
+      // Generate Storage key
       const relativePath = this.getRelativePath(filePath, options.source);
-      const r2Key = `${options.type}/${relativePath}`;
+      const storageKey = `${options.type}/${relativePath}`;
 
-      // Check if file exists in R2
-      const exists = await this.checkExists(r2Key);
+      // Check if file exists in Storage
+      const exists = await this.checkExists(storageKey);
 
       if (exists && !options.overwrite) {
         return {
@@ -192,7 +175,7 @@ class MediaUploadScript {
 
       // Check if file has changed (compare hash)
       if (exists && options.overwrite) {
-        const hasChanged = await this.hasFileChanged(r2Key, fileBuffer);
+        const hasChanged = await this.hasFileChanged(storageKey, fileBuffer);
         if (!hasChanged) {
           return {
             file: relativePath,
@@ -210,7 +193,7 @@ class MediaUploadScript {
         };
       }
 
-      // Upload to R2
+      // Upload to Storage
       const contentType = this.getContentType(filePath);
       const metadata = {
         originalName: path.basename(filePath),
@@ -219,15 +202,14 @@ class MediaUploadScript {
         hash: this.calculateHash(fileBuffer),
       };
 
-      await this.s3Client.send(
-        new PutObjectCommand({
-          Bucket: this.bucketName,
-          Key: r2Key,
-          Body: fileBuffer,
-          ContentType: contentType,
-          Metadata: metadata,
-        })
-      );
+      await this.bucket.file(storageKey).save(fileBuffer, {
+        resumable: false,
+        metadata: {
+          contentType,
+          cacheControl: this.getCacheControl(contentType),
+          metadata,
+        },
+      });
 
       return {
         file: relativePath,
@@ -245,41 +227,29 @@ class MediaUploadScript {
   }
 
   /**
-   * Check if file exists in R2
+   * Check if file exists in Storage
    */
   private async checkExists(key: string): Promise<boolean> {
-    try {
-      await this.s3Client.send(
-        new HeadObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-        })
-      );
-      return true;
-    } catch {
-      return false;
-    }
+    const [exists] = await this.bucket.file(key).exists();
+    return exists;
   }
 
   /**
-   * Check if file has changed by comparing hashes
+   * Check if file has changed by comparing MD5 (Storage reports it base64-encoded)
    */
   private async hasFileChanged(key: string, fileBuffer: Buffer): Promise<boolean> {
-    try {
-      const response = await this.s3Client.send(
-        new HeadObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-        })
-      );
+    const [metadata] = await this.bucket.file(key).getMetadata();
+    const localMd5 = createHash('md5').update(fileBuffer).digest('base64');
+    return metadata.md5Hash !== localMd5;
+  }
 
-      const remoteHash = response.Metadata?.hash;
-      const localHash = this.calculateHash(fileBuffer);
-
-      return remoteHash !== localHash;
-    } catch {
-      return true; // If we can't get metadata, assume changed
-    }
+  /**
+   * Long-lived cache for images, short for everything else
+   */
+  private getCacheControl(contentType: string): string {
+    return contentType.startsWith('image/')
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=3600';
   }
 
   /**
@@ -433,7 +403,7 @@ async function main() {
 
 function printHelp() {
   console.log(`
-Media Upload Script for Cloudflare R2
+Media Upload Script for Firebase Storage
 
 Usage:
   npm run upload-media -- [options]
@@ -441,17 +411,18 @@ Usage:
 Options:
   --source <path>          Source directory or file (default: ./content/media)
   --type <type>            Media type: "public" or "private" (default: public)
-  --overwrite              Update existing files in R2
+  --overwrite              Update existing files in Storage
   --optimize               Optimize images during upload (not yet implemented)
   --delete-after-upload    Delete local files after successful upload
   --dry-run                Show what would be uploaded without uploading
   --help                   Show this help message
 
-Environment Variables (required):
-  CLOUDFLARE_ACCOUNT_ID    Your Cloudflare account ID
-  R2_ACCESS_KEY_ID         R2 access key ID
-  R2_SECRET_ACCESS_KEY     R2 secret access key
-  R2_BUCKET_NAME           R2 bucket name (optional, defaults to "anandmoghan-media")
+Credentials (one of):
+  gcloud auth application-default login
+  GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+
+Environment Variables (optional):
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET   Bucket name (defaults to anandmoghan-me.firebasestorage.app)
 
 Examples:
   # Upload all public media

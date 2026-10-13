@@ -16,7 +16,7 @@ This platform bridges professional life as an AI Scientist at Amazon with person
 - **Framework**: Next.js 15 with App Router
 - **Styling**: Tailwind CSS with custom design tokens
 - **Content**: MDX for blog posts with KaTeX for formulas
-- **Hosting**: Cloudflare Pages with R2 storage
+- **Hosting**: Firebase Hosting (static export) with a Firebase Function for `/api/**`, Firestore, and Storage
 - **Authentication**: Service-abstracted auth system
 
 ## Getting Started
@@ -27,7 +27,7 @@ npm install
 
 # Configure environment (for media system)
 cp .env.example .env
-# Edit .env with your Cloudflare R2 credentials
+# Edit .env with your Firebase credentials
 
 # Run development server
 npm run dev
@@ -40,8 +40,8 @@ Visit [http://localhost:3000](http://localhost:3000) to see the site.
 
 ## Documentation
 
-- **[Media System Guide](docs/MEDIA-SYSTEM.md)** - Complete guide to media management with Cloudflare R2
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Deployment instructions for Cloudflare Pages
+- **[Media System Guide](docs/MEDIA-SYSTEM.md)** - Complete guide to media management with Firebase Storage
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Deployment instructions for Firebase Hosting
 - **[SEO Checklist](docs/SEO-CHECKLIST.md)** - SEO optimization checklist
 
 ## Project Structure
@@ -66,52 +66,33 @@ Visit [http://localhost:3000](http://localhost:3000) to see the site.
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run lint` - Run ESLint
-- `npm run upload-media` - Upload media to Cloudflare R2
+- `npm run upload-media` - Upload media to Firebase Storage
 - `npm run generate-manifest` - Generate static media manifest
 
 ## Key Features
 
 ### Media System
-- **R2-First Architecture**: Media stored in Cloudflare R2, not in repository
-- **Build-Time Discovery**: Fetches media list from R2 during static generation
-- **CDN Delivery**: Global CDN serving with optimal performance
-- **Smart Upload**: Automatic change detection and optional local file cleanup
+- **Storage-first**: Media lives in Firebase Storage (`public/**`), not in the repository
+- **Build-time discovery**: The media list is fetched from Storage during static generation
+- **Smart upload**: Automatic change detection and optional local file cleanup
 
 See [docs/MEDIA-SYSTEM.md](docs/MEDIA-SYSTEM.md) for complete documentation.
 
 ## Deployment
 
-The platform uses automated CI/CD with GitHub Actions for deployment to Cloudflare Pages.
-
-### Quick Deploy
+The site is one Next.js static export hosted on Firebase Hosting (project `anandmoghan-me`). The private apps under `/apps/**` ship in the same export, `/api/**` is served by the Firebase Function `api` (europe-west2), and DNS stays at Cloudflare.
 
 ```bash
-# Deploy to production
-npm run deploy:production
-
-# Deploy to preview
-npm run deploy:preview
-
-# Setup deployment (first time)
-npm run setup-deployment
+npm run deploy          # build + hosting
+npm run deploy:all      # hosting, functions, firestore rules, storage rules
+npm run deploy:preview  # preview channel
 ```
 
-### Automated Deployment
+- **Production**: GitHub Actions deploys hosting, functions, and rules on push to `main`
+- **Preview**: each pull request gets a Hosting preview channel URL
+- **Rollback**: Hosting release history in the Firebase console, or `firebase hosting:clone`
 
-- **Production**: Automatic deployment on push to `main` branch
-- **Preview**: Automatic preview deployment for pull requests
-- **Staging**: Automatic deployment on push to `staging` branch
-
-### Deployment Features
-
-- ✅ Automated build and deployment
-- ✅ Preview deployments for pull requests
-- ✅ Automatic rollback on failure
-- ✅ Health monitoring (hourly checks)
-- ✅ Manual rollback capability
-- ✅ Zero-downtime deployments
-
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/CI-CD.md](docs/CI-CD.md) for complete documentation.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/CI-CD.md](docs/CI-CD.md).
 
 ## License
 

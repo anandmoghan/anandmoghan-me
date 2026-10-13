@@ -27,7 +27,10 @@ public/global/styles/    COPY of ~/workspace/code/global/styles (committed; see 
 
 - A post is a folder `content/posts/<slug>/` with `post.json` and section files `NN-name.html`.
   The URL is `/posts/<slug>`; keep existing slugs stable.
-- `published: false` builds the page with `noindex` and hides it from lists.
+- `published: false` builds the page with `noindex` and hides it from lists and the sitemap; the
+  page is still reachable by URL. Drafts live in `content/posts/<slug>/` from the first outline so
+  the user can review them in the browser (`npm run dev`); flip to `true` only after the user
+  approves the post.
 - `tags` are ids from `DEFAULT_TAGS` in `common/utils/post.ts`; add a tag there before using it.
 - Each section file is exactly one `<section id="kebab-id">`, one `<h2>` (no id; it reuses the
   section id), optional `<h3 id="...">` subsections, then `</section>`. The build throws otherwise.
@@ -85,6 +88,14 @@ Lilian Weng, Sebastian Raschka, and Hugging Face blog posts.
 
 ## Target Voice
 
+**Always:** a working professional talking about what they have read from industry and seen in
+their own work. Describe what production systems and external teams actually use and why, explain
+the trade-offs, and use paper results only as evidence for those trade-offs. Talk about the topic,
+not about papers: name a paper or model only when the reader truly needs it, cite [n] only where a
+specific number is quoted, and put paper-by-paper detail in at most one tabular summary section.
+A post is never a literature review.
+
+
 Senior practitioner writing from real experience — not a tutorial, not an academic paper. The reader is a working engineer who has shipped systems and wants to know what actually breaks in production.
 
 ## Core Principles
@@ -132,6 +143,18 @@ One section file per problem (`<section id>` + `<h2>Problem title</h2>`):
 - `<h4>Data</h4>`: sources, collection, cleaning, labeling strategy. Include the failure mode in the data itself.
 - `<h4>Training strategy</h4>`: model choice rationale, fine-tuning approach, loss, key hyperparameters, serving.
 - `<h4>Evaluation framework</h4>`: offline metrics, then online metrics, then production monitoring. Each distinct.
+
+## Length and grounding in posts
+
+- Match the existing posts: about 6,000 to 7,000 words in total, a 150 to 250 word introduction,
+  and 600 to 1,200 words for most sections (one or two long ones are fine). Say each idea once.
+- Keep only the numbers that make a point, with their setting (test set, hardware) in a few words.
+- No grounding tag pills (`span.tag`) in posts; those belong in research notes. When a claim is the
+  author's own reading, say so in prose ("my read is", "I would expect").
+- No per-section "References: [1, 2]" lines under headings; cite inline as [n] where the claim is,
+  and keep the full list in the References section.
+- No research-process commentary in posts ("the paper does not state", "not given in the
+  abstract", "the note"). If a fact is uncertain, drop it instead of caveating it.
 
 ## Formatting
 

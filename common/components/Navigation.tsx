@@ -18,7 +18,7 @@ export function Navigation() {
               <a href="/posts" className="site-nav__link">
                 Posts
               </a>
-              <a href="https://apps.anandmoghan.me" className="site-nav__link">
+              <a href="/apps" className="site-nav__link">
                 Apps
               </a>
               <ThemeToggle />

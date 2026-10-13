@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import type { ResponsiveImageProps } from '../types/media';
-import { getOptimizedImageUrl, generateSrcSet } from '../utils/media-client';
+import { getPublicMediaUrl } from '../utils/media-client';
 
 /**
- * ResponsiveImage component with lazy loading and optimization
- * Provides responsive image rendering with srcset for different screen sizes
+ * ResponsiveImage component with lazy loading, served from Firebase Storage
  */
 export default function ResponsiveImage({
   src,
@@ -20,9 +19,7 @@ export default function ResponsiveImage({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  // Generate optimized URLs
-  const optimizedSrc = getOptimizedImageUrl(src, { width, height });
-  const srcSet = generateSrcSet(src);
+  const imageSrc = getPublicMediaUrl(src);
 
   const handleLoad = () => {
     setIsLoading(false);
@@ -90,8 +87,7 @@ export default function ResponsiveImage({
         </div>
       )}
       <img
-        src={optimizedSrc}
-        srcSet={srcSet}
+        src={imageSrc}
         sizes={sizes}
         alt={alt}
         width={width}

@@ -33,10 +33,10 @@
   --space-8: 4rem;
 
   /* Radii: cards 1rem, callouts and panels 0.75rem, small controls 0.6rem, code 0.4rem */
-  --radius-card: 1rem;
-  --radius-panel: 0.75rem;
-  --radius: 0.6rem;
-  --radius-code: 0.4rem;
+  --radius-card: 0.25rem;
+  --radius-panel: 0.25rem;
+  --radius: 0.25rem;
+  --radius-code: 0.1875rem;
 
   /* Layout */
   /* Measures are in rem, not ch: ch resolves against each element's own font, so a

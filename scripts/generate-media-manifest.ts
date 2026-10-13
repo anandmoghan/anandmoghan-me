@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Generate Media Manifest from Cloudflare R2
+ * Generate Media Manifest from Firebase Storage
  * 
- * Creates a static JSON manifest of all media files in R2
- * Useful for build-time static generation when R2 credentials aren't available
+ * Creates a static JSON manifest of all media files in Storage
+ * Useful for build-time static generation when Firebase credentials aren't available
  * 
  * Usage:
  *   npm run generate-manifest
@@ -13,7 +13,8 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { getMediaBucket, hasStorageCredentials } from '../common/utils/storage-admin';
+import { getPublicMediaUrl } from '../common/utils/media-client';
 
 interface MediaManifestItem {
   id: string;
@@ -32,70 +33,42 @@ interface MediaManifest {
 }
 
 async function generateManifest() {
-  console.log('🔍 Generating media manifest from Cloudflare R2...\n');
+  console.log('🔍 Generating media manifest from Firebase Storage...\n');
 
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  const bucketName = process.env.R2_BUCKET_NAME || 'anandmoghan-media';
-  const mediaBaseUrl = process.env.NEXT_PUBLIC_MEDIA_URL || 'https://media.anandmoghan.me';
-
-  if (!accountId || !accessKeyId || !secretAccessKey) {
+  if (!hasStorageCredentials()) {
     throw new Error(
-      'Missing required environment variables:\n' +
-      '  CLOUDFLARE_ACCOUNT_ID\n' +
-      '  R2_ACCESS_KEY_ID\n' +
-      '  R2_SECRET_ACCESS_KEY'
+      'No Google credentials found. Either:\n' +
+      '  gcloud auth application-default login\n' +
+      '  export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json'
     );
   }
 
-  const client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
-  });
+  const bucket = getMediaBucket();
 
   const items: MediaManifestItem[] = [];
-  let continuationToken: string | undefined;
 
   try {
-    do {
-      const command = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: 'public/',
-        ContinuationToken: continuationToken,
-      });
+    const [files] = await bucket.getFiles({ prefix: 'public/' });
 
-      const response = await client.send(command);
+    for (const file of files) {
+      if (file.name === 'public/' || file.name.endsWith('/')) continue;
+      const assetPath = file.name.replace(/^public\//, '');
+      const filename = assetPath.split('/').pop() || '';
+      const ext = filename.split('.').pop()?.toLowerCase() || '';
+      const type = getMediaType(ext);
 
-      if (response.Contents) {
-        for (const object of response.Contents) {
-          if (object.Key && object.Key !== 'public/') {
-            const path = object.Key.replace(/^public\//, '');
-            const filename = path.split('/').pop() || '';
-            const ext = filename.split('.').pop()?.toLowerCase() || '';
-            const type = getMediaType(ext);
-
-            if (type) {
-              items.push({
-                id: path,
-                filename,
-                path,
-                publicUrl: `${mediaBaseUrl}/public/${path}`,
-                type,
-                size: object.Size || 0,
-                uploadedAt: object.LastModified?.toISOString() || new Date().toISOString(),
-              });
-            }
-          }
-        }
+      if (type) {
+        items.push({
+          id: assetPath,
+          filename,
+          path: assetPath,
+          publicUrl: getPublicMediaUrl(assetPath),
+          type,
+          size: Number(file.metadata.size ?? 0),
+          uploadedAt: file.metadata.timeCreated ?? new Date().toISOString(),
+        });
       }
-
-      continuationToken = response.NextContinuationToken;
-    } while (continuationToken);
+    }
 
     const manifest: MediaManifest = {
       generatedAt: new Date().toISOString(),

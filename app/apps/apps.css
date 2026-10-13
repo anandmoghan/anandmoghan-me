@@ -1,0 +1,40 @@
+/* Styles for the /apps tree, imported from app/apps/layout.tsx.
+   Colours, fonts and utilities come from the site: tailwind.config.ts maps
+   bg-background, text-muted, border-border, text-destructive and friends onto
+   the shared tokens (public/global/styles/tokens.css). Next does not scope
+   layout CSS, so every rule here is under .apps-shell or uses a unique name. */
+
+.apps-shell a,
+.apps-shell button {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease,
+    opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
+@media print {
+  .apps-shell header {
+    display: none !important;
+  }
+}
+
+/* Share app animations */
+@keyframes share-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.share-fade-in {
+  animation: share-fade-in 0.25s ease-out;
+}
+@keyframes share-slide-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.share-slide-in {
+  animation: share-slide-in 0.3s ease-out;
+}
+@keyframes share-slide-in-minimal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.share-slide-in-minimal {
+  animation: share-slide-in-minimal 0.18s ease-out;
+}

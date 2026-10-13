@@ -10,6 +10,7 @@ const DEFAULT_TAGS: Record<string, Tag> = {
   'machine-learning': { id: 'machine-learning', name: 'Machine Learning', category: 'technical', color: '#7c3aed', description: 'Machine learning algorithms and techniques' },
   'deep-learning': { id: 'deep-learning', name: 'Deep Learning', category: 'technical', color: '#dc2626', description: 'Neural networks and deep learning architectures' },
   'reinforcement-learning': { id: 'reinforcement-learning', name: 'Reinforcement Learning', category: 'technical', color: '#059669', description: 'Reinforcement learning and alignment techniques' },
+  'speech': { id: 'speech', name: 'Speech', category: 'technical', color: '#0d9488', description: 'Speech recognition, synthesis and spoken language models' },
   'nlp': { id: 'nlp', name: 'NLP', category: 'technical', color: '#2563eb', description: 'Natural language processing and text models' },
   'system-design': { id: 'system-design', name: 'System Design', category: 'technical', color: '#0891b2', description: 'ML system architecture and design' },
   'autonomous-driving': { id: 'autonomous-driving', name: 'Autonomous Driving', category: 'technical', color: '#16a34a', description: 'Self-driving cars and autonomous vehicle technology' },

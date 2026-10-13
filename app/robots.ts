@@ -8,12 +8,12 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: 'Googlebot',
         allow: '/',
-        disallow: ['/api/', '/cdn-cgi/'],
+        disallow: ['/api/', '/cdn-cgi/', '/apps/share/'],
       },
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/_next/', '/cdn-cgi/'],
+        disallow: ['/api/', '/_next/', '/cdn-cgi/', '/apps/share/'],
       },
     ],
     sitemap: 'https://anandmoghan.me/sitemap.xml',

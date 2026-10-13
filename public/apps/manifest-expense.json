@@ -1,0 +1,19 @@
+{
+  "name": "Expense",
+  "short_name": "Expense",
+  "description": "Track expenses across bank and credit card statements",
+  "start_url": "/apps/expense",
+  "scope": "/apps/expense",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/apps/icon-expense.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
