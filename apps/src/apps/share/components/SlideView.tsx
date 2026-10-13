@@ -103,8 +103,8 @@ function BulletList({
                 {legend && legend.length > 0 && (
                   <div className="sd-code-legend">
                     {legend.map((item, i) => {
-                      const [tag, ...rest] = item.split(' — ')
-                      const desc = rest.join(' — ')
+                      const [tag, ...rest] = item.split(' - ')
+                      const desc = rest.join(' - ')
                       return (
                         <div key={i} className="sd-code-legend-row">
                           <span className="sd-code-legend-tag">
@@ -202,7 +202,7 @@ export function SlideView({
   const phaseIndex = phaseTitles.indexOf(slide.title ?? '')
 
   if (slide.kind === 'title') {
-    const [authorName, authorRole] = deckMeta.author.split(' — ')
+    const [authorName, authorRole] = deckMeta.author.split(', ')
     return (
       <div className="sd-root flex h-full w-full flex-col overflow-auto">
         <div className="flex flex-1 flex-col items-start justify-center px-8 py-10 sm:px-16">

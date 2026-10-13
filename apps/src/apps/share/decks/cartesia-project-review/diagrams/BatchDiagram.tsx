@@ -28,7 +28,7 @@ export default function BatchDiagram({
       {stage >= 1 && (
         <div className={fade('group relative w-full')}>
           <Gutter id="batch-before" />
-          <div className="sd-kv-row-label">Before — chunk boundary</div>
+          <div className="sd-kv-row-label">Before, chunk boundary</div>
           <div className="sd-kv-row">
             <span className="sd-kv-cell sd-kv-content" />
             <span className="sd-kv-cell sd-kv-content" />
@@ -44,14 +44,14 @@ export default function BatchDiagram({
         <div className={fade('group relative sd-kv-arrow-row')}>
           <Gutter id="batch-op" />
           <span className="sd-kv-arrow-glyph">&darr;</span>
-          torch.gather — right-align
+          torch.gather, right-align
         </div>
       )}
 
       {stage >= 3 && (
         <div className={fade('group relative w-full')}>
           <Gutter id="batch-after" />
-          <div className="sd-kv-row-label">After — padding pushed left</div>
+          <div className="sd-kv-row-label">After, padding pushed left</div>
           <div className="sd-kv-row">
             <span className="sd-kv-cell sd-kv-pad" />
             <span className="sd-kv-cell sd-kv-pad" />

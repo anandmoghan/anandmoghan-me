@@ -34,7 +34,7 @@ export function ActivityPane({ commentsByBullet, bulletMeta, onSelect, onClose, 
           <div className="sd-activity-empty-state">
             <p className="sd-activity-empty">No comments yet.</p>
             <p className="sd-activity-hint">
-              Hover over a bullet point, click the comment icon, and add your note — Anand will address it live in the
+              Hover over a bullet point, click the comment icon, and add your note. Anand will address it live in the
               session or follow up afterward.
             </p>
           </div>

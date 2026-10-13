@@ -6,7 +6,7 @@ const deck: Deck = {
   meta: {
     slug: 'fin-project-review',
     title: "Continual Learning for Alexa's Speech to Speech Models",
-    author: 'Anand Mohan — Applied Scientist at Amazon AGI',
+    author: 'Anand Mohan, Applied Scientist at Amazon AGI',
     institute: 'Fin - Project Review',
   },
   slides: [

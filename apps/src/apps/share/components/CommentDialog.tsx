@@ -85,7 +85,7 @@ export function CommentDialog({
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
           {comments.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--sd-ink-muted)' }}>
-              No comments yet — be the first.
+              No comments yet, be the first.
             </p>
           ) : (
             comments.map((comment) => (

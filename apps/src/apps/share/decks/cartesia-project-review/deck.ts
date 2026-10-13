@@ -5,7 +5,7 @@ const deck: Deck = {
   meta: {
     slug: 'cartesia-project-review',
     title: 'Online RL for Speech-to-Speech Systems',
-    author: 'Anand Mohan — Applied Scientist at Amazon AGI',
+    author: 'Anand Mohan, Applied Scientist at Amazon AGI',
     institute: 'Cartesia Project Review',
   },
   slides: [
@@ -156,21 +156,21 @@ const deck: Deck = {
         },
         {
           id: 'grpo-eq-dr-grpo-advantage',
-          label: 'Dr. GRPO³ — advantage',
+          label: 'Dr. GRPO³: advantage',
           text: 'drops the std(r) division from the advantage',
           equation: {
             formula: 'A_i = r_i - \\mathrm{mean}(r)',
-            legend: 'no std(r) division — avoids inflating gradients on low-variance groups',
+            legend: 'no std(r) division, avoids inflating gradients on low-variance groups',
           },
         },
         {
           id: 'grpo-eq-dr-grpo-loss',
-          label: 'Dr. GRPO³ — loss normalization',
+          label: 'Dr. GRPO³: loss normalization',
           text: 'normalizes by the batch\'s longest sequence instead of each response\'s own length',
           equation: {
             formula:
               'L = -\\dfrac{1}{G \\cdot N_{\\max}}\\sum_{i=1}^{G}\\sum_{t=1}^{|o_i|} \\min\\!\\Big(\\rho_{i,t} A_i,\\ \\mathrm{clip}(\\rho_{i,t},\\,1-\\epsilon,\\,1+\\epsilon)\\,A_i\\Big) + \\beta \\cdot \\mathrm{KL}\\big(\\pi_\\theta \\,\\|\\, \\pi_{\\mathrm{ref}}\\big)',
-            legend: '$N_{\\max}$ the current batch\'s longest sequence, replaces per-response length — removes the bias that let incorrect responses drift longer unpunished',
+            legend: '$N_{\\max}$ the current batch\'s longest sequence, replaces per-response length, removes the bias that let incorrect responses drift longer unpunished',
           },
         },
         {
@@ -273,11 +273,11 @@ const deck: Deck = {
               '[BOU] [BOS] <audio_chunk_N> [ETT] [BOA] [BOT] <text_N> [TT]',
             ],
             legend: [
-              '[SYS] [BOU] [BOA] — begin a system / user / agent turn',
-              '[BOS] [BOT] — begin a speech / text segment',
-              '[EOG] — end of generation',
-              '[ETT] — external turn-taking trigger',
-              '[TT] — turn-taking handoff into interleaved text and audio',
+              '[SYS] [BOU] [BOA] - begin a system / user / agent turn',
+              '[BOS] [BOT] - begin a speech / text segment',
+              '[EOG] - end of generation',
+              '[ETT] - external turn-taking trigger',
+              '[TT] - turn-taking handoff into interleaved text and audio',
             ],
             fullWidth: true,
           },
