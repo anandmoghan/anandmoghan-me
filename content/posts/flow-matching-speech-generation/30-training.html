@@ -81,7 +81,7 @@
       <text class="d-text--small" x="10" y="126" dominant-baseline="middle">noisy input</text>
       <rect class="d-lane" x="100" y="104" width="600" height="44" rx="8"/>
       <text class="d-text--small" x="400" y="126" text-anchor="middle"
-        dominant-baseline="middle">noisy mel x_t over all frames</text>
+        dominant-baseline="middle">noisy mel x<tspan class="d-sub" dy="4">t</tspan><tspan dy="-4"> over all frames</tspan></text>
 
       <text class="d-text--small" x="10" y="190" dominant-baseline="middle">text</text>
       <rect class="d-lane" x="100" y="168" width="600" height="44" rx="8"/>
@@ -114,8 +114,10 @@
       <!-- == Labels == -->
       <text class="d-text--muted" x="370" y="242">concatenated per frame</text>
       <text class="d-text--muted" x="259" y="272" text-anchor="middle">adaLN</text>
-      <text class="d-text--muted" x="484" y="272" text-anchor="middle">v_θ</text>
-      <text class="d-text--muted" x="560" y="334" text-anchor="middle">mask m; u_t from x_0, x_1</text>
+      <text class="d-text--muted" x="484" y="272" text-anchor="middle">v<tspan class="d-sub" dy="4">θ</tspan></text>
+      <text class="d-text--muted" x="560" y="334" text-anchor="middle">
+        mask m; u<tspan class="d-sub" dy="4">t</tspan><tspan dy="-4"> from x</tspan><tspan class="d-sub" dy="4">0</tspan><tspan dy="-4">, x</tspan><tspan class="d-sub" dy="4">1</tspan>
+      </text>
     </svg>
     <figcaption>
       Figure: a schematic training example with character-text inputs and a masked-frame loss, drawn in the inference-time shape (prompt, then the span to generate).

@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Online RL for flow matching and token-based speech generation</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false}
+      ],
+      ignoredTags: ['script', 'style', 'pre', 'code']
+    });"></script>
+</head>
+<body class="prose">
+  <header>
+    <h1>Online RL for flow matching and token-based speech generation</h1>
+    <p>Research note, 2026-10-13. Source-checked claims for a blog post section on GRPO-style post-training of TTS.</p>
+  </header>
+  <main>
+    <section id="how-grounded">
+      <h2>How to read this note</h2>
+      <p>
+        <span class="tag tag--confirmed">Confirmed</span> means I read the arXiv abstract or the paper text (PDF) or a first-party README.
+        <span class="tag tag--reported">Reported</span> means a secondary source, a search summary, or a table whose text extraction was garbled and needs a visual check.
+        <span class="tag tag--inference">Inference</span> means my own reasoning.
+        Numbers appear only next to the source that states them.
+        Time and noise conventions differ between papers, so symbols are defined where each equation is used.
+      </p>
+    </section>
+
+    <section id="summary">
+      <h2>Short answer</h2>
+      <ul>
+        <li>
+          A flow matching sampler is a deterministic ODE, so each denoising step has no probability density and no exploration.
+          Vanilla GRPO needs both a per-step likelihood ratio and diverse rollouts.
+          Source: Flow-GRPO, arXiv 2505.05470, Section 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          There are four working routes.
+          (1) ODE-to-SDE conversion so each step is a Gaussian (Flow-GRPO, FlowTTS-GRPO).
+          (2) Retrain the network to output a Gaussian mean and variance (F5R-TTS).
+          (3) Skip likelihoods and reweight the flow-matching regression loss by a group-normalised advantage (GROW).
+          (4) Leave the flow model alone and run RL on the stage that does have likelihoods: the AR token LM or the duration predictor.
+          Sources: arXiv 2505.05470, 2606.23190, 2504.02407, 2608.03215, 2507.14988.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          In LM-plus-flow hybrids, FlowTTS-GRPO reports that RL on the flow stage mostly moves speaker similarity and audio quality, while intelligibility is set by the LM tokens.
+          Source: arXiv 2606.23190, Sections 1 and 4.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Every system that reports rewards uses WER or CER from an ASR model and speaker-verification cosine.
+          Single-score optimisation is reported to reward-hack in four independent papers.
+          Sources: arXiv 2406.02430, 2509.18531, 2601.16483, 2609.13150.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          RL post-training is cheap next to pretraining in every paper that reports step counts: hundreds to roughly ten thousand updates, often with LoRA, against 200K to 1M pretraining updates.
+          Sources: arXiv 2504.02407, 2507.14988, 2608.03215, 2606.23190.
+          <span class="tag tag--confirmed">Confirmed</span>
+          The ratio is not a clean compute figure because batch sizes differ.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="equations">
+      <h2>Key equations</h2>
+
+      <h3 id="eq-grpo">Group-normalised advantage and the GRPO objective</h3>
+      <p>
+        For a prompt \( c \), sample \( G \) outputs \( x^1, \dots, x^G \) from the old policy and score each with a scalar reward \( R(x^i, c) \).
+        The advantage is the reward standardised within the group:
+      </p>
+      <p>\[ \hat A^i = \frac{R(x^i, c) - \operatorname{mean}\left(\{R(x^j, c)\}_{j=1}^{G}\right)}{\operatorname{std}\left(\{R(x^j, c)\}_{j=1}^{G}\right)} \]</p>
+      <p>
+        The objective applies a PPO-style clipped ratio at every step \( t \) of a trajectory of length \( T \), plus a KL penalty to the frozen reference policy:
+      </p>
+      <p>\[ \mathcal{J}(\theta) = \mathbb{E}_{c,\{x^i\}\sim\pi_{\theta_{\text{old}}}} \left[ \frac{1}{G} \sum_{i=1}^{G} \frac{1}{T} \sum_{t=0}^{T-1} \left( \min\left( r_t^i(\theta)\,\hat A^i,\ \operatorname{clip}\left(r_t^i(\theta),\, 1-\varepsilon,\, 1+\varepsilon\right)\hat A^i \right) - \beta\, D_{\mathrm{KL}}(\pi_\theta \,\|\, \pi_{\text{ref}}) \right) \right] \]</p>
+      <p>
+        Here \( r_t^i(\theta) = \pi_\theta(x_{t-1}^i \mid x_t^i, c) / \pi_{\theta_{\text{old}}}(x_{t-1}^i \mid x_t^i, c) \) is the per-step likelihood ratio, \( \varepsilon \) is the clip range, and \( \beta \) weights the KL term.
+        The same advantage is shared by every step of one trajectory because the reward arrives only on the final sample.
+        Source: Flow-GRPO, arXiv 2505.05470, Eqs. 4 and 5.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <p>
+        The ratio \( r_t^i \) is the problem for flow matching: it needs \( \pi_\theta(x_{t-1} \mid x_t, c) \), and a deterministic Euler step gives a Dirac delta.
+      </p>
+
+      <h3 id="eq-sde">ODE-to-SDE conversion</h3>
+      <p>
+        Flow-GRPO uses rectified flow with \( x_t = (1-t)\,x_0 + t\,\epsilon \) and reverse-time sampling from noise at \( t = 1 \) to data at \( t = 0 \).
+        The deterministic sampler follows the velocity \( v_t \) learned by the network:
+      </p>
+      <p>\[ \mathrm{d}x_t = v_t \,\mathrm{d}t \]</p>
+      <p>
+        Adding noise of scale \( \sigma_t \) and correcting the drift with the score \( \nabla \log p_t \) gives an SDE with the same marginals at every \( t \):
+      </p>
+      <p>\[ \mathrm{d}x_t = \left( v_t(x_t) - \frac{\sigma_t^2}{2}\,\nabla \log p_t(x_t) \right)\mathrm{d}t + \sigma_t\, \mathrm{d}w \]</p>
+      <p>
+        For rectified flow the score is a function of \( v_t \), which gives
+      </p>
+      <p>\[ \mathrm{d}x_t = \left( v_t(x_t) + \frac{\sigma_t^2}{2t}\left( x_t + (1-t)\,v_t(x_t) \right) \right)\mathrm{d}t + \sigma_t\, \mathrm{d}w \]</p>
+      <p>
+        Euler-Maruyama discretisation with step \( \Delta t \) (negative in reverse time) and \( \epsilon \sim \mathcal{N}(0, I) \) gives the sampler:
+      </p>
+      <p>\[ x_{t+\Delta t} = x_t + \left[ v_\theta(x_t, t) + \frac{\sigma_t^2}{2t}\left( x_t + (1-t)\,v_\theta(x_t, t) \right) \right]\Delta t + \sigma_t \sqrt{\Delta t}\; \epsilon \]</p>
+      <p>
+        Each step is now an isotropic Gaussian with mean \( \bar x_{t+\Delta t} \) (the bracketed drift update) and standard deviation \( \sigma_t \sqrt{|\Delta t|} \), so \( \pi_\theta(x_{t+\Delta t} \mid x_t, c) \) is a closed-form density.
+        Flow-GRPO sets \( \sigma_t = a \sqrt{t / (1-t)} \), where \( a \) is the noise level.
+        The KL to the reference model reduces to a squared distance between the two means:
+      </p>
+      <p>\[ D_{\mathrm{KL}}(\pi_\theta \,\|\, \pi_{\text{ref}}) = \frac{\left\| \bar x_{t+\Delta t,\theta} - \bar x_{t+\Delta t,\text{ref}} \right\|^2}{2\,\sigma_t^2\,\Delta t} \]</p>
+      <p>
+        Source: Flow-GRPO, arXiv 2505.05470, Eqs. 6 to 9 and the KL paragraph.
+        <span class="tag tag--confirmed">Confirmed</span>
+        FlowTTS-GRPO reuses these equations but flips the time axis (\( t = 0 \) is noise), so the signs in its Eq. 7 differ.
+        Source: arXiv 2606.23190, Section 2.2.2.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+
+      <h3 id="eq-grow">GROW: advantage-weighted flow-matching regression</h3>
+      <p>
+        GROW skips the SDE.
+        It rolls out \( G \) utterances with the ordinary ODE sampler, standardises each reward within the group, and uses the sum as a signed per-sample weight on the usual flow-matching loss.
+        With \( z_r^{(k)} \) the group-standardised reward \( r \in \{\text{wer}, \text{sim}\} \) of rollout \( k \):
+      </p>
+      <p>\[ w^{(k)} = \lambda_{\text{wer}}\, z_{\text{wer}}^{(k)} + \lambda_{\text{sim}}\, z_{\text{sim}}^{(k)} \]</p>
+      <p>
+        With \( x_1^{(k)} \) the encoded rollout, \( x_0 \sim \mathcal{N}(0, I) \), \( x_t = (1-t)\,x_0 + t\,x_1 \) and target velocity \( v^\star = x_1 - x_0 \), the loss is
+      </p>
+      <p>\[ \mathcal{L} = \sum_k \left[ w^{(k)} \left\| v_\theta(x_t^{(k)}, t) - v^{\star(k)} \right\|^2 + \beta_{W_2} \left\| v_\theta(x_t^{(k)}, t) - v_{\theta_{\text{ref}}}(x_t^{(k)}, t) \right\|^2 \right] \]</p>
+      <p>
+        The second term is the Wasserstein-2 velocity penalty that anchors the policy to the frozen reference, and it plays the role of the KL term.
+        Because \( w^{(k)} \) has zero mean over the group, the loss contains no self-imitation component: it only pulls toward above-average rollouts and pushes away from below-average ones.
+        Source: GROW, arXiv 2608.03215, Algorithm 1 and the section "From Exponential to Linear Group-Relative Advantage".
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+
+      <h3 id="eq-multi-reward">Multi-reward combination</h3>
+      <p>
+        FlowTTS-GRPO normalises each reward by its standard deviation over the current batch, then takes a weighted sum:
+      </p>
+      <p>\[ R = \lambda_1 \frac{R_{\text{SS}}}{\operatorname{std}(R_{\text{SS}})} + \lambda_2 \frac{R_{\text{ASR}}}{\operatorname{std}(R_{\text{ASR}})} + \lambda_3 \frac{R_{\text{MOS}}}{\operatorname{std}(R_{\text{MOS}})} \]</p>
+      <p>
+        Here \( R_{\text{SS}} \) is speaker-verification cosine, \( R_{\text{ASR}} \) is \( 1 - \) CER or WER, and \( R_{\text{MOS}} \) is the P.835 DNSMOS overall score.
+        Source: arXiv 2606.23190, Eq. 12.
+        <span class="tag tag--confirmed">Confirmed</span>
+        F5R-TTS uses a plain weighted sum \( \lambda_W (1 - \mathrm{WER}) + \lambda_S\, \mathrm{SIM} \), then group-standardises the total.
+        Source: arXiv 2504.02407, Eqs. 6 to 9.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+    </section>
+
+    <section id="flow-routes">
+      <h2>RL on the flow matching model</h2>
+
+      <h3 id="flow-grpo">Flow-GRPO (images) and what it fixes</h3>
+      <ul>
+        <li>
+          Two strategies: ODE-to-SDE conversion for exploration, and Denoising Reduction (fewer denoising steps while collecting RL data, the full count at inference).
+          Source: arXiv 2505.05470, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reported results on SD3.5-M: GenEval accuracy 63% to 95%, visual text rendering accuracy 59% to 92%.
+          Source: arXiv 2505.05470, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Deterministic ODE fails GRPO in two ways: the ratio needs a density that is expensive under deterministic dynamics (divergence estimation), and reduced randomness greatly lowers training efficiency.
+          Source: arXiv 2505.05470, Section 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Hyperparameters in the appendix: training timesteps 10, evaluation timesteps 40, group size 24, noise level \( a = 0.7 \), image resolution 512, KL weight \( \beta = 0.04 \) for GenEval and text rendering and 0.01 for PickScore, LoRA \( r = 32 \), \( \alpha = 64 \), 24 A800 GPUs.
+          Source: arXiv 2505.05470, Appendix B.3 and B.4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Cutting data-collection steps from 40 to 10 gave over a 4x training speedup with no loss in final reward; going to 5 steps did not consistently help.
+          Source: arXiv 2505.05470, Section 5.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Noise level: \( a = 0.1 \) limits exploration and slows reward growth, gains saturate by 0.7, and too much noise degrades samples and fails training.
+          Source: arXiv 2505.05470, Section 5.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Group size: \( G = 12 \) and \( G = 6 \) became unstable and collapsed with the PickScore reward, \( G = 24 \) stayed stable.
+          Source: arXiv 2505.05470, Section 5.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          KL: removing it on compositional generation lowered image quality while a tuned KL kept similar task gains; on the human-preference task, no KL caused a collapse in diversity.
+          The authors say KL is not empirically equivalent to early stopping.
+          Source: arXiv 2505.05470, Section 5.3 and the introduction.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The Flow-GRPO text I extracted does not discuss classifier-free guidance during RL.
+          Treat the CFG recipe as coming from the speech papers below.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+
+      <h3 id="flowtts-grpo">FlowTTS-GRPO (Tongyi Lab, 2026)</h3>
+      <ul>
+        <li>
+          Online RL for flow-matching TTS by converting ODE trajectories to SDE paths, fine-tuning open-source models without auxiliary models.
+          Tested on CosyVoice 3.0 (LM plus flow hybrid; only the flow stage is trained) and F5-TTS (flow only).
+          Source: arXiv 2606.23190, abstract and Section 2.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Which steps get noise: a windowed schedule borrowed from MixGRPO and FlowSE-GRPO.
+          SDE sampling is applied only to a small window of early steps and the remaining steps are deterministic ODE; optimisation touches only the stochastic steps.
+          The runs use a 2-step window; inference uses 10 denoising steps for CosyVoice 3.0 and 16 for F5-TTS.
+          Source: arXiv 2606.23190, Sections 2.2.2 and 3.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Noise level: 0.1 oscillates without sustained gain, 0.5 reaches the saturation point, and 0.5 was chosen.
+          Measured with speaker similarity as the only reward.
+          Source: arXiv 2606.23190, Section 4.4.5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CFG during RL: omitting CFG in training rollouts accelerates convergence, and the gain still shows under CFG at inference.
+          The authors read this as more exploration and as evidence that tuning only the conditional velocity is enough.
+          Source: arXiv 2606.23190, abstract and Section 4.4.4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Group size and batch: 8 samples per prompt for CosyVoice 3.0 and 10 for F5-TTS; 16 and 6 prompts per iteration respectively, each repeated 4 times; groups with zero reward standard deviation are discarded; 8 parameter updates per iteration.
+          Source: arXiv 2606.23190, Section 3.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Adapter and optimiser: LoRA rank 32, alpha 64, about 10.09M trainable parameters (2.78% of the CosyVoice 3.0 flow model); learning rate 1e-4 (CosyVoice 3.0) and 5e-5 (F5-TTS), linearly decayed to 0 at 10k steps; 8 GPUs.
+          Source: arXiv 2606.23190, Section 3.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          KL: the objective carries a \( \beta D_{\mathrm{KL}} \) term to the reference model, but I did not find a numeric \( \beta \) in the extracted paper text.
+          Source: arXiv 2606.23190, Eqs. 8 and 10.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Rewards: ERes2Net speaker-embedding cosine, \( 1 - \) CER (Paraformer, Chinese) or \( 1 - \) WER (Whisper, English), and P.835 DNSMOS overall at 16 kHz.
+          Weights \( \lambda_1 = \lambda_2 = 1.0 \), \( \lambda_3 = 0.4 \) for DNSMOS.
+          Raising the DNSMOS weight from 0.2 to 1.0 speeds DNSMOS gains but slows speaker-similarity growth, and at 0.2 DNSMOS oscillates near baseline.
+          Source: arXiv 2606.23190, Sections 2.3 and 4.4.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Weighted sum with per-reward std normalisation converges faster and more stably than a probabilistic scheme that assigns each prompt to a single reward.
+          Without std normalisation, the reward with the larger batch std (DNSMOS, std higher than speaker similarity) dominates the advantage.
+          Source: arXiv 2606.23190, Sections 2.4 and 4.4.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Hard-case synthesis: 20k extra Chinese prompts built by repeating words or whole sentences (local word repetition, sparse multi-word repetition, global sentence repetition).
+          It speeds ASR-reward growth for F5-TTS and adds little for CosyVoice 3.0, whose intelligibility is LM-driven.
+          Source: arXiv 2606.23190, Sections 2.5 and 4.4.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Results on Seed-TTS-Eval, CosyVoice 3.0-0.5B-2512 (step 9545): speaker similarity SS2 (ERes2Net) 0.830 to 0.859 and SS1 (WavLM) 0.777 to 0.804 on test-zh.
+          SS1 was not used as a reward and also improved, which the authors cite as evidence against reward hacking.
+          Source: arXiv 2606.23190, Section 4.2.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS (step 1289) on Seed-TTS-Eval: test-zh CER 1.81 to 1.55 and SS1 0.760 to 0.777; test-en WER 1.88 to 1.73; test-hard CER 9.00 to 7.86.
+          CosyVoice 3.0 test-zh CER moved from 1.20 to 1.26, i.e. no intelligibility gain.
+          Source: arXiv 2606.23190, Table 2, text extraction of the table.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Subjective A/B tests: 30 samples per language, 10 native-speaker raters, RL models preferred over baselines on overall quality and timbre similarity in English and Chinese.
+          Source: arXiv 2606.23190, Section 4.5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reward plateau for CosyVoice 3.0: the ASR reward stalls near 0.99, which the authors attribute to LM-token-limited intelligibility.
+          Their conclusion is a functional split: RL on the LM for intelligibility, RL on the flow stage for timbre and perceptual quality.
+          Source: arXiv 2606.23190, Section 4.2.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="f5r-tts">F5R-TTS (Gaussian outputs)</h3>
+      <ul>
+        <li>
+          The last layer of F5-TTS is changed to output the mean and variance of a Gaussian over \( x_1 - x_0 \), trained with a log-likelihood objective, so each flow step has a density.
+          Source: arXiv 2504.02407, Section 2.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          This costs a pretraining run: the probabilised model F5-P is pretrained for 1M updates on 8 A100 40GB GPUs before GRPO.
+          The GRPO stage then runs 1,100 updates on 8 A100 40GB GPUs with a batch of 6,400 frames, against 160,000 frames in pretraining.
+          Source: arXiv 2504.02407, Section 3.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Rewards: SenseVoice ASR for \( 1 - \) WER and WeSpeaker cosine for similarity; the reference model is frozen at the pretrained weights and a KL penalty is applied.
+          Source: arXiv 2504.02407, Sections 2.3 and 3.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reported results on Seed-TTS-eval test-cn (WenetSpeech4TTS Basic training): 29.5% relative WER reduction and 4.6% relative SIM increase on the general set (WER 2.10% to 1.48%, SIM 0.698 to 0.730).
+          Source: arXiv 2504.02407, abstract and Table 1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          FlowTTS-GRPO criticises F5R-TTS for needing a separately trained Gaussian generator and for using one rollout per prompt, which removes the group-wise advantage.
+          Source: arXiv 2606.23190, Section 1.
+          <span class="tag tag--reported">Reported</span>
+          That is a competing paper's reading; the F5R-TTS abstract does not state the rollout count.
+        </li>
+      </ul>
+
+      <h3 id="grow">GROW (no SDE, no likelihood ratio)</h3>
+      <ul>
+        <li>
+          Target problem: AR-diffusion TTS (DiTAR) solves a flow ODE per latent patch inside an autoregressive loop, so trajectory-level likelihood RL is expensive.
+          GROW acts on the standard flow-matching objective instead.
+          Source: arXiv 2608.03215, abstract and introduction.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Why signed advantages and not exponential reward weights: bounded WER and similarity rewards are tightly clustered within a prompt group, so positive weights are dominated by a shared self-imitation term.
+          A zero-mean weight \( A/\sigma \) removes it.
+          Source: arXiv 2608.03215, abstract and Eq. 7.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Ablation (average change over LibriSpeech-PC test-clean, Seed-TTS EN and ZH): signed \( A/\sigma \) gives WER improvement 0.458 and SIM +0.039; exponential weighting of the centred advantage gives 0.199 and -0.003; exponential of the raw reward gives 0.095 and 0.000.
+          Source: arXiv 2608.03215, Table 2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Setup: pretrained DiTAR at 200K updates as both initialisation and frozen reference; group size \( G = 8 \); \( \lambda_{\text{wer}} = \lambda_{\text{sim}} = 1 \); \( \beta_{W_2} = 0.025 \); AdamW with constant learning rate 2e-6; batch size 128; "several hundred updates".
+          Source: arXiv 2608.03215, RL fine-tuning configuration.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Results averaged over three test sets: WER 2.016 to 1.558 and SIM 0.676 to 0.715 with UTMOS kept.
+          The DiTAR-GRPO baseline (Flow-GRPO with the MixGRPO window and CPS noise) improves by 0.269 WER and 0.030 SIM, and degrades UTMOS on average.
+          The authors attribute that degradation to the injected SDE noise.
+          Source: arXiv 2608.03215, abstract and results.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Denoising steps in RL: rollouts at 10 NFE and evaluation at 32 NFE keep nearly the full gain (average WER improvement 0.477 at 32 NFE, 0.458 at 10, 0.413 at 5) and train 2.9x faster than 32-NFE DiTAR-GRPO.
+          DiTAR-GRPO degrades clearly at 5 NFE.
+          Source: arXiv 2608.03215, Table 1 and text.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CFG: GROW rolls out with CFG at guidance scale 1.5 but computes the regression loss on the conditional velocity only.
+          Regressing on the guided velocity collapsed the gain to 0.094 WER and +0.007 SIM; rollouts without CFG gave 0.465 and +0.033.
+          Source: arXiv 2608.03215, Table 3 (column order read from the caption and values).
+          <span class="tag tag--reported">Reported</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="token-routes">
+      <h2>RL on the AR token stage and the duration predictor</h2>
+
+      <h3 id="token-lm">LM-style RL on speech tokens</h3>
+      <ul>
+        <li>
+          Seed-TTS (ByteDance) compares RL with external reward models (PPO, REINFORCE) against DPO, which needs no reward model, and reports both work.
+          The showcased model uses REINFORCE with SIM and WER rewards (Seed-TTS RL-SIM-WER) and a second variant rewarded by speech-emotion-recognition accuracy (Seed-TTS RL-SER).
+          Source: Seed-TTS, arXiv 2406.02430, Section 4.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS RL-SIM-WER vs the in-context-learning model: WER ZH 1.115 to 1.002, EN 2.249 to 1.945, hard set 7.585 to 6.423; SIM ZH 0.796 to 0.801, EN 0.762 to 0.766, hard 0.776 to 0.782; CMOS +0.14, with a 44.1% win, 25% tie and 30.9% loss preference.
+          Source: arXiv 2406.02430, Tables 7 and 8.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS RL-SER zero-shot emotion-control accuracy: angry 0.46 to 0.91, happy 0.44 to 0.80, sad 0.53 to 0.78, surprise 0.13 to 0.82.
+          Source: arXiv 2406.02430, Table 9.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS reports reward hacking: to lower WER the model generated slower, more clearly pronounced speech at the cost of naturalness, and the authors say careful tuning is needed to balance this trade-off.
+          Source: arXiv 2406.02430, Section 4.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 3 introduces a differentiable reward model for post-training, applicable to other LLM-based speech synthesis models.
+          The name DiffRO is in the full text and in the companion paper.
+          Source: arXiv 2505.17589, abstract; DiffRO, arXiv 2507.05911.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DiffRO mechanism: a Token2Text model (ASR-like, trained on ASR data) scores codec tokens directly, so no waveform is synthesised; Gumbel-Softmax makes sampled tokens differentiable so the reward is maximised by backpropagation instead of a policy-gradient loop.
+          A multi-task reward (MTR) model adds emotion, MOS and other attribute heads.
+          Source: arXiv 2507.05911, abstract; arXiv 2505.17589, Section 2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DiffRO limitation: it acts only on the LM, so for MOS control the LM can emit noisy tokens that lower the predicted token-level MOS while the flow model and vocoder, trained on clean audio, partly denoise them.
+          Speaker age and gender control is especially weak because speaker information enters at the flow stage.
+          Source: arXiv 2507.05911, Section 4.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 3 reports that RL post-training gives 12% to 35% relative improvement in content consistency on the Seed-TTS test sets.
+          On the multilingual CV3-Eval voice-cloning subset, adding DiffRO to CosyVoice3-0.5B changes CER or WER from 3.89 to 2.89 (zh), 10.4 to 5.15 (ja) and 12.8 to 4.02 (ko).
+          Source: arXiv 2505.17589, Sections 5.1 and 5.2.1, Table 5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          GRPO for LLM-based TTS: rewards come from an off-the-shelf ASR model with no dedicated reward model; a composite of CER and negative log-likelihood from the ASR model is more informative than CER alone.
+          Source: arXiv 2509.18798, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          RRPO: DiffRO-style reward models can be exploited by acoustic artifacts that earn spurious reward and degrade perceptual quality, especially for emotion control.
+          A hybrid-regularised robust reward model mitigates this and improves emotional expressiveness and naturalness in subjective tests.
+          Source: arXiv 2512.04552, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          GLM-TTS (Z.ai) is a token LM plus flow system that trains the LM with GRPO and multiple rewards (similarity, CER, emotion, laughter), a distributed reward server and token-level reward allocation.
+          Source: github.com/zai-org/GLM-TTS README.
+          <span class="tag tag--confirmed">Confirmed</span>
+          The README listed RL-optimised weights as "coming soon" when I read it, and I found no technical report with numbers.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          The CosyVoice repository lists GRPO training support for CosyVoice 2 (credited to an NVIDIA contributor, with Triton TensorRT-LLM runtime support) and an RL model Fun-CosyVoice3-0.5B-2512 with training and inference scripts.
+          Source: github.com/FunAudioLLM/CosyVoice README.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="duration">RL on the duration predictor (DMOSpeech 2)</h3>
+      <ul>
+        <li>
+          DMOSpeech 2 optimises the duration predictor with GRPO using speaker similarity and WER rewards, which needs no differentiable path from the metric to the generator.
+          Source: arXiv 2507.14988, abstract and Section 3.2.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The predictor outputs a distribution over remaining length (300 classes of 100 ms, up to 30 s) and is the stochastic policy.
+          For each input, \( K \) lengths are sampled, a 4-step student generates speech for each, and the reward is
+        </li>
+      </ul>
+      <p>\[ r_k = \log p\big(x \mid C(y_k)\big) + \lambda_{\text{SIM}}\, \frac{e_p \cdot e_{y_k}}{\|e_p\|\,\|e_{y_k}\|} \]</p>
+      <p>
+        where \( C \) is a CTC ASR model on mel-spectrograms, \( e_p \) and \( e_{y_k} \) are speaker embeddings of the prompt and the generated speech, and \( \lambda_{\text{SIM}} = 3 \).
+        Source: arXiv 2507.14988, Eq. 4.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <ul>
+        <li>
+          Settings: group size 16, clip \( \varepsilon = 0.2 \), KL weight \( \beta = 0.04 \), sampling temperature 0.7 for exploration, batches with reward spread (max minus min) under 0.01 are skipped, 1.5K GRPO steps after 85K supervised steps, 8 H100 GPUs.
+          Source: arXiv 2507.14988, Section 3.2.2 and Section 4.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Appendix tuning: performance degraded sharply beyond about 1.5K to 2K RL steps, which the authors read as overfitting to the reward.
+          Group size 8 was unstable, 16 and 32 were more stable, 16 was chosen.
+          Source: arXiv 2507.14988, Appendix A.2.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS-en WER 3.750 to 1.752 and SIM 0.672 to 0.698 with the RL duration predictor; Seed-TTS-zh CER 2.000 to 1.527.
+          Source: arXiv 2507.14988, Table 1, text extraction of the table.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Teacher-guided sampling uses the teacher for early denoising steps and the student for the final steps to restore diversity lost to distribution matching distillation ("mode shrinkage").
+          It is a distillation fix, not an RL component.
+          Source: arXiv 2507.14988, abstract and Section 3.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="rewards">
+      <h2>Reward design and failure modes</h2>
+      <ul>
+        <li>
+          Intelligibility: \( 1 - \) WER or CER from a fixed ASR model (Paraformer, Whisper, SenseVoice in different papers), sometimes plus ASR negative log-likelihood.
+          Sources: arXiv 2504.02407, 2606.23190, 2509.18798.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reward text granularity matters: for Japanese, CER computed in the kana domain cuts target-kanji reading error by about 26% relative to orthographic CER under matched GRPO, reaches its best validation point in 4k versus 18k steps, and without KL regularisation shows severe output elongation that KL substantially suppresses.
+          Source: arXiv 2610.07575, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Speaker similarity: cosine between speaker-verification embeddings of the generated audio and the prompt (WavLM-based, WeSpeaker, ERes2Net in different papers).
+          Evaluating with a different verification model than the reward model is the check used by FlowTTS-GRPO (SS1 not in the reward, SS2 in it).
+          Source: arXiv 2606.23190.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          MOS predictors: UTMOS, DNSMOS, SCOREQ are used as evaluators and rewards.
+          Once both clips are clean, no single predictor reliably picks the listener-preferred one and several fall below the accuracy of picking the longer clip.
+          Optimising a single score drives that metric to its optimum while independent held-out judges and a listening test get worse; even an equal-weighted ensemble helps and a calibrated composite resists the behaviour best.
+          Source: arXiv 2609.13150, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Learned subjective rewards (style, naturalness, likability, arousal) with a CER zone constraint to block transcript drift: each reward mainly lifts its own target metric, human transfer is uneven, and Best-of-8 reranking under the same reward is not clearly worse than GRPO perceptually.
+          Source: arXiv 2608.31035, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Learned preference reward: SpeechJudge-GRM (Qwen2.5-Omni-7B, SFT on chain-of-thought rationales then GRPO) reaches 77.2% agreement with human preference on SpeechJudge-Eval versus 72.7% for a Bradley-Terry reward model; the best audio LLM judge tested, Gemini-2.5-Flash, is under 70%.
+          The authors say it can serve as an RL reward.
+          Source: arXiv 2511.07931, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Emotion rewards: Seed-TTS uses speech-emotion-recognition accuracy; DiffRO uses the log-probability of the target emotion from the MTR model; GLM-TTS lists emotion and laughter rewards.
+          Sources: arXiv 2406.02430, 2507.05911, GLM-TTS README.
+          <span class="tag tag--confirmed">Confirmed</span>
+          I found no paper that isolates a prosody-specific RL reward and shows it working.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Flat prosody under transcription rewards: GRPO on CER and NLL lowered error rates but collapsed prosody into monotone speech, and adding speaker similarity as a reward destabilised training and degraded CER.
+          The fix was iterative DPO on a few hundred human-labelled preference pairs per round, which won on human preference (ELO) on a Korean call-centre set.
+          Source: arXiv 2509.18531, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Slow, over-articulated speech is the same hack seen from the other side: Seed-TTS saw lower WER from slower, clearer speech at a naturalness cost.
+          Source: arXiv 2406.02430.
+          <span class="tag tag--confirmed">Confirmed</span>
+          A duration or rate guard in the reward, or a held-out rate metric, would catch it.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          Single-metric hacking outside TTS: in flow-matching speech enhancement, a single reward gives rapid metric gains with degraded fidelity, and a multi-metric reward reduces overfitting.
+          Source: FlowSE-GRPO, arXiv 2601.16483, abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reward-model exploitation: DiffRO-style reward models can be gamed with acoustic artifacts.
+          Source: RRPO, arXiv 2512.04552.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Mitigations reported, by source: ensembles or calibrated composites (2609.13150), KL or W2 anchoring (2610.07575, 2608.03215, 2505.05470), a robust or regularised reward model (2512.04552), human preference pairs (2509.18531), multi-metric rewards (2601.16483), a CER zone constraint (2608.31035), and held-out judges not used in the reward (2606.23190, 2608.03215).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="recipe">
+      <h2>Practical recipe</h2>
+      <p>
+        The steps below combine the settings that two or more of the papers above agree on.
+        The ordering and the defaults are my synthesis.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+      <ol>
+        <li>
+          Start from a converged pretrained or SFT model, which also serves as the frozen reference.
+          All papers above do this.
+          If the flow model must emit a Gaussian (F5R-TTS), that needs its own pretraining run, which is why later work moved to SDE conversion or GROW.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Build prompts as (prompt audio, prompt text, new target text) triples so training matches zero-shot inference, and add hard cases such as repeated words if the model is flow-only.
+          Source: arXiv 2606.23190, Sections 2.1 and 2.5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Sample a group per prompt: 8 to 10 in the speech papers (arXiv 2606.23190, 2608.03215), 16 for the duration policy (arXiv 2507.14988), 24 in the image paper (arXiv 2505.05470).
+          Smaller groups were unstable in two of those papers.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Roll out with fewer denoising steps than at inference (10 versus 32 or 40 in arXiv 2608.03215 and 2505.05470).
+          For the SDE route, inject noise only in a short window of steps and use a noise level near 0.5 to 0.7.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Decode to audio and score with a fixed ASR model and a speaker-verification model, optionally plus a small-weight quality term; standardise each reward before summing; drop groups with near-zero reward spread.
+          Sources: arXiv 2606.23190, 2507.14988.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Compute the group-normalised advantage, take a clipped (SDE route) or regression-weighted (GROW) update on a LoRA adapter or the full model, with KL or W2 anchoring to the reference.
+          Stop on held-out metrics, not training reward: the duration-predictor RL degraded sharply after about 1.5K to 2K steps.
+          Sources: arXiv 2606.23190, 2608.03215, 2507.14988.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Evaluate with a different ASR and speaker model than the reward models, add a held-out naturalness judge, and run a listening test before release.
+          Sources: arXiv 2609.13150, 2606.23190.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Run best-of-N reranking under the same reward as a baseline first, since arXiv 2608.31035 finds it about as good perceptually as GRPO for subjective rewards.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ol>
+
+      <h3 id="cost">Compute relative to pretraining</h3>
+      <ul>
+        <li>
+          F5R-TTS: 1M pretraining updates (batch 160,000 frames) versus 1,100 GRPO updates (batch 6,400 frames), both on 8 A100 40GB GPUs.
+          Source: arXiv 2504.02407, Section 3.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DMOSpeech 2 duration predictor: 85K supervised steps then 1.5K GRPO steps on 8 H100 GPUs.
+          Source: arXiv 2507.14988, Section 4.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          GROW: 200K-update pretrained checkpoint, then several hundred RL updates at learning rate 2e-6 and batch 128.
+          Source: arXiv 2608.03215.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          FlowTTS-GRPO: 9,545 steps for CosyVoice 3.0 and 1,289 steps for F5-TTS on 8 GPUs, with LoRA on under 3% of the flow model; the authors note F5-TTS needed substantially more wall-clock time per step and resource limits capped the run.
+          Source: arXiv 2606.23190, Sections 3.3 and 4.2.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Rollouts dominate cost.
+          In GROW, a rollout costs about patch count times NFE passes of the diffusion head, doubled by CFG, which is why dropping the rollout NFE from 32 to 10 gave a 2.9x speedup.
+          Source: arXiv 2608.03215.
+          <span class="tag tag--confirmed">Confirmed</span>
+          Each rollout also needs a vocoder pass plus ASR and speaker passes; I did not find a paper that reports the share of time spent in reward models.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          A like-for-like pretraining-to-RL compute ratio is not stated by any of these papers.
+          Step counts compare updates at different batch sizes, so the figures above bound the ratio only loosely.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+
+      <h3 id="gains">Typical reported gains, with test set</h3>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>System</th>
+              <th>Method</th>
+              <th>Test set</th>
+              <th>Reported change</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>F5R-TTS</td>
+              <td>GRPO, Gaussian outputs</td>
+              <td>Seed-TTS-eval test-cn</td>
+              <td>WER 2.10% to 1.48%, SIM 0.698 to 0.730</td>
+              <td>arXiv 2504.02407</td>
+            </tr>
+            <tr>
+              <td>GROW on DiTAR</td>
+              <td>Advantage-weighted regression</td>
+              <td>Average of LibriSpeech-PC test-clean, Seed-TTS EN, Seed-TTS ZH</td>
+              <td>WER 2.016 to 1.558, SIM 0.676 to 0.715</td>
+              <td>arXiv 2608.03215</td>
+            </tr>
+            <tr>
+              <td>Seed-TTS</td>
+              <td>REINFORCE, SIM and WER rewards</td>
+              <td>Seed-TTS ZH, EN, hard</td>
+              <td>WER 1.115 to 1.002, 2.249 to 1.945, 7.585 to 6.423</td>
+              <td>arXiv 2406.02430</td>
+            </tr>
+            <tr>
+              <td>FlowTTS-GRPO on CosyVoice 3.0-0.5B-2512</td>
+              <td>Flow-stage SDE GRPO</td>
+              <td>Seed-TTS-Eval test-zh</td>
+              <td>SS1 0.777 to 0.804, SS2 0.830 to 0.859</td>
+              <td>arXiv 2606.23190</td>
+            </tr>
+            <tr>
+              <td>DMOSpeech 2</td>
+              <td>GRPO on duration predictor</td>
+              <td>Seed-TTS-en</td>
+              <td>WER 3.750 to 1.752 (table text extraction)</td>
+              <td>arXiv 2507.14988</td>
+            </tr>
+            <tr>
+              <td>CosyVoice3-0.5B</td>
+              <td>DiffRO</td>
+              <td>CV3-Eval multilingual voice cloning</td>
+              <td>zh 3.89 to 2.89, ja 10.4 to 5.15, ko 12.8 to 4.02 (CER or WER)</td>
+              <td>arXiv 2505.17589</td>
+            </tr>
+            <tr>
+              <td>Flow-GRPO (images, for reference)</td>
+              <td>ODE-to-SDE GRPO</td>
+              <td>GenEval</td>
+              <td>63% to 95%</td>
+              <td>arXiv 2505.05470</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        These rows come from different training data, base models, reward models and evaluators, so they are not comparable across rows.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+
+      <h3 id="industry">What industry systems report using</h3>
+      <ul>
+        <li>
+          ByteDance Seed-TTS: REINFORCE with SIM, WER and emotion-recognition rewards on an AR model; DPO also tried.
+          Source: arXiv 2406.02430.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Alibaba CosyVoice 3: DiffRO on speech tokens with a multi-task reward model; the repository also supports GRPO.
+          Source: arXiv 2505.17589, 2507.05911; CosyVoice README.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Alibaba Tongyi Lab FlowTTS-GRPO: flow-stage SDE GRPO on CosyVoice 3.0 and F5-TTS.
+          Source: arXiv 2606.23190.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Z.ai GLM-TTS: multi-reward GRPO on the LM stage.
+          Source: GLM-TTS README.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          I found no first-party RL write-up from ElevenLabs, Cartesia, Hume, Sesame or OpenAI.
+          <span class="tag tag--reported">Reported</span>
+          This is absence of evidence from my search, not evidence that they do not use RL.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicts</h2>
+      <ul>
+        <li>
+          Seed-TTS RL algorithm: the Seed-TTS paper says it compared PPO, REINFORCE and DPO and showcases REINFORCE.
+          FlowTTS-GRPO describes Seed-TTS as using PPO; F5R-TTS lists PPO, REINFORCE and DPO.
+          I follow the primary paper (REINFORCE for the reported models).
+        </li>
+        <li>
+          CFG during RL: FlowTTS-GRPO reports faster convergence with no CFG in training rollouts.
+          GROW rolls out with CFG (scale 1.5) and finds no-CFG rollouts give a similar WER gain but a smaller SIM gain (0.033 versus 0.039).
+          The two are different models (flow head in an AR-diffusion model versus a standalone flow model) and different rewards, so this is not a clean contradiction.
+        </li>
+        <li>
+          Where to apply RL in hybrids: FlowTTS-GRPO argues LM RL drives intelligibility and flow RL drives timbre and quality.
+          DiffRO's own MOS-control result shows an LM-only reward can be partially undone by the flow stage.
+          No paper I found trains both stages jointly or compares the two orders.
+        </li>
+        <li>
+          KL weight for speech flow models: FlowTTS-GRPO includes a KL term but I found no value in the extracted text.
+          GROW uses \( \beta_{W_2} = 0.025 \) and DMOSpeech 2 uses \( \beta = 0.04 \) on the duration policy.
+          I found no KL sweep for a speech flow model; the only \( \beta \) ablation is in Flow-GRPO on images.
+        </li>
+        <li>
+          CosyVoice GRPO numbers: an earlier research file cites a CER of 4.08% to 3.36% from a GitCode mirror summary.
+          I could not confirm it in the CosyVoice README, and 4.08 equals the CosyVoice 2 Chinese CER in the CosyVoice 3 multilingual table (arXiv 2505.17589, Table 5), so the mirror figure may be a misread.
+          Do not quote it.
+        </li>
+        <li>
+          Table-extraction numbers: FlowTTS-GRPO Table 2 (F5-TTS and CosyVoice 3.0 rows) and DMOSpeech 2 Table 1 were read from garbled PDF text.
+          Check them against the rendered tables before quoting.
+        </li>
+        <li>
+          Prosody and duration rewards: no confirmed automatic reward for prosody naturalness exists beyond learned MOS or preference models; arXiv 2509.18531 argues there is none.
+          Qwen-Audio-3.0-TTS (arXiv 2607.23938) is reported by a search summary to use a composite with prosodic naturalness, but I did not open it, so it is excluded here.
+        </li>
+        <li>
+          Compute: no paper gives GPU-hours for RL against pretraining on the same model, and none reports the reward-model share of RL wall-clock time.
+        </li>
+        <li>
+          Not checked: verl, TRL or OpenRLHF audio support; whether the arXiv ids dated 2606 to 2610 have later versions with changed numbers.
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li>Flow-GRPO: Training Flow Matching Models via Online RL. arXiv 2505.05470. Abstract and full text read.</li>
+        <li>F5R-TTS: Improving Flow-Matching based Text-to-Speech with Group Relative Policy Optimization. arXiv 2504.02407. Abstract and full text read.</li>
+        <li>GROW: Group-Relative Advantage-Weighted On-Policy Reinforcement Learning of Autoregressive-Diffusion Text-to-Speech model. arXiv 2608.03215. Abstract and full text read.</li>
+        <li>FlowTTS-GRPO: Online Reinforcement Learning with Multi-Objective Reward Optimization for Flow-Matching Based Text-to-Speech. arXiv 2606.23190. Abstract and full text read.</li>
+        <li>DMOSpeech 2: Reinforcement Learning for Duration Prediction in Metric-Optimized Speech Synthesis. arXiv 2507.14988. Abstract and full text read.</li>
+        <li>CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training. arXiv 2505.17589. Abstract and full text read.</li>
+        <li>Differentiable Reward Optimization for LLM based TTS system. arXiv 2507.05911. Abstract and full text read.</li>
+        <li>Seed-TTS: A Family of High-Quality Versatile Speech Generation Models. arXiv 2406.02430. Abstract and RL section read.</li>
+        <li>Group Relative Policy Optimization for Text-to-Speech with Large Language Models. arXiv 2509.18798. Abstract read.</li>
+        <li>No Verifiable Reward for Prosody: Toward Preference-Guided Prosody Learning in TTS. arXiv 2509.18531. Abstract read.</li>
+        <li>RRPO: Robust Reward Policy Optimization for LLM-based Emotional TTS. arXiv 2512.04552. Abstract read.</li>
+        <li>The Limits of Reference-Free Speech Quality Metrics as Evaluators and Rewards on Modern Text-to-Speech. arXiv 2609.13150. Abstract read.</li>
+        <li>When Does Predictor-Based RL Align with Human Perception? A Study of Subjective Rewards in Codec-Based Speech Language Models. arXiv 2608.31035. Abstract read.</li>
+        <li>Pronunciation-Oriented Reinforcement Learning for Japanese Text-to-Speech with Kana-Domain ASR Rewards. arXiv 2610.07575. Abstract read.</li>
+        <li>FlowSE-GRPO: Training Flow Matching Speech Enhancement via Online Reinforcement Learning. arXiv 2601.16483. Abstract read.</li>
+        <li>SpeechJudge: Towards Human-Level Judgment for Speech Naturalness. arXiv 2511.07931. Abstract read.</li>
+        <li>github.com/FunAudioLLM/CosyVoice README (GRPO support, Fun-CosyVoice3-0.5B-2512 RL model).</li>
+        <li>github.com/zai-org/GLM-TTS README (multi-reward GRPO).</li>
+        <li>Starting material: failure-modes-eval.html in this folder, materials/research/speech-to-speech/13-online-rl-rewards-speech.md, speech-lit-review chapters 05-70 and 06-20.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Built from arXiv abstracts and PDFs read on 2026-10-13. Table values flagged Reported need a visual check before publication.</p>
+  </footer>
+</body>
+</html>

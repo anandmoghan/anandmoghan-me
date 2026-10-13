@@ -444,7 +444,8 @@ html {
    Classes: d-box (neutral block), d-box--accent (the component being discussed),
    d-box--muted (optional/external), d-group (dashed container), d-text, d-text--small,
    d-text--muted, d-arrow (line with marker-end="url(#arrow)"), d-arrow--dashed,
-   d-lane (timeline lane background). Define the arrow marker once per svg:
+   d-lane (timeline lane background), d-sub / d-sup (subscript / superscript tspan, see the
+   guide: shift with dy and undo the shift on the next tspan). Define the arrow marker once per svg:
    <defs><marker id="arrow" ...><path class="d-arrowhead" .../></marker></defs> */
 .prose figure.diagram {
   background: var(--surface);
@@ -510,6 +511,11 @@ html {
   font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 400;
+}
+
+.prose .diagram .d-sub,
+.prose .diagram .d-sup {
+  font-size: 0.75em;
 }
 
 .prose .diagram .d-arrow {

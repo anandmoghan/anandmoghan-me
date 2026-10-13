@@ -1,0 +1,208 @@
+<section id="online-rl">
+  <h2>Online RL for Flow-Matching TTS</h2>
+  <p>
+    Pretraining regresses a velocity field onto data, and nothing in that loss targets WER, speaker similarity or naturalness, which the <a href="#failure-modes-and-evaluation-how-these-models-are-scored">evaluation harness</a> already scores cheaply.
+    GRPO closes that gap by scoring a group of samples per prompt and pushing toward the better ones, but it assumes a stochastic policy with a likelihood at every step, and an Euler ODE sampler has neither.
+  </p>
+
+  <!-- == Why GRPO does not fit == -->
+  <h3 id="online-rl-why-grpo-does-not-fit">Why GRPO does not fit a flow model</h3>
+  <p>
+    For a prompt with \( G \) rollouts and scalar rewards \( R^i \), the advantage is:
+  </p>
+  \[
+    \hat A^{i} = \frac{R^{i} - \operatorname{mean}_{j} R^{j}}{\operatorname{std}_{j} R^{j}}
+  \]
+  <p>
+    A rollout counts as good only if it beats its siblings, so no learned critic is needed.
+    If every rollout scores the same, the standard deviation is zero and the group carries no signal, which is why <a href="#online-rl-a-working-recipe">the recipe below</a> drops such groups.
+    The update multiplies the advantage by a clipped ratio of new to old step likelihoods, with a KL penalty to a frozen reference.
+    That ratio is where a flow model breaks: once the initial noise is drawn every ODE step is deterministic, so a step has no density, and the group explores only through its starting noise.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 230" role="img"
+      aria-label="GRPO loop: the flow model with a LoRA adapter samples G rollouts, a
+        vocoder renders them, reward models score them, group advantages drive a clipped
+        update anchored to a frozen reference, and the new adapter feeds the next round">
+      <defs>
+        <marker id="online-rl-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Rollout row == -->
+      <rect class="d-box" x="10" y="30" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="52" text-anchor="middle"
+        dominant-baseline="middle">Text + prompt</text>
+
+      <rect class="d-box d-box--accent" x="160" y="30" width="150" height="44" rx="8"/>
+      <text class="d-text" x="235" y="52" text-anchor="middle"
+        dominant-baseline="middle">Flow + LoRA</text>
+
+      <rect class="d-box" x="340" y="30" width="140" height="44" rx="8"/>
+      <text class="d-text" x="410" y="52" text-anchor="middle"
+        dominant-baseline="middle">G rollouts</text>
+
+      <rect class="d-box" x="530" y="30" width="140" height="44" rx="8"/>
+      <text class="d-text" x="600" y="52" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+
+      <!-- == Update row == -->
+      <rect class="d-box" x="530" y="150" width="140" height="44" rx="8"/>
+      <text class="d-text" x="600" y="172" text-anchor="middle"
+        dominant-baseline="middle">Reward models</text>
+
+      <rect class="d-box" x="340" y="150" width="140" height="44" rx="8"/>
+      <text class="d-text" x="410" y="172" text-anchor="middle"
+        dominant-baseline="middle">Group advantage</text>
+
+      <rect class="d-box" x="160" y="150" width="150" height="44" rx="8"/>
+      <text class="d-text" x="235" y="172" text-anchor="middle"
+        dominant-baseline="middle">Clipped update</text>
+
+      <rect class="d-box d-box--muted" x="10" y="150" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="172" text-anchor="middle"
+        dominant-baseline="middle">Frozen reference</text>
+
+      <!-- == Arrows == -->
+      <path class="d-arrow" d="M 130 52 L 158 52" marker-end="url(#online-rl-arrow)"/>
+      <path class="d-arrow" d="M 310 52 L 338 52" marker-end="url(#online-rl-arrow)"/>
+      <path class="d-arrow" d="M 480 52 L 528 52" marker-end="url(#online-rl-arrow)"/>
+      <path class="d-arrow" d="M 600 74 L 600 148" marker-end="url(#online-rl-arrow)"/>
+      <path class="d-arrow" d="M 530 172 L 482 172" marker-end="url(#online-rl-arrow)"/>
+      <path class="d-arrow" d="M 340 172 L 312 172" marker-end="url(#online-rl-arrow)"/>
+      <path class="d-arrow" d="M 130 172 L 158 172" marker-end="url(#online-rl-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 235 150 L 235 76"
+        marker-end="url(#online-rl-arrow)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="144" y="44" text-anchor="middle">c</text>
+      <text class="d-text--muted" x="504" y="44" text-anchor="middle">mels</text>
+      <text class="d-text--muted" x="610" y="115">audio</text>
+      <text class="d-text--muted" x="506" y="164" text-anchor="middle">R</text>
+      <text class="d-text--muted" x="326" y="164" text-anchor="middle">Â</text>
+      <text class="d-text--muted" x="144" y="164" text-anchor="middle">KL</text>
+      <text class="d-text--muted" x="245" y="115">new adapter</text>
+      <text class="d-text--small" x="600" y="214" text-anchor="middle">ASR, speaker, MOS</text>
+      <text class="d-text--small" x="410" y="214" text-anchor="middle">within each prompt</text>
+    </svg>
+    <figcaption>
+      Figure: one GRPO round, in which \( G \) rollouts per prompt are rendered, scored and turned into group advantages for a clipped update anchored to the frozen reference.
+    </figcaption>
+  </figure>
+
+  <!-- == Routes == -->
+  <h3 id="online-rl-four-ways-around-it">Four ways around it</h3>
+  <p>
+    The four workarounds differ in what becomes the policy.
+    The first is to <strong>turn the ODE into an SDE</strong> for rollouts.
+    Adding noise with a chosen rollout schedule \( \sigma_t \), and correcting the drift with a score term that for rectified flow is a function of \( v_\theta \), keeps the marginals at every \( t \):
+  </p>
+  \[
+    x_{t+\Delta t} = x_t + \mu_\theta(x_t, t)\,\Delta t + \sigma_t \sqrt{\Delta t}\,z
+  \]
+  <p>
+    Here \( \mu_\theta \) is the velocity plus that correction and \( z \sim \mathcal{N}(0, I) \) is a fresh draw per step, so each step is a Gaussian with a closed-form density and GRPO applies unchanged.
+    Rollouts dominate the cost, so they run short: for Flow-GRPO on images, cutting rollout steps from 40 to 10 trained over 4x faster with no loss in final reward [35].
+    The FlowTTS-GRPO recipe also injects noise only in a short window of early steps, trains only those, and drops CFG from rollouts, which converged faster and still helped with CFG back on at inference [36].
+    The catch is that the injected noise is itself a defect: an SDE baseline on an AR-diffusion TTS model lost UTMOS on average [37].
+  </p>
+  <p>
+    The second <strong>retrains the network to output a Gaussian</strong> over the velocity, so every step has a density without changing the sampler.
+    It works, but F5R-TTS needed a 1M-update pretraining run before its 1,100 GRPO updates [38].
+  </p>
+  <p>
+    The third <strong>skips the likelihood</strong>.
+    Roll out with the ordinary ODE sampler, take each rollout's final latent \( x_1^{i} \), and re-noise it along the straight path with \( x_0 \sim \mathcal{N}(0, I) \) and \( \sigma_{\min} = 0 \):
+  </p>
+  \[
+    x_t^{i} = (1 - t)\,x_0 + t\,x_1^{i}
+  \]
+  <p>
+    The flow matching loss is then weighted by the group advantage \( \hat A^{i} \), with a second term that anchors the velocity to the frozen reference velocity \( v_{\text{ref}} \) at weight \( \beta \):
+  </p>
+  \[
+    \mathcal{L} = \sum_{i} \Big[ \hat A^{i} \big\| v_\theta(x_t^{i}, t) - (x_1^{i} - x_0) \big\|^2 + \beta \big\| v_\theta(x_t^{i}, t) - v_{\text{ref}}(x_t^{i}, t) \big\|^2 \Big]
+  \]
+  <p>
+    The advantages have zero mean, so the loss pulls toward above-average rollouts and away from the rest.
+    The sign matters: WER and SIM rewards cluster tightly within a group, so positive-only weights mostly teach the model to imitate its own samples.
+  </p>
+  <p>
+    The fourth <strong>leaves the flow model alone</strong> and runs RL where likelihoods already exist: the speech-token LM in two-stage systems, or a categorical <a href="#training-duration">duration predictor</a> in F5-TTS-style models.
+    Industry has used this route most: Seed-TTS ran REINFORCE on SIM and WER rewards [15], and CosyVoice 3 backpropagated a differentiable reward into its tokens [26].
+    In those systems the LM sets intelligibility; when CosyVoice 3's flow stage was trained with GRPO, its ASR reward stalled near 0.99 while similarity kept climbing [36].
+    The reverse holds too: a flow decoder and vocoder trained on clean audio partly undo an LM-only MOS reward, and speaker attributes respond weakly because the speaker enters at the flow stage.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Route</th>
+          <th>Policy</th>
+          <th>Extra cost</th>
+          <th>Moves most</th>
+          <th>Main catch</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SDE rollouts</td>
+          <td>Gaussian flow steps</td>
+          <td>Low with a short noise window</td>
+          <td>Similarity and quality; WER too where the flow stage sets intelligibility</td>
+          <td>Injected noise can cost quality</td>
+        </tr>
+        <tr>
+          <td>Gaussian output head</td>
+          <td>Gaussian over the velocity</td>
+          <td>A pretraining run</td>
+          <td>WER and SIM</td>
+          <td>Changes the base model</td>
+        </tr>
+        <tr>
+          <td>Advantage-weighted loss</td>
+          <td>None; no likelihood ratio</td>
+          <td>Low: ODE rollouts at reduced NFE</td>
+          <td>WER and SIM, MOS held</td>
+          <td>My read: with no clipping, only the anchor limits drift</td>
+        </tr>
+        <tr>
+          <td>LM or duration RL</td>
+          <td>Tokens or a length distribution</td>
+          <td>Low: standard LLM tooling</td>
+          <td>Intelligibility, pacing</td>
+          <td>Cannot fix timbre</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- == Recipe == -->
+  <h3 id="online-rl-a-working-recipe">A working recipe</h3>
+  <p>
+    Start from a converged checkpoint, which doubles as the frozen reference, and build prompts as (prompt audio, prompt text, new target text) triples so RL sees the zero-shot task.
+    Sample 8 to 16 rollouts per prompt: for Flow-GRPO on images, groups of 6 and 12 collapsed where 24 held [35], and a duration policy was unstable at 8 but not at 16 [12].
+    Score each rollout with a fixed ASR model (one minus WER or CER), a speaker-verification cosine to the prompt and optionally a MOS predictor.
+    Normalise each reward by its batch standard deviation before summing so the noisiest one does not dominate; FlowTTS-GRPO weights similarity and ASR at 1.0 and DNSMOS at 0.4 [36].
+    Drop groups whose rewards barely differ.
+    Train a LoRA adapter (rank 32 is under 3% of CosyVoice 3's flow model [36]) with a KL or velocity anchor, for hundreds to about ten thousand updates against hundreds of thousands to a million in pretraining.
+  </p>
+
+  <!-- == Reward hacking == -->
+  <h3 id="online-rl-reward-hacking">Reward hacking</h3>
+  <p>
+    The policy optimises the reward models, not the listener.
+    Seed-TTS lowered WER by speaking slowly and over-articulating, at a cost in naturalness [15].
+    Learned reward models get gamed by acoustic artifacts, much as a single MOS predictor does in <a href="#failure-modes-and-evaluation-post-training-with-rewards">the previous section</a>.
+    Training length is its own risk: the DMOSpeech 2 duration policy degraded sharply after about 1.5K to 2K steps [12].
+  </p>
+  <p>
+    I would use three defences.
+    Sum several rewards and keep the KL anchor on; on images, KL and early stopping were not interchangeable.
+    Evaluate with judges the policy never saw, a different ASR model and speaker encoder than the rewards use; in FlowTTS-GRPO, WavLM similarity, not a reward, still rose from 0.777 to 0.804 on seed-tts-eval Mandarin [36].
+    Stop on a held-out listening set that tracks speaking rate, not on training reward.
+  </p>
+</section>
