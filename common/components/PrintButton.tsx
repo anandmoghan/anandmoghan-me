@@ -18,7 +18,7 @@ export default function PrintButton() {
     <button
       onClick={handlePrint}
       disabled={isPrinting}
-      className="print-button"
+      className="print-button btn btn--outline btn--sm"
       aria-label="Print page"
       title="Print or save as PDF"
     >

@@ -1,0 +1,144 @@
+<section id="the-modern-llm-stack">
+  <h2>The Modern LLM Stack</h2>
+  <p>Production systems combine these innovations:</p>
+  <p><strong>The Complete Stack:</strong></p>
+  <ul>
+    <li><strong>Training</strong>: FlashAttention for memory efficiency, RoPE for position encoding</li>
+    <li><strong>Architecture</strong>: GQA for reduced KV cache, optional sliding window for long context</li>
+    <li><strong>Serving</strong>: PagedAttention (vLLM) for memory management, continuous batching for throughput</li>
+    <li><strong>Inference acceleration</strong>: Speculative decoding for 2-3x speedup, prompt caching for up to 90% cost reduction</li>
+  </ul>
+  <p>
+    Open-weight models like Llama 3 and Mistral document most of this stack publicly;
+    closed labs don't publish theirs, but the same bottlenecks apply.
+    Each innovation solves a specific bottleneck:
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Technique</th>
+          <th>Problem Solved</th>
+          <th>Impact</th>
+          <th>Memory Impact</th>
+          <th>When to Use</th>
+          <th>Adoption</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>FlashAttention</td>
+          <td>Memory I/O bottleneck</td>
+          <td>2-4x training speed</td>
+          <td>\( O(N) \) vs \( O(N^2) \) space*</td>
+          <td>Always (training)</td>
+          <td>Universal</td>
+        </tr>
+        <tr>
+          <td>Mixed Precision</td>
+          <td>Memory &amp; compute</td>
+          <td>2-3x speedup</td>
+          <td>~50% activation memory</td>
+          <td>Always (training)</td>
+          <td>Universal</td>
+        </tr>
+        <tr>
+          <td>GQA</td>
+          <td>KV cache size</td>
+          <td>4x inference memory (typical config)</td>
+          <td>4x reduction</td>
+          <td>Always (inference)</td>
+          <td>Llama 3, Mistral, Gemma 2</td>
+        </tr>
+        <tr>
+          <td>RoPE</td>
+          <td>Position encoding</td>
+          <td>Better extrapolation</td>
+          <td>Zero parameters</td>
+          <td>Default choice</td>
+          <td>Most modern LLMs</td>
+        </tr>
+        <tr>
+          <td>PagedAttention</td>
+          <td>Memory fragmentation</td>
+          <td>2-4x serving throughput</td>
+          <td>~60% less waste</td>
+          <td>Serving at scale</td>
+          <td>vLLM standard</td>
+        </tr>
+        <tr>
+          <td>Sliding Window</td>
+          <td>Long context compute</td>
+          <td>Linear vs quadratic</td>
+          <td>KV cache bounded by window</td>
+          <td>100K+ contexts</td>
+          <td>Mistral, Longformer</td>
+        </tr>
+        <tr>
+          <td>Ring Attention</td>
+          <td>Single-device memory limit</td>
+          <td>Device-count× longer sequences</td>
+          <td>Linear with devices</td>
+          <td>Ultra-long context (research)</td>
+          <td>Research/Ultra-long context</td>
+        </tr>
+        <tr>
+          <td>Speculative Decoding</td>
+          <td>Sequential generation</td>
+          <td>2-3x lower latency at small batch</td>
+          <td>+small model overhead</td>
+          <td>Latency-critical apps</td>
+          <td>Google PaLM, Meta Llama</td>
+        </tr>
+        <tr>
+          <td>Prompt Caching</td>
+          <td>Redundant computation</td>
+          <td>Up to 85% lower TTFT, up to 90% lower cost</td>
+          <td>+cache storage</td>
+          <td>Shared prompts/RAG</td>
+          <td>Claude, GPT-4, Gemini</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    *Note: FlashAttention reduces memory usage from \( O(N^2) \) to \( O(N) \)
+    but maintains \( O(N^2) \) computational complexity (FLOPs).
+    The speedup comes from optimizing memory I/O (HBM ↔ SRAM), not reducing arithmetic operations.
+  </p>
+
+  <h3 id="techniques-simplified">Techniques Simplified: What to use?</h3>
+  <p>
+    <strong>Training from scratch:</strong>
+    Mixed Precision (BF16, or FP8 on H100+), FlashAttention, Gradient Checkpointing (if memory-constrained),
+    GQA in architecture, RoPE for position encoding
+  </p>
+  <p>
+    <strong>Fine-tuning:</strong>
+    Mixed Precision (BF16, or FP8 on H100+), FlashAttention, Gradient Checkpointing,
+    LoRA/QLoRA for parameter-efficient fine-tuning
+  </p>
+  <p>
+    <strong>Serving (latency-critical, chatbots):</strong>
+    FP8 inference (H100+) or BF16, GQA or MQA, PagedAttention (vLLM), Continuous Batching,
+    Speculative Decoding (with draft model), Prompt Caching (with common prefixes), KV cache quantization (INT8)
+  </p>
+  <p>
+    <strong>Serving (throughput-critical, batch jobs):</strong>
+    FP8 inference (H100+) or BF16, PagedAttention, Continuous Batching, Larger static batches, Prompt Caching.
+    Skip Speculative Decoding, which is less effective for large batches.
+  </p>
+  <p>
+    <strong>Long context (100K+ tokens):</strong>
+    FlashAttention, Sliding Window Attention, RoPE scaling (NTK-aware, YaRN), Sparse patterns
+  </p>
+  <p>
+    <strong>Ultra-long context (1M+ tokens, research):</strong>
+    Ring Attention, Sparse attention patterns, Efficient position encoding.
+    Consider alternatives like SSMs or linear attention.
+  </p>
+  <p>
+    Hardware-aware algorithm design matters as much as the math.
+    Understanding memory hierarchy, parallelism opportunities, and hardware capabilities is essential.
+  </p>
+</section>

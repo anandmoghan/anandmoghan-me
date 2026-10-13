@@ -1,0 +1,104 @@
+<section id="attention-vs-alternative-sequence-models">
+  <h2>Attention vs Alternative Sequence Models</h2>
+  <p>
+    While attention + modern optimizations dominates production systems,
+    it's worth understanding alternatives to appreciate why attention won, and when you might consider something else.
+  </p>
+  <p>
+    Attention isn't the only way to model sequences.
+    Understanding the trade-offs helps explain why attention dominates:
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Mechanism</th>
+          <th>Time Complexity</th>
+          <th>Parallelizable</th>
+          <th>Long-range</th>
+          <th>Space</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>RNN/LSTM</td>
+          <td>\( O(n \cdot d^2) \)</td>
+          <td>No (Sequential)</td>
+          <td>Weak</td>
+          <td>\( O(n \cdot d) \)</td>
+        </tr>
+        <tr>
+          <td>CNN</td>
+          <td>\( O(n \cdot k \cdot d^2) \)</td>
+          <td>Yes</td>
+          <td>Limited</td>
+          <td>\( O(n \cdot d) \)</td>
+        </tr>
+        <tr>
+          <td>Attention</td>
+          <td>\( O(n^2 \cdot d) \)</td>
+          <td>Yes</td>
+          <td>Strong</td>
+          <td>\( O(n^2 + n \cdot d) \)</td>
+        </tr>
+        <tr>
+          <td>Linear Attn</td>
+          <td>\( O(n \cdot d^2) \)</td>
+          <td>Yes</td>
+          <td>Moderate</td>
+          <td>\( O(n \cdot d) \)</td>
+        </tr>
+        <tr>
+          <td>SSM (Mamba)</td>
+          <td>\( O(n \cdot d^2) \)</td>
+          <td>Yes</td>
+          <td>Strong</td>
+          <td>\( O(n \cdot d) \)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Where \( n \) = sequence length, \( d \) = hidden dimension, \( k \) = kernel size</p>
+  <p>
+    <strong>Attention won because</strong>: Parallelization + long-range modeling &gt; complexity cost.
+    Modern hardware (GPUs/TPUs) is optimized for parallel matrix operations,
+    making attention's \( O(n^2) \) complexity acceptable for practical sequence lengths.
+  </p>
+  <p><strong>Emerging alternatives</strong>:</p>
+  <ul>
+    <li><strong>Linear Attention</strong> (Linformer, Performer): Approximate attention with \( O(n) \) complexity using low-rank projections or random features</li>
+    <li><strong>State Space Models</strong> (Mamba, S4): Recurrent models with efficient parallelization during training</li>
+    <li><strong>RWKV</strong>: Hybrid approach combining RNN efficiency with Transformer-like parallelization</li>
+  </ul>
+  <p>
+    These alternatives show promise for ultra-long contexts (1M+ tokens) where \( O(n^2) \) becomes prohibitive,
+    but standard attention remains dominant for most applications.
+  </p>
+
+  <h4>When to Consider Alternatives</h4>
+  <p>Attention alternatives make sense when:</p>
+  <ol>
+    <li>
+      <strong>Ultra-long context (1M+ tokens)</strong>: SSMs or linear attention may be viable
+      when \( O(n^2) \) becomes truly prohibitive,
+      though Ring Attention + sparse patterns often work better
+    </li>
+    <li>
+      <strong>Streaming inference</strong>: RNNs/SSMs have constant memory regardless of history length,
+      useful for infinite-length streaming applications
+    </li>
+    <li>
+      <strong>Edge deployment</strong>: Simpler models (RNNs, small CNNs)
+      may fit resource constraints better than attention-based models
+    </li>
+    <li>
+      <strong>Specific inductive biases</strong>: CNNs for local patterns (images, audio),
+      RNNs for true sequential processing with hidden state
+    </li>
+  </ol>
+  <p>
+    For most production LLMs, standard attention + modern optimizations (FlashAttention, GQA, PagedAttention) remains optimal.
+    The ecosystem, tooling, and empirical results strongly favor attention-based architectures
+    for the 1K-100K token range that covers most real-world applications.
+  </p>
+</section>

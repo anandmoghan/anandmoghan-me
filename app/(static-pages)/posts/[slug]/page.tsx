@@ -1,17 +1,9 @@
 import { getAllPosts, getPostBySlug } from '@/common/utils/post';
-import { compile } from '@mdx-js/mdx';
-import rehypeKatex from 'rehype-katex';
-import remarkMath from 'remark-math';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import rehypeHeadingIds from '@/common/utils/rehype-heading-ids';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github.css';
-import { run } from '@mdx-js/mdx';
-import * as runtime from 'react/jsx-runtime';
-import CodeBlock from '@/common/components/CodeBlock';
+import CodeCopyButtons from '@/common/components/CodeCopyButtons';
 import TableOfContents from '@/common/components/TableOfContents';
 import PrintButton from '@/common/components/PrintButton';
 import type { Metadata } from 'next';
@@ -90,112 +82,35 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
-  const compiled = await compile(post.content, {
-    outputFormat: 'function-body',
-    remarkPlugins: [remarkMath, remarkGfm],
-    rehypePlugins: [rehypeKatex, rehypeHighlight, rehypeHeadingIds],
-  });
-
-  const { default: Content } = await run(compiled, {
-    ...runtime,
-    baseUrl: import.meta.url,
-  } as any);
-
-  // Custom components for MDX
-  const components = {
-    pre: (props: any) => (
-      <div style={{ margin: '1em 0' }}>
-        <CodeBlock {...props} />
-      </div>
-    ),
-    img: (props: any) => (
-      <span style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        margin: '2rem auto',
-        maxWidth: '800px'
-      }}>
-        <img
-          {...props}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '600px',
-            height: 'auto',
-            objectFit: 'contain',
-            borderRadius: '8px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-          }}
-        />
-        {props.alt && (
-          <span style={{
-            display: 'block',
-            marginTop: '0.75rem',
-            textAlign: 'center',
-            fontSize: '0.875rem',
-            fontStyle: 'italic',
-            color: 'var(--muted)',
-            maxWidth: '90%'
-          }}>
-            {props.alt}
-          </span>
-        )}
-      </span>
-    ),
-    table: (props: any) => (
-      <div className="table-wrapper">
-        <table {...props} />
-      </div>
-    ),
-    a: (props: any) => (
-      <a {...props}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          wordBreak: 'break-word',
-          overflowWrap: 'break-word',
-          ...props.style
-        }}
-      />
-    ),
-  };
-
   return (
     <main className="min-h-screen">
       {/* Header Section */}
-      <section className="relative py-8 px-6 sm:px-8 lg:px-12">
-        <div className="absolute inset-0 -z-10" style={{
-          background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)'
-        }}></div>
+      <section className="post-header py-8 px-4 sm:px-8 lg:px-12">
         <div className="max-w-7xl mx-auto">
-          <Link 
+          <Link
             href={post.published ? "/posts" : "/posts?unpublished=true"}
-            className="inline-flex items-center gap-2 mb-6 text-sm font-medium transition-colors hover:opacity-70"
-            style={{ color: 'var(--accent)' }}
+            className="back-link tap mb-4"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Back to Posts
           </Link>
-          
+
           {!post.published && (
             <div className="mb-3">
-              <span className="inline-block px-2 py-1 rounded text-sm font-medium" style={{
-                backgroundColor: '#000',
-                color: '#fff'
-              }}>
+              <span className="badge badge--warn">
                 Draft
               </span>
             </div>
           )}
-          
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-4 leading-tight" style={{ color: 'var(--foreground)' }}>
+
+          <h1 className="page-title mb-4">
             {post.title}
           </h1>
-          <div className="w-20 h-1 rounded-full mb-4" style={{ backgroundColor: 'var(--accent)' }}></div>
-          
-          <div className="flex items-center gap-3 text-sm mb-3" style={{ color: 'var(--muted)' }}>
+          <div className="accent-rule mb-4"></div>
+
+          <div className="meta-line mb-3">
             <time dateTime={post.publishedAt.toISOString()}>
               {post.publishedAt.toLocaleDateString('en-US', {
                 year: 'numeric',
@@ -203,11 +118,9 @@ export default async function PostPage({ params }: PostPageProps) {
                 day: 'numeric',
               })}
             </time>
-            <span>•</span>
             <span>{post.metadata.readingTime} min read</span>
-            <span>•</span>
             <span>{post.metadata.wordCount} words</span>
-            <span className="ml-auto">
+            <span className="meta-line__end">
               <PrintButton />
             </span>
           </div>
@@ -217,12 +130,7 @@ export default async function PostPage({ params }: PostPageProps) {
               {post.tags.map(tag => (
                 <span
                   key={tag.id}
-                  className="px-3 py-1 text-sm font-medium rounded-full"
-                  style={{
-                    backgroundColor: `${tag.color}20`,
-                    color: tag.color,
-                    border: `1px solid ${tag.color}40`
-                  }}
+                  className="badge badge--accent"
                   title={tag.description}
                 >
                   {tag.name}
@@ -234,22 +142,21 @@ export default async function PostPage({ params }: PostPageProps) {
       </section>
 
       {/* Content Section with TOC */}
-      <section className="pb-8 px-4 sm:px-6 lg:px-12">
+      <section className="py-8 px-4 sm:px-6 lg:px-12">
         <div className="max-w-7xl mx-auto">
           <div className="flex gap-8 items-start">
             {/* Main Content */}
-            <div className="flex-1 min-w-0 overflow-x-hidden">
-              <div className="p-4 sm:p-6 lg:p-8 rounded-lg shadow-sm prose prose-lg" style={{
-                backgroundColor: 'white',
-                border: '1px solid var(--border)',
-                maxWidth: 'none'
-              }}>
-                <Content components={components} />
-              </div>
+            <div className="flex-1 min-w-0">
+              <article
+                id="post-body"
+                className="prose"
+                dangerouslySetInnerHTML={{ __html: post.html }}
+              />
+              <CodeCopyButtons containerId="post-body" />
             </div>
-            
+
             {/* Table of Contents */}
-            <TableOfContents content={post.content} />
+            <TableOfContents headings={post.headings} />
           </div>
         </div>
       </section>

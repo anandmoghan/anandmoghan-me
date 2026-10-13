@@ -1,0 +1,36 @@
+<section id="step-3-create-a-pytorch-dockerfile">
+  <h2>Step 3: Create a PyTorch Dockerfile</h2>
+  <p>Let's create a custom Docker image with PyTorch and all necessary dependencies.</p>
+  <p>Create a new directory for your project:</p>
+  <pre><code class="language-bash">mkdir pytorch-docker-demo
+cd pytorch-docker-demo</code></pre>
+  <p>Create a file named <code>Dockerfile</code>:</p>
+  <pre><code class="language-dockerfile">FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN apt-get update &amp;&amp; apt-get install -y \
+    build-essential \
+    curl \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+    torch==2.1.0 \
+    torchvision==0.16.0 \
+    numpy==1.24.3 \
+    matplotlib==3.7.1 \
+    scikit-learn==1.3.0
+
+COPY . /app
+
+CMD ["python", "train.py"]</code></pre>
+  <h3 id="dockerfile-breakdown">Dockerfile Breakdown</h3>
+  <ul>
+    <li><code>FROM python:3.10-slim</code>: Start with a lightweight Python 3.10 image</li>
+    <li><code>WORKDIR /app</code>: Set working directory inside container</li>
+    <li><code>RUN apt-get update</code>: Install system dependencies</li>
+    <li><code>RUN pip install</code>: Install Python packages</li>
+    <li><code>COPY . /app</code>: Copy your code into the container</li>
+    <li><code>CMD</code>: Default command to run when container starts</li>
+  </ul>
+</section>

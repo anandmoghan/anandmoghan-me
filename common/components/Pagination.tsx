@@ -41,13 +41,12 @@ export default function Pagination({ currentPage, totalPages, onPageChange, clas
   const visiblePages = getVisiblePages();
 
   return (
-    <nav className={`flex items-center justify-center gap-2 ${className}`} aria-label="Pagination">
+    <nav className={`flex flex-wrap items-center justify-center gap-2 ${className}`} aria-label="Pagination">
       {/* Previous button */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
-        style={{ color: 'var(--accent)' }}
+        className="btn btn--ghost"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -62,8 +61,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, clas
             return (
               <span
                 key={`dots-${index}`}
-                className="px-3 py-2 text-sm"
-                style={{ color: 'var(--muted)' }}
+                className="px-2 text-sm text-muted"
               >
                 ...
               </span>
@@ -77,17 +75,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, clas
             <button
               key={pageNumber}
               onClick={() => onPageChange(pageNumber)}
-              className={`
-                px-3 py-2 text-sm font-medium rounded-md transition-colors
-                ${isCurrentPage 
-                  ? 'text-white shadow-sm' 
-                  : 'hover:bg-muted'
-                }
-              `}
-              style={{
-                backgroundColor: isCurrentPage ? 'var(--accent)' : 'transparent',
-                color: isCurrentPage ? 'white' : 'var(--accent)'
-              }}
+              className={`chip justify-center min-w-[2.75rem] ${isCurrentPage ? 'is-active' : ''}`}
               aria-current={isCurrentPage ? 'page' : undefined}
             >
               {pageNumber}
@@ -100,8 +88,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, clas
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
-        style={{ color: 'var(--accent)' }}
+        className="btn btn--ghost"
       >
         Next
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">

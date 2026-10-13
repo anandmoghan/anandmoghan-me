@@ -1,0 +1,80 @@
+<section id="key-takeaways">
+  <h2>Key Takeaways</h2>
+  <ol>
+    <li>
+      <strong>Scaled dot-product attention</strong> uses \( \sqrt{d_k} \) scaling to maintain gradient health as dimensionality increases,
+      a simple fix for variance growth.
+    </li>
+    <li>
+      <strong>Multi-head attention</strong> provides parallel representational subspaces,
+      allowing the model to capture diverse relationships simultaneously.
+      Research shows heads develop distinct patterns (positional, syntactic, semantic),
+      and 10-20% can be pruned with minimal loss.
+    </li>
+    <li>
+      <strong>Attention dropout</strong> regularizes against overfitting to specific attention patterns
+      by randomly zeroing connections during training.
+      It matters most for smaller models and datasets; large LLM pretraining runs usually disable it.
+    </li>
+    <li>
+      <strong>Cross-attention vs self-attention</strong>: Self-attention relates positions within a sequence;
+      cross-attention relates positions between sequences
+      (critical for translation, multimodal models, retrieval-augmented generation).
+    </li>
+    <li>
+      <strong>Causal masking</strong> prevents information leakage in autoregressive models by masking future positions.
+      This enables parallel training but requires sequential generation at inference.
+    </li>
+    <li>
+      <strong>Permutation equivariance</strong> means attention has no inherent position bias,
+      necessitating explicit positional encodings (RoPE, ALiBi) but providing maximum flexibility.
+    </li>
+    <li>
+      <strong>Mixed precision training</strong> (BF16) is the foundational optimization that enables all others:
+      about half the activation memory, 2-3x speedup, with minimal quality loss.
+      Always enable this first.
+    </li>
+    <li>
+      <strong>FlashAttention</strong> solved the "how" of efficient computation through IO-aware tiling,
+      achieving 2-4x speedups and enabling long-context training by minimizing memory bandwidth bottlenecks.
+    </li>
+    <li>
+      <strong>GQA</strong> solved the "what to cache" problem by reducing KV cache size
+      (4x in a typical configuration) with minimal quality loss, critical for inference at scale.
+      Further compression via quantization and eviction policies pushes efficiency even further.
+    </li>
+    <li>
+      <strong>RoPE</strong> solved the "where" of position encoding with zero parameters and inherent relative positioning,
+      becoming the de facto standard.
+      ALiBi offers a simpler alternative with competitive performance.
+    </li>
+    <li>
+      <strong>PagedAttention</strong> solved the "where to store" problem
+      by applying virtual memory concepts to KV cache management,
+      achieving 2-4x serving throughput and making continuous batching far more memory-efficient.
+    </li>
+    <li>
+      <strong>Sparse patterns</strong> (sliding window, block-sparse) solve the "when to attend" problem for ultra-long contexts,
+      enabling 100K+ token processing with linear complexity through layer composition.
+    </li>
+    <li>
+      <strong>Ring Attention</strong> solves the "how to distribute" problem
+      by enabling context length to scale linearly with device count.
+      By organizing devices in a ring and overlapping communication with computation,
+      it achieves near-zero overhead
+      and supports sequences up to device-count times longer than single-device memory-efficient Transformers,
+      enabling 100M+ token contexts.
+    </li>
+    <li>
+      <strong>Speculative Decoding</strong> achieves 2-3x lower latency in small-batch serving
+      by using a fast draft model to generate candidate tokens,
+      then verifying them in parallel with the target model.
+      Maintains exact output distribution without retraining.
+    </li>
+    <li>
+      <strong>Prompt Caching</strong> eliminates redundant computation by caching and reusing KV pairs from identical prefixes,
+      with Anthropic reporting up to 90% cost reduction and 85% latency reduction
+      for requests with stable system prompts or document context.
+    </li>
+  </ol>
+</section>

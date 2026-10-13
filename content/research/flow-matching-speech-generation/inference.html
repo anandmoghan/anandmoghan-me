@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow matching and diffusion for speech: inference and optimisation</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false}
+      ],
+      ignoredTags: ['script', 'style', 'pre', 'code']
+    });"></script>
+</head>
+<body class="prose">
+  <header>
+    <h1>Flow matching and diffusion for speech: inference and optimisation</h1>
+    <p>Research note, 2026-10-13. Source-checked claims for a blog post.</p>
+  </header>
+  <main>
+    <section id="conventions">
+      <h2>Conventions</h2>
+      <p>
+        Confirmed means I read the arXiv abstract or paper text (or first-party code or README) in this pass.
+        Reported means a secondary source, a search summary, or an earlier note that I did not re-read.
+        Inference is my own reasoning.
+      </p>
+      <p>
+        NFE is the number of network evaluations per utterance.
+        Papers differ on whether NFE counts the extra classifier-free guidance (CFG) pass, so compare NFE across papers with care.
+        RTF figures come from different GPUs and implementations; the conflicts are listed at the end.
+      </p>
+    </section>
+
+    <section id="solvers">
+      <h2>ODE solvers and NFE</h2>
+      <ul>
+        <li>
+          Voicebox uses the midpoint solver with step size 0.0625, which the paper labels NFE=32, and it uses torchdiffeq, which offers fixed and adaptive solvers.
+          Source: Voicebox, arXiv 2306.15687, Section 5.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voicebox says it reaches very high quality with fewer than 10 NFEs.
+          Zero-shot TTS WER stays at a mean of 2.0 (variance 0.005) across NFE settings.
+          Source: arXiv 2306.15687, Sections 3.4 and 5.6.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voicebox timing: NFE=2 without CFG takes about 0.31 s for a 10 s sample, about 20 times faster than VALL-E.
+          At NFE=64 it is only 4% slower than VALL-E.
+          Source: arXiv 2306.15687, abstract and Section 5.6.
+          Hardware is not stated.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox speech uses midpoint with step 0.0625, "invoking the derivatives 32 times".
+          With CFG that is 64 model calls, so its NFE does not count the guidance pass.
+          Source: Audiobox, arXiv 2312.15821, Section 5.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Adaptive dopri5 appears in Audiobox Sound as the default solver at absolute and relative tolerance 1e-5.
+          The Bespoke solver is claimed to be over 25 times faster than dopri5 without loss of performance.
+          I could not read the Bespoke result tables (the paper text was truncated), so I give no Bespoke NFE.
+          Source: arXiv 2312.15821, abstract, introduction, Section 6.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          I found no speech paper that reports a dopri5 NFE count for TTS.
+          A search summary says another paper (Shallow Flow Matching, arXiv 2505.12226) found default torchdiffeq tolerances too strict and relaxed them to 1e-5.
+          I did not read that paper.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          F5-TTS defaults to Euler.
+          In Appendix B.4 Euler is "inherently faster and performs slightly better typically for larger NFE with Sway Sampling".
+          Without Sway Sampling, Euler degrades.
+          Source: F5-TTS, arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Matcha-TTS uses first-order Euler only and has no solver ablation.
+          Source: Matcha-TTS, arXiv 2309.03199.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          ZipVoice uses an Euler solver.
+          Source: ZipVoice, arXiv 2506.13053, Section IV-D.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 2 runs at 10 NFE with CFG strength 0.7.
+          Source: CosyVoice 2, arXiv 2412.10117.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          StreamFlow uses an Euler solver with 10 time steps and CFG strength 0.5.
+          Source: StreamFlow, arXiv 2506.23986.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Midpoint and Heun cost more evaluations per step, and the speech evidence says they buy little over Euler once the schedule is good.
+          This is my reading of the F5-TTS solver table below.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+
+      <h3 id="solver-table">F5-TTS: solver, NFE and quality (Table 6, Sway s = -1)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Solver</th>
+              <th>NFE</th>
+              <th>LS-PC WER</th>
+              <th>LS-PC SIM-o</th>
+              <th>RTF</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Euler</td><td>16</td><td>2.53</td><td>0.66</td><td>0.15</td></tr>
+            <tr><td>midpoint</td><td>16</td><td>2.43</td><td>0.66</td><td>0.26</td></tr>
+            <tr><td>Heun-3</td><td>16</td><td>2.39</td><td>0.65</td><td>0.44</td></tr>
+            <tr><td>Euler</td><td>32</td><td>2.42</td><td>0.66</td><td>0.31</td></tr>
+            <tr><td>midpoint</td><td>32</td><td>2.41</td><td>0.66</td><td>0.53</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Source: F5-TTS, arXiv 2410.06885, Appendix B.4 and Table 1.
+        RTF is for 10 s of speech on one RTX 3090.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+
+      <h3 id="matcha-table">Matcha-TTS: Euler NFE vs quality (Table 1)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>NFE</th>
+              <th>RTF (includes HiFi-GAN)</th>
+              <th>WER %</th>
+              <th>MOS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>10</td><td>0.038</td><td>2.09</td><td>3.84</td></tr>
+            <tr><td>4</td><td>0.019</td><td>2.15</td><td>3.77</td></tr>
+            <tr><td>2</td><td>0.015</td><td>2.34</td><td>3.65</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Source: Matcha-TTS, arXiv 2309.03199, RTX 3090.
+        The score-based Grad-TTS baseline at NFE 10 and 4 has WER 3.44 and 3.69 and MOS 3.49 and 3.20.
+        The authors state that MAT-10 and MAT-4 MOS are statistically similar.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+    </section>
+
+    <section id="cfg">
+      <h2>Classifier-free guidance cost</h2>
+      <p>
+        With guidance strength \( \alpha \), Voicebox uses
+        \( \tilde v_t = (1+\alpha)\,v_t(\text{cond}) - \alpha\, v_t(\text{uncond}) \).
+        Source: arXiv 2306.15687, Section 3.5.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <ul>
+        <li>
+          Each guided evaluation needs two forward passes, and the Voicebox figure caption says "Inference time will be doubled with CFG".
+          Source: arXiv 2306.15687, Section 3.5 and Figure 5.
+          The paper describes no mitigation beyond choosing NFE.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          In the F5-TTS reference code the conditional and unconditional passes run in one batched transformer call (<code>cfg_infer=True</code>).
+          The output is split with <code>torch.chunk(pred_cfg, 2, dim=0)</code> and combined as <code>pred + (pred - null_pred) * cfg_strength</code>.
+          If strength is below 1e-5 it runs a single pass.
+          Source: SWivid/F5-TTS, <code>src/f5_tts/model/cfm.py</code>.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Batching the two passes saves a sequential launch, but it still doubles the FLOPs and the activation memory.
+          Speed-up from batching depends on whether the GPU is already saturated.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          F5-TTS trains with two-stage dropout: masked speech dropped at 0.3, then speech plus text dropped at 0.2.
+          Its default inference CFG strength is 2.
+          Source: arXiv 2410.06885, Sections 4 and 5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reported guidance values: Voicebox \( \alpha = 0.7 \) (also Audiobox speech), CosyVoice 2 0.7, StreamFlow 0.5, F5-TTS 2.
+          The code form <code>pred + (pred - null) * s</code> is the same convention as Voicebox's \( \alpha \), so F5's 2 corresponds to a total weight of 3 on the conditional term.
+          I did not verify the CosyVoice 2 or StreamFlow convention.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          Voicebox guidance and NFE interact: at NFE of 4 or fewer, lower guidance (\( \alpha = 0 \) or 0.3) gives higher speaker similarity, and from NFE 8 stronger guidance helps.
+          With \( \alpha = 0 \), WER rises slightly from 2.8 to 3.1 as NFE goes from 2 to 32 in diverse sampling.
+          Lower NFE and low guidance both reduce sample diversity (FSD improves with NFE).
+          Source: arXiv 2306.15687, Section 5.6 and Figure 5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          ZipVoice's distilled student is conditioned on the CFG strength \( \omega \), so it needs no unconditional pass.
+          A teacher made of two CFG-guided steps supplies the target for one student step.
+          ZipVoice inference also uses time-dependent CFG: early steps drop only the text condition, later steps drop text and audio.
+          The \( \omega \) range is not given in the text I read.
+          Source: arXiv 2506.13053.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Other CFG-removal routes: CuteTTS folds CFG and several solver steps into one interval-conditioned student, and the unified guidance paper distils conditional knowledge into the weights.
+          Numbers are in the few-step section.
+          Sources: arXiv 2608.08638, arXiv 2607.00363.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="schedules">
+      <h2>Sway sampling and other time-step schedules</h2>
+      <p>
+        Sway Sampling warps a uniform \( u \in [0,1] \) with
+      </p>
+      \[
+        t = u + s\Big(\cos\big(\tfrac{\pi}{2}u\big) - 1 + u\Big),
+        \qquad s = -1 \text{ by default.}
+      \]
+      <ul>
+        <li>
+          Negative \( s \) puts more steps at small \( t \).
+          The valid range is \( s \in [-1, 2/(\pi-2)] \), \( s = 0 \) is uniform, and Table 6 also tests \( s = -0.8 \).
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Ablation at 32 NFE, midpoint, on LibriSpeech-PC: with Sway WER 2.41 and SIM 0.66, without Sway WER 2.84 and SIM 0.62.
+          On Seed-TTS test-en WER is 1.87 with and 1.93 without.
+          On test-zh it is WER 1.58 and SIM 0.75 with, against WER 1.93 and SIM 0.69 without.
+          At 16 NFE with Sway (midpoint) LibriSpeech-PC WER is 2.43, SIM 0.66, RTF 0.26.
+          Source: arXiv 2410.06885, Table 5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          It is inference-only: no retraining and no extra run-time cost.
+          The F5-TTS code applies the same warp to the time grid when a coefficient is set.
+          Source: arXiv 2410.06885; SWivid/F5-TTS <code>cfm.py</code>.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Empirically Pruned Step Sampling (EPSS) keeps dense early steps under Sway and prunes later steps.
+          Its 7-NFE grid is {0, 1/16, 1/8, 3/16, 1/4, 1/2, 3/4, 1}.
+          Source: Accelerating Flow-Matching-Based TTS via EPSS, arXiv 2505.19931, training-free.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The current F5-TTS code builds its default grid with an EPSS function when the start time is 0, otherwise a linear grid, and applies the sway warp afterwards.
+          The warp default is <code>None</code> in <code>sample()</code>.
+          Source: SWivid/F5-TTS <code>cfm.py</code>.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 2 uses a cosine schedule \( t := 1 - \cos(\tfrac{1}{2} t \pi) \) at inference only, which gives more steps to the initial stage.
+          Source: arXiv 2412.10117.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DMOSpeech 2's 4-step student uses Sway with \( s = -1 \) at \( t \in \{0, 0.0761, 0.2929, 0.6173\} \), which is the sway image of \( \{0, 0.25, 0.5, 0.75\} \).
+          Source: DMOSpeech 2, arXiv 2507.14988, Section 3.1 and Appendix B.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Learned or searched schedules: IntMeanFlow proposes Optimal Step Sampling Search (O3S) with no added inference cost, and the flow-map paper proposes a TD-DP sampling schedule derived from teacher dynamics.
+          Sources: arXiv 2510.07979, arXiv 2609.36324 (abstracts).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="epss-table">F5-TTS NFE vs quality with EPSS (LibriSpeech-PC test-clean, Table 3)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>NFE</th>
+              <th>RTF</th>
+              <th>WER %</th>
+              <th>SIM-o</th>
+              <th>UTMOS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>16</td><td>0.065</td><td>2.29</td><td>0.67</td><td>3.97</td></tr>
+            <tr><td>12</td><td>0.050</td><td>2.44</td><td>0.66</td><td>3.93</td></tr>
+            <tr><td>10</td><td>0.042</td><td>2.44</td><td>0.66</td><td>3.92</td></tr>
+            <tr><td>7</td><td>0.030</td><td>2.45</td><td>0.66</td><td>3.84</td></tr>
+            <tr><td>6 (variant a)</td><td>0.027</td><td>2.41</td><td>0.66</td><td>3.82</td></tr>
+            <tr><td>5</td><td>0.023</td><td>2.55</td><td>0.59</td><td>2.91</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Source: arXiv 2505.19931, RTX 3090, Euler, CFG 2.0, Sway -1, Vocos.
+        Table 1 of the same paper gives the unscheduled baselines: 32 NFE WER 2.37 (RTF 0.123), 16 NFE WER 2.44, and 7 NFE WER 4.16 with SIM 0.60 and UTMOS 3.36.
+        With EPSS, 7 NFE gives WER 2.45, SIM 0.66, RTF 0.030.
+        The paper states performance "sharply declines below 6 NFE".
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+    </section>
+
+    <section id="few-step">
+      <h2>Few-step methods applied to speech</h2>
+
+      <h3 id="consistency">Consistency models and consistency distillation</h3>
+      <ul>
+        <li>
+          Consistency models map any point on a trajectory to the same endpoint, giving one-step sampling, and can be distilled from a diffusion model or trained from scratch.
+          Source: Consistency Models, arXiv 2303.01469.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CoMoSpeech distils a consistency model from a diffusion teacher for one-step speech and singing synthesis.
+          It reports more than 150 times faster than real time on one A100, comparable to FastSpeech2.
+          Teacher models give the best quality; the one-step model matches or beats multi-step diffusion baselines.
+          Source: CoMoSpeech, arXiv 2305.06908.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          RapFlow-TTS enforces velocity consistency along the straightened ODE path, adds time interval scheduling and adversarial learning, and reports "a 5- and 10-fold reduction in synthesis steps" against flow-matching and score-based baselines.
+          Source: arXiv 2506.16741 (Interspeech 2025).
+          I did not read the result tables.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="reflow">Reflow and rectified flow</h3>
+      <ul>
+        <li>
+          Rectified flow learns straight paths by repeated rectification; the authors show good samples with a single Euler step.
+          Source: Flow Straight and Fast, arXiv 2209.03003.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          ReFlow-TTS applies it to mel generation, with one-step synthesis and no pre-trained teacher.
+          On LJSpeech it beats other diffusion-based models and its one-step version is competitive with other one-step TTS models.
+          The abstract has no numbers.
+          Source: arXiv 2309.17056 (ICASSP 2024).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          VoiceFlow uses rectified flow matching for TTS at "a limited number of sampling steps".
+          The abstract gives no step counts.
+          Source: arXiv 2309.05027 (ICASSP 2024).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          SlimSpeech builds on ReFlow-TTS with annealing reflow for one-step sampling.
+          Source: arXiv 2504.07776, via a search summary only.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+      </ul>
+
+      <h3 id="shortcut-meanflow">Shortcut models and mean-flow style</h3>
+      <ul>
+        <li>
+          Shortcut models condition one network on noise level and step size, and need one network and one training phase.
+          Source: One Step Diffusion via Shortcut Models, arXiv 2410.12557 (images).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          R-VC applies shortcut flow matching to zero-shot voice conversion, down to two sampling steps.
+          This is voice conversion, not TTS.
+          Source: arXiv 2506.01014 (ACL 2025).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          I did not find a shortcut-model TTS paper.
+          A search summary also lists shortcut flow matching for speech enhancement (arXiv 2509.21522) and REF-VC (arXiv 2508.04996); I did not read either.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          IntMeanFlow approximates average velocity with the teacher's instantaneous velocity over an interval, avoiding the Jacobian-vector-product memory cost and self-bootstrapping instability that MeanFlow causes in TTS.
+          It reports 1-NFE token-to-spectrogram and 3-NFE text-to-spectrogram inference.
+          Source: arXiv 2510.07979.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          FlashTTS uses an X-pred mean-flow decoder at exactly 2 NFE, a 16-layer DiT with hidden size 768 (about 159.25M parameters) that predicts the clean mel.
+          Source: FlashTTS, arXiv 2606.09141.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          MeanFlow itself (average velocity, FID 3.43 on ImageNet one-step) is cited from an earlier note.
+          Source: arXiv 2505.13447, not re-read here.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          DSFlow distils flow-matching TTS to few and one step with endpoint matching plus mean-velocity alignment and lightweight step-aware tokens.
+          The abstract has no numbers.
+          Source: arXiv 2602.09041.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="dmd">Distribution matching distillation (DMD)</h3>
+      <ul>
+        <li>
+          DMD2 removes the regression loss, adds a two time-scale update rule and a GAN loss on real data, and supports multi-step sampling.
+          Source: arXiv 2405.14867 (images).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DMOSpeech distils a 128-step teacher to a 4-step student with DMD2 and trains CTC and speaker-verification losses through the student.
+          RTF drops from 0.96 to 0.07 on a V100.
+          Student WER is 1.94 with SIM 0.69, against ground truth 2.19 and 0.67.
+          Student timesteps are {1.0, 0.75, 0.50, 0.25}.
+          Source: DMOSpeech, arXiv 2410.11097.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DMOSpeech 2 uses teacher-guided sampling: the F5-TTS teacher runs 14 steps, the student 2, for 16 total.
+          On Seed-TTS-en the 32-step F5 teacher has WER 1.947, SIM 0.662, RTF 0.1671.
+          The 4-step student has WER 1.752, SIM 0.698, RTF 0.0316.
+          The 16-step mix has WER 1.738, SIM 0.699, RTF 0.0941.
+          RTF was measured on one H100.
+          Source: arXiv 2507.14988.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The paper gives a general range of about 6 to 14 teacher steps and 2 to 3 student steps.
+          Source: arXiv 2507.14988, Section 3.3.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="adversarial">Adversarial post-training</h3>
+      <ul>
+        <li>
+          Adversarial post-training (APT) after diffusion pre-training gives one-step generation in Seaweed-APT (2-second 720p video in real time).
+          Source: arXiv 2501.08316 (video, not speech).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          APTTS (Interspeech 2025, LG AI Research) treats a pre-trained latent flow-matching TTS model as a few-step generator trained with reconstruction and adversarial losses, and also applies the method to Matcha-TTS.
+          It reports better quality with lower inference time.
+          I found no arXiv version and no numbers; sources are the ISCA archive and LG Research listing.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          DMOSpeech's student is trained with a conformer discriminator, and RapFlow-TTS adds adversarial learning.
+          DriftTTS explicitly avoids adversarial discrimination.
+          Sources: arXiv 2410.11097, arXiv 2506.16741, arXiv 2610.03390.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="recent-few-step">Recent few-step speech results</h3>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Result as stated</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ZipVoice-Distill</td>
+              <td>
+                16 NFE (WER 1.64, SIM 0.668 LibriSpeech), 8 NFE (1.54, 0.647), 4 NFE (1.51, 0.657).
+                GPU RTF on H20: F5-TTS 32 NFE 0.2958, ZipVoice 16 NFE 0.0557, Distill 8 NFE 0.0233, Distill 4 NFE 0.0125.
+                At 4 NFE, no distillation gives WER 2.11 and with distillation 1.68 (LibriTTS ablation).
+              </td>
+              <td>arXiv 2506.13053, Tables I, II, VI</td>
+            </tr>
+            <tr>
+              <td>Flow maps (LFMD)</td>
+              <td>Seed-TTS 1-NFE student WER 1.80% vs 1.76% for the 32-NFE teacher</td>
+              <td>arXiv 2609.36324</td>
+            </tr>
+            <tr>
+              <td>DriftTTS</td>
+              <td>LJSpeech NFE 4: MCD 3.87 dB, WER 3.7%, MOS 4.18 vs Matcha-TTS 3.85 dB, 3.4%, 3.96; ground truth 4.22. No teacher, distillation or discriminator.</td>
+              <td>arXiv 2610.03390</td>
+            </tr>
+            <tr>
+              <td>CuteTTS</td>
+              <td>Guidance-step distillation: first-audio latency down 23.3%, RTF down 40.8% vs base, comparable quality</td>
+              <td>arXiv 2608.08638</td>
+            </tr>
+            <tr>
+              <td>Unified guidance</td>
+              <td>Inference sped up "nearly three times" with better speaker similarity; no other numbers in the abstract</td>
+              <td>arXiv 2607.00363</td>
+            </tr>
+            <tr>
+              <td>FlashTTS</td>
+              <td>2 NFE decoder, first-packet latency 325 ms (see streaming section)</td>
+              <td>arXiv 2606.09141</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        These are each paper's own test sets and hardware, so compare the shape of the trade-off, not the rows.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <ul>
+        <li>
+          Pattern across the 2024 to 2026 papers: a pure velocity-matching student blurs at low NFE, so the successful ones add a distribution-level, metric-level or adversarial signal.
+          ZipVoice's plain distillation is an exception that holds quality at 4 NFE.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="streaming">
+      <h2>Streaming and chunked flow matching</h2>
+      <ul>
+        <li>
+          CosyVoice 2 samples one of four masks per training example, uniformly: non-causal, full-causal, chunk-M (past plus M future frames) and chunk-2M.
+          A right-padded 1-D convolution (kernel P+1) is the look-ahead layer before 2x up-sampling from 25 Hz tokens to 50 Hz mel.
+          Table 8's caption gives chunk size 15 for the streaming modules.
+          Source: arXiv 2412.10117.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 2 gives first-packet latency as \( L_{TTS} = M d_{lm} + M d_{fm} + M d_{voc} \) (LM, flow and vocoder per-token times) and the text-speech mixing ratio N:M as 5:15.
+          It gives no measured first-packet latency, names no vocoder, and does not mention KV caching.
+          Source: arXiv 2412.10117.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          StreamFlow (a DiT with block-wise attention masks) uses a default block of 24 frames (0.24 s), chunks of 2 blocks, and a receptive field of \( (p+q+1) b \) for \( p \) backward and \( q \) forward blocks.
+          First-packet latency is about 180 ms on an A100, and per-chunk latency stays near 180 ms in long-form generation because of the fixed window, while the full-history DiT baseline's per-chunk time grows.
+          Source: arXiv 2506.23986.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Larger future context raises quality but also cost and first-packet latency.
+          Source: arXiv 2506.23986 (abstract summary); table below.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          FireRedTTS-1S chunk-wise flow matching: a 150M-parameter flow model, 1 s chunks (25 semantic tokens at 40 ms), a look-ahead convolution over the future 3 tokens, left context limited to 2 s, RTF 0.1 and latency under 300 ms on an L20.
+          Its bound is latency \( \le (l+3) t_s + t_a + t_c \) for LM step, flow and BigVGAN times.
+          Chunks are joined by crossfading, with 8 previous mel frames as vocoder context.
+          NFE and a chunk-size ablation are not reported.
+          Source: FireRedTTS-1S, arXiv 2503.20499.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Kimi-Audio's detokenizer uses a chunk-wise causal mask in training and inference.
+          It appends the first n semantic tokens of the next chunk (example n = 4) as look-ahead and keeps only the current chunk's mel.
+          Look-ahead "will only delay the generation of the first chunk" by n tokens.
+          It fine-tunes with chunk sizes of 0.5 to 3 s, uses BigVGAN, and reports no NFE or latency in the text I read.
+          Source: arXiv 2504.18425.
+          The example chunk length is garbled in the text I read (it showed "11 second"); my earlier note says 1 s.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Qwen3-TTS (25 Hz variant with a DiT): the DiT waits for 16 LM tokens before producing the first 8-token mel chunk (320 ms of audio per steady packet).
+          BigVGAN adds a 130 ms right-context look-ahead.
+          Source: Qwen3-TTS, arXiv 2601.15621.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          VoXtream reports 102 ms first-packet latency on GPU with a limited look-ahead.
+          Source: VoXtream, arXiv 2509.15969 (abstract).
+          That flow-matching decoders on chunks hurt first-packet latency in systems like CosyVoice 2 comes from a search summary, not the abstract.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          SyncSpeech reports 0.06 s first packet against 0.22 s for CosyVoice 2 on LibriSpeech test-clean, and starts after 2 text tokens (CosyVoice 2 needs 5).
+          Source: arXiv 2502.11094, from an earlier note.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          FlashTTS reports no block size or look-ahead for its block-wise attention, and says CosyVoice 2 buffers five text tokens while FlashTTS starts at one.
+          Source: arXiv 2606.09141.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          A chunked non-causal decoder waits half a chunk on average for the decision plus one look-ahead block, and that wait adds directly to first-packet time.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+
+      <h3 id="chunk-table">StreamFlow: block size vs quality (StreamFlow-SR, Table 2)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Block size</th>
+              <th>STOI</th>
+              <th>UTMOS</th>
+              <th>PESQ</th>
+              <th>ViSQOL</th>
+              <th>SECS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>0.12 s</td><td>0.806</td><td>3.571</td><td>1.361</td><td>3.940</td><td>0.721</td></tr>
+            <tr><td>0.24 s</td><td>0.832</td><td>3.667</td><td>1.521</td><td>4.069</td><td>0.701</td></tr>
+            <tr><td>0.48 s</td><td>0.848</td><td>3.698</td><td>1.573</td><td>4.075</td><td>0.713</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Source: arXiv 2506.23986.
+        Receptive-field variants (Table 1): StreamFlow-SR (2 back, 1 ahead) STOI 0.832, UTMOS 3.667, SECS 0.709; StreamFlow-LR (2 back, 2 ahead) 0.829, 3.638, 0.721; causal DiT-CVS baseline 0.819, 3.618, 0.717.
+        Subjective NMOS is 3.978 (DiT-CVS), 4.012 (SR) and 4.153 (LR).
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <p>
+        Reading: in this one study, larger blocks and more future context help objective quality, and the first-packet latency of 180 ms is quoted for the default setup.
+        The trend is from one system and the objective metrics are not monotone in SECS, so treat it as indicative.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+    </section>
+
+    <section id="latency">
+      <h2>Caching, real-time factor and first-packet latency</h2>
+      <ul>
+        <li>
+          CosyVoice's README lists a streaming mode "including kv cache and sdpa for rtf optimization", vLLM support for CosyVoice 2/3, and a claim that TensorRT-LLM "could give 4x acceleration" over a Hugging Face implementation.
+          The 4x figure has no benchmark details, and the README names no flow-decoder acceleration or RTF.
+          It claims "latency as low as 150ms" in bi-streaming.
+          Source: github.com/FunAudioLLM/CosyVoice README.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Qwen3-TTS measures latency on an internal vLLM (V0) engine and uses <code>torch.compile</code> and CUDA Graph for the tokenizer decoder.
+          The paper does not mention KV cache.
+          Source: arXiv 2601.15621.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          VoxAudio, a causal autoregressive flow matching model, uses chunk-wise factorisation with per-chunk noise levels and sliding-window streaming with KV caching.
+          Source: arXiv 2608.12951 (abstract).
+          That RTF improves roughly inversely with chunk size while first-chunk latency stays constant comes from a search summary.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          The AR stage can reuse its KV cache across steps, but the flow stage cannot reuse activations across ODE steps because its input \( x_t \) changes each step.
+          Only the prompt-dependent parts (text encoding, reference mel features) are step-invariant.
+          I found no paper that caches the prompt computation for a flow decoder.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          StreamFlow's per-chunk time for the full-history DiT baseline grows with history, while its sliding window stays flat.
+          That is a bounded-context substitute for a KV cache on the flow side.
+          Source: arXiv 2506.23986, Figure 5 (values not given in text).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="flashtts-table">FlashTTS vs CosyVoice 2 (Table 1, Minimax subset)</h3>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>FTL ms</th>
+              <th>TPP ms</th>
+              <th>FPL ms</th>
+              <th>RTF</th>
+              <th>WER</th>
+              <th>SIM</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>CosyVoice 2 (10 NFE)</td><td>257</td><td>339</td><td>843</td><td>0.913</td><td>26.2</td><td>0.721</td></tr>
+            <tr><td>FlashTTS Stage 1 (2 NFE)</td><td>60</td><td>123</td><td>377</td><td>0.793</td><td>18.0</td><td>0.702</td></tr>
+            <tr><td>FlashTTS Stage 1 (3 NFE)</td><td>60</td><td>198</td><td>413</td><td>0.824</td><td>17.2</td><td>0.711</td></tr>
+            <tr><td>FlashTTS MTP-3 (2 NFE)</td><td>62</td><td>123</td><td>325</td><td>0.632</td><td>18.8</td><td>0.695</td></tr>
+            <tr><td>FlashTTS MTP-3 (3 NFE)</td><td>62</td><td>165</td><td>366</td><td>0.702</td><td>17.5</td><td>0.714</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Source: arXiv 2606.09141, one RTX 4090 with no engineering optimisations.
+        The column names (FTL, TPP, FPL) are as printed; I did not confirm their expansions beyond FPL as first-packet latency.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+
+      <h3 id="qwen-table">Qwen3-TTS: first packet and RTF under concurrency (Table 2)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>Concurrency</th>
+              <th>First-packet ms</th>
+              <th>RTF</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>25 Hz, 0.6B (DiT)</td><td>1</td><td>138</td><td>0.234</td></tr>
+            <tr><td>25 Hz, 0.6B (DiT)</td><td>6</td><td>481</td><td>0.709</td></tr>
+            <tr><td>12 Hz, 0.6B (causal)</td><td>1</td><td>97</td><td>0.288</td></tr>
+            <tr><td>12 Hz, 0.6B (causal)</td><td>6</td><td>299</td><td>0.434</td></tr>
+            <tr><td>25 Hz, 1.7B (DiT)</td><td>1</td><td>150</td><td>0.253</td></tr>
+            <tr><td>25 Hz, 1.7B (DiT)</td><td>6</td><td>523</td><td>0.725</td></tr>
+            <tr><td>12 Hz, 1.7B (causal)</td><td>1</td><td>101</td><td>0.313</td></tr>
+            <tr><td>12 Hz, 1.7B (causal)</td><td>6</td><td>333</td><td>0.463</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Source: arXiv 2601.15621; hardware is "a single typical computational resource".
+        First-packet latency is LM time to the first packet plus tokenizer decode time per packet.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <ul>
+        <li>
+          Other first-packet figures: FireRedTTS-1S 300 ms (chunk-wise flow, RTF 0.1) vs 150 ms (multi-stream LM, RTF 0.3), arXiv 2503.20499; StreamFlow about 180 ms, arXiv 2506.23986.
+          Definitions and hardware differ, so they are not a ranking.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Moshi 160 ms theoretical and about 200 ms in practice, and Qwen3-Omni 234 ms theoretical cold-start, are carried over from the earlier notes and are not flow decoders.
+          Sources: arXiv 2410.00037, arXiv 2509.17765.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="vocoder">
+      <h2>Vocoder cost relative to the flow model</h2>
+      <ul>
+        <li>
+          Matcha-TTS RTF includes HiFi-GAN (13.9M parameters) against an 18.2M parameter acoustic model.
+          The split of RTF between them is not given.
+          Source: arXiv 2309.03199, Table 1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          FlashTTS uses a 50M-parameter HiFi-GAN at 24 kHz alongside a 159.25M-parameter decoder.
+          Source: arXiv 2606.09141.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS uses Vocos by default, and swapping to BigVGAN lowers LibriSpeech-PC WER from 2.42 to 2.11 at 32 NFE and from 2.53 to 2.21 at 16 NFE.
+          Table 8 has no RTF column, so the speed cost of BigVGAN is not measured there.
+          Source: arXiv 2410.06885, Table 8.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          BigVGAN scales to 112M parameters, as noted in the earlier note.
+          Source: BigVGAN, arXiv 2206.04658, not re-read here.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Both CosyVoice 2 and FireRedTTS-1S include a vocoder term in the first-packet latency formula, and Qwen3-TTS's BigVGAN look-ahead adds 130 ms.
+          Sources: arXiv 2412.10117, arXiv 2503.20499, arXiv 2601.15621.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Once the flow model is cut to 2 to 4 NFE, the vocoder and the look-ahead start to dominate, because the flow cost has shrunk while the vocoder cost has not.
+          I found no paper that reports the flow-versus-vocoder time split directly.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="serving">
+      <h2>Serving considerations</h2>
+      <ul>
+        <li>
+          Under concurrency the Qwen3-TTS DiT variants degrade much faster than the causal ones: for the 0.6B models, RTF goes from 0.234 to 0.709 (25 Hz) vs 0.288 to 0.434 (12 Hz) between 1 and 6 streams.
+          The paper calls the 12 Hz decoder "batch-friendly".
+          Source: arXiv 2601.15621.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Matcha-TTS training memory is 4.8 GiB for MAT, against 7.8 GiB for Grad-TTS and 12.4 GiB for VITS, measured at batch size 32 in fp16.
+          This is training memory, not serving memory.
+          Source: arXiv 2309.03199, Table 1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          ZipVoice reports CPU RTF with a single Xeon thread: F5-TTS 37.284, ZipVoice 16 NFE 9.5529, Distill 8 NFE 2.4177, Distill 4 NFE 1.2202.
+          Source: arXiv 2506.13053, Table II.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Flow-stage cost scales with NFE times (1 + guidance pass) times model size times sequence length, so a 10 NFE guided model is about 20 model calls per utterance.
+          Distillation and guidance folding cut both factors.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          Memory per stream for a sliding-window flow decoder is bounded by the window, whereas a full-history decoder grows with utterance length.
+          I found no paper that reports GPU memory per stream for a flow TTS decoder.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicts</h2>
+      <ul>
+        <li>
+          F5-TTS RTF for 16 NFE is 0.15 in the F5-TTS paper (RTX 3090, Euler) but 0.065 in the EPSS paper on the same GPU class, and the EPSS 32-NFE value is 0.123 against 0.31.
+          Same-GPU gaps this large point to different implementations or measurement code, and the EPSS paper does not state its 16 and 7 NFE baseline solver.
+        </li>
+        <li>
+          The EPSS text claims a 78% cost reduction "compared to 32-NFE uniform sampling", while its Table 2 labels the 32-NFE baseline as Sway Sampling.
+        </li>
+        <li>
+          F5-TTS Table 1 lists RTF 0.15 for 16 NFE (Euler), while Table 5 lists 0.26 for 16 NFE (midpoint).
+          They are different solvers, not a contradiction, but they are easy to mix up.
+        </li>
+        <li>
+          NFE counting: Voicebox and Audiobox count solver evaluations without the CFG pass (32 NFE is 64 model calls).
+          I did not establish the convention in F5-TTS, CosyVoice 2 or ZipVoice.
+        </li>
+        <li>
+          DMOSpeech's 128-step teacher WER was returned as 9.51 with SIM 0.55 in my fetch.
+          That looks low-quality for a teacher and I did not verify the table, so I use only the student numbers.
+        </li>
+        <li>
+          Time direction: DMOSpeech lists student timesteps {1.0, 0.75, 0.50, 0.25} while DMOSpeech 2 lists sway times {0, 0.0761, 0.2929, 0.6173}.
+          The papers may use opposite conventions.
+          DMOSpeech 2 also uses both \( u \) and \( s \) for the sway coefficient.
+        </li>
+        <li>
+          Kimi-Audio's chunk length and up-sampling factor are garbled in the text I read, so the 1 s chunk figure rests on an earlier note.
+        </li>
+        <li>
+          RTF teachers disagree across papers on the same F5-TTS model: 0.3 on an H20 (ZipVoice, 32 NFE, 0.2958), 0.1671 on an H100 (DMOSpeech 2, 32 steps), 0.31 on an RTX 3090 (F5-TTS, 32 NFE Euler).
+        </li>
+        <li>
+          Not found: a speech paper reporting dopri5 NFE; a shortcut-model TTS paper; an arXiv version of APTTS; a dedicated chunk-size versus WER or SIM ablation for flow-matching TTS (StreamFlow's is objective-metric only); a measured flow-versus-vocoder time split; GPU memory per concurrent stream.
+        </li>
+        <li>
+          Not checked: the Bespoke solver result tables, RapFlow-TTS result tables, and the claims taken from earlier notes without re-reading (MeanFlow 2505.13447, BigVGAN 2206.04658, Moshi, Qwen3-Omni, SyncSpeech).
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li>Voicebox: Text-Guided Multilingual Universal Speech Generation at Scale. Le et al., 2023. arXiv 2306.15687.</li>
+        <li>Audiobox: Unified Audio Generation with Natural Language Prompts. Vyas et al., 2023. arXiv 2312.15821.</li>
+        <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching. Chen et al., 2024. arXiv 2410.06885.</li>
+        <li>Accelerating Flow-Matching-Based Text-to-Speech via Empirically Pruned Step Sampling. Zheng et al., 2025. arXiv 2505.19931.</li>
+        <li>Matcha-TTS: A fast TTS architecture with conditional flow matching. Mehta et al., 2023. arXiv 2309.03199.</li>
+        <li>ZipVoice: Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching. 2025. arXiv 2506.13053.</li>
+        <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models. Du et al., 2024. arXiv 2412.10117.</li>
+        <li>StreamFlow: Streaming Flow Matching with Block-wise Guided Attention Mask for Speech Token Decoding. Guo, Yao, Ma, Wang, Xie, 2025. arXiv 2506.23986.</li>
+        <li>FireRedTTS-1S: An Upgraded Streamable Foundation Text-to-Speech System. Guo et al., 2025. arXiv 2503.20499.</li>
+        <li>Kimi-Audio Technical Report. 2025. arXiv 2504.18425.</li>
+        <li>Qwen3-TTS technical report. 2026. arXiv 2601.15621.</li>
+        <li>VoXtream: Full-Stream Text-to-Speech with Extremely Low Latency. Torgashov, Henter, Skantze, 2025. arXiv 2509.15969.</li>
+        <li>FlashTTS: Fast Streaming TTS with MTP Acceleration and X-pred Mean Flow Distillation. Xie et al., 2026. arXiv 2606.09141.</li>
+        <li>VoxAudio: Vocalized Audio Synthesis via Multi-Reward Autoregressive Flow Matching. Guo et al., 2026. arXiv 2608.12951.</li>
+        <li>DMOSpeech: Direct Metric Optimization via Distilled Diffusion Model in Zero-Shot Speech Synthesis. 2024. arXiv 2410.11097.</li>
+        <li>DMOSpeech 2: Reinforcement Learning for Duration Prediction in Metric-Optimized Speech Synthesis. 2025. arXiv 2507.14988.</li>
+        <li>CoMoSpeech: One-Step Speech and Singing Voice Synthesis via Consistency Model. Ye et al., 2023. arXiv 2305.06908.</li>
+        <li>ReFlow-TTS: A Rectified Flow Model for High-fidelity Text-to-Speech. Guan et al., 2023. arXiv 2309.17056.</li>
+        <li>VoiceFlow: Efficient Text-to-Speech with Rectified Flow Matching. Guo, Du, Ma, Chen, Yu, 2023. arXiv 2309.05027.</li>
+        <li>RapFlow-TTS: Rapid and High-Fidelity Text-to-Speech with Improved Consistency Flow Matching. Park et al., 2025. arXiv 2506.16741.</li>
+        <li>DSFlow: Dual Supervision and Step-Aware Architecture for One-Step Flow Matching Speech Synthesis. Lin et al., 2026. arXiv 2602.09041.</li>
+        <li>Rhythm Controllable and Efficient Zero-Shot Voice Conversion via Shortcut Flow Matching (R-VC). Zuo et al., 2025. arXiv 2506.01014.</li>
+        <li>IntMeanFlow: Few-step Speech Generation with Integral Velocity Distillation. Wang et al., 2025. arXiv 2510.07979.</li>
+        <li>Distill Locally, Schedule Globally: Flow Maps for Few-Step Text-to-Speech. Collin et al., 2026. arXiv 2609.36324.</li>
+        <li>DriftTTS: Few-Step Text-to-Speech Without Distillation via Distribution-Matching Drift. Khan, Biswas, Islam, 2026. arXiv 2610.03390.</li>
+        <li>Enhancing Flow Matching with A Unified Guidance Framework for Efficient and Robust Speech Synthesis. Yu et al., 2026. arXiv 2607.00363.</li>
+        <li>CuteTTS: Efficient and High-Quality Speech Synthesis via Autoregressive Modeling of Continuous Latents. Zhang et al., 2026. arXiv 2608.08638.</li>
+        <li>Consistency Models. Song, Dhariwal, Chen, Sutskever, 2023. arXiv 2303.01469.</li>
+        <li>Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow. Liu, Gong, Liu, 2022. arXiv 2209.03003.</li>
+        <li>One Step Diffusion via Shortcut Models. Frans, Hafner, Levine, Abbeel, 2024. arXiv 2410.12557.</li>
+        <li>Improved Distribution Matching Distillation for Fast Image Synthesis. Yin et al., 2024. arXiv 2405.14867.</li>
+        <li>Diffusion Adversarial Post-Training for One-Step Video Generation. Lin et al., 2025. arXiv 2501.08316.</li>
+        <li>APTTS: Adversarial Post-training in Latent Flow Matching for Fast and High-fidelity Text-to-Speech. Yoon, Lee, Lee, Choi, Interspeech 2025. No arXiv id found; ISCA archive entry yoon25_interspeech.</li>
+        <li>First-party code and docs: github.com/SWivid/F5-TTS (<code>src/f5_tts/model/cfm.py</code>) and github.com/FunAudioLLM/CosyVoice (README).</li>
+        <li>Carried over, not re-read: MeanFlow arXiv 2505.13447; BigVGAN arXiv 2206.04658; Moshi arXiv 2410.00037; Qwen3-Omni arXiv 2509.17765; SyncSpeech arXiv 2502.11094; SlimSpeech arXiv 2504.07776; Shallow Flow Matching arXiv 2505.12226; Shortcut Flow Matching for Speech Enhancement arXiv 2509.21522; REF-VC arXiv 2508.04996.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Prepared 2026-10-13 from the speech-lit-review, speech-to-speech and research notes, plus arXiv checks.</p>
+  </footer>
+</body>
+</html>

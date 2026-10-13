@@ -1,0 +1,30 @@
+<section id="open-problems">
+  <h2>Open Problems</h2>
+  <ul>
+    <li>
+      <strong>Reward Model Limitations</strong>: Current models struggle with distribution shift, ambiguous preferences, and capturing nuanced human values in scalar rewards.
+      Future directions include multi-objective reward models (separate dimensions for helpfulness, harmlessness, factuality), uncertainty-aware models, and ensembles for robustness.
+    </li>
+    <li>
+      <strong>Scalable Oversight</strong>: As models become more capable, humans struggle to evaluate outputs on tasks we can't solve ourselves.
+      Approaches being explored include debate (models argue, humans judge), recursive reward modeling (using aligned models to evaluate others), and process supervision on verifiable steps.
+    </li>
+    <li>
+      <strong>Reasoning Generalization</strong>: Current reasoning models excel at math and code but struggle with open-ended reasoning, multi-step planning in ambiguous domains, and subjective topics.
+      Challenge: How do we extend outcome-based RL beyond verifiable domains?
+    </li>
+    <li>
+      <strong>Efficiency</strong>: RL training is expensive. RLHF requires multiple models, online learning needs continuous data collection, and process supervision requires step-level labels.
+      Future directions include more efficient algorithms (DPO showed one path), better sample efficiency (active learning, curriculum learning), and distillation to smaller models.
+    </li>
+    <li>
+      <strong>Safety and Robustness</strong>: Models can be jailbroken, aligned behavior may not transfer to new domains, and models find loopholes in reward functions.
+      Research areas include adversarial training, uncertainty quantification for safe deployment, and interpretability tools for understanding alignment.
+    </li>
+    <li>
+      <strong>Multi-Modal Alignment</strong>: Most RL work focuses on text, but models are increasingly multi-modal.
+      Open questions: How do we collect preferences for images, video, audio? How do we verify outcomes in creative domains?
+      Early work includes RLHF for text-to-image models (Stable Diffusion, DALL-E) and multi-modal Constitutional AI.
+    </li>
+  </ul>
+</section>

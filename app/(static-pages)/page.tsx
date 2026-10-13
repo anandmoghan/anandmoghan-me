@@ -28,18 +28,15 @@ export default function Home() {
     <main className="min-h-screen">
       {/* Hero Section */}
       <section className="relative py-8 px-6 sm:px-8 lg:px-12" itemScope itemType="https://schema.org/Person">
-        <div className="absolute inset-0 -z-10" style={{
-          background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)'
-        }}></div>
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-5xl sm:text-6xl font-bold mb-4 leading-tight" style={{ color: 'var(--foreground)' }} itemProp="name">
+          <h1 className="page-title mb-4" itemProp="name">
             Anand Mohan
           </h1>
-          <div className="w-20 h-1 rounded-full mb-4" style={{ backgroundColor: 'var(--accent)' }}></div>
-          <p className="text-base sm:text-lg font-semibold mb-2" style={{ color: 'var(--accent)' }} itemProp="jobTitle">
+          <div className="accent-rule mb-4"></div>
+          <p className="text-base sm:text-lg font-bold mb-2 text-accent" itemProp="jobTitle">
             Applied Scientist, <span itemProp="worksFor" itemScope itemType="https://schema.org/Organization"><span itemProp="name">Amazon AGI</span></span>
           </p>
-          <p className="text-sm sm:text-base leading-relaxed" style={{ color: 'var(--muted)' }} itemProp="description">
+          <p className="text-sm sm:text-base leading-relaxed text-muted" itemProp="description">
             Advancing Speech-to-Speech LLMs and continual learning for next-generation AI systems.
           </p>
           <meta itemProp="url" content="https://anandmoghan.me" />
@@ -64,17 +61,16 @@ export default function Home() {
       </section>
 
       {/* Recent Posts Section */}
-      <section className="py-8 px-6 sm:px-8 lg:px-12" style={{ backgroundColor: 'var(--card-bg)' }}>
+      <section className="py-8 px-6 sm:px-8 lg:px-12 border-t border-border bg-subtle">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>
+            <h2 className="section-title">
               Recent Posts
             </h2>
             {allPosts.length > 3 && (
               <Link 
                 href="/posts"
-                className="text-sm font-medium hover:opacity-70 transition-opacity"
-                style={{ color: 'var(--accent)' }}
+                className="btn btn--ghost text-accent"
               >
                 View all posts →
               </Link>
@@ -82,11 +78,8 @@ export default function Home() {
           </div>
           
           {recentPosts.length === 0 ? (
-            <div className="p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300" style={{ 
-              backgroundColor: 'white',
-              border: '1px solid var(--border)'
-            }}>
-              <p className="text-sm" style={{ color: 'var(--muted)' }}>
+            <div className="card">
+              <p className="text-sm text-muted">
                 Posts coming soon. Stay tuned for insights on AI research, technology, and life experiences.
               </p>
             </div>

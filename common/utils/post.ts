@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import matter from 'gray-matter';
-import type { Post, PostFrontmatter, Tag } from '../types/post';
+import { listSections, renderSections } from './html';
+import type { Post, PostMeta, PostWithContent, Tag } from '../types/post';
 
 const POST_CONTENT_DIR = path.join(process.cwd(), 'content/posts');
 
@@ -19,90 +19,101 @@ const DEFAULT_TAGS: Record<string, Tag> = {
   'family': { id: 'family', name: 'Family', category: 'family', color: '#ea580c', description: 'Family life and experiences' },
 };
 
-function calculateReadingTime(content: string): number {
+function calculateReadingTime(text: string): number {
   const wordsPerMinute = 200;
-  const words = content.trim().split(/\s+/).length;
-  return Math.ceil(words / wordsPerMinute);
+  return Math.ceil(countWords(text) / wordsPerMinute);
 }
 
-function hasFormulas(content: string): boolean {
-  // Check for LaTeX math delimiters
-  return /\$\$[\s\S]*?\$\$|\$[^\$]+\$/.test(content);
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).length;
 }
 
-export function getAllPosts(includeUnpublished: boolean = false): Post[] {
+function hasFormulas(html: string): boolean {
+  return html.includes('class="katex');
+}
+
+function postDir(slug: string): string {
+  return path.join(POST_CONTENT_DIR, slug);
+}
+
+function readMeta(slug: string): PostMeta {
+  const file = path.join(postDir(slug), 'post.json');
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8')) as PostMeta;
+  } catch (error) {
+    throw new Error(`invalid ${path.relative(process.cwd(), file)}: ${(error as Error).message}`);
+  }
+}
+
+function resolveTags(tagIds: string[]): Tag[] {
+  return tagIds.map(tagId =>
+    DEFAULT_TAGS[tagId] || {
+      id: tagId,
+      name: tagId.charAt(0).toUpperCase() + tagId.slice(1),
+      category: 'technical' as const,
+      color: '#6b7280',
+      description: `Posts tagged with ${tagId}`
+    }
+  );
+}
+
+// A post is a folder content/posts/<slug>/ with post.json and NN-name.html section fragments.
+function listSlugs(): string[] {
   if (!fs.existsSync(POST_CONTENT_DIR)) {
     return [];
   }
+  return fs.readdirSync(POST_CONTENT_DIR).filter(name =>
+    fs.existsSync(path.join(POST_CONTENT_DIR, name, 'post.json'))
+  );
+}
 
-  const files = fs.readdirSync(POST_CONTENT_DIR);
-  const mdxFiles = files.filter(file => file.endsWith('.mdx') || file.endsWith('.md'));
-
-  const posts = mdxFiles.map(filename => {
-    const slug = filename.replace(/\.(mdx|md)$/, '');
-    return getPostBySlug(slug);
-  }).filter((post): post is Post => post !== null);
+export function getAllPosts(includeUnpublished: boolean = false): Post[] {
+  const posts = listSlugs().map(slug => {
+    const { html: _html, headings: _headings, ...post } = loadPost(slug);
+    return post;
+  });
 
   // Filter out unpublished posts unless explicitly requested
-  const filteredPosts = includeUnpublished 
-    ? posts 
+  const filteredPosts = includeUnpublished
+    ? posts
     : posts.filter(post => post.published);
 
   // Sort by published date, newest first
   return filteredPosts.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
 }
 
-export function getPostBySlug(slug: string): Post | null {
-  try {
-    const fullPath = path.join(POST_CONTENT_DIR, `${slug}.mdx`);
-    const altPath = path.join(POST_CONTENT_DIR, `${slug}.md`);
-    
-    let filePath = fullPath;
-    if (!fs.existsSync(fullPath) && fs.existsSync(altPath)) {
-      filePath = altPath;
-    } else if (!fs.existsSync(fullPath)) {
-      return null;
-    }
-
-    const fileContents = fs.readFileSync(filePath, 'utf8');
-    const { data, content } = matter(fileContents);
-    const frontmatter = data as PostFrontmatter;
-
-    const tags = (frontmatter.tags || []).map(tagId => 
-      DEFAULT_TAGS[tagId] || { 
-        id: tagId, 
-        name: tagId.charAt(0).toUpperCase() + tagId.slice(1), 
-        category: 'technical' as const, 
-        color: '#6b7280',
-        description: `Posts tagged with ${tagId}`
-      }
-    );
-
-    const wordCount = content.trim().split(/\s+/).length;
-
-    return {
-      id: slug,
-      slug,
-      title: frontmatter.title,
-      content,
-      excerpt: frontmatter.excerpt,
-      publishedAt: new Date(frontmatter.publishedAt),
-      updatedAt: frontmatter.updatedAt ? new Date(frontmatter.updatedAt) : new Date(frontmatter.publishedAt),
-      tags,
-      author: {
-        name: frontmatter.author || 'Anand Mohan',
-      },
-      metadata: {
-        readingTime: calculateReadingTime(content),
-        wordCount,
-        hasFormulas: hasFormulas(content),
-      },
-      published: frontmatter.published !== false, // Default to true if not specified
-    };
-  } catch (error) {
-    console.error(`Error reading post ${slug}:`, error);
+export function getPostBySlug(slug: string): PostWithContent | null {
+  if (!listSlugs().includes(slug)) {
     return null;
   }
+  return loadPost(slug);
+}
+
+function loadPost(slug: string): PostWithContent {
+  const meta = readMeta(slug);
+  const { html, headings, text } = renderSections(listSections(postDir(slug)));
+  const publishedAt = new Date(meta.publishedAt);
+
+  return {
+    id: slug,
+    slug,
+    title: meta.title,
+    excerpt: meta.excerpt,
+    publishedAt,
+    updatedAt: meta.updatedAt ? new Date(meta.updatedAt) : publishedAt,
+    tags: resolveTags(meta.tags || []),
+    author: {
+      name: meta.author || 'Anand Mohan',
+    },
+    metadata: {
+      readingTime: calculateReadingTime(text),
+      wordCount: countWords(text),
+      hasFormulas: hasFormulas(html),
+    },
+    published: meta.published !== false, // Default to true if not specified
+    html,
+    headings,
+  };
 }
 
 export function getPostsByTag(tagId: string): Post[] {

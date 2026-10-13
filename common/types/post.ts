@@ -22,7 +22,6 @@ export interface Post {
   id: string;
   slug: string;
   title: string;
-  content: string;
   excerpt: string;
   publishedAt: Date;
   updatedAt: Date;
@@ -32,7 +31,20 @@ export interface Post {
   published: boolean; // Whether the post is published
 }
 
-export interface PostFrontmatter {
+export interface PostHeading {
+  id: string;
+  level: 2 | 3;
+  text: string;
+}
+
+// A post with its rendered body, used by the post page only (lists get plain Post).
+export interface PostWithContent extends Post {
+  html: string;
+  headings: PostHeading[];
+}
+
+// Shape of content/posts/<slug>/post.json.
+export interface PostMeta {
   title: string;
   excerpt: string;
   publishedAt: string;

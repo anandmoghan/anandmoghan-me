@@ -1,0 +1,16 @@
+<section id="step-5-build-the-docker-image">
+  <h2>Step 5: Build the Docker Image</h2>
+  <p>Now let's build our Docker image:</p>
+  <pre><code class="language-bash">docker build -t pytorch-mnist .</code></pre>
+  <p>This command:</p>
+  <ul>
+    <li><code>docker build</code>: Builds an image from a Dockerfile</li>
+    <li><code>-t pytorch-mnist</code>: Tags the image with name "pytorch-mnist"</li>
+    <li><code>.</code>: Uses the current directory as build context</li>
+  </ul>
+  <p>The build process will take a few minutes as it downloads dependencies.</p>
+  <h3 id="verify-the-image">Verify the Image</h3>
+  <p>List your Docker images:</p>
+  <pre><code class="language-bash">docker images</code></pre>
+  <p>You should see <code>pytorch-mnist</code> in the list.</p>
+</section>

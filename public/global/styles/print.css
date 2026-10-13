@@ -1,0 +1,124 @@
+/* A4 portrait print stylesheet. Safe to link with media="print" or to @import.
+   White page, black text, Literata 10.5pt body, Nunito Sans headings, bordered boxes, no shadows. */
+
+@page {
+  size: A4 portrait;
+  margin: 18mm 16mm;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --subtle: #f3f3f0;
+    --fg: #000000;
+    --muted: #333333;
+    --border: #999999;
+    --accent: #000000;
+    --warn: #000000;
+    --shadow-card: none;
+    --shadow-lift: none;
+    --shadow-float: none;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .prose,
+  body.prose {
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  * {
+    box-shadow: none !important;
+  }
+
+  .sidebar,
+  .topbar,
+  .chapter-nav,
+  .drawer-backdrop,
+  .no-print {
+    display: none !important;
+  }
+
+  .layout,
+  .main,
+  .content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4 { break-after: avoid; }
+
+  .break-before { break-before: page; }
+
+  table,
+  figure,
+  .callout,
+  .table-wrap,
+  pre,
+  blockquote,
+  details {
+    break-inside: avoid;
+  }
+
+  .table-wrap {
+    overflow: visible;
+    border: 1px solid var(--border);
+  }
+
+  .table-wrap table {
+    min-width: 0 !important;
+  }
+
+  .prose pre {
+    white-space: pre-wrap;
+    overflow: visible;
+    border: 1px solid var(--border);
+  }
+
+  .prose .katex-display {
+    overflow: visible;
+  }
+
+  .prose a {
+    color: #000000;
+    text-decoration: none;
+  }
+
+  .prose details > * {
+    display: block;
+  }
+
+  .prose summary::before {
+    display: none;
+  }
+
+  /* Callouts print as plain bordered boxes. */
+  .callout {
+    background: #ffffff;
+    border: 1px solid #333333;
+    border-left-width: 4px;
+  }
+
+  .callout__title,
+  .callout > strong:first-child {
+    color: #000000;
+  }
+
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+}

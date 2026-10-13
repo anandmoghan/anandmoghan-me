@@ -1,0 +1,362 @@
+<section id="inference-optimizations">
+  <h2>Inference Optimizations</h2>
+  <p><strong>References</strong>: [6, 7, 8, 9, 10, 11, 17]</p>
+  <p>
+    In production, inference latency and throughput directly drive user experience and cost.
+    LLMs face unique challenges during inference, particularly around memory efficiency and latency.
+    The following techniques address these bottlenecks to enable fast, cost-effective serving at scale.
+  </p>
+
+  <h3 id="gqa">Grouped Query Attention (GQA): The KV Cache Solution</h3>
+  <p>
+    During autoregressive generation, models cache key-value pairs from previous tokens to avoid recomputation.
+    For a model with 32 attention heads and 128-dimensional head size,
+    each token requires storing \( 32 \times 128 \times 2 = 8{,}192 \) values per layer (keys and values).
+    At 100K context length, this becomes approximately 819M values per layer, a massive memory bottleneck.
+  </p>
+  <figure>
+    <img src="https://media.anandmoghan.me/public/images/attention/gqa-comparison.png" alt="Figure 3: Comparison of Multi-Head Attention (MHA), Multi-Query Attention (MQA), and Grouped Query Attention (GQA). GQA groups query heads to share KV heads, balancing quality and efficiency. Source: Ainslie et al. (2023)">
+    <figcaption>Figure 3: Comparison of Multi-Head Attention (MHA), Multi-Query Attention (MQA), and Grouped Query Attention (GQA). GQA groups query heads to share KV heads, balancing quality and efficiency. Source: Ainslie et al. (2023)</figcaption>
+  </figure>
+  <p>
+    Multi-Query Attention (MQA) proposed a radical solution: share a single key-value head across all query heads.
+    This reduces KV cache by 32x but comes with potential quality degradation (~1-2% on benchmarks),
+    which can be largely mitigated through uptraining (continuing training with MQA architecture).
+  </p>
+  <p>
+    Grouped Query Attention (GQA) found the sweet spot.
+    Instead of 32 separate KV heads (MHA) or 1 shared KV head (MQA),
+    use, for example, 8 KV heads with 4 query heads per group.
+  </p>
+  <p>
+    The results are remarkable: a 4x reduction in KV cache size in this configuration,
+    with quality close to MHA and speed close to MQA.
+    Llama 2 70B, all Llama 3 models, Mistral 7B, and Gemma 2 use GQA.
+    Even better, existing MHA models can be "uptrained" to GQA using only 5% of original training compute.
+  </p>
+
+  <h3 id="mla">Multi-Head Latent Attention (MLA): Extreme Compression</h3>
+  <p><strong>References</strong>: [18, 19]</p>
+  <p>
+    While GQA reduces memory by sharing KV heads,
+    Multi-Head Latent Attention (MLA), introduced in DeepSeek-V2 and refined in DeepSeek-V3,
+    takes a more aggressive approach: low-rank key-value joint compression.
+  </p>
+  <p>
+    Instead of storing full Key and Value matrices (even shared ones),
+    MLA projects them into a low-dimensional latent vector \( c_{KV} \) during inference.
+  </p>
+  <p><strong>The mechanism:</strong></p>
+  <ol>
+    <li>
+      <strong>Compression</strong>: Inputs are projected down to a small latent dimension \( d_c \) (e.g., 512)
+      using a down-projection matrix \( W_{DKV} \)
+    </li>
+    <li>
+      <strong>Storage</strong>: Only this tiny compressed latent vector \( c_{KV} \) is stored in the KV cache,
+      drastically reducing memory footprint
+    </li>
+    <li>
+      <strong>Decompression</strong>: During attention computation,
+      the latent vector is up-projected using \( W_{UK} \) and \( W_{UV} \) to generate the full heads on-the-fly.
+      At inference, \( W_{UK} \) can be absorbed into the query projection and \( W_{UV} \) into the output projection,
+      so the full keys and values are never materialized
+    </li>
+    <li>
+      <strong>Decoupled RoPE</strong>: RoPE's position-dependent rotation would block absorbing \( W_{UK} \)
+      into the query projection,
+      so MLA carries position in a small separate key vector (64 dimensions in DeepSeek-V2)
+      that bypasses the compression and is cached alongside \( c_{KV} \)
+    </li>
+  </ol>
+  <p>
+    <strong>Impact</strong>: MLA enables extreme KV cache compression.
+    Models with massive head counts (e.g., 128 heads) achieve KV cache sizes smaller than even GQA models,
+    often compressing memory usage by 90%+ compared to standard MHA.
+  </p>
+  <p>
+    <strong>Real-world deployment</strong>: This breakthrough is why DeepSeek-V3 can efficiently serve a 671B parameter model at production scale.
+    By compressing the KV cache to a fraction of what GQA would require,
+    MLA makes serving massive MoE models economically viable,
+    a critical enabler for the next generation of ultra-large language models.
+  </p>
+  <p>
+    <strong>Adoption note</strong>: MLA started as a DeepSeek innovation (V2 and V3).
+    Kimi K2 reuses the DeepSeek-V3 architecture including MLA,
+    but most other model families still use GQA as the standard KV cache optimization.
+  </p>
+
+  <h3 id="kv-cache-compression">Beyond GQA: KV Cache Compression</h3>
+  <p>
+    While GQA reduces cache size through architectural changes,
+    additional compression techniques push efficiency further:
+  </p>
+  <ol>
+    <li><strong>Quantization</strong>: Store KV cache in 8-bit or 4-bit precision instead of 16-bit (2-4x savings with minimal quality loss)</li>
+    <li><strong>Eviction policies</strong>: Drop least-important cached tokens based on attention scores</li>
+    <li><strong>Streaming LLMs</strong>: Keep only recent tokens plus "attention sinks" (initial tokens that accumulate disproportionate attention)</li>
+    <li><strong>H2O (Heavy Hitters Oracle)</strong>: Cache only high-attention tokens, evict low-attention ones</li>
+  </ol>
+  <p>
+    <strong>Example impact</strong>: For a Llama-2-70B-shaped model (80 layers, 64 query heads of dimension 128),
+    a single 4K-token sequence needs ~10.7GB of KV cache with full MHA in FP16.
+    GQA with 8 KV heads cuts that to ~1.3GB, and INT8 quantization halves it again to ~0.67GB.
+  </p>
+  <p>
+    <strong>Attention sinks</strong>: Initial tokens accumulate disproportionate attention weight even when semantically irrelevant.
+    Keeping these tokens in cache is critical for long-context generation quality;
+    evicting them causes catastrophic degradation.
+  </p>
+
+  <h3 id="rope">Rotary Position Embedding (RoPE): Encoding Position Elegantly</h3>
+  <p>
+    Remember the permutation equivariance property?
+    We need positional information, but how we encode it matters enormously.
+    The original Transformer added fixed sinusoidal position encodings to the input
+    (learned absolute embeddings, later used by BERT and GPT-2, performed about the same).
+    RoPE took a different approach: encode position by rotating query and key vectors in high-dimensional space.
+  </p>
+  <p>
+    Key insight: if we rotate \( Q_m \) by angle \( m\theta \) and \( K_n \) by angle \( n\theta \),
+    their dot product naturally depends on the relative distance \( (m-n)\theta \):
+  </p>
+  \[
+  \langle q_m e^{im\theta}, k_n e^{in\theta} \rangle = \text{Re}\left[q_m \overline{k_n} e^{i(m-n)\theta}\right]
+  \]
+  <p>Here each pair of dimensions is treated as a complex number, and the bar is complex conjugation.</p>
+  <p>
+    In practice, this complex rotation is implemented using sine and cosine operations on real-valued vectors.
+    There are two common implementation variants:
+  </p>
+  <p><strong>Interleaved (Llama-style)</strong>: Rotates adjacent pairs of features \( (q_{2i}, q_{2i+1}) \):</p>
+  \[
+  \begin{pmatrix} q_{2i} \\ q_{2i+1} \end{pmatrix} \rightarrow \begin{pmatrix} \cos(m\theta_i) & -\sin(m\theta_i) \\ \sin(m\theta_i) & \cos(m\theta_i) \end{pmatrix} \begin{pmatrix} q_{2i} \\ q_{2i+1} \end{pmatrix}
+  \]
+  <p><strong>Rotary Half (GPT-NeoX-style)</strong>: Splits the vector into two halves and rotates them against each other:</p>
+  \[
+  \begin{pmatrix} q_{\text{first half}} \\ q_{\text{second half}} \end{pmatrix} \rightarrow \begin{pmatrix} q_{\text{first half}} \cdot \cos - q_{\text{second half}} \cdot \sin \\ q_{\text{first half}} \cdot \sin + q_{\text{second half}} \cdot \cos \end{pmatrix}
+  \]
+  <p>where \( \theta_i = 10000^{-2i/d} \) for the \( i \)-th dimension pair.</p>
+  <p>
+    <strong>Critical</strong>: Both variants are mathematically valid and produce equivalent relative position encoding,
+    but they are incompatible when loading pre-trained weights.
+    Meta's original Llama checkpoints expect interleaved, while GPT-NeoX expects rotary half.
+    Hugging Face's Llama port uses rotary half and permutes the Q/K projection weights at conversion time to compensate,
+    which is exactly the detail that bites when you mix checkpoints and code from different sources.
+    Using the wrong variant produces garbage outputs.
+  </p>
+  <p>
+    <strong>Note</strong>: In practice, libraries like Hugging Face Transformers handle RoPE automatically for each model architecture,
+    so you rarely implement it yourself.
+  </p>
+  <p>RoPE advantages:</p>
+  <ul>
+    <li><strong>Zero parameters</strong>: No learned embeddings to store</li>
+    <li><strong>Inherently relative</strong>: Attention depends on relative distance, not absolute position</li>
+    <li><strong>Extrapolation</strong>: Can handle sequences longer than training length with proper scaling</li>
+    <li><strong>Universal adoption</strong>: Llama, GPT-NeoX, PaLM, Mistral all use RoPE</li>
+  </ul>
+  <p>
+    For extending to ultra-long contexts (100K+ tokens),
+    techniques either rescale positions (linear position interpolation)
+    or rescale the rotation frequencies (NTK-aware scaling, YaRN)
+    so that longer sequences map into the range seen during training.
+  </p>
+
+  <h4>ALiBi: Simpler Position Encoding</h4>
+  <p>
+    An alternative to RoPE is ALiBi (Attention with Linear Biases),
+    which adds position-dependent bias directly to attention scores:
+  </p>
+  \[
+  \text{attention\_score}[i,j] = \frac{QK^T}{\sqrt{d_k}} - m \cdot |i - j|
+  \]
+  <p>
+    where \( m \) is a fixed, head-specific slope.
+    For \( H \) heads, the slopes form a geometric sequence \( m_h = 2^{-8h/H} \) for \( h = 1, \ldots, H \).
+  </p>
+  <p><strong>Even simpler than RoPE:</strong></p>
+  <ul>
+    <li>No position embeddings to compute or apply</li>
+    <li>Just subtract distance penalty from attention scores</li>
+    <li>Used in: BLOOM, MPT models</li>
+  </ul>
+  <p>
+    <strong>Trade-off</strong>: ALiBi's main selling point was length extrapolation:
+    trained on short sequences, it degrades gracefully on longer ones.
+    RoPE with scaling has since won out in most new models,
+    but ALiBi offers a simpler implementation and competitive performance.
+    The choice often depends on engineering constraints and specific use cases.
+  </p>
+
+  <h3 id="pagedattention">PagedAttention: Virtual Memory for KV Cache</h3>
+  <p>
+    Even with GQA reducing cache size, managing memory efficiently during inference remains challenging.
+    Consider serving multiple requests with varying sequence lengths:
+    traditional approaches pre-allocate maximum memory per request,
+    leaving 60-80% of KV cache memory wasted on over-reservation and fragmentation.
+  </p>
+  <p>
+    PagedAttention, implemented in the vLLM serving framework,
+    applies operating system virtual memory concepts to KV cache management.
+    Instead of contiguous memory allocation,
+    it stores KV cache in fixed-size blocks (e.g., 16 tokens) with a logical-to-physical mapping,
+    much like OS page tables.
+  </p>
+  <p>Advantages:</p>
+  <ul>
+    <li><strong>Dynamic allocation</strong>: Allocate memory as sequences grow</li>
+    <li>
+      <strong>Memory sharing</strong>: Multiple sequences can share prefix blocks
+      (critical for parallel sampling and beam search), with copy-on-write when they diverge
+    </li>
+    <li>
+      <strong>No external fragmentation</strong>: Any free block can serve any sequence,
+      and waste is limited to each sequence's partially filled last block
+    </li>
+    <li><strong>Continuous batching</strong>: Efficiently batch requests of different lengths</li>
+  </ul>
+  <p>
+    Result: 2-4x higher throughput than FasterTransformer and Orca at the same latency.
+    Earlier systems used only 20-40% of KV cache memory for actual token states; vLLM wastes under 4%.
+    vLLM has become the de facto standard for LLM serving.
+  </p>
+
+  <h3 id="continuous-batching">Continuous Batching: Maximizing GPU Utilization</h3>
+  <p>Traditional batching waits for all requests in a batch to complete before starting new ones:</p>
+  <pre><code>Batch 1: [Request A (1000 tokens), Request B (100 tokens), Request C (500 tokens)]
+→ Wait for A (1000 tokens) to finish before starting Batch 2
+→ GPU idle waiting for longest request</code></pre>
+  <p>
+    <strong>Continuous batching</strong> (Orca, implemented in vLLM)
+    adds new requests as soon as capacity is available.
+  </p>
+  <p><strong>Advantages:</strong></p>
+  <ul>
+    <li>Much higher GPU utilization than static batching, since slots freed by finished requests are refilled immediately</li>
+    <li>Lower latency for short requests (don't wait for long requests)</li>
+    <li>Better throughput overall</li>
+  </ul>
+  <p>
+    <strong>Enabler:</strong> Orca's iteration-level scheduling predates PagedAttention,
+    but paged KV memory is what lets a server pack many requests of different lengths into a batch
+    without reserving worst-case memory for each.
+  </p>
+
+  <h3 id="speculative-decoding">Speculative Decoding: Accelerating Inference 2-3x</h3>
+  <p>
+    Autoregressive generation is inherently sequential; each token requires a full model forward pass.
+    Speculative Decoding achieves 2-3x speedup without changing outputs or retraining
+    by using a small "draft" model to predict multiple tokens,
+    then verifying them in parallel with the target model.
+  </p>
+  <p>
+    <strong>Core insight</strong>: Language modeling tasks often contain easier subtasks.
+    A small, fast model can draft plausible continuations,
+    and the large model can verify multiple candidates in a single forward pass.
+  </p>
+  <p><strong>Algorithm:</strong></p>
+  <ol>
+    <li><strong>Draft phase</strong>: Small model generates \( k \) candidate tokens (fast, lower quality)</li>
+    <li><strong>Verification phase</strong>: Large model processes all \( k \) candidates in parallel (single forward pass)</li>
+    <li>
+      <strong>Acceptance</strong>: Accept each draft token with probability \( \min(1, p(x)/q(x)) \),
+      where \( p \) and \( q \) are the target and draft probabilities
+    </li>
+    <li>
+      <strong>Correction</strong>: At the first rejection, sample a replacement from the normalized residual \( \max(0, p - q) \).
+      If all \( k \) are accepted, sample one bonus token from the target.
+      This keeps the output distribution exactly equal to the target model's
+    </li>
+  </ol>
+  <p><strong>How this works:</strong></p>
+  <ul>
+    <li>Draft model is 10-100x faster (smaller, quantized, or distilled)</li>
+    <li>
+      With a 50% per-token acceptance rate and \( k=4 \),
+      each target pass yields ~1.9 tokens on average, before subtracting the draft model's cost
+    </li>
+    <li>Mathematically guaranteed to match target model's distribution exactly</li>
+    <li>No retraining or architecture changes required</li>
+  </ul>
+  <p>
+    <strong>Production adoption</strong>: Google has reported using it in production,
+    and vLLM, TensorRT-LLM, and SGLang all support it.
+    Variants like Medusa (extra decoding heads instead of a separate draft model) and EAGLE push acceptance rates higher.
+    Works best when:
+  </p>
+  <ul>
+    <li>Draft model is 10x+ faster than target</li>
+    <li>Acceptance rate &gt; 60% (predictable text, code, structured output)</li>
+    <li>Batch size is small (latency-sensitive applications)</li>
+  </ul>
+  <p>
+    <strong>Trade-offs</strong>: Less effective for creative/unpredictable generation
+    where draft model struggles to match target distribution.
+  </p>
+
+  <h3 id="prompt-caching">Prompt Caching: Eliminating Redundant Computation</h3>
+  <p>
+    Many LLM requests share common prefixes: system prompts, few-shot examples, or document context.
+    Prompt caching (prefix caching, KV cache reuse) eliminates redundant computation
+    by caching and reusing KV pairs from identical prefixes.
+  </p>
+  <p><strong>How it works:</strong></p>
+  <ol>
+    <li>Compute KV cache for prompt prefix during first request</li>
+    <li>Store cached KV pairs with hash of prefix tokens</li>
+    <li>For subsequent requests with same prefix, load cached KV and only compute new tokens</li>
+    <li>
+      Entries expire after a period of inactivity (5 minutes by default on Anthropic, with an optional 1-hour TTL)
+      or are evicted LRU-style in self-hosted servers
+    </li>
+  </ol>
+  <p><strong>Example scenario:</strong></p>
+  <pre><code>Request 1: [System Prompt (1000 tokens)] + [User Query A (50 tokens)]
+→ Compute full 1050 tokens, cache first 1000
+
+Request 2: [System Prompt (1000 tokens)] + [User Query B (50 tokens)]
+→ Load cached 1000 tokens, compute only 50 new tokens
+→ ~20x less prefill work for this request; cached tokens are billed at a discount</code></pre>
+  <p><strong>Advantages:</strong></p>
+  <ul>
+    <li><strong>Latency</strong>: Anthropic reports up to 85% lower time-to-first-token on long cached prompts</li>
+    <li>
+      <strong>Cost</strong>: Anthropic bills cache reads at 10% of the base input price (cache writes cost 25% more than base);
+      OpenAI also discounts cached input tokens, by an amount that varies by model
+    </li>
+    <li><strong>Longer context</strong>: Enables longer system prompts without latency penalty</li>
+    <li><strong>RAG optimization</strong>: Cache document context across multiple queries</li>
+  </ul>
+  <p><strong>Implementation details:</strong></p>
+  <ul>
+    <li>
+      <strong>Cache granularity</strong>: Minimum cacheable prefix of around 1024 tokens on both Anthropic (higher for some models) and OpenAI,
+      with OpenAI matching in 128-token increments
+    </li>
+    <li><strong>Cache points</strong>: Up to 4 breakpoints per prompt</li>
+    <li><strong>Scope</strong>: Caching applies to entire prefix up to cache_control block</li>
+    <li><strong>Automatic</strong>: vLLM, TensorRT-LLM detect and cache common prefixes</li>
+  </ul>
+  <p>
+    <strong>Design pattern:</strong> Put the stable content (system prompt, tool definitions, few-shot examples, shared documents) first
+    and mark the end of it as a cache breakpoint; put per-request content after it.
+    Anything variable placed before the stable content changes the prefix and invalidates the cache for everything after it.
+  </p>
+  <p>
+    <strong>Note</strong>: Anthropic requires explicit <code>cache_control</code> breakpoints;
+    OpenAI caches eligible prefixes automatically,
+    and vLLM's automatic prefix caching matches shared prefix blocks without any markers.
+  </p>
+  <p><strong>Production considerations:</strong></p>
+  <ul>
+    <li>Structure prompts with stable prefixes first, variable content last</li>
+    <li>Cache hit rate depends on exact token sequence matching</li>
+    <li>Particularly effective for: RAG systems, multi-turn conversations with system prompts, code generation with examples</li>
+    <li>Provider support: Anthropic Claude, OpenAI GPT-4, Google Gemini, AWS Bedrock</li>
+  </ul>
+  <p>
+    <strong>Real-world impact</strong>: Anthropic reports up to 90% cost reduction and 85% latency reduction
+    for long-context applications with stable prefixes.
+  </p>
+</section>

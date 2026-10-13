@@ -40,16 +40,16 @@ export default async function MediaPage() {
   return (
     <div className="px-6 sm:px-8 lg:px-12 py-8">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-gray-900 dark:text-gray-100">
+        <h1 className="page-title mb-8">
           Media Gallery
         </h1>
 
         {error && (
-          <Card className="mb-8 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
-            <p className="text-red-600 dark:text-red-400">
+          <Card className="mb-8">
+            <p className="text-warn font-bold">
               ⚠️ Error loading media: {error}
             </p>
-            <p className="text-sm text-red-500 dark:text-red-500 mt-2">
+            <p className="text-sm text-muted mt-2">
               Try refreshing the page or check your R2 configuration.
             </p>
           </Card>
@@ -57,14 +57,14 @@ export default async function MediaPage() {
 
         {/* Images Section */}
         <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">
+          <h2 className="section-title mb-4">
             Images
           </h2>
           {images.length > 0 ? (
             <MediaGallery assets={images} columns={3} />
           ) : (
             <Card>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-muted">
                 No images available yet. Upload images to R2 using: npm run upload-media
               </p>
             </Card>
@@ -73,7 +73,7 @@ export default async function MediaPage() {
 
         {/* Documents Section */}
         <section>
-          <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">
+          <h2 className="section-title mb-4">
             Documents
           </h2>
           {documents.length > 0 ? (
@@ -82,7 +82,7 @@ export default async function MediaPage() {
                 <Card key={doc.id}>
                   <div className="flex items-start space-x-3">
                     <svg
-                      className="h-8 w-8 text-blue-500 flex-shrink-0"
+                      className="h-8 w-8 text-accent flex-shrink-0"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -95,10 +95,10 @@ export default async function MediaPage() {
                       />
                     </svg>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      <p className="text-sm font-bold text-foreground truncate">
                         {doc.filename}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-muted">
                         {(doc.size / 1024).toFixed(2)} KB
                       </p>
                       {doc.publicUrl && (
@@ -106,7 +106,7 @@ export default async function MediaPage() {
                           href={doc.publicUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                          className="inline-flex items-center min-h-[2.75rem] text-xs font-bold text-accent hover:underline"
                         >
                           Download
                         </a>
@@ -118,7 +118,7 @@ export default async function MediaPage() {
             </div>
           ) : (
             <Card>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-muted">
                 No documents available yet. Upload documents to R2 using: npm run upload-media
               </p>
             </Card>

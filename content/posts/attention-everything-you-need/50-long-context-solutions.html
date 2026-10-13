@@ -1,0 +1,92 @@
+<section id="long-context-solutions">
+  <h2>Long-Context Solutions</h2>
+  <p><strong>References</strong>: [12, 13, 16]</p>
+  <p>
+    As context windows extend beyond 10K-20K tokens, full \( O(N^2) \) attention becomes prohibitive.
+    These techniques enable efficient processing of ultra-long sequences.
+  </p>
+
+  <h3 id="sparse-and-sliding-window-attention">Sparse and Sliding Window Attention</h3>
+  <p>
+    Full \( O(N^2) \) attention becomes prohibitive beyond 10K-20K tokens.
+    Sparse attention patterns offer linear or near-linear complexity
+    by restricting which positions can attend to each other.
+  </p>
+  <p>Sliding Window Attention restricts each token to attend only to the previous \( W \) tokens.</p>
+  <p>
+    Mistral 7B (v0.1) uses a 4096-token sliding window.
+    Key insight: stacking layers provides global context through composition,
+    since layer \( L \) can see information from up to \( L \times W \) tokens away.
+    With a 4K window and 32 layers, the theoretical receptive field is ~131K tokens,
+    although information degrades over that many hops,
+    and later Mistral releases dropped the sliding window in favor of full attention.
+  </p>
+  <p>
+    Longformer combines sliding window with global attention tokens:
+    certain positions (e.g., \( \text{[CLS]} \)) attend to all positions and are attended to by all positions.
+    This hybrid approach balances efficiency with global reasoning.
+  </p>
+
+  <h3 id="ring-attention">Ring Attention: Scaling Beyond Single-Device Limits</h3>
+  <p>
+    While FlashAttention optimizes memory on a single device,
+    Ring Attention tackles a different problem: what if your sequence is too long to fit on any single device?
+    Even with FlashAttention, processing 100M tokens requires over 1TB of memory, far exceeding typical GPU capacity.
+  </p>
+  <p>
+    <strong>Core mechanism</strong>: Ring Attention distributes the sequence across multiple devices arranged in a ring.
+    Each device holds one query block and iterates through all key-value blocks by passing them around the ring.
+    The key insight is overlapping communication with computation:
+    while device \( i \) computes attention,
+    it simultaneously sends KV blocks to device \( (i+1) \) and receives from device \( (i-1) \).
+  </p>
+  <p>
+    This works because blockwise attention computation is permutation-invariant:
+    blocks can be processed in any order as long as statistics are combined correctly.
+    When block size is large enough (≥ FLOPS/Bandwidth),
+    communication is fully hidden by computation, resulting in near-zero overhead.
+  </p>
+  <p><strong>Memory per device</strong>: \( O(b \cdot c \cdot h) \) per block, in the paper's notation:</p>
+  <ul>
+    <li>\( b \) = batch size</li>
+    <li>\( c \) = block size (tokens per device, e.g., 1024)</li>
+    <li>\( h \) = hidden dimension</li>
+  </ul>
+  <p>Each device stores:</p>
+  <ol>
+    <li>Local query block (\( b \cdot c \cdot h \))</li>
+    <li>Current KV block being processed (\( 2 \cdot b \cdot c \cdot h \))</li>
+    <li>Next KV block being received (\( 2 \cdot b \cdot c \cdot h \), overlapped with computation)</li>
+    <li>Output accumulator (\( b \cdot c \cdot h \))</li>
+  </ol>
+  <p>
+    Total: ~\( 6 \cdot b \cdot c \cdot h \) bytes, independent of total sequence length \( N \).
+    Whether processing 1M or 100M tokens, each device uses the same memory.
+  </p>
+  <p>
+    <strong>Scaling</strong>: Context length scales linearly with device count.
+    With 8 GPUs, train 8× longer sequences; with 512 TPUs, train 512× longer.
+    Experiments show training sequences exceeding 100M tokens,
+    enabling whole-codebase understanding, long document processing, and high-resolution multimodal models.
+  </p>
+  <p><strong>Comparison with alternatives</strong>:</p>
+  <ul>
+    <li>
+      <strong>vs FlashAttention</strong>: FlashAttention optimizes single-device memory; Ring Attention distributes across devices.
+      They're complementary: Ring Attention uses FlashAttention for local computation.
+    </li>
+    <li>
+      <strong>vs Sparse attention</strong>: Ring Attention computes exact attention without approximations,
+      while sparse methods sacrifice some interactions for efficiency.
+    </li>
+    <li>
+      <strong>vs Traditional sequence parallelism</strong>: Ring Attention only communicates with neighbors (not all-to-all),
+      overlaps communication with computation,
+      and can hide communication entirely when blocks are large enough.
+    </li>
+  </ul>
+  <p>
+    Ring Attention demonstrates that when single-device memory is the bottleneck,
+    clever distributed algorithms can unlock orders of magnitude improvements without sacrificing accuracy.
+  </p>
+</section>

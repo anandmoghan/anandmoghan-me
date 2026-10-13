@@ -1,0 +1,174 @@
+<section id="memory-compute-optimizations">
+  <h2>Memory &amp; Compute Optimizations</h2>
+  <p><strong>References</strong>: [5, 14, 15]</p>
+  <p>
+    Modern transformer training faces significant memory bottlenecks.
+    The following techniques address these challenges to enable efficient training at scale.
+  </p>
+
+  <h3 id="mixed-precision-training">Mixed Precision Training: Foundation for Efficiency</h3>
+  <p>
+    Before diving into attention-specific optimizations,
+    mixed precision training (FP16/BF16) is the foundational technique that enables all other optimizations.
+    Instead of using 32-bit floating point (FP32) for all computations,
+    mixed precision uses 16-bit formats for most operations while maintaining FP32 for critical accumulations.
+  </p>
+  <p><strong>Two main formats:</strong></p>
+  <ul>
+    <li><strong>FP16 (Float16)</strong>: Standard half precision, halves activation memory, but prone to underflow/overflow</li>
+    <li><strong>BF16 (BFloat16)</strong>: Same range as FP32 but lower precision, preferred for stability</li>
+  </ul>
+  <p><strong>BF16 advantages:</strong></p>
+  <ul>
+    <li>Same dynamic range as FP32 (8-bit exponent) reduces underflow/overflow compared to FP16</li>
+    <li>No loss scaling required (unlike FP16), which is the main practical benefit</li>
+    <li>Native hardware support on A100, H100, and newer GPUs</li>
+    <li>Pairs perfectly with FlashAttention and other optimizations</li>
+    <li>Roughly halves activation memory (optimizers still keep FP32 master weights, so total savings are smaller)</li>
+    <li>2-3x training speedup from faster compute on Tensor Cores</li>
+    <li>Negligible quality difference versus FP32 when done correctly</li>
+  </ul>
+  <p>
+    Mixed precision is now standard in all production training pipelines;
+    it's the first optimization to enable, not an optional extra.
+  </p>
+
+  <h4>The Next Frontier: FP8 Training</h4>
+  <p><strong>References</strong>: [20, 21]</p>
+  <p>
+    Modern hardware (NVIDIA H100/B200) natively supports FP8 (8-bit floating point), doubling throughput over BF16.
+    FP8 uses two formats: E4M3 (higher precision) for forward pass, E5M2 (wider range) for gradients.
+  </p>
+  <p>
+    Libraries like NVIDIA's Transformer Engine handle FP8 automatically with delayed scaling.
+    For inference, FP8 is gaining ground for Llama-4 class models:
+    2x faster weight loading than BF16 without INT4's quantization noise.
+    On older GPUs without FP8 support, INT8 and INT4 weight quantization remain the common choices.
+  </p>
+  <p>
+    <strong>Trade-off</strong>: Requires H100+ hardware.
+    BF16 remains the safer default, but FP8 is the future for cutting-edge systems.
+  </p>
+
+  <h3 id="flashattention">FlashAttention: The I/O Revolution</h3>
+  <p>
+    Understanding attention's computational complexity is one thing;
+    understanding its memory access patterns is another.
+    The real bottleneck in modern hardware isn't compute; it's memory bandwidth.
+  </p>
+  <p>
+    <strong>Important distinction</strong>: FlashAttention reduces <strong>memory usage</strong>
+    from \( O(N^2) \) to \( O(N) \) by not materializing the full attention matrix,
+    while maintaining \( O(N^2) \) <strong>computational complexity</strong> (FLOPs).
+    The 2-4x speedup comes from optimizing memory I/O between HBM and SRAM, not from reducing arithmetic operations.
+    This is a common misconception worth clarifying.
+  </p>
+  <p>
+    FlashAttention reformulates attention to minimize memory reads and writes
+    between GPU high-bandwidth memory (HBM) and on-chip SRAM.
+    Key insight: instead of materializing the full \( N \times N \) attention matrix in HBM,
+    compute attention in blocks that fit in SRAM, using tiling and recomputation strategies.
+  </p>
+
+  <h4>The Memory Hierarchy Problem</h4>
+  <p>Modern GPUs have a memory hierarchy (A100 numbers from the FlashAttention paper):</p>
+  <ul>
+    <li><strong>HBM (High-Bandwidth Memory)</strong>: Large (40GB+) but slow (~1.5 TB/s)</li>
+    <li><strong>SRAM (On-chip memory)</strong>: Small (~20MB) but fast (~19 TB/s)</li>
+  </ul>
+  <figure>
+    <img src="https://media.anandmoghan.me/public/images/attention/flashattention-memory.png" alt="Figure 2: GPU memory hierarchy showing the speed-capacity tradeoff between HBM and SRAM. FlashAttention optimizes data movement between these levels. Source: Dao et al. (2022)">
+    <figcaption>Figure 2: GPU memory hierarchy showing the speed-capacity tradeoff between HBM and SRAM. FlashAttention optimizes data movement between these levels. Source: Dao et al. (2022)</figcaption>
+  </figure>
+  <p>Standard attention implementations:</p>
+  <ol>
+    <li>Load \( Q \), \( K \) from HBM → compute \( QK^T \) → write to HBM</li>
+    <li>Load \( QK^T \) from HBM → compute softmax → write to HBM</li>
+    <li>Load softmax output and \( V \) from HBM → compute final output</li>
+  </ol>
+  <p>
+    Each step involves expensive HBM reads/writes.
+    For a sequence of length 4096, the score matrix has 4096 × 4096 ≈ 16.8M entries,
+    or 32MB in FP16, for a single head of a single sequence.
+    Multiply by heads and batch size and it dwarfs SRAM.
+  </p>
+
+  <h4>FlashAttention's Solution</h4>
+  <p>FlashAttention uses tiling and kernel fusion:</p>
+  <ol>
+    <li><strong>Tiling</strong>: Split \( Q \), \( K \), \( V \) into blocks that fit in SRAM</li>
+    <li><strong>Online Softmax</strong>: Compute softmax incrementally without materializing the full attention matrix</li>
+    <li><strong>Recomputation</strong>: In the backward pass, recompute attention on-the-fly rather than storing it</li>
+  </ol>
+  <p>
+    Result: 2-4x speedups and the ability to handle much longer sequences.
+    This isn't just an optimization; it's what makes training on sequences of 16K+ tokens practical.
+  </p>
+  <p>
+    By recomputing attention during backpropagation rather than storing it,
+    FlashAttention trades minimal extra compute for massive memory savings,
+    a favorable tradeoff since modern GPUs are compute-rich but memory-bound.
+  </p>
+
+  <h4>FlashAttention-2 and FlashAttention-3</h4>
+  <p>
+    <strong>FlashAttention-2</strong> made three changes.
+    It cut non-matmul FLOPs by deferring the softmax rescaling to the end of the loop,
+    since GPUs run matmuls far faster than anything else.
+    It made the outer loop run over query blocks so it could parallelize across the sequence dimension,
+    not just batch and heads, which keeps the GPU busy for long sequences with small batches.
+    And within each block it split work across warps by query rows instead of by keys,
+    removing most of the shared-memory communication between warps.
+    The result was ~2x over FA-1, reaching 50-73% of A100 peak FLOPs.
+  </p>
+  <p>
+    <strong>FlashAttention-3</strong> targets H100's new hardware:
+    the Tensor Memory Accelerator (TMA) for asynchronous memory transfers
+    and WGMMA instructions for warpgroup-wide matmuls.
+    It uses warp specialization, where producer warps load data while consumer warps compute,
+    and it overlaps softmax with the matmuls both across warpgroups (ping-pong scheduling) and within a warpgroup.
+    FA-3 is 1.5-2x faster than FA-2 in FP16, reaching ~75% of H100 peak (about 740 TFLOPs/s),
+    and gets close to 1.2 PFLOPs/s in FP8, using block quantization and incoherent processing to keep FP8 error in check.
+    The evolution from FA-1 → FA-2 → FA-3 demonstrates how algorithms must co-evolve with hardware for optimal performance.
+  </p>
+
+  <h3 id="gradient-checkpointing">Gradient Checkpointing: Trading Compute for Memory</h3>
+  <p>
+    <strong>Core Idea:</strong> During backpropagation,
+    recompute intermediate activations on-demand instead of storing them all in memory.
+  </p>
+  <p><strong>Standard backpropagation:</strong></p>
+  <ul>
+    <li>Forward: Compute and store ALL intermediate activations (attention scores, FFN activations, dropout masks, layer outputs)</li>
+    <li>Backward: Use stored activations to compute gradients</li>
+    <li>Memory: \( O(L \cdot S \cdot H) \) where \( L \) = num_layers, \( S \) = seq_len, \( H \) = hidden_dim</li>
+  </ul>
+  <p><strong>With checkpointing:</strong></p>
+  <ul>
+    <li>Forward: Only save inputs to checkpointed segments, discard internal activations</li>
+    <li>Backward: Recompute activations from saved checkpoints when needed</li>
+    <li>
+      Memory: \( O(\sqrt{L} \cdot S \cdot H) \) with a checkpoint every \( \sqrt{L} \) layers.
+      Checkpointing every layer still stores one input per layer, \( O(L \cdot S \cdot H) \),
+      but with a much smaller constant since none of the layer's internal activations are kept
+    </li>
+  </ul>
+  <p><strong>Tradeoffs:</strong></p>
+  <ul>
+    <li>Memory reduction: 60-80% for large models</li>
+    <li>
+      Speed cost: ~20-33% slower
+      (each checkpointed forward pass runs again during backward, and the forward pass is roughly a third of training compute)
+    </li>
+    <li>Gradient quality: Mathematically identical to standard backprop</li>
+  </ul>
+  <p>
+    <strong>When to use:</strong> Training large models that don't fit in GPU memory,
+    maximizing batch size or sequence length.
+  </p>
+  <p><strong>When NOT to use:</strong> Inference (no backprop), when memory isn't the bottleneck.</p>
+  <p>
+    <strong>Combined techniques:</strong> FlashAttention + checkpointing enables 10x+ longer sequences.
+    Works well with mixed precision and ZeRO optimizer for massive models.
+  </p>
+</section>

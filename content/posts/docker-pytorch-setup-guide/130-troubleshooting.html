@@ -1,0 +1,27 @@
+<section id="troubleshooting">
+  <h2>Troubleshooting</h2>
+  <h3 id="container-exits-immediately">Container Exits Immediately</h3>
+  <p>Check logs:</p>
+  <pre><code class="language-bash">docker logs &lt;container-id&gt;</code></pre>
+  <h3 id="out-of-memory">Out of Memory</h3>
+  <p>Increase Docker Desktop memory allocation:</p>
+  <ol>
+    <li>Open Docker Desktop</li>
+    <li>Go to Settings → Resources</li>
+    <li>Increase Memory limit to 8GB or more</li>
+  </ol>
+  <h3 id="slow-performance-on-mac">Slow Performance on Mac</h3>
+  <p>
+    Docker on Mac uses virtualization, which can be slower than native Linux.
+    Consider:
+  </p>
+  <ul>
+    <li>Using Docker volumes instead of bind mounts</li>
+    <li>Increasing allocated resources</li>
+    <li>Using <code>.dockerignore</code> to exclude unnecessary files</li>
+  </ul>
+  <h3 id="permission-issues">Permission Issues</h3>
+  <p>If you encounter permission errors, ensure your user has Docker permissions:</p>
+  <pre><code class="language-bash">sudo usermod -aG docker $USER</code></pre>
+  <p>Then log out and back in.</p>
+</section>

@@ -1,0 +1,14 @@
+<section id="step-6-run-the-container">
+  <h2>Step 6: Run the Container</h2>
+  <p>Run your training inside a Docker container:</p>
+  <pre><code class="language-bash">docker run --rm pytorch-mnist</code></pre>
+  <p>Flags explained:</p>
+  <ul>
+    <li><code>--rm</code>: Automatically remove container when it exits</li>
+    <li><code>pytorch-mnist</code>: Name of the image to run</li>
+  </ul>
+  <h3 id="run-with-volume-mounting">Run with Volume Mounting</h3>
+  <p>To persist data and models outside the container:</p>
+  <pre><code class="language-bash">docker run --rm -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models pytorch-mnist</code></pre>
+  <p>This mounts local directories into the container, so downloaded data and saved models persist.</p>
+</section>

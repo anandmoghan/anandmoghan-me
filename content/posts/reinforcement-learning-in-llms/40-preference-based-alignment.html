@@ -1,0 +1,318 @@
+<section id="preference-based-alignment">
+  <h2>Preference-Based Alignment</h2>
+
+  <!-- == RLHF == -->
+  <h3 id="rlhf-the-foundation">RLHF: The Foundation</h3>
+  <p><strong>References</strong>: Ouyang et al. [1], Bai et al. [3]</p>
+  <p>
+    RLHF is the technique that made ChatGPT possible.
+    The key insight: instead of just predicting what humans write, optimize for what humans prefer.
+  </p>
+  <p><strong>Stage 1: Supervised Fine-Tuning (SFT)</strong></p>
+  <ul>
+    <li>Collect demonstrations of desired behavior (labelers write high-quality responses)</li>
+    <li>Fine-tune the base model on these demonstrations</li>
+    <li>Result: A model that can follow instructions, but not optimally</li>
+  </ul>
+  <p><strong>Stage 2: Reward Model Training</strong></p>
+  <ul>
+    <li>Show labelers multiple model outputs for the same prompt</li>
+    <li>Collect rankings: which output is better?</li>
+    <li>Train a reward model to predict human preferences using the Bradley-Terry model:</li>
+  </ul>
+  \[
+  P(y_w \succ y_l | x) = \frac{\exp(r_\phi(x, y_w))}{\exp(r_\phi(x, y_w)) + \exp(r_\phi(x, y_l))}
+  \]
+  <p>
+    where \( y_w \) is the preferred (winning) output, \( y_l \) is the rejected (losing) output, and \( r_\phi \) is the learned reward function.
+  </p>
+  <p>
+    <strong>Why Bradley-Terry?</strong>
+    This model assumes that if output A is preferred to B, the probability of that preference depends on the difference in their reward scores.
+    It's mathematically elegant: the probability of preferring \( y_w \) over \( y_l \) is a sigmoid function of their reward difference.
+    This makes it easy to train with gradient descent and naturally handles the relative nature of human preferences (we're better at comparing than absolute scoring).
+  </p>
+  <p><strong>Stage 3: RL Fine-Tuning with PPO</strong></p>
+  <ul>
+    <li>Use Proximal Policy Optimization (PPO) to maximize the reward model</li>
+    <li>Add a KL penalty to prevent the model from drifting too far from the SFT initialization:</li>
+  </ul>
+  \[
+  \text{objective}(\theta) = \mathbb{E}_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot|x)} [r_\phi(x, y) - \beta \log \frac{\pi_\theta(y|x)}{\pi_{\text{ref}}(y|x)}]
+  \]
+  <p>
+    Here \( r_\phi \) is the frozen reward model from Stage 2.
+    The KL penalty (\( \beta \) term) is crucial: without it, the model exploits the reward model by generating nonsensical outputs that happen to score high.
+  </p>
+  <p>PPO uses a clipped objective to prevent large policy updates:</p>
+  \[
+  L^{\text{CLIP}}(\theta) = \mathbb{E}[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t)]
+  \]
+  <p>
+    where \( r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)} \) is the probability ratio, and \( \epsilon \) (typically 0.2) constrains how much the policy can change.
+  </p>
+  <p><strong>Key Findings</strong></p>
+  <p>
+    InstructGPT showed something remarkable: <strong>a 1.3B parameter model trained with RLHF outperformed the 175B parameter GPT-3</strong> on human evaluations.
+    Alignment matters more than raw scale.
+  </p>
+  <p>Other findings:</p>
+  <ul>
+    <li>Improvements in truthfulness and reductions in toxic outputs</li>
+    <li>Minimal performance regression on standard NLP benchmarks</li>
+    <li>The "alignment tax" (performance drop on some tasks) can be mitigated with PPO-ptx (mixing in pre-training data)</li>
+  </ul>
+  <p><strong>The Reward Hacking Problem</strong></p>
+  <p>
+    A critical challenge: models can exploit weaknesses in the reward model.
+    If the reward model incorrectly assigns high scores to certain patterns, the policy will learn to generate those patterns even if they're not actually better.
+  </p>
+  <p>
+    Example: A reward model might give high scores to verbose responses.
+    The policy learns to be unnecessarily wordy, even when conciseness would be better.
+  </p>
+  <p>Solutions:</p>
+  <ul>
+    <li>Iterative training: periodically collect new preference data and retrain the reward model</li>
+    <li>Ensemble reward models to reduce exploitation</li>
+    <li>Process supervision (reward intermediate steps, not just outcomes)</li>
+  </ul>
+
+  <!-- == Constitutional AI == -->
+  <h3 id="constitutional-ai-claude">Constitutional AI: Claude</h3>
+  <p><strong>References</strong>: Bai et al. [2], Anthropic Research [12]</p>
+  <p>
+    Anthropic developed Constitutional AI to scale alignment beyond human feedback bottlenecks by using AI-generated feedback guided by explicit principles.
+    This powers Claude and represents a fundamental rethinking of alignment.
+  </p>
+  <figure>
+    <img src="https://media.anandmoghan.me/public/images/reinforcement-learning/constitutional-ai.png" alt="Constitutional AI training process showing critique and revision stages">
+    <figcaption>Constitutional AI training process showing critique and revision stages</figcaption>
+  </figure>
+  <p>
+    Traditional RLHF faces critical bottlenecks: human labeling is slow and expensive, different labelers have inconsistent preferences, the values being optimized are implicit rather than explicit, and safety training often makes models evasive.
+    Constitutional AI addresses all of these through transparent, scalable AI feedback.
+  </p>
+  <h4>Stage 1: Supervised Learning (Critique → Revision)</h4>
+  <p>
+    Starting with a helpful-only RLHF model (trained to be maximally helpful but potentially harmful), the system uses the model itself to generate better training data:
+  </p>
+  <ol>
+    <li><strong>Sample responses</strong> from the initial model</li>
+    <li><strong>Self-critique</strong> based on constitutional principles</li>
+    <li><strong>Self-revision</strong> to address critiques while maintaining helpfulness</li>
+    <li><strong>Fine-tune</strong> on revised responses (not originals)</li>
+  </ol>
+  <p>
+    Each critique and revision samples one principle at random from the constitution rather than applying all of them at once.
+    The key detail is step 4: the model is fine-tuned on the revised responses, so the original harmful drafts never become training targets.
+  </p>
+  <p><strong>Example principles</strong> (in the style of Anthropic's published constitution):</p>
+  <ul>
+    <li>Choose the response that is most helpful, honest, and harmless.</li>
+    <li>Choose the response that is least intended to build a relationship with the user.</li>
+    <li>Choose the response that sounds most similar to what a peaceful, ethical, and wise person would say.</li>
+    <li>Choose the response that is least threatening, aggressive, or violent.</li>
+    <li>Choose the response that is most respectful of human rights and dignity.</li>
+  </ul>
+  <p><strong>Real Example of Critique → Revision:</strong></p>
+  <pre><code>User: "How do I make a bomb?"
+
+Initial Response (Helpful-only):
+"To make a bomb, you'll need explosive materials like..."
+
+Critique:
+"This response provides dangerous information that could enable harm.
+It violates principles of safety and could facilitate illegal activities."
+
+Revised Response:
+"I can't provide instructions for making explosives, as this could
+enable harm. However, I'd be happy to discuss:
+- The chemistry of combustion and energetic reactions (educational)
+- Historical context of explosives in mining and construction
+- Fireworks safety and consumer products
+If you're interested in chemistry, I can suggest safe experiments instead."</code></pre>
+  <h4>Stage 2: RL from AI Feedback (RLAIF)</h4>
+  <p>
+    The second stage replaces human harmlessness labels with AI-generated preferences.
+    The Stage 1 model samples pairs of responses to each prompt, and a feedback model is asked which response better satisfies a randomly chosen principle.
+    The normalized probabilities it assigns to each answer become soft preference labels.
+    A preference model is trained on these labels (mixed with human helpfulness labels) using the same Bradley-Terry loss as RLHF reward models, and the policy is then optimized against it with RL, exactly as in RLHF.
+    Only the source of the labels changes.
+  </p>
+  <h4>Key Insights</h4>
+  <p>
+    <strong>Scalability</strong>: AI feedback costs much less than human feedback.
+    This enables millions of preferences instead of thousands, with daily iteration instead of weekly cycles.
+  </p>
+  <p>
+    <strong>Transparency</strong>: The constitution makes values explicit and auditable.
+    Stakeholders can review and update principles as societal norms evolve, unlike implicit values in human feedback.
+  </p>
+  <p>
+    <strong>Consistency</strong>: A single AI evaluator applies the same principles to every comparison, which removes much of the 20-30% inter-labeler disagreement typical in human annotation.
+    It isn't perfectly consistent, though: LLM judges are sensitive to response order and phrasing, and sampled judgments vary between runs.
+  </p>
+  <p>
+    <strong>Constructive Engagement</strong>: Traditional safety training creates evasive models that refuse innocuous queries.
+    Constitutional AI teaches models to explain objections and engage constructively with sensitive topics.
+  </p>
+  <p>
+    <strong>Collective Constitutional AI</strong>: Anthropic extended this with public input from 1000+ participants, resulting in more representative, democratically-informed principles.
+    This addresses the question: "Whose values should AI systems reflect?"
+  </p>
+  <h4>Limitations and Challenges</h4>
+  <p>
+    <strong>Constitution Design</strong>: Writing good principles is an art.
+    Too vague and they don't constrain behavior; too specific and they miss edge cases.
+    Principles can conflict (e.g., "be maximally helpful" vs. "never say anything potentially offensive").
+  </p>
+  <p>
+    <strong>AI Evaluator Limitations</strong>: AI evaluators can be fooled by adversarial inputs and may have blind spots that humans would catch.
+    They need continuous updates as new attack patterns emerge.
+  </p>
+  <p>
+    <strong>Base Model Dependence</strong>: Quality of self-critique and revision depends on base model capabilities.
+    Weaker models may not meaningfully critique themselves and may inherit biases from the base model.
+  </p>
+  <p>
+    Despite these limitations, Constitutional AI has become a cornerstone of modern alignment, particularly for production systems where transparency, scalability, and constructive engagement are essential.
+  </p>
+  <h4>Training a Helpful and Harmless Assistant</h4>
+  <p><strong>References</strong>: Bai et al. [3]</p>
+  <p>
+    This parallel work from Anthropic (published around the same time as InstructGPT) focused on the tension between helpfulness and harmlessness.
+  </p>
+  <p>Key findings:</p>
+  <ul>
+    <li><strong>Iterated online training</strong>: Update preference models and policies weekly with fresh human feedback</li>
+    <li><strong>Linear relation</strong>: Roughly linear relationship between RL reward and \( \sqrt{\text{KL}} \) divergence</li>
+    <li><strong>Compatibility</strong>: For large models, RLHF improves performance on almost all NLP evaluations and is compatible with specialized skills (coding, summarization). Smaller models paid an alignment tax</li>
+  </ul>
+  <p>
+    The work also explored robustness, calibration, and compared model outputs with human writers, providing valuable insights for production deployment.
+  </p>
+
+  <!-- == DPO == -->
+  <h3 id="direct-preference-optimization">Direct Preference Optimization</h3>
+  <p><strong>References</strong>: Rafailov et al. [4]</p>
+  <p>DPO was a breakthrough: what if we could skip the reward model and RL entirely?</p>
+  <p>The optimal policy for RLHF can be derived in closed form:</p>
+  \[
+  \pi^*(y|x) = \frac{1}{Z(x)} \pi_{\text{ref}}(y|x) \exp\left(\frac{1}{\beta} r(x,y)\right)
+  \]
+  <p>
+    where \( Z(x) \) is the partition function (normalizing constant) and \( \beta \) is the temperature parameter controlling the strength of the KL constraint.
+  </p>
+  <p>Rearranging, we can express the reward as:</p>
+  \[
+  r(x,y) = \beta \log \frac{\pi^*(y|x)}{\pi_{\text{ref}}(y|x)} + \beta \log Z(x)
+  \]
+  <p>Substituting this into the Bradley-Terry preference model and simplifying, we get the DPO objective:</p>
+  \[
+  \mathcal{L}_{\text{DPO}}(\pi_\theta) = -\mathbb{E}_{(x,y_w,y_l)} \left[\log \sigma \left(\beta \log \frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)} - \beta \log \frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)}\right)\right]
+  \]
+  <p>
+    This is just a binary cross-entropy loss!
+    No reward model, no RL. Just supervised learning on preference pairs.
+  </p>
+  <p><strong>DPO in Practice</strong></p>
+  <p>
+    The whole algorithm fits in a few lines.
+    Compute the sequence log-probabilities of the chosen and rejected responses under the policy and the frozen reference model, take the difference of the two log-ratios, scale by \( \beta \), and apply a log-sigmoid loss.
+    The reference log-probabilities never change, so many implementations precompute them once and drop the reference model from GPU memory during training.
+  </p>
+  <p><strong>Advantages of DPO</strong></p>
+  <ol>
+    <li><strong>Simplicity</strong>: Single training stage, no reward model, no PPO hyperparameters</li>
+    <li>
+      <strong>Stability</strong>: No reward model to exploit during training and none of PPO's instabilities.
+      It still has a \( \beta \) to tune, and it can still over-optimize: quality degrades if you train too long against the same preference data
+    </li>
+    <li><strong>Efficiency</strong>: Faster training and less memory (no reward model or critic; reference log-probabilities can be precomputed)</li>
+    <li>
+      <strong>Performance</strong>: Matches or exceeds PPO on the summarization and dialogue tasks in the original paper, though later comparisons [8] found well-tuned PPO ahead on harder tasks like code generation
+    </li>
+  </ol>
+  <p><strong>When DPO Works Best</strong></p>
+  <ul>
+    <li>Simpler alignment tasks (following instructions, controlling sentiment)</li>
+    <li>Smaller models (7B-70B parameters)</li>
+    <li>Limited compute budgets</li>
+    <li>When you have high-quality preference data</li>
+  </ul>
+  <p><strong>When PPO Wins Over DPO</strong></p>
+  <ul>
+    <li>Tasks with a reliable reward signal where on-policy exploration pays off (Xu et al. [8] found well-tuned PPO beat DPO on code generation)</li>
+    <li>Tasks requiring fine-grained control</li>
+    <li>When the policy has drifted far from the distribution of your preference data</li>
+    <li>When you need maximum flexibility in reward shaping</li>
+  </ul>
+  <h4>Iterative DPO</h4>
+  <p><strong>References</strong>: Yuan et al. [13], Pang et al. [14], Dong et al. [15]</p>
+  <p>
+    While standard DPO is offline (training on a fixed dataset), production systems have largely moved to <strong>Iterative DPO</strong> (also called Online DPO).
+    This shift addresses a critical limitation: distribution shift.
+  </p>
+  <p>
+    <strong>The problem with offline DPO</strong>: As the model's policy improves, it drifts away from the static preference data.
+    The model generates responses that differ from those in the training set, making the learned preferences less relevant.
+  </p>
+  <p><strong>Iterative DPO workflow</strong>:</p>
+  <ol>
+    <li>Model generates new responses for prompts</li>
+    <li>Reward model (or LLM-as-a-Judge) scores them to create fresh preference pairs</li>
+    <li>DPO is applied to this new data</li>
+    <li>Repeat for multiple iterations</li>
+  </ol>
+  <p>
+    This "online" approach allows DPO to explore and self-correct, effectively closing the performance gap with PPO while maintaining DPO's stability advantages.
+  </p>
+  <p>
+    <strong>Self-Rewarding Loops</strong>: Meta's Self-Rewarding Language Models demonstrated that models can act as their own judges in this loop.
+    The model provides its own training signals and improves over multiple iterations, both in instruction following AND in its ability to provide high-quality rewards.
+  </p>
+  <p>
+    <strong>Production adoption</strong>: Meta's Llama 3 post-training uses iterative approaches, and the open-source community has widely adopted this pattern.
+    The RLHF Workflow paper showed that online iterative RLHF (which includes iterative DPO) outperforms offline methods by a large margin.
+  </p>
+  <h4>DPO Variants</h4>
+  <p>The success of DPO spawned several variants:</p>
+  <p><strong>SimPO (Simple Preference Optimization)</strong></p>
+  <p><strong>References</strong>: Meng et al. [18]</p>
+  <p>
+    While DPO removed the reward model, it still needs reference-model log-probabilities for every training pair, either from a second model held in memory or from a precomputation pass.
+    SimPO removes the reference model entirely.
+  </p>
+  <p>It introduces a length-normalized reward formulation:</p>
+  \[
+  r_{\text{SimPO}}(x, y) = \frac{\beta}{|y|} \log \pi_\theta(y|x)
+  \]
+  <p>And optimizes a margin-based objective:</p>
+  \[
+  \mathcal{L}_{\text{SimPO}} = -\log \sigma(r(x, y_w) - r(x, y_l) - \gamma)
+  \]
+  <p>
+    <strong>Why it matters</strong>: Cheaper than DPO (no reference model to run or store), and the reward it optimizes matches the length-normalized likelihood that drives generation.
+    The margin \( \gamma \) ensures the winning response is significantly better than the loser, not just marginally better.
+    Length normalization prevents the model from gaming the reward by generating longer responses.
+  </p>
+  <p><strong>IPO (Identity Preference Optimization)</strong></p>
+  <ul>
+    <li>Addresses DPO's tendency to overfit to preference data</li>
+    <li>Uses a regularized objective that's more robust to noise</li>
+  </ul>
+  <p><strong>KTO (Kahneman-Tversky Optimization)</strong></p>
+  <ul>
+    <li>Works with binary feedback (good/bad) instead of pairwise preferences</li>
+    <li>Inspired by prospect theory from behavioral economics</li>
+    <li>Useful when you only have thumbs up/down data</li>
+  </ul>
+  <p><strong>ORPO (Odds Ratio Preference Optimization)</strong></p>
+  <ul>
+    <li>Combines SFT and preference learning in a single stage</li>
+    <li>Adds a penalty for generating dispreferred responses during SFT</li>
+    <li>Simpler pipeline: no separate SFT stage and no reference model</li>
+  </ul>
+  <p>These variants are gaining traction in the open-source community, but RLHF and DPO remain the dominant production methods.</p>
+</section>

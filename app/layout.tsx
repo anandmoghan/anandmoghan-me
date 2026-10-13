@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import GoogleAnalytics from "./components/GoogleAnalytics";
 import RedirectTracker from "./components/RedirectTracker";
+import { ThemeProvider } from "@/common/components/ThemeProvider";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://anandmoghan.me';
 const gaId = process.env.NEXT_PUBLIC_GA_ID || 'G-4BFLN7Y3SY';
@@ -100,8 +101,34 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Nunito Sans: headings and UI. Literata: body prose. JetBrains Mono: code. */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap"
+        />
+        <link rel="stylesheet" href="/global/styles/tokens.css" />
+        <link rel="stylesheet" href="/global/styles/prose.css" />
+        <link rel="stylesheet" href="/global/styles/ui.css" />
+        <link rel="stylesheet" href="/global/styles/print.css" media="print" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Apply the saved theme before first paint so there is no flash.
+              try {
+                var savedTheme = localStorage.getItem('theme');
+                if (savedTheme === 'dark' || savedTheme === 'light') {
+                  var root = document.documentElement;
+                  root.setAttribute('data-theme', savedTheme);
+                  root.classList.add(savedTheme);
+                }
+              } catch (err) {}
+            `
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -193,7 +220,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <RedirectTracker />
         </Suspense>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

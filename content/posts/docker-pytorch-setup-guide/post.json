@@ -1,0 +1,10 @@
+{
+  "title": "Getting Started with Docker and PyTorch",
+  "excerpt": "Learn how to set up Docker on macOS, create a PyTorch container, and run your first machine learning training with a public dataset. Perfect for ML engineers looking to containerize their workflows.",
+  "publishedAt": "2026-01-10",
+  "tags": [
+    "python",
+    "machine-learning"
+  ],
+  "published": true
+}

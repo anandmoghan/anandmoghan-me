@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import type { PostHeading } from '@/common/types/post';
 
 interface TocItem {
   id: string;
@@ -10,10 +11,10 @@ interface TocItem {
 }
 
 interface TableOfContentsProps {
-  content: string;
+  headings: PostHeading[];
 }
 
-export default function TableOfContents({ content }: TableOfContentsProps) {
+export default function TableOfContents({ headings }: TableOfContentsProps) {
   const [toc, setToc] = useState<TocItem[]>([]);
   const [activeId, setActiveId] = useState<string>('');
   const [isOpen, setIsOpen] = useState(false);
@@ -21,33 +22,6 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
   const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    // Extract headings from content (only h2 and h3)
-    const headingRegex = /^(#{2,3})\s+(.+)$/gm;
-    const headings: { level: number; text: string; id: string }[] = [];
-    let match;
-
-    while ((match = headingRegex.exec(content)) !== null) {
-      const level = match[1].length;
-      let text = match[2].trim();
-      
-      // Strip LaTeX math expressions from TOC display
-      text = text
-        .replace(/\$\$(.+?)\$\$/g, '$1')  // Display math
-        .replace(/\$(.+?)\$/g, '$1')      // Inline math
-        .replace(/\\text\{([^}]+)\}/g, '$1')  // \text{} commands
-        .replace(/\\[a-zA-Z]+/g, '')      // Other LaTeX commands
-        .replace(/[{}]/g, '')             // Curly braces
-        .replace(/\s+/g, ' ')             // Normalize whitespace
-        .trim();
-      
-      const id = match[2].trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-      
-      headings.push({ level, text, id });
-    }
-
     // Build hierarchical structure
     const buildHierarchy = (items: typeof headings): TocItem[] => {
       const result: TocItem[] = [];
@@ -78,7 +52,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
     };
 
     setToc(buildHierarchy(headings));
-  }, [content]);
+  }, [headings]);
 
   useEffect(() => {
     // Intersection Observer for active section highlighting
@@ -96,14 +70,16 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
       }
     );
 
-    // Observe all headings (only h2 and h3)
-    const headings = document.querySelectorAll('h2[id], h3[id]');
-    headings.forEach((heading) => observer.observe(heading));
+    // Observe each TOC target; an h2 shares its id with the enclosing <section>.
+    const targets = headings
+      .map(({ id }) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null);
+    targets.forEach((target) => observer.observe(target));
 
     return () => {
-      headings.forEach((heading) => observer.unobserve(heading));
+      targets.forEach((target) => observer.unobserve(target));
     };
-  }, [toc]);
+  }, [headings]);
 
   // Scroll active item into view
   useEffect(() => {
@@ -315,24 +291,15 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
       {/* Desktop TOC - Sticky sidebar */}
       <aside className="hidden lg:block w-72 flex-shrink-0 self-stretch">
         <div className="sticky top-32 z-10">
-          <div className="rounded-lg border shadow-sm" style={{
-            backgroundColor: 'white',
-            borderColor: 'var(--border)',
+          <div className="toc-panel" style={{
             maxHeight: 'calc(100vh - 10rem)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden'
           }}>
             {/* Sticky header */}
-            <div className="p-5 pb-3 border-b flex-shrink-0" style={{
-              backgroundColor: 'white',
-              borderColor: 'var(--border)',
-              borderTopLeftRadius: '8px',
-              borderTopRightRadius: '8px'
-            }}>
-              <h2 className="text-sm font-bold uppercase tracking-wider" style={{ 
-                color: 'var(--foreground)'
-              }}>
+            <div className="pl-1 pb-2 flex-shrink-0">
+              <h2 className="toc-label">
                 On This Page
               </h2>
             </div>
@@ -340,11 +307,9 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
             {/* Scrollable content */}
             <nav 
               ref={navRef}
-              className="pl-5 pr-6 pt-3 pb-5 overflow-y-auto overflow-x-hidden flex-1" 
+              className="pl-1 pr-4 pb-5 overflow-y-auto overflow-x-hidden flex-1" 
               style={{
-                minHeight: 0,
-                borderBottomLeftRadius: '8px',
-                borderBottomRightRadius: '8px'
+                minHeight: 0
               }}
             >
               {renderTocItems(toc)}
@@ -358,11 +323,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         {/* Floating toggle button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-lg transition-transform hover:scale-110"
-          style={{
-            backgroundColor: 'var(--accent)',
-            color: 'white'
-          }}
+          className="toc-fab fixed bottom-6 right-6 z-50"
           aria-label="Toggle table of contents"
         >
           <svg
@@ -385,7 +346,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         {/* Backdrop */}
         {isOpen && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            className="fixed inset-0 z-40 bg-[var(--backdrop)]"
             onClick={() => setIsOpen(false)}
           />
         )}
@@ -393,27 +354,22 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         {/* Drawer */}
         <div
           ref={tocRef}
-          className={`fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl shadow-2xl transition-transform duration-300 ease-in-out ${
+          className={`toc-drawer fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl transition-transform duration-300 ease-in-out ${
             isOpen ? 'translate-y-0' : 'translate-y-full'
           }`}
           style={{
-            backgroundColor: 'white',
             maxHeight: '70vh',
             overflow: 'hidden'
           }}
         >
-          <div className="p-4 border-b" style={{ 
-            borderColor: 'var(--border)',
-            backgroundColor: 'white'
-          }}>
+          <div className="p-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--foreground)' }}>
+              <h2 className="toc-label">
                 On This Page
               </h2>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-2 rounded-lg hover:opacity-70 transition-opacity"
-                style={{ color: 'var(--muted)' }}
+                className="btn btn--ghost btn--icon"
                 aria-label="Close table of contents"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

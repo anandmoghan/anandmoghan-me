@@ -1,0 +1,18 @@
+<section id="advanced-docker-compose">
+  <h2>Advanced: Docker Compose</h2>
+  <p>For more complex setups, use Docker Compose. Create <code>docker-compose.yml</code>:</p>
+  <pre><code class="language-yaml">version: '3.8'
+
+services:
+  pytorch-training:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python train.py</code></pre>
+  <p>Run with:</p>
+  <pre><code class="language-bash">docker-compose up</code></pre>
+</section>

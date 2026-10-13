@@ -1,23 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Site styles. Colours, fonts, radii and shadows come from the shared tokens
+   (public/global/styles/tokens.css, synced by `npm run sync-global`); post typography comes from
+   prose.css and shared components (.btn, .chip, .badge, .card, .back-link) from ui.css.
+   Both are linked in app/layout.tsx. This file only holds the site-specific glue. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Old variable names used by components, mapped onto the shared tokens.
+   --muted, --border and --accent are defined by tokens.css and kept as they are. */
 :root {
-  --background: #ffffff;
-  --foreground: #1a1a1a;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --accent: #374151;
-  --card-bg: #f9fafb;
-  --primary: #374151;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --card-bg: var(--surface);
+  --primary: var(--accent);
+  --destructive: var(--warn);
+  --success: var(--accent);
 }
 
 html {
@@ -26,23 +24,32 @@ html {
   width: 100%;
   position: relative;
   touch-action: pan-y;
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.7;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  line-height: var(--leading-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
   max-width: 100vw;
+  overflow-x: clip;
   touch-action: pan-y;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  line-height: var(--leading-heading);
+  letter-spacing: -0.01em;
 }
 
 a {
@@ -50,373 +57,197 @@ a {
   color: inherit;
 }
 
-/* Smooth transitions */
-a, button {
-  transition: all 0.2s ease;
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
 }
 
-/* Prose styles for blog content */
-.prose {
-  color: var(--foreground);
-  font-size: 12pt;
-  line-height: 1.6;
+/* 44px tap targets for controls outside the shared components. */
+button,
+select,
+summary {
+  min-height: var(--tap);
 }
 
-/* Hide the first h1 in prose since we show title in header */
-.prose > h1:first-child {
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* Page sections */
+.page-title {
+  font-size: clamp(2.1rem, 6vw, 3.1rem);
+  line-height: 1.1;
+  color: var(--fg);
+}
+
+/* Short accent rule under a page title. */
+.accent-rule {
+  width: 5rem;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background: var(--accent);
+}
+
+.section-title {
+  font-size: var(--text-h2);
+  color: var(--fg);
+}
+
+.text-muted-token {
+  color: var(--muted);
+}
+
+/* Meta line: items separated by a bullet. */
+.meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.meta-line > * + *:not(.meta-line__end)::before {
+  content: "\2022";
+  margin-right: 0.75rem;
+  color: var(--border);
+}
+
+.meta-line__end {
+  margin-left: auto;
+}
+
+/* Header and footer chrome */
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-nav__brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.site-nav__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--muted);
+  border-radius: 9999px;
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.12s ease;
+}
+
+.site-nav__link:hover {
+  color: var(--fg);
+  background: var(--subtle);
+}
+
+.site-nav__link:active {
+  transform: scale(0.97);
+}
+
+.site-footer {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.site-footer a:hover {
+  color: var(--fg);
+}
+
+/* Post page */
+.post-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* The page title is in the header, so the body's own first h1 is hidden. */
+#post-body > h1:first-child {
   display: none;
 }
 
-.prose h1,
-.prose h2,
-.prose h3,
-.prose h4,
-.prose h5,
-.prose h6 {
-  color: var(--foreground);
-  font-weight: 700;
-  margin-top: 1em;
-  margin-bottom: 0.4em;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
+/* The prose sits on the page background; prose.css paints its own background. */
+#post-body.prose {
+  background: transparent;
 }
 
-.prose h1 {
-  font-size: 2.25rem;
-  margin-top: 0;
-  line-height: 1.2;
-}
-
-.prose h2 {
-  font-size: 1.875rem;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--border);
-  margin-top: 2em;
-  line-height: 1.25;
-}
-
-.prose h3 {
-  font-size: 1.5rem;
-  margin-top: 1.6em;
-  line-height: 1.3;
-}
-
-.prose h4 {
-  font-size: 1.25rem;
-  margin-top: 1.4em;
-}
-
-.prose h5 {
-  font-size: 1.125rem;
-  margin-top: 1.2em;
-}
-
-.prose h6 {
-  font-size: 1rem;
-  margin-top: 1em;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-/* Responsive heading sizes for mobile */
-@media (max-width: 640px) {
-  .prose h1 {
-    font-size: 1.5rem;
-  }
-  
-  .prose h2 {
-    font-size: 1.2rem;
-  }
-  
-  .prose h3 {
-    font-size: 1rem;
-  }
-  
-  .prose h4 {
-    font-size: 0.9rem;
-  }
-  
-  .prose h5 {
-    font-size: 0.8rem;
-  }
-  
-  .prose h6 {
-    font-size: 0.7rem;
-  }
-}
-
-.prose p {
-  margin-top: 0.6em;
-  margin-bottom: 0.6em;
-  color: var(--foreground);
-}
-
-.prose a {
-  color: var(--primary);
-  text-decoration: none;
-  font-weight: 500;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.2s;
-}
-
-.prose a:hover {
-  border-bottom-color: var(--primary);
-}
-
-.prose strong {
-  color: var(--foreground);
-  font-weight: 700;
-}
-
-.prose code {
-  background-color: var(--card-bg);
-  padding: 0.2em 0.4em;
-  border-radius: 0.25rem;
-  font-size: 0.875em;
-  color: var(--foreground);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.prose pre {
-  background-color: #f9fafb;
-  padding: 1em;
-  border-radius: 0.75rem;
-  overflow-x: auto;
-  margin: 1em 0;
-  border: 1px solid var(--border);
-  position: relative;
-}
-
-/* Responsive padding for code blocks on mobile */
-@media (max-width: 640px) {
-  .prose pre {
-    padding: 0.75em;
-    margin: 0.75em 0;
-  }
-  
-  .hljs {
-    padding: 0.75em !important;
-  }
-}
-
-.prose pre code {
-  background-color: transparent;
-  padding: 0;
-  color: var(--foreground);
-  font-size: 0.875em;
-}
-
-/* Show copy button on hover */
-.prose div:has(> pre):hover button {
-  opacity: 1 !important;
-}
-
-.prose ul,
-.prose ol {
-  margin-top: 0.6em;
-  margin-bottom: 0.6em;
-  padding-left: 1.625em;
-}
-
-.prose ul {
-  list-style-type: disc;
-}
-
-.prose ol {
-  list-style-type: decimal;
-}
-
-.prose ul ul {
-  list-style-type: circle;
-}
-
-.prose ul ul ul {
-  list-style-type: square;
-}
-
-.prose ol ol {
-  list-style-type: lower-alpha;
-}
-
-.prose ol ol ol {
-  list-style-type: lower-roman;
-}
-
-.prose li {
-  margin-top: 0.15em;
-  margin-bottom: 0.15em;
-  color: var(--foreground);
-  display: list-item;
-}
-
-.prose li strong {
-  color: var(--foreground);
-}
-
-.prose blockquote {
-  border-left: 4px solid var(--primary);
-  padding-left: 1.5em;
-  font-style: italic;
-  color: var(--muted);
-  margin: 1em 0;
-  background-color: var(--card-bg);
-  padding: 1em 1.5em;
-  border-radius: 0.5rem;
-}
-
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0;
-  font-size: 0.875em;
-}
-
-.prose thead {
-  border-bottom: 2px solid var(--border);
-}
-
-.prose th {
-  padding: 0.75em 1em;
-  text-align: left;
-  font-weight: 600;
-  color: var(--foreground);
-  background-color: var(--card-bg);
-  white-space: nowrap;
-}
-
-.prose td {
-  padding: 0.75em 1em;
-  border-bottom: 1px solid var(--border);
-  color: var(--foreground);
-  white-space: nowrap;
-}
-
-.prose tbody tr:hover {
-  background-color: var(--card-bg);
-}
-
-.prose img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 0.5rem;
-  margin: 1em 0;
-  border: 1px solid var(--border);
-}
-
-/* KaTeX math styling */
-.katex {
-  font-size: 1.1em;
-  overflow: visible;
+/* Wide content scrolls inside the column instead of widening the page. */
+#post-body pre,
+#post-body .katex-display {
   max-width: 100%;
 }
 
-.katex-display {
-  margin: 1em auto;
-  padding: 0.5em 0;
-  max-width: 100%;
-  width: fit-content;
-  display: block;
-  text-align: center;
-}
-
-/* Center all math equations */
-.prose .katex-display {
-  text-align: center !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  display: block !important;
-}
-
-/* Hide equation numbers from align environments */
-.katex .tag {
-  display: none !important;
-}
-
-.katex .eqn-num {
-  display: none !important;
-}
-
-/* Ensure aligned equations are centered */
-.katex-display > .katex {
-  display: inline-block;
-  text-align: left;
-}
-
-.katex .vlist,
-.katex .vlist-r,
-.katex .hide-tail {
-  overflow: visible !important;
-  max-width: 100%;
-}
-
-.katex .hide-tail svg {
-  overflow: hidden;
-  max-width: 100%;
-}
-
-.katex-mathml {
-  clip: rect(1px, 1px, 1px, 1px);
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
-
-/* Code highlighting adjustments */
-.hljs {
-  background-color: #f9fafb !important;
-  color: var(--foreground) !important;
-  padding: 1.25em;
-  border-radius: 0.75rem;
-}
-
-/* Ensure docstrings and comments are readable */
-.hljs-comment,
-.hljs-quote,
-.hljs-doctag,
-.hljs-string,
-.hljs-meta .hljs-string {
-  color: #6a737d !important; /* Readable gray for comments/docstrings */
-}
-
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-type,
-.hljs-built_in,
-.hljs-name,
-.hljs-tag {
-  color: #d73a49 !important; /* Red for keywords */
-}
-
-.hljs-title,
-.hljs-section,
-.hljs-selector-id {
-  color: #6f42c1 !important; /* Purple for function names */
-}
-
-.hljs-variable,
-.hljs-template-variable {
-  color: #e36209 !important; /* Orange for variables */
-}
-
-.hljs-literal,
-.hljs-number {
-  color: #005cc5 !important; /* Blue for numbers */
-}
-
-.hljs-params {
-  color: #24292e !important; /* Dark gray for parameters */
-}
-
-/* Code block wrapper with copy button */
+/* Code blocks: wrapper and copy button are added at runtime by CodeCopyButtons. */
 .code-block-wrapper {
   position: relative;
-  margin: 1em 0;
 }
 
-/* Table wrapper - similar to code block wrapper */
+.copy-code-button {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.code-block-wrapper:hover .copy-code-button,
+.copy-code-button:focus-visible {
+  opacity: 1;
+}
+
+.copy-code-button:hover {
+  color: var(--fg);
+}
+
+.copy-code-button:active {
+  transform: scale(0.97);
+}
+
+.copy-code-button svg {
+  flex-shrink: 0;
+}
+
+/* Touch screens have no hover, so the button is always visible there. */
+@media (hover: none) {
+  .copy-code-button {
+    opacity: 1;
+  }
+}
+
+/* Table wrapper (older posts): scrolls sideways inside its own box. */
 .table-wrapper {
   position: relative;
   margin: 1em auto;
@@ -433,67 +264,127 @@ a, button {
   width: fit-content;
 }
 
-.copy-code-button {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
+/* Code highlighting. The post page imports highlight.js/styles/github.css, which is light only;
+   these rules (higher specificity) recolour every token class from variables, with a dark set
+   that follows the same theme guards as tokens.css. */
+:root {
+  --hl-comment: #59636e;
+  --hl-keyword: #cf222e;
+  --hl-title: #8250df;
+  --hl-attr: #0550ae;
+  --hl-string: #0a3069;
+  --hl-builtin: #953800;
+  --hl-name: #116329;
+  --hl-add-bg: rgb(26 127 55 / 0.15);
+  --hl-del-bg: rgb(207 34 46 / 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hl-comment: #9aa3ad;
+    --hl-keyword: #ff7b72;
+    --hl-title: #d2a8ff;
+    --hl-attr: #79c0ff;
+    --hl-string: #a5d6ff;
+    --hl-builtin: #ffa657;
+    --hl-name: #7ee787;
+    --hl-add-bg: rgb(63 185 80 / 0.2);
+    --hl-del-bg: rgb(248 81 73 / 0.2);
+  }
+}
+
+:root[data-theme="dark"] {
+  --hl-comment: #9aa3ad;
+  --hl-keyword: #ff7b72;
+  --hl-title: #d2a8ff;
+  --hl-attr: #79c0ff;
+  --hl-string: #a5d6ff;
+  --hl-builtin: #ffa657;
+  --hl-name: #7ee787;
+  --hl-add-bg: rgb(63 185 80 / 0.2);
+  --hl-del-bg: rgb(248 81 73 / 0.2);
+}
+
+.prose pre code.hljs {
   padding: 0;
+  color: var(--fg);
   background: none;
-  border: none;
-  color: #6b7280;
-  font-size: 0.75rem;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s, color 0.2s;
-  z-index: 10;
 }
 
-.code-block-wrapper:hover .copy-code-button {
-  opacity: 1;
+.prose .hljs-doctag,
+.prose .hljs-keyword,
+.prose .hljs-meta .hljs-keyword,
+.prose .hljs-template-tag,
+.prose .hljs-template-variable,
+.prose .hljs-type,
+.prose .hljs-variable.language_ {
+  color: var(--hl-keyword);
 }
 
-.copy-code-button:hover {
-  color: #374151;
+.prose .hljs-title,
+.prose .hljs-title.class_,
+.prose .hljs-title.class_.inherited__,
+.prose .hljs-title.function_ {
+  color: var(--hl-title);
 }
 
-.copy-code-button svg {
-  flex-shrink: 0;
+.prose .hljs-attr,
+.prose .hljs-attribute,
+.prose .hljs-literal,
+.prose .hljs-meta,
+.prose .hljs-number,
+.prose .hljs-operator,
+.prose .hljs-variable,
+.prose .hljs-selector-attr,
+.prose .hljs-selector-class,
+.prose .hljs-selector-id {
+  color: var(--hl-attr);
 }
 
-.copy-code-button span {
-  font-weight: 500;
+.prose .hljs-regexp,
+.prose .hljs-string,
+.prose .hljs-meta .hljs-string {
+  color: var(--hl-string);
 }
 
-/* Mobile overflow fixes */
-@media (max-width: 640px) {
-  .prose {
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-  }
-
-  .prose pre,
-  .prose code,
-  .katex-display {
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Tables remain scrollable on mobile */
-  .prose table {
-    font-size: 0.75em;
-  }
-  
-  .prose th,
-  .prose td {
-    padding: 0.5em 0.75em;
-  }
+.prose .hljs-built_in,
+.prose .hljs-symbol {
+  color: var(--hl-builtin);
 }
 
-/* Table of Contents Scrollbar Styling */
+.prose .hljs-comment,
+.prose .hljs-code,
+.prose .hljs-formula {
+  color: var(--hl-comment);
+}
+
+.prose .hljs-name,
+.prose .hljs-quote,
+.prose .hljs-selector-tag,
+.prose .hljs-selector-pseudo {
+  color: var(--hl-name);
+}
+
+.prose .hljs-subst {
+  color: var(--fg);
+}
+
+.prose .hljs-section,
+.prose .hljs-bullet {
+  color: var(--hl-attr);
+}
+
+.prose .hljs-addition {
+  color: var(--hl-name);
+  background-color: var(--hl-add-bg);
+}
+
+.prose .hljs-deletion {
+  color: var(--hl-keyword);
+  background-color: var(--hl-del-bg);
+}
+
+/* Table of contents */
 aside nav::-webkit-scrollbar {
   width: 6px;
 }
@@ -512,32 +403,20 @@ aside nav::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
 }
 
-/* Ensure TOC maintains white background */
-aside nav,
-aside .sticky > div {
-  background-color: white;
+/* Plain list on the page background, like the materials sidebar pane. */
+.toc-panel {
+  background: transparent;
 }
 
-/* Smooth scroll behavior */
-html {
-  scroll-behavior: smooth;
+.toc-label {
+  margin: 0;
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-/* Scroll padding to account for fixed header */
-html {
-  scroll-padding-top: 80px;
-}
-
-/* Heading scroll margin for better positioning */
-.prose h2,
-.prose h3,
-.prose h4,
-.prose h5,
-.prose h6 {
-  scroll-margin-top: 80px;
-}
-
-/* Table of Contents Tree Structure Enhancements */
 .toc-item-wrapper:hover .toc-line {
   background-color: var(--accent) !important;
   opacity: 0.5;
@@ -548,470 +427,82 @@ html {
   transform: scale(1.3);
 }
 
-/* Smooth transitions for TOC elements */
 .toc-line,
 .toc-bullet {
   transition: all 0.2s ease;
 }
 
-/* Print Button Styles */
-.print-button {
+/* TOC rows: 44px tap targets on touch screens. */
+@media (pointer: coarse) {
+  aside nav button,
+  .toc-drawer nav button {
+    min-height: var(--tap);
+    align-items: center;
+  }
+}
+
+.toc-fab {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background-color: white;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 9999px;
+  box-shadow: var(--shadow-float);
+  transition: transform 0.12s ease;
 }
 
-.print-button:hover:not(:disabled) {
-  background-color: var(--card-bg);
-  border-color: var(--accent);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+.toc-fab:active {
+  transform: scale(0.95);
 }
 
-.print-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.toc-drawer {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: var(--shadow-float);
 }
 
-.print-button svg {
-  flex-shrink: 0;
-}
-
-/* Print Styles */
+/* Print: shared print.css handles the prose; this hides the site chrome. */
 @media print {
-  /* Page setup with margins and page numbers */
-  @page {
-    margin: 0.5in 0.5in 0.75in 0.5in; /* Extra bottom margin for page numbers */
-    size: letter;
-    
-    @bottom-center {
-      content: counter(page);
-      font-size: 9pt;
-      color: #666;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-  }
-
-  /* Scale entire page to 70% for denser appearance */
-  body {
-    zoom: 0.70;
-    -moz-transform: scale(0.70);
-    -moz-transform-origin: 0 0;
-  }
-
-  /* Hide non-essential elements */
   nav,
   footer,
   aside,
   .print-button,
   button,
-  .copy-code-button {
+  .copy-code-button,
+  .back-link,
+  .fixed {
     display: none !important;
   }
 
-  /* Specifically hide table of contents */
-  aside,
-  aside *,
-  [class*="lg:block w-72"],
-  .fixed.bottom-0,
-  .fixed.bottom-6 {
-    display: none !important;
-    visibility: hidden !important;
+  .post-header {
+    padding: 0 0 0.75rem !important;
+    border-bottom: 2pt solid #000;
+    background: none;
   }
 
-  /* Hide back to posts link */
-  a[href*="/posts"] {
-    display: none !important;
-  }
-
-  /* Reset page layout */
-  html {
-    width: 100%;
-    height: auto;
-    margin: 0;
-    padding: 0;
-    overflow: visible;
-  }
-
-  body {
-    width: 100%;
-    height: auto;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible;
-  }
-
-  /* Force all containers to respect print layout */
-  main,
-  section,
-  div {
-    max-width: 100% !important;
-    width: auto !important;
-  }
-
-  /* Remove all flex layouts */
-  .flex,
-  .flex-col,
-  .flex-1 {
-    display: block !important;
-  }
-
-  /* Force flex containers to block and remove gaps */
-  div[class*="flex"] {
-    display: block !important;
-    gap: 0 !important;
-  }
-
-  /* Ensure content takes full width */
-  .min-w-0,
-  .overflow-x-hidden {
-    min-width: 100% !important;
-    width: 100% !important;
-  }
-
-  /* Remove all backgrounds and shadows */
-  * {
-    box-shadow: none !important;
-  }
-
-  body,
-  main,
-  section {
-    background: white !important;
-    background-color: white !important;
-  }
-
-  /* Remove all borders except where explicitly needed */
-  * {
-    border: none !important;
-  }
-
-  /* Content wrapper - use full page width */
-  .prose {
-    max-width: none !important;
-    width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    font-size: 10pt !important;
-    color: #000 !important;
-  }
-
-  /* Ensure all parent containers use full width */
-  main,
-  main > *,
-  section,
-  section > *,
-  article,
-  .max-w-7xl,
-  .max-w-4xl,
-  .max-w-3xl,
-  .max-w-2xl,
-  .prose-lg {
-    max-width: none !important;
-    width: 100% !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  /* Override any container constraints */
-  * {
-    max-width: none !important;
-  }
-
-  /* Specific override for prose content */
-  .prose,
-  .prose * {
-    max-width: 100% !important;
-  }
-
-  /* Hide the first h1 in prose since we show title in header */
-  .prose > h1:first-child {
-    display: none !important;
-  }
-
-  /* Reduce heading sizes slightly for print */
-  .prose h1 {
-    font-size: 13pt !important;
-    margin-top: 0 !important;
-    margin-bottom: 0.5rem !important;
-    page-break-after: avoid;
-    color: #000 !important;
-  }
-
-  .prose h2 {
-    font-size: 12pt !important;
-    margin-top: 1.5rem !important;
-    margin-bottom: 0.5rem !important;
-    page-break-after: avoid;
-    color: #000 !important;
-  }
-
-  .prose h3 {
-    font-size: 11pt !important;
-    margin-top: 1.25rem !important;
-    margin-bottom: 0.4rem !important;
-    page-break-after: avoid;
-    color: #000 !important;
-  }
-
-  .prose h4 {
-    font-size: 10pt !important;
-    margin-top: 1rem !important;
-    margin-bottom: 0.3rem !important;
-    page-break-after: avoid;
-    color: #000 !important;
-  }
-
-  .prose h5,
-  .prose h6 {
-    font-size: 10pt !important;
-    margin-top: 0.75rem !important;
-    margin-bottom: 0.3rem !important;
-    page-break-after: avoid;
-    color: #000 !important;
-  }
-
-  /* Optimize paragraphs and text - keep natural rendering */
-  .prose p {
-    margin-top: 0.25rem !important;
-    margin-bottom: 0.25rem !important;
-    orphans: 3;
-    widows: 3;
-    color: #000 !important;
-  }
-
-  .prose strong {
-    color: #000 !important;
-    font-weight: 700 !important;
-  }
-
-  .prose em {
-    font-style: italic;
-    color: #000 !important;
-  }
-
-  /* Code blocks - minimal overrides */
-  .prose pre {
-    page-break-inside: auto;
-    background-color: #f9fafb !important;
-  }
-
-  .prose code {
-    color: #000 !important;
-  }
-
-  /* Lists - keep natural spacing */
-  .prose ul,
-  .prose ol {
-    color: #000 !important;
-  }
-
-  .prose li {
-    color: #000 !important;
-  }
-
-  /* Tables - minimal overrides */
-  .prose table {
-    page-break-inside: avoid;
-    color: #000 !important;
-  }
-
-  .prose th,
-  .prose td {
-    color: #000 !important;
-  }
-
-  /* Images - keep natural sizing */
-  .prose img {
-    page-break-inside: avoid;
-    max-width: 100% !important;
-  }
-
-  /* Blockquotes - keep natural styling */
-  .prose blockquote {
-    page-break-inside: avoid;
-    color: #000 !important;
-  }
-
-  /* Links - show URLs for external links */
-  .prose a {
-    color: #000 !important;
-  }
-
-  .prose a[href^="http"]:after {
-    content: " (" attr(href) ")";
-    font-size: 0.75em;
-    color: #666;
-  }
-
-  .prose a[href^="#"]:after,
-  .prose a[href^="/"]:after {
-    content: "";
-  }
-
-  /* Page breaks */
-  h1, h2, h3, h4, h5, h6 {
-    page-break-after: avoid;
-    page-break-inside: avoid;
-  }
-
-  /* Force page break before References section */
-  h2[id*="reference"],
-  h2[id*="Reference"] {
-    page-break-before: always !important;
-  }
-
-  /* Allow code blocks and tables to break across pages */
-  pre {
-    page-break-inside: auto !important;
-  }
-
-  table {
-    page-break-inside: auto !important;
-  }
-
-  /* Avoid breaking these */
-  blockquote, img {
-    page-break-inside: avoid;
-  }
-
-  /* Avoid orphan lines at page breaks */
-  p, li {
-    orphans: 3;
-    widows: 3;
-  }
-
-  /* Math equations - keep screen rendering */
-  .katex-display {
-    page-break-inside: avoid;
-  }
-
-  .prose p .katex {
-    page-break-inside: avoid;
-  }
-
-  /* Preserve KaTeX mathematical borders */
-  .katex .frac-line {
-    border-bottom-width: 0.04em !important;
-    border-bottom-style: solid !important;
-    border-bottom-color: currentColor !important;
-  }
-
-  .katex .sqrt > .root {
-    border-top-width: 0.04em !important;
-    border-top-style: solid !important;
-    border-top-color: currentColor !important;
-  }
-
-  .katex .stretchy {
-    border: inherit !important;
-  }
-
-  /* Hide all SVG icons except in prose content */
-  svg {
-    display: none !important;
-  }
-
-  .prose svg {
-    display: inline !important;
-  }
-
-  /* Hide decorative divs */
-  .w-20,
-  [class*="gradient"] {
-    display: none !important;
-  }
-
-  /* Header section - clean and professional */
-  section:first-of-type {
-    padding: 0 !important;
-    margin: 0 0 1rem 0 !important;
-    border: none !important;
-    border-bottom: 2pt solid #000 !important;
-    padding-bottom: 0.75rem !important;
-  }
-
-  /* Remove gradient background from header */
-  section:first-of-type .absolute {
-    display: none !important;
-  }
-
-  /* Title styling */
-  section:first-of-type h1 {
+  .post-header .page-title {
     font-size: 1.5rem !important;
-    margin: 0 0 0.5rem 0 !important;
-    line-height: 1.2 !important;
-    color: #000 !important;
-    font-weight: 700 !important;
-    border: none !important;
+    color: #000;
   }
 
-  /* Metadata (date, reading time, etc) */
-  section:first-of-type time,
-  section:first-of-type > div > div:first-child > div {
-    color: #555 !important;
-    font-size: 0.75rem !important;
+  .post-header .accent-rule {
+    display: none;
   }
 
-  /* Tags styling */
-  section:first-of-type > div > div:last-child {
-    margin-top: 0.5rem !important;
+  .post-header .badge {
+    border: 1pt solid #666;
+    color: #000;
+    background: #f5f5f5;
   }
 
-  section:first-of-type span[class*="px-3"] {
-    padding: 0.15rem 0.5rem !important;
-    font-size: 0.7rem !important;
-    border: 1pt solid #666 !important;
-    margin-right: 0.35rem !important;
-    margin-bottom: 0.25rem !important;
-    display: inline-block !important;
-    border-radius: 3pt !important;
-    background-color: #f5f5f5 !important;
-    color: #000 !important;
+  #post-body > h1:first-child {
+    display: none !important;
   }
 
-  /* Draft badge */
-  section:first-of-type span[style*="backgroundColor: #000"],
-  section:first-of-type span[style*="background-color: rgb(0, 0, 0)"] {
-    background-color: #000 !important;
-    color: #fff !important;
-    padding: 0.15rem 0.4rem !important;
-    font-size: 0.7rem !important;
-    font-weight: 700 !important;
-    border: none !important;
-  }
-
-  /* Content section */
-  section:last-of-type {
-    padding: 0 !important;
-    margin: 0 !important;
-    border: none !important;
-  }
-
-  /* Remove all card styling from content */
-  section:last-of-type * {
-    border: none !important;
-    box-shadow: none !important;
-  }
-
-  /* Specifically target the content wrapper */
-  section:last-of-type > div,
-  section:last-of-type > div > div,
-  section:last-of-type > div > div > div {
-    border: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-shadow: none !important;
+  h2[id*="reference" i] {
+    page-break-before: always;
   }
 }

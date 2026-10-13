@@ -46,7 +46,7 @@ export default function TagList({
 
         return (
           <div key={category} className="mb-4">
-            <h3 className="text-sm font-semibold mb-2 text-muted">
+            <h3 className="text-sm font-bold mb-2 text-muted">
               {categoryLabels[category]}
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -58,29 +58,13 @@ export default function TagList({
                   <button
                     key={tag.id}
                     onClick={() => onTagClick?.(tag.id)}
-                    className={`
-                      inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full
-                      transition-all duration-200 hover:scale-105
-                      ${isSelected 
-                        ? 'text-white shadow-md' 
-                        : 'hover:shadow-sm'
-                      }
-                    `}
-                    style={{
-                      backgroundColor: isSelected ? tag.color : `${tag.color}20`,
-                      color: isSelected ? 'white' : tag.color,
-                      border: `1px solid ${tag.color}40`
-                    }}
+                    className={`chip ${isSelected ? 'is-active' : ''}`}
+                    aria-pressed={isSelected}
                     title={tag.description}
                   >
                     <span>{tag.name}</span>
                     {showCounts && count > 0 && (
-                      <span className={`
-                        text-xs px-1.5 py-0.5 rounded-full
-                        ${isSelected ? 'bg-white/20' : 'bg-current/10'}
-                      `}>
-                        {count}
-                      </span>
+                      <span className="chip__count">{count}</span>
                     )}
                   </button>
                 );
@@ -105,25 +89,12 @@ export function InlineTagList({ tags, className = '', size = 'sm' }: InlineTagLi
     return null;
   }
 
-  const sizeClasses = {
-    sm: 'px-2 py-1 text-xs',
-    md: 'px-3 py-1.5 text-sm'
-  };
-
   return (
     <div className={`flex flex-wrap gap-2 ${className}`}>
       {tags.map(tag => (
         <span
           key={tag.id}
-          className={`
-            font-medium rounded-full
-            ${sizeClasses[size]}
-          `}
-          style={{
-            backgroundColor: `${tag.color}20`,
-            color: tag.color,
-            border: `1px solid ${tag.color}40`
-          }}
+          className={`badge badge--accent ${size === 'md' ? 'text-sm' : ''}`}
           title={tag.description}
         >
           {tag.name}

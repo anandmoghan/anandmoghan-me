@@ -1,0 +1,26 @@
+<section id="introduction">
+  <h2>Introduction</h2>
+  <p>
+    Pre-training on trillions of tokens gets you a model that's really good at predicting the next word.
+    But that's about it.
+    You still get hallucinations, toxic outputs, models that ignore your instructions, and zero ability to reason through complex problems.
+    Turns out, optimizing for next-token prediction doesn't give you a helpful AI. It gives you a very expensive autocomplete.
+  </p>
+  <p>
+    RLHF changed that.
+    It's what made ChatGPT actually useful instead of just impressive.
+    Then DPO came along and made the whole process simpler and cheaper, which is why most open-weight models now use it or one of its variants.
+    And in the last year or so, we've seen outcome-based methods like GRPO unlock reasoning capabilities that can compete with human experts on competition math and coding problems.
+  </p>
+  <p>
+    This post covers the full stack, from the RLHF foundations everyone's using to the newer techniques powering reasoning models.
+    If you've already shipped RLHF in production, we'll get through that quickly and focus on what's changed: iterative methods, constitutional AI, and the cold start + RL recipe that's become standard for reasoning systems.
+  </p>
+  <div class="callout callout--note">
+    <strong>Disclaimer:</strong>
+    <p>
+      This post was written with the help of LLMs, with content carefully curated based on papers I've read and systems I've used.
+      If you notice any errors, please send a note to <a href="mailto:moghan.anand@gmail.com">moghan.anand@gmail.com</a>.
+    </p>
+  </div>
+</section>

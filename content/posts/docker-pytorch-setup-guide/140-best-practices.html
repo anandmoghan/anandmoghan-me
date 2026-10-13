@@ -1,0 +1,47 @@
+<section id="best-practices">
+  <h2>Best Practices</h2>
+  <h3 id="use-dockerignore">1. Use .dockerignore</h3>
+  <p>Create a <code>.dockerignore</code> file to exclude unnecessary files:</p>
+  <pre><code class="language-text">__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.git
+.gitignore
+.DS_Store
+*.ipynb_checkpoints
+data/
+models/
+logs/</code></pre>
+  <h3 id="multi-stage-builds">2. Multi-stage Builds</h3>
+  <p>For production, use multi-stage builds to reduce image size:</p>
+  <pre><code class="language-dockerfile">FROM python:3.10-slim as builder
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+FROM python:3.10-slim
+
+WORKDIR /app
+COPY --from=builder /root/.local /root/.local
+COPY . .
+
+ENV PATH=/root/.local/bin:$PATH
+
+CMD ["python", "train.py"]</code></pre>
+  <h3 id="pin-package-versions">3. Pin Package Versions</h3>
+  <p>Always specify exact versions in your Dockerfile to ensure reproducibility.</p>
+  <h3 id="layer-caching">4. Layer Caching</h3>
+  <p>Order Dockerfile commands from least to most frequently changing to maximize cache usage.</p>
+  <h3 id="security">5. Security</h3>
+  <ul>
+    <li>Don't run containers as root in production</li>
+    <li>Scan images for vulnerabilities</li>
+    <li>Use official base images</li>
+    <li>Keep images updated</li>
+  </ul>
+</section>

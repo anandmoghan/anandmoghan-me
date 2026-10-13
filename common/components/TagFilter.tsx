@@ -110,14 +110,14 @@ export default function TagFilter({ posts, onFilteredPostsChange, className = ''
 
   return (
     <div className={`tag-filter ${className}`}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-muted">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-bold text-muted">
           Filter by tags
         </h3>
         {hasSelectedTags && (
           <button
             onClick={clearAllTags}
-            className="text-xs text-accent hover:text-accent/70 transition-colors"
+            className="btn btn--ghost btn--sm"
           >
             Clear all
           </button>
@@ -129,35 +129,17 @@ export default function TagFilter({ posts, onFilteredPostsChange, className = ''
         {availableTags.map(tag => {
           const isSelected = selectedTags.includes(tag.id);
           const count = availableTagCounts[tag.id] || 0;
-          
+
           return (
             <button
               key={tag.id}
               onClick={() => handleTagClick(tag.id)}
-              className={`
-                inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full
-                transition-all duration-200 hover:scale-105 border
-                ${isSelected 
-                  ? 'shadow-md opacity-100' 
-                  : hasSelectedTags 
-                    ? 'opacity-40 hover:opacity-70' 
-                    : 'opacity-100 hover:opacity-80'
-                }
-              `}
-              style={{
-                backgroundColor: isSelected ? tag.color : `${tag.color}15`,
-                color: isSelected ? 'white' : tag.color,
-                borderColor: `${tag.color}30`
-              }}
+              className={`chip ${isSelected ? 'is-active' : ''}`}
+              aria-pressed={isSelected}
               title={tag.description}
             >
               <span>{tag.name}</span>
-              <span className={`
-                text-xs px-1.5 py-0.5 rounded-full font-medium
-                ${isSelected ? 'bg-white/25 text-white' : 'bg-current/15'}
-              `}>
-                {count}
-              </span>
+              <span className="chip__count">{count}</span>
             </button>
           );
         })}

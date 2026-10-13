@@ -1,0 +1,239 @@
+<section id="the-modern-llm-stack">
+  <h2>The Modern LLM Stack</h2>
+  <p>
+    Since DeepSeek-R1's release in early 2025, a clear pattern has emerged for training state-of-the-art reasoning models.
+    Rather than treating cold start, rule-based rewards, and iterative optimization as separate techniques, production systems combine them into a unified workflow.
+  </p>
+  <p>
+    This "modern recipe" synthesizes lessons from DeepSeek-R1, Llama 3, and the broader shift toward iterative methods.
+    Here's how the pieces fit together:
+  </p>
+  <h4>Stage 1: Cold Start with Long CoT Data</h4>
+  <p><strong>Purpose</strong>: Establish stable reasoning format before RL training begins.</p>
+  <p>
+    <strong>What you do</strong>: Collect or generate a small dataset (1K-10K examples) of high-quality chain-of-thought reasoning focused on format, not correctness.
+    Include examples with consistent language, clear step-by-step structure (e.g., <code>&lt;think&gt;...&lt;/think&gt;</code> tags), verification steps, and self-correction patterns.
+  </p>
+  <p>
+    <strong>Critical for reasoning models</strong>: If you want the model to learn self-correction during RL, the cold start data must include failed attempts and backtracking.
+    Perfect, straight-line reasoning teaches format but makes it harder for RL to learn error recovery.
+    Include examples like "Wait, that's wrong because..." or "Let me try a different approach..."
+  </p>
+  <p>
+    <strong>Why it matters</strong>: Without it, pure RL can still learn to reason, but the outputs drift into hard-to-read, language-mixed text (see DeepSeek-R1-Zero above).
+    The cold start provides guardrails that constrain the format space, allowing RL to focus on improving reasoning quality.
+  </p>
+  <p>
+    <strong>Implementation</strong>: Standard supervised fine-tuning (SFT) on the CoT dataset.
+    Typically takes a few hours on a single node.
+  </p>
+  <h4>Stage 2: Rule-Based Rewards During RL</h4>
+  <p><strong>Purpose</strong>: Enforce format constraints and prevent training collapse during RL optimization.</p>
+  <p>
+    <strong>What you do</strong>: Augment outcome rewards (correctness) with programmatic checks for format enforcement, language consistency, quality heuristics, and safety constraints.
+    See the Rule-Based Rewards (RBR) section for detailed categories and examples.
+  </p>
+  <p>
+    <strong>Why it matters</strong>: RBR provide immediate feedback without human labeling, preventing catastrophic failures while guiding the model toward desirable behaviors.
+  </p>
+  <p>
+    <strong>Design principle</strong>: Keep rules simple and weighted low (0.1-0.5x the outcome reward).
+    Rules should guide, not dominate.
+    If rule violations are frequent, the cold start data needs improvement.
+  </p>
+  <h4>Alternate Stage for Assistants: Constitutional AI</h4>
+  <p>
+    <strong>Purpose</strong>: For general assistants (not reasoning models), Constitutional AI offers a scalable alternative to traditional human feedback.
+  </p>
+  <p>
+    <strong>What you do:</strong>
+    Instead of collecting expensive human preferences, define explicit principles (a "constitution") and use the model itself to generate training data:
+  </p>
+  <ol>
+    <li><strong>Critique → Revision</strong>: The model critiques its own responses based on constitutional principles, then revises them. Fine-tune on the improved responses.</li>
+    <li><strong>RLAIF</strong>: Generate response pairs, have an AI evaluator judge which better follows the constitution, train a preference model from these AI preferences.</li>
+    <li><strong>Proceed to RL</strong>: Use the AI-trained preference model in Stage 3 (PPO/DPO)</li>
+  </ol>
+  <p>
+    <strong>Why it works</strong>: AI feedback is cheaper, more consistent, and transparent (explicit principles).
+    Claude uses this approach for scalable, principle-based alignment.
+  </p>
+  <p>
+    <strong>When to use</strong>: Choose Constitutional AI for chatbots when you need transparent alignment, fast iteration, and can articulate clear principles.
+    Use traditional RLHF when tasks are highly subjective or you have abundant human feedback.
+  </p>
+  <h4>Stage 3: Iterative Optimization</h4>
+  <p><strong>Purpose</strong>: Continuously improve both reasoning quality and the training signal itself.</p>
+  <p>
+    <strong>What you do</strong>: Instead of training on a fixed dataset (offline), generate fresh data from the current policy and iterate.
+    For reasoning models, use GRPO with outcome + rule-based rewards.
+    For general alignment, use Iterative DPO with reward model or LLM-as-a-Judge scoring (see Iterative DPO section for details).
+  </p>
+  <p>
+    <strong>Why it matters</strong>: Offline training suffers from distribution shift. As the policy improves, it drifts from the static training data.
+    Iterative methods allow the model to explore, self-correct, and improve both its outputs and its ability to evaluate quality.
+  </p>
+  <h4>When to Deviate</h4>
+  <p>This recipe is optimized for reasoning models with verifiable outcomes. For other use cases:</p>
+  <ul>
+    <li><strong>General instruction-following</strong>: Skip cold start, use standard SFT → DPO/PPO</li>
+    <li><strong>Safety-critical alignment</strong>: Add Constitutional AI principles and process supervision</li>
+    <li><strong>Limited compute</strong>: Use offline DPO instead of iterative methods</li>
+    <li><strong>Preference-based tasks</strong>: Replace outcome rewards with learned reward models</li>
+  </ul>
+  <p><strong>Production Considerations</strong></p>
+  <ul>
+    <li>
+      <strong>Online vs Offline RLHF</strong>: Online RLHF continuously generates new data from the current policy with fresh feedback (used by ChatGPT, Claude), while offline RLHF trains on fixed datasets. Offline is simpler but can overfit.
+    </li>
+    <li>
+      <strong>Production Metrics</strong>: Monitor reward model health (distribution drift, preference agreement), policy performance (KL divergence, win rate), and safety (refusal rates, jailbreak attempts, toxic outputs).
+    </li>
+    <li>
+      <strong>Rejection Sampling</strong>: Sample N outputs (16-64), score with reward model, return best. This provides inference-time alignment without training but costs N× at inference.
+    </li>
+    <li>
+      <strong>Alignment Tax</strong>: RLHF can hurt performance on some tasks as the model shifts from pre-training distribution.
+      Mitigate with PPO-ptx, careful KL tuning, and monitoring.
+    </li>
+    <li>
+      <strong>Reward Hacking</strong>: Models exploit reward model weaknesses (verbosity, high-scoring phrases).
+      Prevent with ensemble models, adversarial training, iterative updates, and process supervision.
+    </li>
+    <li>
+      <strong>Scaling Laws</strong>: More preference data improves quality with diminishing returns.
+      Larger reward models are more robust.
+      Online learning scales better.
+    </li>
+  </ul>
+
+  <!-- == Techniques simplified == -->
+  <h3 id="techniques-simplified-what-to-use">Techniques Simplified: What to use?</h3>
+  <p>
+    <strong>DPO</strong>: Start here for first-time alignment on 7B-70B models with clean preference data and limited compute (&lt;100 GPU-days).
+    Simple, stable, but may not achieve absolute best performance.
+  </p>
+  <p>
+    <strong>RLHF (PPO)</strong>: Upgrade when you need maximum control, have 70B+ models, can invest in online learning infrastructure, or have safety-critical applications.
+    Requires significant engineering investment.
+  </p>
+  <p>
+    <strong>GRPO</strong>: Use for math, coding, or verifiable domains with outcome-based rewards.
+    Memory-efficient alternative to PPO.
+    It also works with learned reward models, but its sweet spot is cheap, reliable rewards.
+  </p>
+  <p>
+    <strong>Constitutional AI</strong>: Adopt when you need transparent, auditable alignment and want to scale beyond human feedback bottlenecks.
+    Requires careful principle design.
+  </p>
+  <p>
+    <strong>Process Supervision</strong>: Implement for reasoning models where reliability matters more than speed and you can afford step-level human labels.
+    Expensive but produces interpretable reasoning.
+  </p>
+  <p>
+    <strong>Budget guide</strong>: &lt;10 GPU-days (DPO only), 10-100 (DPO → PPO refinement), 100-1000 (full RLHF), 1000+ (RLHF + process supervision).
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>RLHF (PPO)</th>
+          <th>DPO (Offline)</th>
+          <th>Iterative DPO</th>
+          <th>GRPO</th>
+          <th>Constitutional AI</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Training Stages</strong></td>
+          <td>3 (SFT → RM → PPO)</td>
+          <td>1 (direct)</td>
+          <td>Multiple iterations</td>
+          <td>2 (SFT → GRPO)</td>
+          <td>2 (SL → RLAIF)</td>
+        </tr>
+        <tr>
+          <td><strong>Reward Model</strong></td>
+          <td>Explicit</td>
+          <td>Implicit</td>
+          <td>Implicit or LLM-as-Judge</td>
+          <td>Rule-based or learned</td>
+          <td>AI-based</td>
+        </tr>
+        <tr>
+          <td><strong>Stability</strong></td>
+          <td>Moderate</td>
+          <td>High</td>
+          <td>High</td>
+          <td>High</td>
+          <td>High</td>
+        </tr>
+        <tr>
+          <td><strong>Memory</strong></td>
+          <td>High (actor+critic+ref+RM)</td>
+          <td>Low-Medium (policy+ref)</td>
+          <td>Low-Medium</td>
+          <td>Medium (actor+ref)</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><strong>Hyperparameters</strong></td>
+          <td>Many (10+)</td>
+          <td>Few (2-3)</td>
+          <td>Few (3-5)</td>
+          <td>Medium (5-7)</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><strong>Iteration Speed</strong></td>
+          <td>Slow</td>
+          <td>Fast</td>
+          <td>Medium</td>
+          <td>Medium</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><strong>Best For</strong></td>
+          <td>General alignment</td>
+          <td>Simple tasks</td>
+          <td>Bridging stability &amp; performance</td>
+          <td>Math/code</td>
+          <td>Safety-focused</td>
+        </tr>
+        <tr>
+          <td><strong>Complexity</strong></td>
+          <td>High</td>
+          <td>Low</td>
+          <td>Medium</td>
+          <td>Medium</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><strong>Production Use</strong></td>
+          <td>Frontier labs</td>
+          <td>Initial alignment</td>
+          <td>Llama 3, open-source</td>
+          <td>Reasoning models</td>
+          <td>Claude</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- == Further developments == -->
+  <h3 id="further-developments">Further Developments</h3>
+  <p>
+    <strong>Hybrid RL Approaches</strong>: Leading labs combine multiple methods: initial DPO for broad alignment → targeted PPO for safety-critical behaviors; GRPO for reasoning → DPO for instruction-following; Constitutional AI principles + process supervision for interpretable safety.
+  </p>
+  <p>
+    <strong>Inference-Time RL</strong>: Test-time compute scaling (popularized by o1) is becoming standard with dynamic compute allocation based on problem difficulty, mixture of shallow and deep thinking, and early stopping when confidence is high.
+  </p>
+  <p>
+    <strong>Multi-Objective Reward Modeling</strong>: Moving beyond scalar rewards with separate reward heads for helpfulness, harmlessness, and factuality; Pareto-optimal policies balancing multiple objectives; and user-controllable trade-offs at inference time.
+  </p>
+  <p>
+    <strong>Agentic RL</strong>: RL methods extending beyond static responses to include tool use (code execution, web search) integrated into RL loops, multi-step planning with intermediate verification, and learning from interaction traces rather than just completions.
+  </p>
+</section>

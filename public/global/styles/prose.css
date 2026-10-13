@@ -1,0 +1,522 @@
+/* Article typography. Scope: any element with class "prose", or body.prose.
+   Body copy is Literata; headings, tables, tags, callout labels and other UI text are Nunito Sans. */
+
+html {
+  /* 17px base: every rem-based size reads a notch larger, and still follows the browser setting. */
+  font-size: 106.25%;
+}
+
+.prose {
+  font-family: var(--font-prose);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  color: var(--fg);
+  background: var(--bg);
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+.prose *,
+.prose *::before,
+.prose *::after {
+  box-sizing: border-box;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-family: var(--font-ui);
+  line-height: var(--leading-heading);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 1.8em 0 0.6em;
+  text-wrap: balance;
+}
+
+.prose h1 { font-size: var(--text-h1); margin-top: 0; }
+.prose h2 { font-size: var(--text-h2); }
+.prose h3 { font-size: var(--text-h3); }
+.prose h4 { font-size: var(--text-h4); }
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose dl,
+.prose blockquote,
+.prose pre,
+.prose figure,
+.prose details {
+  margin: 0 0 1em;
+}
+
+/* Lists: bullets are small muted dots; ordered lists keep numbers with muted markers. */
+.prose ul,
+.prose ol {
+  padding-left: 1.5em;
+}
+
+.prose ul {
+  list-style: none;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose ol ol {
+  list-style: lower-alpha;
+}
+
+.prose ol ol ol {
+  list-style: lower-roman;
+}
+
+.prose ul > li {
+  position: relative;
+}
+
+.prose ul > li::before {
+  content: "";
+  position: absolute;
+  left: -1.05em;
+  top: 0.72em;
+  width: 0.36em;
+  height: 0.36em;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 75%, transparent);
+}
+
+.prose ol > li::marker {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.prose li {
+  margin: 0.3em 0;
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin-bottom: 0;
+}
+
+.prose strong {
+  font-weight: 600;
+}
+
+/* Links */
+.prose a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+.prose a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.prose :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.prose blockquote {
+  padding: 0.25em 1em;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  font-style: italic;
+}
+
+.prose blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+/* Code */
+.prose code,
+.prose kbd,
+.prose samp {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+}
+
+.prose :not(pre) > code {
+  background: var(--subtle);
+  padding: 0.12em 0.4em;
+  border-radius: var(--radius-code);
+}
+
+.prose pre {
+  background: var(--subtle);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.prose pre code {
+  font-size: 0.88em;
+  background: none;
+  padding: 0;
+}
+
+.kbd,
+.prose kbd {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.1em 0.45em;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-code);
+  background: var(--surface);
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+/* Tables: a card-like container that scrolls sideways instead of crushing the columns. */
+.table-wrap {
+  overflow-x: auto;
+  margin: 0 0 1.25em;
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.prose :not(.table-wrap) > table {
+  margin: 0 0 1.25em;
+}
+
+.prose th,
+.prose td {
+  padding: 0.7em 1em;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.prose thead th {
+  background: var(--subtle);
+  font-weight: 700;
+}
+
+.prose tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Narrow screens: wide tables (marked .wide, or with 3+ columns) keep a readable width and scroll.
+   Browsers without :has() support skip the second rule and rely on .wide alone. */
+@media (max-width: 599px) {
+  .table-wrap.wide table {
+    min-width: 36rem;
+  }
+
+  .table-wrap:has(th:nth-child(3)) table {
+    min-width: 36rem;
+  }
+}
+
+.table-wrap--sticky {
+  max-height: 70vh;
+}
+
+.table-wrap--sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Figures */
+.prose figure {
+  text-align: center;
+}
+
+.prose figure img,
+.prose figure svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose figcaption {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: 0.5em;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* KaTeX: display maths has no box; it stays centred and scrolls sideways when too wide. */
+.prose .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+  /* Block margins only: the shell centres blocks with auto inline margins. */
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+/* KaTeX's hidden MathML copy is position: absolute. Anchor it to its formula so that, inside a
+   sideways-scrolling table or display block, it cannot widen the page at phone width. */
+.prose .katex {
+  position: relative;
+}
+
+/* Callouts: a plain card. Variants differ only by the 3px left rule and the label colour. */
+.callout {
+  --callout-accent: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--callout-accent);
+  border-radius: var(--radius-panel);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 1.25em;
+}
+
+.callout > :last-child {
+  margin-bottom: 0;
+}
+
+.callout > :first-child {
+  margin-top: 0;
+}
+
+.callout__title,
+.callout > strong:first-child {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--callout-accent);
+  margin-bottom: 0.35em;
+}
+
+.callout--note { --callout-accent: var(--muted); }
+.callout--say { --callout-accent: var(--accent); }
+.callout--warn { --callout-accent: var(--warn); }
+.callout--inference { --callout-accent: var(--muted); border-left-style: dashed; }
+
+/* Tags: a plain pill; the status shows as a tiny leading dot.
+   Inline (not inline-block) so trailing punctuation cannot wrap away from the tag. */
+.tag {
+  display: inline;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 0.3em 0.7em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--subtle);
+  color: var(--muted);
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
+.tag--confirmed::before,
+.tag--reported::before,
+.tag--inference::before {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-right: 0.5em;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+}
+
+.tag--confirmed::before { background: var(--accent); }
+.tag--reported::before { background: var(--muted); }
+.tag--inference::before { border: 1px dashed var(--muted); }
+
+/* Columns */
+.cols-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin: 0 0 1.25em;
+}
+
+.cols-2 > * {
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .cols-2 {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+}
+
+/* Details: a surface card with a chevron on the summary. */
+.prose details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  padding: 0 1em;
+  background: var(--surface);
+}
+
+.prose summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: var(--tap);
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.prose summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose summary::before {
+  content: "";
+  flex: none;
+  width: 0.45em;
+  height: 0.45em;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.prose details[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.prose details[open] > summary {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.75em;
+}
+
+.prose details > :last-child {
+  margin-bottom: 0.75em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prose summary::before { transition: none; }
+}
+
+/* Block diagrams: inline SVG inside figure.diagram.
+   Shapes use classes only, never hard-coded colours, so diagrams follow the theme and
+   print cleanly. Coordinates are in a viewBox; width scales to the column.
+   Classes: d-box (neutral block), d-box--accent (the component being discussed),
+   d-box--muted (optional/external), d-group (dashed container), d-text, d-text--small,
+   d-text--muted, d-arrow (line with marker-end="url(#arrow)"), d-arrow--dashed,
+   d-lane (timeline lane background). Define the arrow marker once per svg:
+   <defs><marker id="arrow" ...><path class="d-arrowhead" .../></marker></defs> */
+.prose figure.diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: var(--space-4);
+  margin: var(--space-5) auto;
+}
+
+.prose figure.diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.prose .diagram .d-box {
+  fill: var(--surface);
+  stroke: var(--fg);
+  stroke-width: 1.25;
+}
+
+.prose .diagram .d-box--accent {
+  fill: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.prose .diagram .d-box--muted {
+  fill: var(--subtle);
+  stroke: var(--border);
+}
+
+.prose .diagram .d-group {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+}
+
+.prose .diagram .d-lane {
+  fill: var(--subtle);
+  stroke: none;
+}
+
+.prose .diagram .d-text {
+  fill: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.prose .diagram .d-text--small {
+  fill: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.prose .diagram .d-text--muted {
+  fill: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.prose .diagram .d-arrow {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+
+.prose .diagram .d-arrow--dashed {
+  stroke-dasharray: 5 4;
+}
+
+.prose .diagram .d-arrowhead {
+  fill: var(--muted);
+}
+
+@media print {
+  .prose figure.diagram {
+    break-inside: avoid;
+    border-color: #999;
+  }
+}

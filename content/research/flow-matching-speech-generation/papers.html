@@ -1,0 +1,1794 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow matching and diffusion for speech generation: paper survey</title>
+  <!--
+    Shared styles, hosted. Works from anywhere with internet access.
+    To work offline against a local checkout instead, use a relative path, for example:
+      <link rel="stylesheet" href="../global/styles/standalone.css">
+  -->
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+  <!-- Client-side maths: write \( inline \) and \[ display \] in the body. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false},
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      ignoredTags: ['script', 'style', 'pre', 'code']
+    });"></script>
+</head>
+<body class="prose">
+  <header>
+    <h1>Flow matching and diffusion for speech generation: a paper survey</h1>
+    <p>Research note for the blog post. Checked against arXiv full texts on 2026-10-13.</p>
+  </header>
+  <main>
+    <!-- == How to read this note == -->
+    <section id="how-to-read">
+      <h2>How to read this note</h2>
+      <p>
+        Every claim carries one of three labels.
+        <span class="tag tag--confirmed">Confirmed</span> means I read the statement or number in the paper itself (arXiv PDF text).
+        <span class="tag tag--reported">Reported</span> means it comes from a secondary source, such as another paper's comparison table or the local notes.
+        <span class="tag tag--inference">Inference</span> means it is my reading, not something a paper states.
+      </p>
+      <p>
+        Numbers are copied as printed, with the test set named.
+        Cells say "not reported" where I could not find the value in the text I read.
+        I read the latest arXiv version available on the day, so a figure can differ from version 1 of the same paper.
+      </p>
+      <div class="callout callout--warn">
+        <strong>Do not rank models from the results table.</strong>
+        <p>
+          Test sets, ASR models, speaker-verification models and listening-test references differ between papers.
+          Speaker similarity is the worst offender: CosyVoice 2 prints 0.748 and 0.806 for the same test-zh output, depending on the verifier
+          (<a href="#cosyvoice2">CosyVoice 2</a>).
+        </p>
+      </div>
+    </section>
+
+    <!-- == Background == -->
+    <section id="background">
+      <h2>Background: the flow-matching objective in one line</h2>
+      <p>
+        With the optimal-transport path, a training pair is a noise sample \( x_0 \) and a data sample \( x_1 \).
+        The noisy input is
+        \( x_t = (1-(1-\sigma_{\min})t)\,x_0 + t\,x_1 \)
+        and the network regresses the constant velocity
+      </p>
+      <p>
+        \[
+          \mathcal{L} = \mathbb{E}_{t,x_0,x_1}
+          \big\lVert v_\theta(x_t, t, c) - \big(x_1-(1-\sigma_{\min})\,x_0\big) \big\rVert^2 .
+        \]
+      </p>
+      <p>
+        Here \( c \) is the condition (text, masked audio, tokens).
+        Sampling integrates the learned ODE with a fixed-step solver, and NFE counts network evaluations.
+        <span class="tag tag--confirmed">Confirmed</span>
+        (path and target: Audiobox, arXiv 2312.15821, and CosyVoice 2, arXiv 2412.10117, Eq. 3 to 4).
+        Classifier-free guidance (CFG) runs the model with and without the condition, which doubles the cost per step.
+        <span class="tag tag--confirmed">Confirmed</span>
+        (Voicebox, arXiv 2306.15687; Audiobox states 64 solver calls become 128 forward passes with CFG).
+      </p>
+    </section>
+
+    <!-- == Diffusion era == -->
+    <section id="diffusion-era">
+      <h2>Diffusion era</h2>
+
+      <article id="wavegrad">
+        <h3>WaveGrad (2020, arXiv 2009.00713)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            A 24 kHz waveform, refined from Gaussian white noise and conditioned on a 128-band mel spectrogram.
+            It is a vocoder, not a text-to-speech model.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Mel plus a noise level.
+            For the TTS test the mel came from Tacotron 2, so alignment is handled upstream of the model.
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--inference">Inference</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Fully convolutional and non-autoregressive, built from UBlock and DBlock stacks.
+            Base has 15M parameters and Large has 23M.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            385 hours of proprietary English from 84 professional voice talents; the evaluation speaker is one female voice from that set.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            1,000 iterations with discrete-index conditioning, or as few as 6 iterations with continuous noise-level conditioning.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            MOS on the proprietary single-speaker test with Tacotron 2 mels (Table 1):
+            Base, 6 iterations, 4.41 (&plusmn; 0.03);
+            Base, 1,000 iterations, 4.47 (&plusmn; 0.04);
+            Large, 1,000 iterations, 4.51 (&plusmn; 0.04);
+            WaveRNN 4.49 (&plusmn; 0.04); GAN-TTS 4.34 (&plusmn; 0.04); ground truth 4.58 (&plusmn; 0.05).
+            RTF 0.2 on a V100 GPU at 6 iterations, against 20.1 for WaveRNN; RTF 1.5 on a 16-core Xeon CPU.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            A discrete-index model needs a separate model per noise schedule, and the 25-iteration Fibonacci schedule scored only 3.86 MOS.
+            The continuous noise-level variant generalised better at low iteration counts (Table 2).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="diffwave">
+        <h3>DiffWave (2020, arXiv 2009.09761)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            A 22.05 kHz waveform: mel-conditioned vocoding, class-conditional and unconditional generation.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Mel spectrogram upsampled and added to each residual layer; no text and no alignment in the model.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Non-autoregressive bidirectional dilated-convolution network with 30 residual layers.
+            Base is 2.64M parameters (64 channels), Large is 6.91M (128 channels).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            LJ Speech, about 24 hours, for vocoding; the SC09 spoken-digit subset of Speech Commands for the unconditional and class-conditional tasks.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Training uses \( T \in \{20, 40, 50, 200\} \) steps; a fast schedule samples with \( T_{\text{infer}} = 6 \) steps.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            Vocoder MOS on LJ Speech (Table 1):
+            Large, T=200, 4.44 (&plusmn; 0.07); WaveNet 4.43 (&plusmn; 0.10); Base fast (6 steps) 4.37 (&plusmn; 0.07); Large fast (6 steps) 4.42 (&plusmn; 0.09); ground truth 4.52 (&plusmn; 0.06).
+            Base with T=20 runs 2.1 times faster than real time and Base fast runs 5.6 times faster than real time on a V100; a WaveNet implementation was about 500 times slower than real time.
+            Unconditional SC09 MOS (Table 2): DiffWave 3.39 (&plusmn; 0.32), WaveGAN 2.03, WaveNet-256 1.43, test set 3.72.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The authors state DiffWave is still slower than flow-based vocoders; a 5.91M WaveFlow is more than 40 times faster than real time.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="grad-tts">
+        <h3>Grad-TTS (2021, arXiv 2105.06337)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            An 80-band mel spectrogram, decoded to audio by HiFi-GAN.
+            The diffusion starts from Gaussian noise whose mean is the text encoder's output.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Monotonic alignment search (MAS) at training, as in Glow-TTS, and a duration predictor at inference.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Text encoder plus duration predictor (7.2M parameters together) and a U-Net score decoder (7.6M).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            LJ Speech, about 24 hours, single female speaker, 22.05 kHz; test set of about 500 short recordings.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Reverse SDE or probability-flow ODE with a chosen number of decoder steps; variants Grad-TTS-N with N = 4, 10, 100, 1000.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            MOS on 40 LJ Speech test sentences (Table 2), with RTF on GPU:
+            Grad-TTS-1000 4.44 (&plusmn; 0.05), RTF 3.663;
+            Grad-TTS-100 4.38 (&plusmn; 0.06), RTF 0.363;
+            Grad-TTS-10 4.38 (&plusmn; 0.06), RTF 0.033;
+            Grad-TTS-4 3.96 (&plusmn; 0.07), RTF 0.012;
+            Glow-TTS 4.11 (&plusmn; 0.07), RTF 0.008;
+            FastSpeech 3.68 (&plusmn; 0.09); Tacotron 2 4.32 (&plusmn; 0.07), RTF 0.075; ground truth 4.53 (&plusmn; 0.06).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            Quality gain is marginal beyond about 10 steps, and 4 steps is where it visibly drops.
+            It cannot match Glow-TTS or FastSpeech on speed.
+            The authors' end-to-end variant (a WaveGrad decoder) was not good enough to enter the listening test.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="naturalspeech2">
+        <h3>NaturalSpeech 2 (2023, arXiv 2304.09116)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            Continuous latent vectors from a residual-vector-quantizer neural codec at 16 kHz, 200 times down-sampled (12.5 ms per frame), decoded by the codec decoder.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Phoneme encoder plus explicit duration and pitch predictors; durations come from an internal alignment tool.
+            A speech prompt is injected by in-context learning, with Q-K-V attention layers in the predictors and the diffusion model.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Non-autoregressive latent diffusion model, 400M parameters.
+            Phoneme encoder is a 6-layer Transformer; duration and pitch predictors are 30-layer 1D convolutions.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            44K hours of English Multilingual LibriSpeech (LibriVox audiobooks), about 5K speakers, 16 kHz.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Euler ODE solver with 150 diffusion steps for speech and 1,000 for singing.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LibriSpeech test-clean, 3 s prompt (Tables 3, 5, 6): WER 2.26 against ground truth 1.94 and YourTTS 7.10; SMOS 3.28 against ground truth 3.33 and YourTTS 2.03; CMOS of ground truth relative to NaturalSpeech 2 is +0.04.
+            VCTK: WER 6.99 against ground truth 9.49; SMOS 3.20; CMOS of ground truth is -0.30.
+            Against VALL-E demo samples: SMOS 3.83 against 3.53, CMOS -0.31 for VALL-E.
+            The CMOS test filtered several diffusion samples with a speech scoring model.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Speed</dt>
+          <dd>
+            RTF 0.366 at 150 NFE on a V100, measured in the NaturalSpeech 3 paper (Table 10).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            Needs a phoneme-level aligner and pitch extractor, and 150 solver steps.
+            The authors list consistency models as future work for speed, and say the model was still underfitting at 300K steps.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="naturalspeech3">
+        <h3>NaturalSpeech 3 (2024, arXiv 2403.03100)</h3>
+        <dl>
+          <dt>Is it diffusion?</dt>
+          <dd>
+            Yes, but discrete.
+            The paper generates FACodec attribute tokens (prosody, content, acoustic details) and a duration sequence with <em>discrete</em> masked diffusion; timbre comes from the prompt.
+            It is not Gaussian-noise diffusion on continuous features.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Generates</dt>
+          <dd>
+            Factorized codec tokens decoded to waveform by the FACodec decoder.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Duration is generated first by a discrete diffusion model; phoneme-level alignment comes from an internal alignment tool.
+            Phoneme-level prosody codes condition the duration model.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Factorized diffusion model over four token streams.
+            The scaling study uses 500M parameters (12 layers) and 1B (24 layers).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            Libri-Light, 60K hours of 16 kHz audiobook speech, about 7,000 speakers; scaled to 200K hours with 1B parameters in a separate experiment.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            4 iterations per diffusion process, CFG scale 1.0 (none for duration), totalling 60 forward passes; a one-step variant uses 15.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LibriSpeech test-clean, one sentence per speaker, 3 s prompt (Table 1):
+            SIM-O 0.67, SIM-R 0.76, WER 1.81 (ground truth 0.68 and 1.94), CMOS 0.00 (ground truth +0.08), SMOS 4.01 (ground truth 3.85).
+            Latency on a V100 (Table 10): RTF 0.296 against 0.366 for NaturalSpeech 2 and 4.520 for VALL-E; the one-step variant has RTF 0.067 with UTMOS 4.01 against 4.30.
+            Scaling on an internal 30-clip test set (Tables 7 and 8): 500M/200K h gives SIM-O 0.73 and WER 2.11; 1B gives 0.78 and 1.71.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            English-only, audiobook data; FACodec needs phoneme transcripts for content supervision, which limits scalability; background sound is not a factorized attribute.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="ditto-tts">
+        <h3>DiTTo-TTS (2024, arXiv 2406.11427)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            A latent from a Mel-VAE at 10.76 Hz; the decoder gives a mel spectrogram, which BigVGAN turns into a 22.05 kHz waveform.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            No phonemes and no durations.
+            Text enters through a pre-trained text encoder (SpeechT5 for English, ByT5 for the multilingual model) by cross-attention.
+            A separately trained speech length predictor sets the total length of the noise sequence.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Diffusion Transformer with long skip connections and global AdaLN.
+            English sizes: S 41.89M, B 151.58M, L 507.99M, XL 739.97M; the multilingual model is 790.44M.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            82K hours across nine languages (multilingual model); 55K hours of English for DiTTo-en.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Trained with 1,000 discrete diffusion steps; main tables use NFE 25 with classifier-free guidance, and the improved model (marked with a dagger) uses a DDIM schedule.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LibriSpeech test-clean subset, 4 to 10 s clips.
+            Continuation task (Table 1): DiTTo-en-XL WER 1.78, SIM-o 0.5773, SIM-r 0.6075; ground truth WER 2.15, SIM-o 0.7395; inference time for 10 s of speech 1.616 s for XL and 0.903 s for B at NFE 25.
+            Cross-sentence task (Table 2): XL WER 2.56, SIM-o 0.6270, SIM-r 0.6554.
+            Subjective, cross-sentence (Table 3): DiTTo-en-XL SMOS 3.91 (&plusmn; 0.16), CMOS 0.00 (reference); ground truth SMOS 4.08 (&plusmn; 0.14), CMOS +0.13.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The authors find three levers matter: DiT over U-Net, a total-length predictor over fixed-length padding, and semantic alignment in the latent.
+            The speech length predictor is a separate model, so duration is not fully removed, only coarsened to one number per utterance.
+            Voicebox's 6.4 s in the same table is copied from its paper at 64 NFE, so it may not share hardware or settings with the other rows.
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--inference">Inference</span>
+          </dd>
+        </dl>
+      </article>
+    </section>
+
+    <!-- == Flow-matching era == -->
+    <section id="flow-era">
+      <h2>Flow-matching era</h2>
+
+      <article id="voicebox">
+        <h3>Voicebox (2023, arXiv 2306.15687)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            An 80-band log mel spectrogram at 100 Hz, vocoded by HiFi-GAN.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Frame-level phone sequence from the Montreal Forced Aligner at training, and a separate duration model at inference (regression by default; a flow-matching duration model gives more diverse samples).
+            The audio context is a masked-infilling prompt; loss is computed on the masked frames.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Transformer with convolutional position embeddings, ALiBi bias and U-Net-style skip connections: audio model 330M parameters, duration model 28M (English) or 34M (multilingual).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            60K hours of English audiobooks (VB-En) and 50K hours of six-language audiobooks (VB-Multi).
+            The abstract says "over 50K hours".
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Midpoint solver, step 0.0625, NFE 32 by default; "less than 10 NFEs" already gives high quality; CFG strength 0.7 for the monolingual TTS results.
+            At NFE 2 without CFG a 10 s sample takes about 0.31 s, about 20 times faster than VALL-E; at NFE 64 it is about 4% slower than VALL-E (the VALL-E time comes from the Voicebox authors' own re-implementation, which they say is faster than the original, 6.2 against 10 seconds).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            Filtered LibriSpeech test-clean (Table 2), cross-sentence 3 s prompt: WER 1.9, SIM-o 0.662, SIM-r 0.681, QMOS 3.78 (&plusmn; 0.10), SMOS 3.71 (&plusmn; 0.11).
+            Ground truth: WER 2.2, SIM-o 0.754, QMOS 3.98 (&plusmn; 0.14), SMOS 4.01 (&plusmn; 0.09).
+            VALL-E: WER 5.9, SIM-r 0.580.
+            Continuation, VB-En with CFG 0.7: WER 2.0, SIM-o 0.593, SIM-r 0.616; VALL-E 3.8, 0.452, 0.508.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            Trained on read audiobook speech, so conversational speech may transfer poorly.
+            It depends on a phonemizer and forced aligner, and word-based phonemizers miss context-dependent pronunciation such as French liaison.
+            It also cannot control voice and emotion independently.
+            At low NFE with low guidance, samples are less diverse but easier for the ASR model, so WER can look better than the audio is.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="audiobox">
+        <h3>Audiobox (2023, arXiv 2312.15821)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            Dense Encodec features taken before residual quantization, for speech, sound and music, rather than mel; the Encodec decoder renders audio.
+            The authors moved off mel because HiFi-GAN does not generalise well to non-speech audio.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Frame-aligned transcript plus a separate flow-matching duration model trained on labelled data; description-based and example-based style prompts.
+            Sampled durations are averaged over a small number of draws at inference for stability.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            24-layer Transformer, 330M parameters, with U-Net skips, adapted from the Voicebox and SpeechFlow recipe.
+            Pre-trained with a self-supervised infilling objective (Audiobox SSL), then fine-tuned.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            Pre-training on over 160K hours of speech, 20K hours of music and 6K hours of sound; Audiobox Speech fine-tunes on a 100K-hour transcribed English speech subset.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Midpoint solver with 16 steps (NFE 32) and guidance weight 0.7 for the speech comparison in the appendix.
+            A learned Bespoke solver with 4 steps (NFE 8) matches it: LibriSpeech SIM-o 0.735 against 0.734, WER 3.0 against 3.2.
+            The abstract claims over 25 times speed-up from Bespoke solvers.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            In-context TTS, Table 1: Audiobox Speech LibriSpeech SIM-r 0.745 and SIM-o 0.734, average SIM-o over five domains 0.642, average WER 4.0.
+            Voicebox on the same table: SIM-r 0.696, SIM-o 0.674, average SIM-o 0.531, LibriSpeech WER 2.6, average WER 6.1.
+            WER uses Whisper large-v2, except values marked as HuBERT-L from other papers.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            Similarity and out-of-domain WER improve with data coverage, but LibriSpeech WER is worse than Voicebox (3.2 against 2.6), so the gains are on robustness across domains and on similarity, not on clean read speech.
+            Description-based control is limited by scarce labelled data.
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--inference">Inference</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="matcha-tts">
+        <h3>Matcha-TTS (2023, arXiv 2309.03199)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            An 80-band mel; HiFi-GAN (LJ Speech checkpoint LJ_V17) renders audio.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Monotonic alignment search at training with a duration predictor at inference, so no external aligner.
+            Single speaker.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Encoder-decoder with a 1D-convolution plus Transformer U-Net decoder, trained with optimal-transport conditional flow matching; 18.2M parameters.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            LJ Speech standard split (about 24 hours of one speaker).
+            <span class="tag tag--reported">Reported</span>
+            (hours from the Grad-TTS paper; Matcha-TTS names the dataset and split)
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Conditions MAT-2, MAT-4 and MAT-10 use NFE 2, 4 and 10.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LJ Speech test set (Table 1), WER from Whisper medium, RTF includes vocoding, MOS on 40 utterances:
+            MAT-10 WER 2.09, MOS 3.84 (&plusmn; 0.08), RTF 0.038;
+            MAT-4 2.15, 3.77 (&plusmn; 0.07), 0.019;
+            MAT-2 2.34, 3.65 (&plusmn; 0.08), 0.015;
+            Grad-TTS at NFE 10: 3.44, 3.49 (&plusmn; 0.08), 0.049;
+            Grad-TTS at NFE 4: 3.69, 3.20 (&plusmn; 0.09), 0.019;
+            VITS 2.52, 3.71 (&plusmn; 0.08), 0.074;
+            FastSpeech 2 4.18, 3.29 (&plusmn; 0.09), 0.010;
+            vocoded ground truth 1.97, 4.13 (&plusmn; 0.09).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            Single speaker only and a deterministic duration predictor; the authors list multi-speaker and probabilistic duration modelling as future work.
+            They warn that MOS values are not comparable across papers.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="p-flow">
+        <h3>P-Flow (2023, NeurIPS 2023; no arXiv version found)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            An 80-bin mel at 22 kHz; a pre-trained universal HiFi-GAN renders audio.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            A speech-prompted text encoder takes a 3 s prompt segment plus IPA text; training masks the loss over that segment to stop copy-pasting.
+            MAS gives training alignment and a duration predictor is used at inference.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Small Transformer text encoder (3M parameters), duration predictor and a WaveNet-based flow-matching decoder.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            LibriTTS, 580 hours from 2,456 speakers; only utterances longer than 3 s are used, giving a 256 hour subset (the results table prints 260).
+            Trained on one A100 for 800K iterations.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            10 Euler steps, guidance scale 1.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LibriSpeech test-clean (2.2 hour set following the VALL-E protocol), HuBERT ASR (Table 2):
+            P-Flow WER 2.6, SECS 0.544, text-to-mel latency 0.115 s (&plusmn; 0.004) on an A100;
+            ground truth through HiFi-GAN 2.4 and 0.64; YourTTS 7.7 and 0.337; VALL-E 5.9 and 0.580 (latency proxy 2.515 s); VALL-E continuation 3.8 and 0.508.
+            Preference against VALL-E (Table 3): CMOS +0.27 (&plusmn; 0.10), SMOS +0.23 (&plusmn; 0.13).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The authors say zero-shot ability of the duration predictor remains limited.
+            VALL-E numbers are taken from the VALL-E paper, and its latency is a proxy.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="voiceflow">
+        <h3>VoiceFlow (2023, arXiv 2309.05027)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            A mel spectrogram, vocoded by HiFi-GAN trained per dataset; audio downsampled to 16 kHz.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Explicit: phone durations from Kaldi forced alignment, a duration predictor and a duration adaptor.
+            The comparison with Grad-TTS also uses ground-truth durations in place of MAS.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Same network as Grad-TTS, so inference cost matches at equal steps; trained with rectified flow matching, including a second "ReFlow" stage that retrains on the model's own generated pairs.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            LJ Speech (about 24 hours) and LibriTTS training partitions (585 hours, over 2,300 speakers).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Euler with 2, 10 and 100 steps compared.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            MOS (Table 1), LJ Speech / LibriTTS:
+            2 steps, Grad-TTS 2.98 (&plusmn; 0.06) / 2.52 (&plusmn; 0.12), VoiceFlow 3.92 (&plusmn; 0.07) / 3.81 (&plusmn; 0.07);
+            10 steps, Grad-TTS 3.97 / 3.43, VoiceFlow 4.10 / 3.84;
+            100 steps, Grad-TTS 4.03 / 3.45, VoiceFlow 4.17 / 3.85;
+            vocoded ground truth 4.52 / 4.42.
+            CMOS at 2 steps without ReFlow: -0.78 (&plusmn; 0.13) on LJ Speech and -1.21 (&plusmn; 0.19) on LibriTTS.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The few-step gain depends on the extra ReFlow stage.
+            Automatic alignment search is left as future work, so explicit durations remain.
+            Multi-speaker but not a zero-shot cloning model.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="e2-tts">
+        <h3>E2 TTS (2024, arXiv 2406.18009)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            A 100-band log mel from 24 kHz audio (10.7 ms hop), vocoded by a BigVGAN-based vocoder.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Implicit.
+            The character sequence is padded with filler tokens to the mel length; no phonemizer, aligner or duration model in the model itself.
+            At inference the total length is the prompt length plus a chosen generation length; the main experiments used a Voicebox-style regression duration model for a fair comparison.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            24-layer Transformer with U-Net skips, 1024 dimensions, 335 million parameters, character vocabulary of 399.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            Libriheavy, 50K hours of English audiobooks; also a proprietary 200K hour set; optional unsupervised pre-training on 200K unlabeled hours.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Midpoint solver, NFE 32, CFG strength 1.0.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LibriSpeech-PC test-clean, 4 to 10 s clips (Tables 1 and 2):
+            E2 TTS trained from scratch on Libriheavy WER 2.0, SIM-o 0.675, CMOS -0.14, SMOS 4.66 (&plusmn; 0.07);
+            with pre-training WER 1.9, SIM-o 0.708, CMOS -0.05, SMOS 4.65 (&plusmn; 0.08);
+            on 200K proprietary hours WER 1.9, SIM-o 0.707, CMOS -0.18, SMOS 4.64 (&plusmn; 0.08).
+            Ground truth WER 2.0, SIM-o 0.695, SMOS 3.91 (&plusmn; 0.13); CMOS is measured against ground truth.
+            The authors' Voicebox reproduction on the same Libriheavy data: WER 2.2, SIM-o 0.667, CMOS -0.78.
+            NaturalSpeech 3 (from its paper): 2.6, 0.632, CMOS -0.98.
+            VALL-E 4.9, 0.500.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            It converges far more slowly than the aligned Voicebox, though it ends with lower WER (Fig. 4).
+            The model must find the boundary between prompt text and target text itself; the authors flag long prompts as a risk but saw no WER pattern up to 10 s.
+            F5-TTS reports its reproduction has excellent similarity but much worse WER, which it calls an alignment-robustness deficiency.
+            The paper says a concurrent report, Seed-TTS DiT, looks similar but gives few details.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="f5-tts">
+        <h3>F5-TTS (2024, arXiv 2410.06885)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            A 100-band log mel at 24 kHz; the Vocos vocoder renders audio by default.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Filler-padded characters as in E2 TTS, refined by ConvNeXt V2 blocks before fusion.
+            Duration is not predicted by a model: it is estimated from the ratio of the prompt transcript length to the target text length.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            DiT with adaLN-zero, 22 layers, plus 4 ConvNeXt V2 text layers; 336M parameters.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            Emilia, a public in-the-wild Chinese and English set of about 100K hours.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Euler solver for F5-TTS (midpoint for E2 TTS), 16 or 32 NFE, CFG strength 2, Sway Sampling coefficient -1.
+            Sway Sampling is an inference-only time warp that places more steps early in the trajectory.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LibriSpeech-PC test-clean (Table 1, RTF for 10 s of speech on an RTX 3090):
+            F5-TTS 32 NFE WER 2.42, SIM-o 0.66, RTF 0.31;
+            16 NFE WER 2.53, SIM-o 0.66, RTF 0.15;
+            E2 TTS reproduction, 32 NFE, WER 2.95, SIM-o 0.69, RTF 0.68;
+            ground truth (1,127 samples) 2.23 and 0.69.
+            Seed-TTS test-en (Table 2): F5-TTS 32 NFE WER 1.83, SIM-o 0.67, CMOS 0.31, SMOS 3.89; 16 NFE 1.89, 0.67, 0.16, 3.79; ground truth 2.06 and 0.73.
+            Seed-TTS test-zh: 32 NFE CER 1.56, SIM-o 0.76, CMOS 0.21, SMOS 3.83; ground truth 1.26 and 0.76.
+            Sway Sampling ablation (base model, 32 NFE, LibriSpeech-PC): WER 2.84 without, 2.41 with; SIM-o 0.62 without, 0.66 with.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The authors state two limits: the mel sequence is still much longer than the text, so a more efficient continuous representation is needed, and there is no fine-grained control of paralinguistic detail such as emotion.
+            Seed-TTS, trained on far more data and parameters, remains better on the Seed-TTS test sets.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="seed-tts">
+        <h3>Seed-TTS and its DiT variant (2024, arXiv 2406.02430)</h3>
+        <dl>
+          <dt>What the family is</dt>
+          <dd>
+            The main Seed-TTS system is autoregressive: a speech-token language model, then a diffusion transformer that turns tokens into continuous speech representations coarse to fine, then an acoustic vocoder.
+            Seed-TTS DiT is the non-autoregressive variant, "fully diffusion-based".
+            Flow matching appears only once, in the deployment section: the main system's diffusion module was sped up with consistency distillation and "a modified flow matching algorithm" (citing Esser et al.).
+            I list the DiT variant in this section because the task asked for it, not because the report calls it flow matching.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Generates (DiT)</dt>
+          <dd>
+            The latent representation used by the vocoder, directly from noise, with no acoustic tokenizer in the loop.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment (DiT)</dt>
+          <dd>
+            No phoneme-level durations.
+            The total duration is estimated in advance or supplied by the user (the report chose to supply it, which enables content and speaking-rate editing), and the model learns local alignment itself.
+            The authors say adding a phoneme duration model reduced naturalness.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture and data</dt>
+          <dd>
+            Diffusion transformer; parameter count not reported.
+            Data scale is described only as "orders of magnitude larger" than prior work; F5-TTS says several million hours.
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--reported">Reported</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Number of steps or NFE: not reported.
+            For the deployed main system, a causal diffusion architecture enables streaming in the diffusion module.
+            Deployed against offline (Table 5): latency 0.028 times, RTF 0.132 times, WER 1.518 for both, SIM 0.763 for both, CMOS -0.02.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            Objective set: 1,000 Common Voice English samples and 2,000 DiDiSpeech Mandarin samples, reference 3 to 20 s; Whisper-large-v3 and Paraformer-zh for WER, WavLM-large for SIM (Table 10).
+            Seed-TTS DiT: English WER 1.733, SIM 0.790; Mandarin 1.178 and 0.809.
+            Seed-TTS (AR plus diffusion): English 2.249 and 0.762; Mandarin 1.115 and 0.796.
+            Human: English 2.143 and 0.730; Mandarin 1.254 and 0.750.
+            Subjective set, Seed-TTS main system, CMOS against human: -0.07.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The report says the language-model route has the advantages of streaming and of integration with a text language model, while the DiT is non-streaming and has the simpler pipeline.
+            It also notes that a lower WER does not necessarily mean higher subjective similarity, because a low-WER model may under-reproduce accent or expressiveness in the prompt.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="cosyvoice">
+        <h3>CosyVoice (2024, arXiv 2407.05407)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            Stage 1: supervised semantic (S3) speech tokens from a token language model.
+            Stage 2: a mel spectrogram from an OT conditional flow-matching model; HiFi-GAN renders audio.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            The autoregressive LLM handles text-to-token alignment and length.
+            The flow model is conditioned on a speaker embedding, the tokens and a masked mel, and the paper says this avoids the phonemizers and forced aligners that NAR models need.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            S3 tokenizer made by inserting vector quantization into the SenseVoice ASR encoder; LLM plus conditional flow matching with a cosine time schedule and CFG.
+            The text does not give token rate or flow step count in what I extracted.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            Table 2: Chinese 130,000 h, English 30,000 h, Cantonese 5,000 h, Japanese 4,600 h, Korean 2,200 h; this sums to 171,800 hours.
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--inference">Inference</span>
+            (sum)
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Random sampling decoding in the LLM; flow step count not reported in the text I read.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            Test sets built from LibriTTS test-clean and AISHELL-3 (Tables 8 and 9), ERes2Net for similarity (SS, as printed):
+            English WER 2.89 (&plusmn; 0.18), SS 74.30 (&plusmn; 0.15), against recordings at 2.66 and 69.67; with 5 times re-ranking WER 1.51.
+            Chinese CER 3.82 (&plusmn; 0.24), SS 81.58 (&plusmn; 0.16), against recordings at 2.52 and 74.15; with re-ranking 1.84.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            Sampling variance is visible: picking the best of five outputs by ASR cuts English WER from 2.89 to 1.51.
+            CosyVoice 2 says diffusion-based TTS and hybrid systems lack well-established streaming solutions, which is what it sets out to fix.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="cosyvoice2">
+        <h3>CosyVoice 2 (2024, arXiv 2412.10117)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            FSQ speech tokens at 25 Hz (codebook 6,561) from an LLM; a chunk-aware causal flow-matching model turns them into a 50 Hz mel at 24 kHz; a pre-trained vocoder, not named in the paper, renders audio.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Tokens fix content and length, so the flow model needs no duration.
+            It sees the tokens (a look-ahead convolution, then 2 times up-sampling to match the mel rate), a speaker embedding and the masked reference mel.
+            For streaming, text and speech tokens are interleaved at N = 5 and M = 15.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            Qwen2.5-0.5B as the text-speech LM; causal convolutional Transformer U-Net for flow matching.
+            Four attention masks (non-causal, full-causal, chunk-M, chunk-2M) are sampled uniformly in training so one model serves streaming and offline.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            Tokenizer: 200K hours (110,884 Chinese, 99,918 English).
+            CosyVoice 2: Chinese 130,000 h, English 30,000 h, Japanese 4,600 h, Korean 2,200 h.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            NFE 10, CFG strength 0.7, cosine time schedule that spends more steps early.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            LibriSpeech test-clean subset, Whisper-large V3 (Table 5): CosyVoice 2 WER 2.47, NMOS 3.96, SS 0.745; streaming mode 2.45, 3.90, 0.751; human 2.66, 3.84, 0.697.
+            Seed-TTS test sets (Table 6), SS by WavLM-based model with ERes2Net in brackets:
+            test-zh CER 1.45, SS 0.748 (0.806), streaming 1.45 and 0.753 (0.812);
+            test-en WER 2.57, SS 0.652 (0.736), streaming 2.38 and 0.654 (0.743);
+            test-hard WER 6.83, SS 0.724 (0.776), streaming 8.08 and 0.732 (0.785).
+            No measured first-packet latency is reported, only a latency formula.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The authors state: limited language support; degraded synthesis for languages with overlapping character sets (Japanese pulled toward Chinese pronunciation); no timbre control through text instructions; weak singing.
+            Streaming is "nearly lossless" in typical cases but test-hard WER rises from 6.83 to 8.08.
+            They argue rigid explicit alignment can give flat prosody, and that hybrids get diversity and prosody consistency from the LM.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+        </dl>
+      </article>
+
+      <article id="cosyvoice3">
+        <h3>CosyVoice 3 (2025, arXiv 2505.17589)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            25 Hz FSQ tokens from a tokenizer built on the MinMo voice encoder with multi-task supervision (ASR, language ID, emotion, audio events, speaker analysis; 530K hours), then flow matching to mel.
+            Vocoder: not named in the text I read.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            Token-driven as before.
+            The flow model's text encoder and length regularization module were removed, and the token-to-mel frame-rate mismatch is handled by interpolation.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture</dt>
+          <dd>
+            LM scaled from 0.5B to 1.5B parameters.
+            Flow model switched to a DiT backbone, scaled from 100M to 300M parameters.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Data scale</dt>
+          <dd>
+            One million hours, 9 languages and 18 Chinese dialects.
+            The abstract says this grew "from ten thousand hours"; see the conflicts list.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Flow step count: not reported in the text I read.
+            Post-training uses DiffRO, a differentiable reward applied to the speech tokens through a Gumbel-Softmax relaxation, not to the flow stage.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            Seed-TTS test sets (Table 4), SS by WavLM-based model, ERes2Net in brackets:
+            0.5B: test-zh CER 1.16, SS 0.780 (0.840); test-en WER 2.02, SS 0.718 (0.790); test-hard 6.08, SS 0.758 (0.815).
+            0.5B with RL: 0.75 and 0.774; 1.76 and 0.695; 5.09 and 0.750.
+            1.5B: 1.12 and 0.781; 2.21 and 0.720; 5.83 and 0.758.
+            1.5B with RL: 0.71 and 0.775; 1.45 and 0.695; 5.66 and 0.750.
+            Seed-TTS in the same table: 1.12 and 0.796; 2.25 and 0.762; 7.59 and 0.776.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            The authors say the 1.5B model does not beat 0.5B on test-hard because pre-training and post-training data are limited there, and that the similarity gap to Seed-TTS comes from speaker diversity and data volume.
+            Cannot control timbre by text instruction; weak singing.
+            In the table, RL lowers CER but also lowers SS slightly (test-zh 0.780 to 0.774; test-en 0.718 to 0.695).
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--inference">Inference</span>
+            (reading of the SS drop)
+          </dd>
+        </dl>
+      </article>
+
+      <article id="maskgct">
+        <h3>MaskGCT, the masked-generative contrast (2024, arXiv 2409.00750)</h3>
+        <dl>
+          <dt>Generates</dt>
+          <dd>
+            Discrete tokens, not continuous features.
+            Stage 1 predicts semantic tokens (W2v-BERT 2.0 layer-17 features quantized by a single-codebook VQ-VAE) from text.
+            Stage 2 predicts 12-layer RVQ acoustic codec tokens (DAC-style, Vocos decoder, codebook size 1,024 per layer).
+            Both stages use mask-and-predict, not a diffusion or flow ODE.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Conditioning and alignment</dt>
+          <dd>
+            No text-speech alignment supervision and no phone-level durations.
+            Total length is specified or predicted by a duration model that conditions on the text and the prompt duration.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Architecture and data</dt>
+          <dd>
+            Bidirectional Transformers: text-to-semantic Base 315M or Large 695M parameters, semantic-to-acoustic 353M.
+            Trained on 100K hours from Emilia (50K English, 50K Chinese).
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Sampling</dt>
+          <dd>
+            Text-to-semantic: 50 steps by default, CFG scale 2.5, rescale 0.75, top-k 20, temperature annealed from 1.5 to 0.
+            Semantic-to-acoustic: [40, 16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] steps over the 12 layers, or [10, 1, ...] as a faster setting.
+            WER on test-zh falls from 10.19 at 5 steps to 2.507 at 25 steps and barely changes afterwards.
+            <span class="tag tag--confirmed">Confirmed</span>
+          </dd>
+          <dt>Headline results</dt>
+          <dd>
+            Table 2, T2S-Large; values in brackets are best of five samples:
+            LibriSpeech test-clean SIM-O 0.687 (0.723), WER 2.634 (1.976), SMOS 4.27 (&plusmn; 0.14), CMOS +0.10 (&plusmn; 0.16) against ground truth; with ground-truth length 0.697 and 2.012.
+            Seed-TTS test-en SIM-O 0.717 (0.760), WER 2.623 (1.283); test-zh 0.774 (0.805) and 2.273 (0.843).
+            Ground truth: 0.68 and 1.94; 0.730 and 2.143; 0.750 and 1.254.
+            Parameters: the two stages sum to 1,048M (arithmetic), the figure F5-TTS prints.
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--reported">Reported</span>
+          </dd>
+          <dt>Trade-off or limitation</dt>
+          <dd>
+            Predicted total length is worse than ground-truth length (LibriSpeech WER 2.634 against 2.012), so length prediction costs accuracy.
+            The paper has no dedicated limitations section that I found.
+            Cost: about 50 plus 66 sequential forward passes per utterance by the default step lists, before CFG doubling; that sum is my arithmetic.
+            <span class="tag tag--confirmed">Confirmed</span>
+            <span class="tag tag--inference">Inference</span>
+          </dd>
+        </dl>
+      </article>
+    </section>
+
+    <!-- == Flow matching as decoder inside speech LLMs == -->
+    <section id="speech-llm-decoders">
+      <h2>Flow matching as the token-to-waveform decoder in speech LLMs</h2>
+      <p>
+        In these systems the language model decides content and timing, and the flow model only renders acoustics from tokens.
+        I did not collect standalone TTS WER or similarity for these decoders, because the technical reports evaluate the whole spoken-dialogue model.
+      </p>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>System (arXiv)</th>
+              <th>Decoder as described</th>
+              <th>Streaming mechanism</th>
+              <th>Label</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GLM-4-Voice (2412.02612, Dec 2024)</td>
+              <td>CosyVoice-style decoder: speech token encoder, conditional flow matching, HiFi-GAN; tokens are single-codebook at 12.5 Hz</td>
+              <td>Decoder adapted for streaming inference</td>
+              <td><span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Step-Audio (2502.11946, Feb 2025)</td>
+              <td>Speech decoder of a 3B language model, a flow-matching model and a mel-to-wave vocoder; dual-codebook tokens (16.7 Hz linguistic, 25 Hz semantic) feed a 130B LLM</td>
+              <td>Optimised real-time inference pipeline</td>
+              <td><span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Step-Audio 2 (2507.16632, Jul 2025)</td>
+              <td>CosyVoice 2 tokenizer; flow-matching module plus HiFi-GAN; the flow model was trained on 200,000 hours and adds a CNN-based encoder layer after each self-attention module</td>
+              <td>Not described in the passage I read</td>
+              <td><span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Kimi-Audio (2504.18425, Apr 2025)</td>
+              <td>Flow matching from 12.5 Hz semantic tokens to a 50 Hz mel, then a BigVGAN vocoder; pre-training on about 13 million hours of raw audio</td>
+              <td>Chunk-wise autoregressive streaming (for example 1 s chunks) with a training-free look-ahead of the next 4 tokens; the authors found chunk-boundary artefacts without it</td>
+              <td><span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Qwen2.5-Omni (2503.20215, Mar 2025)</td>
+              <td>Flow-matching DiT from codec tokens to mel, then a modified BigVGAN</td>
+              <td>Sliding-window block attention: receptive field of 4 blocks, lookback 2, lookahead 1</td>
+              <td><span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Qwen3-Omni (2509.17765, Sep 2025)</td>
+              <td>No flow or diffusion: block-wise diffusion was replaced by a lightweight causal ConvNet (Code2Wav) over multi-codebook codec frames; theoretical first-packet latency 234 ms</td>
+              <td>Streaming from the first codec frame</td>
+              <td><span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Moshi (2410.00037, Sep 2024)</td>
+              <td>No flow matching: the text search of the paper found no mention; audio is Mimi codec tokens with a Depth Transformer</td>
+              <td>Codec decoder, streaming by design</td>
+              <td><span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Qwen3-Omni is the clearest counter-trend in this set: the same lab moved from a flow-matching DiT to a ConvNet to cut first-packet latency.
+        <span class="tag tag--confirmed">Confirmed</span>
+        Whether the move is driven by step count, chunking or both is not stated.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+    </section>
+
+    <!-- == Comparison tables == -->
+    <section id="comparison">
+      <h2>Comparison across models</h2>
+      <h3 id="design-table">Design choices</h3>
+      <p>
+        Each cell was read in the paper named in the matching block above.
+        Where a field is marked "not reported", it was absent from the text I read.
+      </p>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>Model (arXiv, year)</th>
+              <th>Generates</th>
+              <th>Alignment or length</th>
+              <th>Backbone</th>
+              <th>Training data</th>
+              <th>Sampling as reported</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>WaveGrad (2009.00713, 2020)</td>
+              <td>Waveform from mel</td>
+              <td>None (mel input)</td>
+              <td>Convolutional, 15M or 23M</td>
+              <td>385 h proprietary</td>
+              <td>6 to 1,000 iterations</td>
+            </tr>
+            <tr>
+              <td>DiffWave (2009.09761, 2020)</td>
+              <td>Waveform from mel, or unconditional</td>
+              <td>None (mel input)</td>
+              <td>Dilated conv, 2.64M or 6.91M</td>
+              <td>LJ Speech about 24 h; SC09</td>
+              <td>T up to 200; 6 steps fast</td>
+            </tr>
+            <tr>
+              <td>Grad-TTS (2105.06337, 2021)</td>
+              <td>Mel, then HiFi-GAN</td>
+              <td>MAS plus duration predictor</td>
+              <td>U-Net, 14.8M</td>
+              <td>LJ Speech about 24 h</td>
+              <td>4 to 1,000 steps</td>
+            </tr>
+            <tr>
+              <td>NaturalSpeech 2 (2304.09116, 2023)</td>
+              <td>Continuous codec latent</td>
+              <td>External aligner; duration and pitch predictors</td>
+              <td>Latent diffusion, 400M</td>
+              <td>44K h MLS English</td>
+              <td>Euler, 150 steps</td>
+            </tr>
+            <tr>
+              <td>NaturalSpeech 3 (2403.03100, 2024)</td>
+              <td>Discrete FACodec tokens plus duration</td>
+              <td>External aligner; duration by discrete diffusion</td>
+              <td>Factorized discrete diffusion, 500M or 1B</td>
+              <td>60K h Libri-Light (200K h in scaling)</td>
+              <td>4 iterations per stream, 60 passes</td>
+            </tr>
+            <tr>
+              <td>DiTTo-TTS (2406.11427, 2024)</td>
+              <td>Mel-VAE latent at 10.76 Hz, then BigVGAN</td>
+              <td>Total-length predictor; cross-attention</td>
+              <td>DiT, up to 790M</td>
+              <td>82K h, nine languages</td>
+              <td>NFE 25, CFG</td>
+            </tr>
+            <tr>
+              <td>Voicebox (2306.15687, 2023)</td>
+              <td>Mel, then HiFi-GAN</td>
+              <td>Forced alignment plus duration model</td>
+              <td>Transformer, 330M</td>
+              <td>60K h English; 50K h multilingual</td>
+              <td>Midpoint, NFE 32, CFG 0.7</td>
+            </tr>
+            <tr>
+              <td>Audiobox (2312.15821, 2023)</td>
+              <td>Encodec dense latent</td>
+              <td>Frame-aligned transcript plus flow duration model</td>
+              <td>Transformer, 330M</td>
+              <td>185K h mixed pre-training; 100K h speech fine-tune</td>
+              <td>Midpoint NFE 32; Bespoke NFE 8</td>
+            </tr>
+            <tr>
+              <td>Matcha-TTS (2309.03199, 2023)</td>
+              <td>Mel, then HiFi-GAN</td>
+              <td>MAS plus duration predictor</td>
+              <td>CNN plus Transformer U-Net, 18.2M</td>
+              <td>LJ Speech</td>
+              <td>NFE 2, 4, 10</td>
+            </tr>
+            <tr>
+              <td>P-Flow (NeurIPS 2023, no arXiv)</td>
+              <td>Mel, then HiFi-GAN</td>
+              <td>MAS plus duration predictor; 3 s speech prompt</td>
+              <td>WaveNet-style decoder; 3M text encoder</td>
+              <td>256 h LibriTTS subset</td>
+              <td>10 Euler steps</td>
+            </tr>
+            <tr>
+              <td>VoiceFlow (2309.05027, 2023)</td>
+              <td>Mel, then HiFi-GAN</td>
+              <td>Forced-alignment durations plus predictor</td>
+              <td>Grad-TTS network with ReFlow</td>
+              <td>LJ Speech; LibriTTS 585 h</td>
+              <td>Euler, 2 to 100 steps</td>
+            </tr>
+            <tr>
+              <td>E2 TTS (2406.18009, 2024)</td>
+              <td>Mel, then BigVGAN-based vocoder</td>
+              <td>Filler tokens; total length chosen</td>
+              <td>Transformer with U-Net skips, 335M</td>
+              <td>50K h Libriheavy; 200K h proprietary</td>
+              <td>Midpoint, NFE 32, CFG 1.0</td>
+            </tr>
+            <tr>
+              <td>F5-TTS (2410.06885, 2024)</td>
+              <td>Mel, then Vocos</td>
+              <td>Filler tokens plus ConvNeXt V2; ratio-based length</td>
+              <td>DiT, 336M</td>
+              <td>About 100K h Emilia</td>
+              <td>Euler, NFE 16 or 32, CFG 2, Sway</td>
+            </tr>
+            <tr>
+              <td>Seed-TTS DiT (2406.02430, 2024)</td>
+              <td>Vocoder latent</td>
+              <td>Total duration supplied; local alignment learned</td>
+              <td>Diffusion transformer, size not reported</td>
+              <td>Not reported</td>
+              <td>Not reported</td>
+            </tr>
+            <tr>
+              <td>CosyVoice (2407.05407, 2024)</td>
+              <td>S3 tokens by LLM, then mel by flow, then HiFi-GAN</td>
+              <td>Implicit in the AR LLM</td>
+              <td>LLM plus OT-CFM</td>
+              <td>171,800 h by my sum</td>
+              <td>Cosine schedule, CFG; steps not reported</td>
+            </tr>
+            <tr>
+              <td>CosyVoice 2 (2412.10117, 2024)</td>
+              <td>25 Hz FSQ tokens, then 50 Hz mel</td>
+              <td>Implicit in the AR LM</td>
+              <td>Qwen2.5-0.5B plus causal U-Net flow</td>
+              <td>166,800 h by my sum</td>
+              <td>NFE 10, CFG 0.7</td>
+            </tr>
+            <tr>
+              <td>CosyVoice 3 (2505.17589, 2025)</td>
+              <td>25 Hz FSQ tokens, then mel</td>
+              <td>Implicit in the AR LM</td>
+              <td>1.5B LM plus 300M DiT flow</td>
+              <td>1M h</td>
+              <td>Not reported</td>
+            </tr>
+            <tr>
+              <td>MaskGCT (2409.00750, 2024)</td>
+              <td>Semantic tokens, then 12-layer RVQ tokens</td>
+              <td>Total length predicted or given; no alignment</td>
+              <td>Masked Transformers, 695M plus 353M</td>
+              <td>100K h Emilia</td>
+              <td>50 plus [40, 16, 1 x 10] steps</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <span class="tag tag--confirmed">Confirmed</span>
+        for every cell except the hour sums for CosyVoice and CosyVoice 2, which are my arithmetic on the papers' tables
+        <span class="tag tag--inference">Inference</span>.
+      </p>
+
+      <h3 id="results-table">Reported results, by test set</h3>
+      <p>
+        The first table groups rows that share a test set only loosely.
+        Read each row with its own test set and its own metric definitions.
+      </p>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Test set (as named by the paper)</th>
+              <th>WER or CER</th>
+              <th>Speaker similarity</th>
+              <th>Subjective</th>
+              <th>Speed as reported</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>WaveGrad</td>
+              <td>Proprietary single speaker, Tacotron 2 mels</td>
+              <td>Not applicable (vocoder)</td>
+              <td>Not applicable</td>
+              <td>MOS 4.41 (6 it.), 4.47 (1,000 it.); ground truth 4.58</td>
+              <td>RTF 0.2 on V100 at 6 it.</td>
+            </tr>
+            <tr>
+              <td>DiffWave</td>
+              <td>LJ Speech vocoding</td>
+              <td>Not applicable</td>
+              <td>Not applicable</td>
+              <td>MOS 4.44 (T=200), 4.42 (6 steps); ground truth 4.52</td>
+              <td>5.6 times real time (Base fast, V100)</td>
+            </tr>
+            <tr>
+              <td>Grad-TTS</td>
+              <td>LJ Speech test sentences</td>
+              <td>Not reported</td>
+              <td>Single speaker</td>
+              <td>MOS 4.38 (10 steps), 4.44 (1,000); ground truth 4.53</td>
+              <td>RTF 0.033 at 10 steps</td>
+            </tr>
+            <tr>
+              <td>Matcha-TTS</td>
+              <td>LJ Speech test set</td>
+              <td>2.09 (NFE 10), 2.34 (NFE 2)</td>
+              <td>Single speaker</td>
+              <td>MOS 3.84, 3.65; vocoded ground truth 4.13</td>
+              <td>RTF 0.038, 0.015 including vocoding</td>
+            </tr>
+            <tr>
+              <td>VoiceFlow</td>
+              <td>LJ Speech; LibriTTS</td>
+              <td>Not reported</td>
+              <td>Not reported</td>
+              <td>MOS 3.92 (2 steps), 4.17 (100) on LJ Speech</td>
+              <td>Not reported</td>
+            </tr>
+            <tr>
+              <td>P-Flow</td>
+              <td>LibriSpeech test-clean, 2.2 h</td>
+              <td>2.6</td>
+              <td>SECS 0.544</td>
+              <td>CMOS +0.27, SMOS +0.23 against VALL-E</td>
+              <td>0.115 s text to mel on A100</td>
+            </tr>
+            <tr>
+              <td>NaturalSpeech 2</td>
+              <td>LibriSpeech test-clean</td>
+              <td>2.26 (ground truth 1.94)</td>
+              <td>SMOS 3.28</td>
+              <td>CMOS of ground truth +0.04</td>
+              <td>RTF 0.366 (from the NS3 paper)</td>
+            </tr>
+            <tr>
+              <td>NaturalSpeech 3</td>
+              <td>LibriSpeech test-clean</td>
+              <td>1.81 (ground truth 1.94)</td>
+              <td>SIM-O 0.67, SIM-R 0.76</td>
+              <td>CMOS 0.00, SMOS 4.01</td>
+              <td>RTF 0.296 on V100</td>
+            </tr>
+            <tr>
+              <td>Voicebox</td>
+              <td>Filtered LibriSpeech test-clean, cross-sentence</td>
+              <td>1.9</td>
+              <td>SIM-o 0.662, SIM-r 0.681</td>
+              <td>QMOS 3.78, SMOS 3.71</td>
+              <td>About 0.31 s per 10 s at NFE 2</td>
+            </tr>
+            <tr>
+              <td>DiTTo-TTS (XL)</td>
+              <td>LibriSpeech test-clean subset, cross-sentence</td>
+              <td>2.56</td>
+              <td>SIM-o 0.6270, SIM-r 0.6554</td>
+              <td>SMOS 3.91; CMOS 0.00 (ground truth +0.13)</td>
+              <td>1.616 s per 10 s at NFE 25 (continuation task)</td>
+            </tr>
+            <tr>
+              <td>E2 TTS</td>
+              <td>LibriSpeech-PC test-clean, 4 to 10 s</td>
+              <td>1.9 to 2.0</td>
+              <td>SIM-o 0.675 to 0.708</td>
+              <td>CMOS -0.05 to -0.18; SMOS 4.64 to 4.66</td>
+              <td>Not reported</td>
+            </tr>
+            <tr>
+              <td>F5-TTS</td>
+              <td>LibriSpeech-PC test-clean</td>
+              <td>2.42 (32 NFE), 2.53 (16 NFE)</td>
+              <td>SIM-o 0.66</td>
+              <td>See Seed-TTS-eval table</td>
+              <td>RTF 0.31, 0.15 on RTX 3090</td>
+            </tr>
+            <tr>
+              <td>MaskGCT</td>
+              <td>LibriSpeech test-clean</td>
+              <td>2.634 (1.976 best of five)</td>
+              <td>SIM-O 0.687 (0.723)</td>
+              <td>SMOS 4.27, CMOS +0.10</td>
+              <td>Not reported</td>
+            </tr>
+            <tr>
+              <td>Audiobox Speech</td>
+              <td>LibriSpeech, authors' protocol</td>
+              <td>3.2 (Whisper large-v2)</td>
+              <td>SIM-r 0.745, SIM-o 0.734</td>
+              <td>See paper Table 2</td>
+              <td>NFE 32; NFE 8 with Bespoke</td>
+            </tr>
+            <tr>
+              <td>CosyVoice</td>
+              <td>LibriTTS test-clean-derived set</td>
+              <td>2.89 (1.51 with 5x re-ranking)</td>
+              <td>SS 74.30 (ERes2Net, percent scale)</td>
+              <td>Not reported</td>
+              <td>Not reported</td>
+            </tr>
+            <tr>
+              <td>CosyVoice 2</td>
+              <td>LibriSpeech test-clean subset</td>
+              <td>2.47 (streaming 2.45)</td>
+              <td>SS 0.745 (streaming 0.751)</td>
+              <td>NMOS 3.96</td>
+              <td>NFE 10; first-packet latency not measured</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        The second table is the closest thing to a shared benchmark: the Seed-TTS test sets, which several papers re-run.
+        Each row cites where its numbers were printed; rows copied from another paper are marked Reported.
+        Similarity is the WavLM-based score unless stated.
+      </p>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>test-en WER / SIM</th>
+              <th>test-zh CER / SIM</th>
+              <th>test-hard error / SIM</th>
+              <th>Where printed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Ground truth</td>
+              <td>2.143 / 0.730</td>
+              <td>1.254 / 0.750</td>
+              <td>not reported</td>
+              <td>Seed-TTS Table 10 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Ground truth</td>
+              <td>2.06 / 0.73</td>
+              <td>1.26 / 0.76</td>
+              <td>not reported</td>
+              <td>F5-TTS Table 2 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>Seed-TTS (AR plus diffusion)</td>
+              <td>2.249 / 0.762</td>
+              <td>1.115 / 0.796</td>
+              <td>7.59 / 0.776</td>
+              <td>Seed-TTS Table 10 <span class="tag tag--confirmed">Confirmed</span>; test-hard from CosyVoice 2 Table 6 <span class="tag tag--reported">Reported</span></td>
+            </tr>
+            <tr>
+              <td>Seed-TTS DiT</td>
+              <td>1.733 / 0.790</td>
+              <td>1.178 / 0.809</td>
+              <td>not reported</td>
+              <td>Seed-TTS Table 10 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>MaskGCT</td>
+              <td>2.623 / 0.717</td>
+              <td>2.273 / 0.774</td>
+              <td>10.27 / 0.748</td>
+              <td>MaskGCT Table 2 <span class="tag tag--confirmed">Confirmed</span>; test-hard from CosyVoice 2 Table 6 <span class="tag tag--reported">Reported</span></td>
+            </tr>
+            <tr>
+              <td>E2 TTS (F5 reproduction, 32 NFE)</td>
+              <td>2.19 / 0.71</td>
+              <td>1.97 / 0.73</td>
+              <td>not reported</td>
+              <td>F5-TTS Table 2 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>F5-TTS (32 NFE)</td>
+              <td>1.83 / 0.67</td>
+              <td>1.56 / 0.76</td>
+              <td>8.67 / 0.713</td>
+              <td>F5-TTS Table 2 <span class="tag tag--confirmed">Confirmed</span>; test-hard from CosyVoice 2 Table 6 <span class="tag tag--reported">Reported</span></td>
+            </tr>
+            <tr>
+              <td>CosyVoice (first version)</td>
+              <td>4.29 / 0.609</td>
+              <td>3.63 / 0.723</td>
+              <td>11.75 / 0.709</td>
+              <td>CosyVoice 2 Table 6 <span class="tag tag--reported">Reported</span></td>
+            </tr>
+            <tr>
+              <td>CosyVoice 2</td>
+              <td>2.57 / 0.652</td>
+              <td>1.45 / 0.748</td>
+              <td>6.83 / 0.724</td>
+              <td>CosyVoice 2 Table 6 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>CosyVoice 2 streaming</td>
+              <td>2.38 / 0.654</td>
+              <td>1.45 / 0.753</td>
+              <td>8.08 / 0.732</td>
+              <td>CosyVoice 2 Table 6 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>CosyVoice 3-0.5B</td>
+              <td>2.02 / 0.718</td>
+              <td>1.16 / 0.780</td>
+              <td>6.08 / 0.758</td>
+              <td>CosyVoice 3 Table 4 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>CosyVoice 3-0.5B with RL</td>
+              <td>1.76 / 0.695</td>
+              <td>0.75 / 0.774</td>
+              <td>5.09 / 0.750</td>
+              <td>CosyVoice 3 Table 4 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+            <tr>
+              <td>CosyVoice 3-1.5B with RL</td>
+              <td>1.45 / 0.695</td>
+              <td>0.71 / 0.775</td>
+              <td>5.66 / 0.750</td>
+              <td>CosyVoice 3 Table 4 <span class="tag tag--confirmed">Confirmed</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- == Synthesis == -->
+    <section id="synthesis">
+      <h2>Synthesis: axes of trade-off</h2>
+      <div class="callout callout--inference">
+        <strong>Inference.</strong>
+        <p>
+          Everything in this section is my reading of the evidence above.
+          Where a paper states a point itself, the sentence says so and carries a Confirmed tag.
+        </p>
+      </div>
+
+      <h3 id="axis-hybrid">AR plus flow hybrid versus fully non-autoregressive</h3>
+      <p>
+        The hybrid family is Seed-TTS (main), CosyVoice 1 to 3, GLM-4-Voice, Step-Audio and Kimi-Audio, with Qwen2.5-Omni using a DiT.
+        The fully non-autoregressive family is Voicebox, Audiobox, NaturalSpeech 2 and 3, DiTTo, E2, F5, Seed-TTS DiT and MaskGCT.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+      <p>
+        CosyVoice 2 states that hybrids get diversity, prosody consistency and quality from the language model, and that diffusion and hybrid systems lacked streaming.
+        Seed-TTS states that the language-model route streams and plugs into a text LLM, while the DiT is non-streaming and simpler.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <p>
+        Quality does not separate the two families in these tables.
+        Seed-TTS DiT beats the AR plus diffusion model on English WER and similarity (1.733 and 0.790 against 2.249 and 0.762) and is close on Mandarin, from the same lab and test set.
+        <span class="tag tag--confirmed">Confirmed</span>
+        My reading: the choice is about interface, not fidelity.
+        Pick the hybrid when text arrives incrementally from an LLM and first-packet time matters; pick fully NAR when the whole text is known and you want infilling or editing.
+        The hybrid pays with sampling variance in the token stage (CosyVoice: best of five cuts WER from 2.89 to 1.51) and an upper bound set by the token quality.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+
+      <h3 id="axis-duration">Explicit duration versus implicit alignment</h3>
+      <p>
+        Explicit: Grad-TTS, Matcha-TTS, P-Flow, VoiceFlow, Voicebox, Audiobox, NaturalSpeech 2 and 3 use an aligner or MAS plus a duration model.
+        Total length only: DiTTo, E2 TTS (as run), F5-TTS, Seed-TTS DiT, MaskGCT.
+        Fully implicit: the AR token models, where the token sequence fixes the length.
+        <span class="tag tag--confirmed">Confirmed</span>
+        (placement; each model's block above gives the source)
+      </p>
+      <p>
+        Evidence for the cost of explicit alignment is mostly from the authors who dropped it.
+        Seed-TTS says adding a phoneme duration model reduced naturalness; CosyVoice 2 says rigid alignment can produce flat prosody; Voicebox lists its phonemizer and aligner dependence as a limitation.
+        <span class="tag tag--confirmed">Confirmed</span>
+        Evidence for the cost of removing it is in E2 TTS, which converges much more slowly than an aligned Voicebox with the same backbone and data, and in F5-TTS, which says the E2 reproduction had worse WER because of alignment robustness.
+        <span class="tag tag--confirmed">Confirmed</span>
+        My reading: explicit durations buy fast, robust training and cost naturalness and a text front end; implicit alignment reverses that, and ConvNeXt text refinement (F5) and ratio-based length are what make it practical.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+
+      <h3 id="axis-representation">Mel plus vocoder versus latent plus decoder</h3>
+      <p>
+        Mel plus vocoder: Grad-TTS, Matcha-TTS, P-Flow, VoiceFlow, Voicebox, E2, F5 and the CosyVoice line.
+        Latent plus decoder: NaturalSpeech 2, Audiobox (Encodec), Seed-TTS (vocoder latent) and DiTTo (a Mel-VAE latent that is then decoded to mel and vocoded).
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <p>
+        Audiobox states the motive for leaving mel: HiFi-GAN does not generalise well to non-speech audio.
+        F5-TTS states the motive for leaving long mel sequences: the mel sequence is still much longer than the text, and it names a more efficient continuous representation as the next step.
+        DiTTo, with a 10.76 Hz latent, generates 10 s of speech in 1.616 s at NFE 25 for the XL model.
+        <span class="tag tag--confirmed">Confirmed</span>
+        My reading: a mel is the easiest target to supervise and debug, and a short learned latent is the route to speed and to non-speech audio, at the price of a second trained component whose reconstruction error caps quality.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+
+      <h3 id="axis-nfe">Quality versus NFE</h3>
+      <p>
+        Gains saturate early.
+        Grad-TTS MOS is 4.38 at 10 steps against 4.44 at 1,000, and falls to 3.96 at 4.
+        Matcha-TTS keeps 3.65 MOS and 2.34 WER at NFE 2.
+        VoiceFlow at 2 steps scores 3.92 against 2.98 for Grad-TTS on LJ Speech.
+        F5-TTS goes from WER 2.53 to 2.42 and RTF 0.15 to 0.31 between 16 and 32 NFE.
+        MaskGCT's text-to-semantic stage plateaus near 25 steps.
+        NaturalSpeech 3 drops UTMOS from 4.30 to 4.01 for a 4.4 times speed-up.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <p>
+        Two details change the reading.
+        CFG doubles the passes per step (Voicebox, Audiobox), so "NFE 16" can mean 32 forward passes.
+        F5-TTS's appendix reports RTF 0.26 at 16 NFE with a midpoint solver against 0.15 in the main table with Euler, so RTF depends on the solver and hardware, not NFE alone.
+        <span class="tag tag--confirmed">Confirmed</span>
+        My reading: 8 to 16 well-chosen steps is the practical floor for plain flow matching, and below that you need a different training signal such as ReFlow (VoiceFlow) or a learned solver (Audiobox Bespoke at NFE 8).
+        <span class="tag tag--inference">Inference</span>
+      </p>
+
+      <h3 id="axis-cloning">Zero-shot cloning robustness versus naturalness</h3>
+      <p>
+        The papers show this tension directly.
+        Seed-TTS says a lower WER does not necessarily mean better subjective similarity, because a low-WER model tends to under-reproduce accent and expressiveness.
+        Voicebox notes that low-NFE, low-guidance samples are less diverse and easier for ASR, so WER improves while quality drops.
+        Audiobox raises similarity across domains but has a higher LibriSpeech WER than Voicebox (3.2 against 2.6).
+        CosyVoice 3's RL lowers CER and also lowers similarity slightly.
+        E2 TTS gets SMOS above ground truth while its CMOS stays below ground truth, because SMOS rewards matching the prompt and the ground truth may span different voices.
+        <span class="tag tag--confirmed">Confirmed</span>
+        (E2 gives the ground-truth explanation for the SMOS gap)
+      </p>
+      <p>
+        My reading: WER, similarity and naturalness pull against each other, and any single leaderboard number hides which one was traded.
+        Report all three with the verifier models named.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+
+      <h3 id="where-they-sit">Where the systems sit</h3>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Systems</th>
+              <th>Defining trait</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>AR tokens, then flow or diffusion renderer</td>
+              <td>Seed-TTS main, CosyVoice 1 to 3, GLM-4-Voice, Step-Audio 1 and 2, Kimi-Audio, Qwen2.5-Omni</td>
+              <td>LM sets content and length; flow model renders acoustics; streaming possible</td>
+            </tr>
+            <tr>
+              <td>Fully NAR, explicit duration</td>
+              <td>Grad-TTS, Matcha-TTS, P-Flow, VoiceFlow, Voicebox, Audiobox, NaturalSpeech 2 and 3</td>
+              <td>Aligner or MAS plus duration model; fast convergence; needs text front end</td>
+            </tr>
+            <tr>
+              <td>Fully NAR, total length only</td>
+              <td>DiTTo-TTS, E2 TTS, F5-TTS, Seed-TTS DiT, MaskGCT</td>
+              <td>One length number; text and speech aligned inside the network</td>
+            </tr>
+            <tr>
+              <td>Neither flow nor diffusion at the waveform stage</td>
+              <td>Moshi, Qwen3-Omni, MaskGCT (masked prediction of tokens)</td>
+              <td>Codec or ConvNet decoder, or masked token prediction; no ODE solver at the waveform stage</td>
+            </tr>
+            <tr>
+              <td>Vocoder only</td>
+              <td>WaveGrad, DiffWave</td>
+              <td>Waveform from mel; the origin of the step-count versus quality trade-off</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <span class="tag tag--inference">Inference</span>
+        (grouping is mine; membership is confirmed per model above)
+      </p>
+    </section>
+
+    <!-- == Sources == -->
+    <section id="sources">
+      <h2>Sources</h2>
+      <p>
+        Primary papers, read as arXiv PDFs on 2026-10-13.
+        Year is the arXiv first-submission year.
+      </p>
+      <ol>
+        <li>WaveGrad: Estimating Gradients for Waveform Generation. Nanxin Chen, Yu Zhang, Heiga Zen, Ron J. Weiss, Mohammad Norouzi, William Chan. 2020. arXiv 2009.00713.</li>
+        <li>DiffWave: A Versatile Diffusion Model for Audio Synthesis. Zhifeng Kong, Wei Ping, Jiaji Huang, Kexin Zhao, Bryan Catanzaro. 2020. arXiv 2009.09761.</li>
+        <li>Grad-TTS: A Diffusion Probabilistic Model for Text-to-Speech. Vadim Popov, Ivan Vovk, Vladimir Gogoryan, Tasnima Sadekova, Mikhail Kudinov. 2021. arXiv 2105.06337.</li>
+        <li>NaturalSpeech 2: Latent Diffusion Models are Natural and Zero-Shot Speech and Singing Synthesizers. Kai Shen, Zeqian Ju, Xu Tan, et al. 2023. arXiv 2304.09116.</li>
+        <li>NaturalSpeech 3: Zero-Shot Speech Synthesis with Factorized Codec and Diffusion Models. Zeqian Ju, Yuancheng Wang, Kai Shen, Xu Tan, et al. 2024. arXiv 2403.03100.</li>
+        <li>DiTTo-TTS: Diffusion Transformers for Scalable Text-to-Speech without Domain-Specific Factors. Keon Lee, Dong Won Kim, Jaehyeon Kim, Seungjun Chung, Jaewoong Cho. 2024. arXiv 2406.11427.</li>
+        <li>Voicebox: Text-Guided Multilingual Universal Speech Generation at Scale. Matthew Le, Apoorv Vyas, Bowen Shi, et al., Wei-Ning Hsu. 2023. arXiv 2306.15687.</li>
+        <li>Audiobox: Unified Audio Generation with Natural Language Prompts. Apoorv Vyas, Bowen Shi, Matthew Le, Andros Tjandra, Yi-Chiao Wu, et al. 2023. arXiv 2312.15821.</li>
+        <li>Matcha-TTS: A fast TTS architecture with conditional flow matching. Shivam Mehta, Ruibo Tu, Jonas Beskow, Eva Szekely, Gustav Eje Henter. 2023. arXiv 2309.03199.</li>
+        <li>P-Flow: A Fast and Data-Efficient Zero-Shot TTS through Speech Prompting. Sungwon Kim, Kevin J. Shih, Rohan Badlani, et al., Bryan Catanzaro. NeurIPS 2023. No arXiv ID; read from the NeurIPS proceedings PDF (papers.neurips.cc, file eb0965da1d2cb3fbbbb8dbbad5fa0bfc).</li>
+        <li>VoiceFlow: Efficient Text-to-Speech with Rectified Flow Matching. Yiwei Guo, Chenpeng Du, Ziyang Ma, Xie Chen, Kai Yu. 2023. arXiv 2309.05027.</li>
+        <li>E2 TTS: Embarrassingly Easy Fully Non-Autoregressive Zero-Shot TTS. Sefik Emre Eskimez, Xiaofei Wang, Manthan Thakker, et al. 2024. arXiv 2406.18009.</li>
+        <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching. Yushen Chen, Zhikang Niu, Ziyang Ma, Keqi Deng, Chunhui Wang, Jian Zhao, Kai Yu, Xie Chen. 2024. arXiv 2410.06885.</li>
+        <li>Seed-TTS: A Family of High-Quality Versatile Speech Generation Models. Philip Anastassiou, Jiawei Chen, Jitong Chen, et al. (ByteDance Seed Team). 2024. arXiv 2406.02430.</li>
+        <li>CosyVoice: A Scalable Multilingual Zero-shot Text-to-speech Synthesizer based on Supervised Semantic Tokens. Zhihao Du, Qian Chen, Shiliang Zhang, et al. 2024. arXiv 2407.05407.</li>
+        <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models. Zhihao Du, Yuxuan Wang, Qian Chen, et al. 2024. arXiv 2412.10117.</li>
+        <li>CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training. Zhihao Du, Changfeng Gao, Yuxuan Wang, et al. 2025. arXiv 2505.17589.</li>
+        <li>MaskGCT: Zero-Shot Text-to-Speech with Masked Generative Codec Transformer. Yuancheng Wang, Haoyue Zhan, Liwei Liu, et al., Zhizheng Wu. 2024. arXiv 2409.00750.</li>
+        <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot. Aohan Zeng, Zhengxiao Du, Mingdao Liu, et al. 2024. arXiv 2412.02612.</li>
+        <li>Step-Audio: Unified Understanding and Generation in Intelligent Speech Interaction. Ailin Huang, Boyong Wu, Bruce Wang, et al. 2025. arXiv 2502.11946.</li>
+        <li>Step-Audio 2 Technical Report. Boyong Wu, Chao Yan, Chen Hu, et al. (StepFun Audio Team). 2025. arXiv 2507.16632.</li>
+        <li>Kimi-Audio Technical Report. Kimi Team (Ding Ding, Zeqian Ju, Yichong Leng, et al.). 2025. arXiv 2504.18425.</li>
+        <li>Qwen2.5-Omni Technical Report. Jin Xu, Zhifang Guo, Jinzheng He, et al. 2025. arXiv 2503.20215.</li>
+        <li>Qwen3-Omni Technical Report. Jin Xu, Zhifang Guo, Hangrui Hu, et al. 2025. arXiv 2509.17765.</li>
+        <li>Moshi: a speech-text foundation model for real-time dialogue. Alexandre Defossez, Laurent Mazare, Manu Orsini, et al. 2024. arXiv 2410.00037.</li>
+      </ol>
+      <p>
+        Cited for the title only, not read: Flow Matching for Generative Modeling, Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, et al., 2022, arXiv 2210.02747.
+        The arXiv API confirmed every ID above against its title and first-submission date.
+      </p>
+      <p>
+        Local notes used as the starting point (secondary):
+        materials/pages/speech-lit-review/03-speech-generation/30-diffusion-and-flow.html,
+        35-flow-tts-and-fidelity.html,
+        10-reference/10-cheat-sheet.html,
+        08-common-problems/10-speech-generation-problems.html,
+        and research/speech-to-speech/*.md.
+      </p>
+    </section>
+
+    <!-- == Open questions == -->
+    <section id="open-questions">
+      <h2>Open questions and conflicts</h2>
+      <ul>
+        <li>
+          <strong>P-Flow has no arXiv ID.</strong>
+          A title search through the arXiv API returned only unrelated papers named P-Flow.
+          The paper is cited from the NeurIPS 2023 proceedings.
+        </li>
+        <li>
+          <strong>Voicebox data size.</strong>
+          The abstract says "over 50K hours", while the body gives 60K hours of English for VB-En and 50K hours for VB-Multi.
+          The local cheat sheet lists only "50K hours" and should name both.
+        </li>
+        <li>
+          <strong>CosyVoice data history.</strong>
+          The CosyVoice 3 abstract says data grew "from ten thousand hours to one million hours".
+          CosyVoice 2's Table 3 sums to 166,800 hours, and CosyVoice's Table 2 to 171,800 hours.
+          I could not reconcile the "ten thousand" figure; it may mean something narrower.
+        </li>
+        <li>
+          <strong>Speaker similarity is not one metric.</strong>
+          Voicebox and NaturalSpeech 3 use a WavLM-TDCNN verifier; Seed-TTS-eval, E2 and F5 use WavLM-large; CosyVoice reports ERes2Net.
+          The same F5-TTS output scores test-zh 0.76 and test-en 0.67 in the F5 paper but 0.741 and 0.647 in CosyVoice 2's Table 6.
+          I did not find the cause.
+        </li>
+        <li>
+          <strong>RTF depends on solver and hardware.</strong>
+          F5-TTS prints RTF 0.15 at 16 NFE (Euler, RTX 3090, 10 s of speech) in Table 1 and 0.26 at 16 NFE in an appendix table that uses the midpoint solver.
+          DiTTo's Voicebox timing (6.4 s at 64 NFE) is copied from the Voicebox paper, so it was not measured on DiTTo's hardware.
+        </li>
+        <li>
+          <strong>Parameter counts differ by source.</strong>
+          E2 TTS says 335 million; F5-TTS's table lists 333M for its E2 reproduction.
+          NaturalSpeech 3's Table 1 model size is not stated in the text I read; F5-TTS prints 500M (Reported).
+        </li>
+        <li>
+          <strong>Seed-TTS gaps.</strong>
+          Training data is only "orders of magnitude larger", and F5-TTS's "several million hours" is secondary.
+          Step count and parameter count are not reported.
+          The DiT variant is called diffusion; flow matching appears only in the deployment note for the main system.
+        </li>
+        <li>
+          <strong>Is NaturalSpeech 3 "diffusion"?</strong>
+          Its own title says so, but the mechanism is discrete masked diffusion over codec tokens, closer in spirit to MaskGCT's mask-and-predict than to Gaussian-noise diffusion.
+          That closeness is my reading.
+        </li>
+        <li>
+          <strong>Metric definitions and subjective baselines differ.</strong>
+          WER uses HuBERT CTC (NaturalSpeech 2 and 3, E2, P-Flow), Whisper large-v3 (Seed-TTS-eval, F5, CosyVoice), Whisper large-v2 (Audiobox) or Whisper medium (Matcha-TTS).
+          CMOS is measured against ground truth in E2 and MaskGCT, but NaturalSpeech 2 uses itself as the reference, which flips the sign.
+          NaturalSpeech 2's CMOS filtered samples with a scoring model.
+        </li>
+        <li>
+          <strong>Test-hard values were read from other papers' tables.</strong>
+          CosyVoice 2's and CosyVoice 3's tables print four or three values for five or four NAR rows, so the E2 TTS entry is blank.
+          I assigned 10.27 to MaskGCT and 8.67 to F5-TTS by column order; check against the original tables before quoting.
+        </li>
+        <li>
+          <strong>Not collected.</strong>
+          Standalone TTS WER and similarity for the GLM-4-Voice, Step-Audio and Kimi-Audio decoders; flow step counts for CosyVoice 1 and 3 and for Kimi-Audio; vocoder names for CosyVoice 2 and 3; a measured first-packet latency for CosyVoice 2 (the paper gives a formula only).
+        </li>
+        <li>
+          <strong>The Moshi claim rests on a text search.</strong>
+          I found zero mentions of flow matching in the paper; I did not read every section.
+        </li>
+        <li>
+          <strong>Versions.</strong>
+          I read the latest versions: WaveGrad v2, DiffWave v3, Grad-TTS v2, NaturalSpeech 2 v3, NaturalSpeech 3 v3, DiTTo-TTS v2, Voicebox v2, Audiobox v1, Matcha-TTS v2, VoiceFlow v3, E2 TTS v2, F5-TTS v3, Seed-TTS v1, CosyVoice v2, CosyVoice 2 v3, CosyVoice 3 v2, MaskGCT v3, Kimi-Audio v1, Step-Audio v2, Step-Audio 2 v3.
+          Numbers can differ from version 1.
+        </li>
+        <li>
+          <strong>Out of scope but adjacent.</strong>
+          Few-step distillation (for example DMOSpeech, MeanFlow-based work) and continuous autoregression with flow heads are covered in the local notes at the Reported level and were not re-checked here.
+        </li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Draft compiled by a read-only research pass; every number is traceable to the paper named beside it.</p>
+  </footer>
+</body>
+</html>

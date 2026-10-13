@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>From diffusion to flow matching: the theory</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false},
+        {left: '$', right: '$', display: false}
+      ],
+      ignoredTags: ['script', 'style', 'pre', 'code']
+    });"></script>
+</head>
+<body class="prose">
+  <header>
+    <h1>From diffusion to flow matching: the theory</h1>
+    <p>Research note for the flow-matching speech generation post. Written 2026-10-13.</p>
+  </header>
+  <main>
+    <section id="conventions">
+      <h2>Conventions</h2>
+      <ul>
+        <li>
+          Papers disagree on the time direction.
+          DDPM indexes noise at \( t = T \).
+          Lipman et al. and Liu et al. put noise at \( t = 0 \) and data at \( t = 1 \).
+          This note follows the flow-matching convention unless a section says otherwise.
+        </li>
+        <li>
+          Every statement carries a grounding tag:
+          <span class="tag tag--confirmed">Confirmed</span> means I read the primary source,
+          <span class="tag tag--reported">Reported</span> means a secondary source,
+          <span class="tag tag--inference">Inference</span> means my own reasoning.
+        </li>
+      </ul>
+    </section>
+
+    <section id="ddpm">
+      <h2>DDPM: forward, reverse and the epsilon loss</h2>
+      <p>Source: Ho, Jain, Abbeel, "Denoising Diffusion Probabilistic Models", arXiv 2006.11239.</p>
+      <ul>
+        <li>
+          The forward process adds Gaussian noise in small steps, and \( x_t \) can be sampled at any \( t \) in closed form (Eq. 2 and Eq. 4).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The reverse process is a learned Gaussian; the mean is parameterised through a noise predictor (Eq. 11).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The simplified loss \( L_{\text{simple}} \) (Eq. 14) is an unweighted version of the per-step bound term (Eq. 12), and the authors found it beneficial for sample quality.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Experiments use \( T = 1000 \) and a linear \( \beta_t \) schedule from \( 10^{-4} \) to \( 0.02 \).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The authors also considered predicting \( x_0 \) and report it "led to worse sample quality early in our experiments".
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      \[
+        q(x_t \mid x_{t-1}) = \mathcal{N}\big(x_t;\ \sqrt{1-\beta_t}\,x_{t-1},\ \beta_t I\big)
+        \qquad \text{(Eq. 2)}
+      \]
+      \[
+        q(x_t \mid x_0) = \mathcal{N}\big(x_t;\ \sqrt{\bar\alpha_t}\,x_0,\ (1-\bar\alpha_t) I\big),
+        \qquad
+        x_t = \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1-\bar\alpha_t}\,\epsilon
+        \qquad \text{(Eq. 4)}
+      \]
+      \[
+        \mu_\theta(x_t, t) = \frac{1}{\sqrt{\alpha_t}}\Big(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\,\epsilon_\theta(x_t, t)\Big)
+        \qquad \text{(Eq. 11)}
+      \]
+      \[
+        L_{\text{simple}}(\theta)
+        = \mathbb{E}_{t,\,x_0,\,\epsilon}\Big[\big\|\epsilon - \epsilon_\theta\big(\sqrt{\bar\alpha_t}\,x_0 + \sqrt{1-\bar\alpha_t}\,\epsilon,\ t\big)\big\|^2\Big]
+        \qquad \text{(Eq. 14)}
+      \]
+      <ul>
+        <li>\( x_0 \): clean data. \( x_t \): data after \( t \) noising steps. \( \epsilon \sim \mathcal{N}(0, I) \): the noise that was added.</li>
+        <li>\( \beta_t \): fixed per-step noise variance. \( \alpha_t = 1 - \beta_t \). \( \bar\alpha_t = \prod_{s=1}^{t} \alpha_s \): fraction of signal variance that survives to step \( t \).</li>
+        <li>\( \epsilon_\theta \): the network that predicts the noise. \( \mu_\theta \): mean of the reverse step \( p_\theta(x_{t-1} \mid x_t) \), whose variance \( \sigma_t^2 \) is fixed (Algorithm 2).</li>
+        <li>\( t \): uniform on \( \{1, \dots, T\} \) in training (Algorithm 1).</li>
+      </ul>
+      <p>
+        Sampling (Algorithm 2) starts at \( x_T \sim \mathcal{N}(0, I) \) and iterates \( x_{t-1} = \mu_\theta(x_t, t) + \sigma_t z \), with \( z \sim \mathcal{N}(0, I) \) for \( t > 1 \) and \( z = 0 \) at the last step.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+      <p>
+        Because \( \nabla_{x_t} \log q(x_t \mid x_0) = -\epsilon / \sqrt{1-\bar\alpha_t} \) under Eq. 4, \( \epsilon_\theta \) is a rescaled score estimate: \( \epsilon_\theta \approx -\sqrt{1-\bar\alpha_t}\,\nabla \log p_t \).
+        The paper says only that Eq. 12 "resembles denoising score matching"; the exact scaling is my derivation.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+    </section>
+
+    <section id="sde">
+      <h2>Score-based SDE view and the probability-flow ODE</h2>
+      <p>Source: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, Poole, "Score-Based Generative Modeling through Stochastic Differential Equations", arXiv 2011.13456.</p>
+      <ul>
+        <li>
+          The forward noising is an SDE (Eq. 5) and its reverse-time SDE depends only on the score of the perturbed marginals (Eq. 6).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DDPM's chain is a discretisation of the variance-preserving (VP) SDE (Eq. 10 and Eq. 11); the SMLD chain gives the variance-exploding (VE) SDE.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          For every diffusion process there is a deterministic process with the same marginals \( p_t(x) \), which is an ODE (Eq. 13). The paper names it the probability flow ODE.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The abstract says this ODE enables exact likelihood computation and improved sampling efficiency.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The score is learned by denoising score matching with weighting \( \lambda(t) \) (Eq. 7).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      \[
+        \mathrm{d}x = f(x, t)\,\mathrm{d}t + g(t)\,\mathrm{d}w
+        \qquad \text{(Eq. 5, forward SDE)}
+      \]
+      \[
+        \mathrm{d}x = \big[f(x, t) - g(t)^2\,\nabla_x \log p_t(x)\big]\mathrm{d}t + g(t)\,\mathrm{d}\bar w
+        \qquad \text{(Eq. 6, reverse-time SDE)}
+      \]
+      \[
+        \mathrm{d}x = \big[f(x, t) - \tfrac{1}{2}\,g(t)^2\,\nabla_x \log p_t(x)\big]\mathrm{d}t
+        \qquad \text{(Eq. 13, probability flow ODE)}
+      \]
+      \[
+        \mathrm{d}x = -\tfrac{1}{2}\beta(t)\,x\,\mathrm{d}t + \sqrt{\beta(t)}\,\mathrm{d}w
+        \qquad \text{(Eq. 11, VP-SDE)}
+      \]
+      <ul>
+        <li>\( f(x, t) \): drift of the forward process. \( g(t) \): scalar diffusion coefficient. \( w \): forward Wiener process; \( \bar w \): Wiener process when time runs backwards.</li>
+        <li>\( p_t(x) \): marginal density of \( x(t) \). \( \nabla_x \log p_t(x) \): its score, estimated by \( s_\theta(x, t) \).</li>
+        <li>\( \beta(t) \): continuous-time noise rate whose discretisation is DDPM's \( \beta_t \).</li>
+      </ul>
+    </section>
+
+    <section id="parameterisations">
+      <h2>x0, epsilon and v prediction</h2>
+      <p>Source: Salimans and Ho, "Progressive Distillation for Fast Sampling of Diffusion Models", arXiv 2202.00512 (variance-preserving, \( \sigma_t^2 = 1 - \alpha_t^2 \)).</p>
+      <ul>
+        <li>
+          Predicting \( \epsilon \) implicitly sets \( \hat x = (z_t - \sigma_t \hat\epsilon) / \alpha_t \), which equals an \( x \)-space loss weighted by \( \alpha_t^2 / \sigma_t^2 \), the SNR (Eq. 9).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          At zero SNR, \( z_t = \epsilon \) carries no information about \( x \), so \( \epsilon \)-prediction no longer implies an \( x \) prediction and the SNR weight is zero.
+          This is why distillation needed a different parameterisation.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          v-prediction is \( v \equiv \alpha_t \epsilon - \sigma_t x \), and then \( \hat x = \alpha_t z_t - \sigma_t \hat v \).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          In their ablation, v-prediction is described as the most stable because it makes DDIM step sizes independent of the SNR, while x-prediction gave slightly better empirical results.
+          Predicting \( \epsilon \) with truncated-SNR weighting was unstable.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Geometrically, with \( \alpha = \cos\phi \) and \( \sigma = \sin\phi \), \( v \) is the derivative of \( z_\phi \) with respect to the angle \( \phi \), and a DDIM step rotates along a circle (Appendix D).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      \[
+        z_t = \alpha_t\,x + \sigma_t\,\epsilon,
+        \qquad
+        v = \alpha_t\,\epsilon - \sigma_t\,x,
+        \qquad
+        x = \alpha_t z_t - \sigma_t v,
+        \qquad
+        \epsilon = \sigma_t z_t + \alpha_t v
+      \]
+      <ul>
+        <li>\( \alpha_t, \sigma_t \): signal and noise scales, with \( \alpha_t^2 + \sigma_t^2 = 1 \). \( z_t \): noisy latent. \( v \): the "velocity" in angle space.</li>
+        <li>The \( \epsilon \) expression is from the paper's angular derivation (Appendix D, after Eq. 30).</li>
+      </ul>
+      <p>
+        The diffusion \( v \) is not the flow-matching velocity.
+        With \( \alpha_t = t \) and \( \sigma_t = 1-t \), the time derivative of \( z_t \) is \( x - \epsilon \), the flow-matching target.
+        Salimans' \( v \) is the derivative with respect to the angle \( \phi \), on the variance-preserving circle.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+    </section>
+
+    <section id="cfg">
+      <h2>Classifier-free guidance</h2>
+      <p>Source: Ho and Salimans, "Classifier-Free Diffusion Guidance", arXiv 2207.12598.</p>
+      <ul>
+        <li>
+          One network is trained jointly as conditional and unconditional by replacing the condition \( c \) with a null token \( \varnothing \) with probability \( p_{\text{uncond}} \) (Algorithm 1).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Sampling uses the linear combination in Eq. 6, so each step costs two forward passes (one conditional, one unconditional).
+          The two-pass cost follows from Eq. 6; the paper does not state it as a headline.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          On ImageNet 64x64 the authors compared \( p_{\text{uncond}} \in \{0.1, 0.2, 0.5\} \).
+          \( 0.5 \) was consistently worse than \( 0.1 \) and \( 0.2 \), which performed about equally.
+          They conclude only a small share of capacity is needed for the unconditional task.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The paper is about diffusion models.
+          Applying the same extrapolation to a flow-matching velocity network is a direct substitution, as ZipVoice-style and F5-style TTS do, but this paper does not cover it.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+      \[
+        \tilde\epsilon_\theta(z, c) = (1 + w)\,\epsilon_\theta(z, c) - w\,\epsilon_\theta(z)
+        \qquad \text{(Eq. 6)}
+      \]
+      \[
+        \hat v = v_\theta(x, t, c) + w\big(v_\theta(x, t, c) - v_\theta(x, t, \varnothing)\big)
+        \qquad \text{(velocity analogue)}
+      \]
+      <ul>
+        <li>\( c \): conditioning (class, text, or speech prompt). \( \varnothing \): null condition. \( w \): guidance strength; \( w = 0 \) is the plain conditional model.</li>
+        <li>\( \epsilon_\theta(z) \) is the same network evaluated with \( c = \varnothing \).</li>
+        <li>The second equation is Eq. 6 with \( \epsilon_\theta \) swapped for a velocity network, the same form as the existing materials fragment.</li>
+      </ul>
+    </section>
+
+    <section id="flow-matching">
+      <h2>Flow matching and conditional flow matching</h2>
+      <p>Source: Lipman, Chen, Ben-Hamu, Nickel, Le, "Flow Matching for Generative Modeling", arXiv 2210.02747.</p>
+      <ul>
+        <li>
+          Flow matching trains a continuous normalizing flow by regressing a vector field, simulation-free.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The FM loss (Eq. 5) needs the intractable marginal field \( u_t(x) \). The conditional loss (Eq. 9) uses a per-sample field \( u_t(x \mid x_1) \), and the two have identical gradients with respect to \( \theta \) (Theorem 2).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Gaussian conditional paths \( p_t(x \mid x_1) = \mathcal{N}(\mu_t(x_1), \sigma_t(x_1)^2 I) \) have a unique closed-form field (Theorem 3, Eq. 15).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The family "subsumes existing diffusion paths as specific instances", and using FM with diffusion paths is reported as a more robust and stable alternative for training diffusion models.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The VP diffusion conditional field (Eq. 19) coincides with the probability flow field of Song et al. restricted to these paths.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      \[
+        \mathcal{L}_{\text{CFM}}(\theta)
+        = \mathbb{E}_{t,\ q(x_1),\ p_t(x \mid x_1)}\big\|v_t(x;\theta) - u_t(x \mid x_1)\big\|^2
+        \qquad \text{(Eq. 9)}
+      \]
+      \[
+        u_t(x \mid x_1) = \frac{\sigma_t'(x_1)}{\sigma_t(x_1)}\big(x - \mu_t(x_1)\big) + \mu_t'(x_1)
+        \qquad \text{(Eq. 15)}
+      \]
+      <ul>
+        <li>\( x_1 \sim q \): a data sample. \( p_t(x \mid x_1) \): conditional probability path. \( v_t(x;\theta) \): the network's vector field. \( u_t(x \mid x_1) \): the conditional target field.</li>
+        <li>\( \mu_t, \sigma_t \): mean and standard deviation of the Gaussian path. Primes are time derivatives. \( t \sim \mathcal{U}[0,1] \).</li>
+      </ul>
+
+      <h3 id="ot-path">The optimal-transport path and the sigma_min term</h3>
+      <ul>
+        <li>
+          The OT path sets the mean and std to change linearly in time (Eq. 20), generated by the field in Eq. 21, with flow map \( \psi_t \) (Eq. 22).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          \( \sigma_{\min} \) is the std of the target Gaussian at \( t = 1 \), so \( p_1(x \mid x_1) \) is a narrow Gaussian around \( x_1 \) rather than a point mass.
+          The regression target after substituting the flow map is \( x_1 - (1-\sigma_{\min})x_0 \) (Eq. 23).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The conditional flow \( \psi_t \) is the optimal-transport map between the two conditional Gaussians \( p_0(x \mid x_1) \) and \( p_1(x \mid x_1) \), moving with constant speed along straight lines.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Setting \( \sigma_{\min} = 0 \) gives the familiar target \( x_1 - x_0 \) used in speech systems and in the materials fragments.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          The OT field has constant direction in time, whereas the diffusion conditional field can overshoot the final sample and backtrack (Figure 3 discussion).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      \[
+        \mu_t(x_1) = t\,x_1,
+        \qquad
+        \sigma_t = 1 - (1 - \sigma_{\min})\,t
+        \qquad \text{(Eq. 20)}
+      \]
+      \[
+        u_t(x \mid x_1) = \frac{x_1 - (1-\sigma_{\min})\,x}{1 - (1-\sigma_{\min})\,t}
+        \qquad \text{(Eq. 21)}
+      \]
+      \[
+        \psi_t(x_0) = \big(1 - (1-\sigma_{\min})t\big)\,x_0 + t\,x_1,
+        \qquad
+        \mathcal{L}_{\text{CFM}}
+        = \mathbb{E}_{t,\ q(x_1),\ p(x_0)}\big\|v_t(\psi_t(x_0)) - \big(x_1 - (1-\sigma_{\min})\,x_0\big)\big\|^2
+        \qquad \text{(Eq. 22, Eq. 23)}
+      \]
+      <ul>
+        <li>\( x_0 \sim \mathcal{N}(0, I) \): noise sample. \( \sigma_{\min} \): small positive constant. \( \psi_t \): the conditional flow map that carries \( x_0 \) to the point at time \( t \).</li>
+        <li>Sampling integrates \( \mathrm{d}x/\mathrm{d}t = v_\theta(x, t) \) from \( t = 0 \) to \( t = 1 \) with an ODE solver.</li>
+      </ul>
+    </section>
+
+    <section id="rectified-flow">
+      <h2>Rectified flow and reflow</h2>
+      <p>Source: Liu, Gong, Liu, "Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow", arXiv 2209.03003.</p>
+      <ul>
+        <li>
+          Rectified flow learns an ODE \( \mathrm{d}Z_t = v(Z_t, t)\,\mathrm{d}t \) by least-squares regression of \( v \) onto \( X_1 - X_0 \) along the linear interpolation (Eq. 1).
+          This is the same regression as Lipman's OT conditional loss with \( \sigma_{\min} = 0 \).
+          <span class="tag tag--confirmed">Confirmed</span> for the Liu loss; the equivalence is <span class="tag tag--inference">Inference</span>.
+        </li>
+        <li>
+          The exact minimiser is the conditional expectation of the line directions through \( x \): \( v^X(x, t) = \mathbb{E}[X_1 - X_0 \mid X_t = x] \) (Eq. 2).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Marginal preserving property (Theorem 3.3): \( \mathrm{Law}(Z_t) = \mathrm{Law}(X_t) \) for every \( t \), so \( (Z_0, Z_1) \) is a valid coupling of \( \pi_0 \) and \( \pi_1 \).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Convex transport costs do not increase (Theorem 3.5), and the reflow iteration \( Z^{k+1} = \mathrm{RectFlow}((Z_0^k, Z_1^k)) \) increases straightness (Theorem 3.7).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          A straight flow (\( Z_t = tZ_1 + (1-t)Z_0 \)) is exactly simulated by one Euler step.
+          Making a learned flow straight is non-trivial, because it must satisfy the inviscid Burgers equation \( \partial_t v + (\partial_z v)\,v = 0 \).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The authors say it is not recommended to apply too many reflow steps, because estimation error on \( v^X \) accumulates.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          They report one step of reflow already gives nearly straight flows that work with a single Euler step.
+          <span class="tag tag--confirmed">Confirmed</span> as the authors' claim on images.
+        </li>
+      </ul>
+      \[
+        \min_v \int_0^1 \mathbb{E}\Big[\big\|(X_1 - X_0) - v(X_t, t)\big\|^2\Big]\mathrm{d}t,
+        \qquad X_t = tX_1 + (1-t)X_0
+        \qquad \text{(Eq. 1)}
+      \]
+      \[
+        S(Z) = \int_0^1 \mathbb{E}\Big[\big\|(Z_1 - Z_0) - \dot Z_t\big\|^2\Big]\mathrm{d}t
+        \qquad \text{(Eq. 3)}
+      \]
+      <ul>
+        <li>\( X_0 \sim \pi_0 \): noise. \( X_1 \sim \pi_1 \): data. \( (X_0, X_1) \): any coupling (independent by default). \( X_t \): linear interpolation.</li>
+        <li>\( Z_t \): the ODE trajectory driven by the learned \( v \). \( \dot Z_t \): its time derivative.</li>
+        <li>\( S(Z) \): straightness; zero means exactly straight at constant speed.</li>
+        <li>Theorem 3.7 bounds \( \min_{k \le K} S(Z^k) \le \mathbb{E}\|X_1 - X_0\|^2 / K \).</li>
+      </ul>
+    </section>
+
+    <section id="interpolants">
+      <h2>Stochastic interpolants as the unifying view</h2>
+      <p>
+        Source: Albergo, Boffi, Vanden-Eijnden, "Stochastic Interpolants: A Unifying Framework for Flows and Diffusions", arXiv 2303.08797 (JMLR 26, 2025, v4).
+        It extends Albergo and Vanden-Eijnden, "Building Normalizing Flows with Stochastic Interpolants", arXiv 2209.15571, which I downloaded but did not read in detail.
+      </p>
+      <ul>
+        <li>
+          A stochastic interpolant bridges any two densities \( \rho_0, \rho_1 \) in finite time with \( x_t = I(t, x_0, x_1) + \gamma(t) z \) (Eq. 2.1), with \( I(0) = x_0 \), \( I(1) = x_1 \) and \( \gamma(0) = \gamma(1) = 0 \).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The density of \( x_t \) satisfies the transport equation \( \partial_t \rho + \nabla\cdot(b\rho) = 0 \) (Eq. 2.9) with velocity \( b = \mathbb{E}[\dot x_t \mid x_t = x] \) (Eq. 2.10), and also a family of Fokker-Planck equations with tunable diffusion coefficient.
+          This yields both an ODE and SDEs with the same marginals.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          \( b \) is the unique minimiser of a quadratic objective (Theorem 7, Eq. 2.13), and the score has a separate one (Eq. 2.14 and Eq. 2.16).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The paper states it unifies flow-based and diffusion-based methods.
+          Section 5 covers score-based diffusion and rectified flows; score-based diffusion is recast as a one-sided interpolant (\( x_t = \alpha(t) z + J(t, x_1) \), Eq. 3.14) after a reparameterisation of time.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The paper's related-work section says Liu et al. (rectification) "improves sampling efficiency but introduces a bias", and that Lipman et al.'s noise convolution is used "at the cost of biasing the method".
+          Their own noise injection is presented as unbiased.
+          <span class="tag tag--confirmed">Confirmed</span> as the authors' characterisation of others.
+        </li>
+      </ul>
+      \[
+        x_t = I(t, x_0, x_1) + \gamma(t)\,z,
+        \qquad
+        b(t, x) = \mathbb{E}\big[\partial_t I(t, x_0, x_1) + \dot\gamma(t)\,z \ \big|\ x_t = x\big]
+        \qquad \text{(Eq. 2.1, Eq. 2.10)}
+      \]
+      \[
+        s(t, x) = \nabla \log \rho(t, x) = -\gamma^{-1}(t)\,\mathbb{E}\big[z \mid x_t = x\big]
+        \qquad \text{(Eq. 2.14)}
+      \]
+      <ul>
+        <li>\( x_0 \sim \rho_0 \), \( x_1 \sim \rho_1 \): endpoints drawn from a coupling \( \nu \). \( z \sim \mathcal{N}(0, I) \): independent latent noise. \( I \): interpolation function. \( \gamma(t) \): latent noise amplitude, zero at both ends.</li>
+        <li>Example: \( x_t = (1-t)x_0 + t x_1 + \sqrt{2t(1-t)}\,z \) (Eq. 1.1).</li>
+        <li>With \( \gamma = 0 \) and \( I = (1-t)x_0 + t x_1 \), this reduces to the rectified-flow regression.</li>
+      </ul>
+    </section>
+
+    <section id="relationship">
+      <h2>How diffusion and flow matching relate</h2>
+      <ul>
+        <li>
+          Both are Gaussian-path models.
+          Under \( x_t = a_t x_1 + s_t \epsilon \), diffusion regresses \( \epsilon \) (or the score, or \( v \)), flow matching regresses \( \dot x_t \), and the targets are linear reparameterisations of each other.
+          The VP diffusion path is a special case of the Gaussian family, and its conditional field equals the probability flow field.
+          <span class="tag tag--confirmed">Confirmed</span> for the VP case (Lipman, Eq. 18 and Eq. 19); the general linear-map statement is <span class="tag tag--inference">Inference</span>.
+        </li>
+        <li>
+          Velocity and score are linked by a closed form.
+          From \( x_t = a_t x_1 + s_t \epsilon \), \( \mathbb{E}[\dot x_t \mid x] = (\dot a_t / a_t)\,x + (\dot a_t s_t^2 / a_t - s_t \dot s_t)\,\nabla\log p_t(x) \).
+          For the OT path (\( a_t = t \), \( s_t = 1-t \)) this becomes \( x/t + \frac{1-t}{t}\nabla\log p_t(x) \).
+          This is my derivation from the score formula in Eq. 2.14 of the interpolants paper.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          The differences are the path and the target, not the model family.
+          Diffusion uses a variance-preserving (or exploding) path that only approaches noise asymptotically in the SDE form; flow matching with the linear path reaches noise at \( t = 0 \) in finite time and the target \( x_1 - x_0 \) has a stable scale at every \( t \).
+          Lipman et al. note the diffusion paths "do not actually reach a true noise distribution in finite time".
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Diffusion also carries a noise schedule and a loss weighting over noise levels.
+          Under \( \epsilon \)-prediction the implied weight on the \( x \)-space loss is the SNR (Salimans Eq. 9); flow matching removes the schedule but keeps a choice of how \( t \) is sampled in training.
+          <span class="tag tag--confirmed">Confirmed</span> for the diffusion weight; the "keeps \( t \) sampling" point is <span class="tag tag--inference">Inference</span> (the materials page cites a large rectified-flow study for biased time sampling; I did not read it here).
+        </li>
+        <li>
+          Sampler: diffusion can be sampled with an SDE or the probability-flow ODE.
+          Plain flow matching and rectified flow sample the ODE only; stochastic interpolants add back a tunable SDE with the same marginals.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="few-steps">
+      <h2>Why straight paths need fewer solver steps</h2>
+      <ul>
+        <li>
+          A perfectly straight constant-speed flow is exactly simulated by a single Euler step.
+          <span class="tag tag--confirmed">Confirmed</span> (Liu et al.)
+        </li>
+        <li>
+          Lipman et al. report that OT-path flow matching reaches a given per-pixel MSE against a 1000-NFE solution with "roughly only 60% of the NFEs" needed by diffusion paths, on ImageNet-32 with fixed-step solvers.
+          They also report better FID at very low NFE.
+          <span class="tag tag--confirmed">Confirmed</span> (images, not speech)
+        </li>
+        <li>
+          A solver's step error grows with how fast the velocity changes along the trajectory.
+          A constant-direction field has none of this error, a curved one needs short steps.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          The learned marginal field averages over every noise-data pair passing through a point, so the learned trajectories are only straighter than diffusion, not straight.
+          This follows from \( v^X(x,t) = \mathbb{E}[X_1 - X_0 \mid X_t = x] \) and is why reflow exists.
+          <span class="tag tag--inference">Inference</span> grounded in Liu et al. Eq. 2.
+        </li>
+        <li>
+          Reflow re-pairs noise with the model's own outputs, giving straighter paths.
+          After one reflow the authors report good single-step results on images; many reflows are discouraged.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li>"Denoising Diffusion Probabilistic Models", Jonathan Ho, Ajay Jain, Pieter Abbeel, 2020, arXiv 2006.11239.</li>
+        <li>"Score-Based Generative Modeling through Stochastic Differential Equations", Yang Song, Jascha Sohl-Dickstein, Diederik P. Kingma, Abhishek Kumar, Stefano Ermon, Ben Poole, ICLR 2021, arXiv 2011.13456.</li>
+        <li>"Progressive Distillation for Fast Sampling of Diffusion Models", Tim Salimans, Jonathan Ho, ICLR 2022, arXiv 2202.00512.</li>
+        <li>"Classifier-Free Diffusion Guidance", Jonathan Ho, Tim Salimans, 2022, arXiv 2207.12598.</li>
+        <li>"Flow Matching for Generative Modeling", Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maximilian Nickel, Matt Le, 2022 (v2 2023), arXiv 2210.02747.</li>
+        <li>"Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow", Xingchao Liu, Chengyue Gong, Qiang Liu, 2022, arXiv 2209.03003.</li>
+        <li>"Stochastic Interpolants: A Unifying Framework for Flows and Diffusions", Michael S. Albergo, Nicholas M. Boffi, Eric Vanden-Eijnden, 2023 (JMLR 2025, v4), arXiv 2303.08797.</li>
+        <li>"Building Normalizing Flows with Stochastic Interpolants", Michael S. Albergo, Eric Vanden-Eijnden, 2022, arXiv 2209.15571 (cited via the interpolants paper only).</li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicts</h2>
+      <ul>
+        <li>Time direction differs across papers (DDPM noise at \( T \); Lipman, Liu and the interpolants paper noise at \( t = 0 \)). Equations from different papers need a conversion before they are combined.</li>
+        <li>The materials fragments omit \( \sigma_{\min} \) (they use \( x_1 - x_0 \)). The value of \( \sigma_{\min} \) used by Lipman et al. and by speech systems such as F5-TTS or Voicebox was not checked.</li>
+        <li>The fragment says flow matching has "no noise schedule and no SNR weighting". That holds for the loss, but a time-sampling distribution and an inference step schedule still exist (see the sway-sampling discussion in the speech-to-speech chapter, not re-verified here).</li>
+        <li>The CFG scale convention differs between papers. Ho and Salimans use \( (1+w)\,\epsilon(c) - w\,\epsilon(\varnothing) \); some speech papers may use \( w\,\epsilon(c) + (1-w)\,\epsilon(\varnothing) \). I did not check which convention F5-TTS, ZipVoice or Voicebox use.</li>
+        <li>The "60% of NFEs" and low-NFE FID results are for ImageNet-32 images, not speech. Whether the straight-path advantage transfers to mel or codec-latent generation is not established by these papers.</li>
+        <li>Liu et al. frame reflow as improving efficiency, while Albergo et al. say it "introduces a bias". How much that matters in practice for speech was not investigated.</li>
+        <li>I did not read Esser et al., "Scaling Rectified Flow Transformers" (arXiv 2403.03206), or InstaFlow (arXiv 2309.06380). Both were downloaded but unread, so nothing here relies on them.</li>
+        <li>DDIM (arXiv 2010.02502) was not fetched, so deterministic-sampler claims rest only on Song et al. and Salimans and Ho.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Research note. Equation numbers refer to the arXiv versions listed under Sources.</p>
+  </footer>
+</body>
+</html>

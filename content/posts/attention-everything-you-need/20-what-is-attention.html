@@ -1,0 +1,201 @@
+<section id="what-is-attention">
+  <h2>What is Attention?</h2>
+  <p><strong>References</strong>: [1, 2]</p>
+  <p>
+    Attention determines relevance.
+    Given a query, which parts of the input matter?
+    Scaled dot-product attention:
+  </p>
+  <figure>
+    <img src="https://media.anandmoghan.me/public/images/attention/transformer-architecture.png" alt="Figure 1: The Transformer model architecture showing multi-head attention and feed-forward layers. Source: Vaswani et al. (2017)">
+    <figcaption>Figure 1: The Transformer model architecture showing multi-head attention and feed-forward layers. Source: Vaswani et al. (2017)</figcaption>
+  </figure>
+  \[
+  \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+  \]
+  <p>Three matrices:</p>
+  <ul>
+    <li><strong>Query (Q)</strong>: What we're looking for</li>
+    <li><strong>Key (K)</strong>: What we're looking at</li>
+    <li><strong>Value (V)</strong>: What we retrieve</li>
+  </ul>
+  <p>Compute dot products between queries and keys for relevance scores, then weight the values accordingly.</p>
+
+  <h4>The \( \sqrt{d_k} \) Scaling Factor</h4>
+  <p>
+    The scaling isn't arbitrary.
+    Vaswani et al.: "We suspect that for large values of \( d_k \),
+    the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients".
+  </p>
+  <p>
+    If \( Q \) and \( K \) contain i.i.d. elements with mean 0 and variance 1, their dot product has variance \( d_k \).
+    Large dimensions → large dot products → softmax saturation → vanishing gradients.
+  </p>
+  <p>
+    Dividing by \( \sqrt{d_k} \) normalizes variance back to ~1.
+    Gradients stay healthy, training stays stable.
+  </p>
+
+  <h3 id="multi-head-attention">Multi-Head Attention</h3>
+  <p><strong>References</strong>: [1, 2]</p>
+  <p>
+    Single attention is useful, but multi-head attention is where things get interesting.
+    Compute attention \( h \) times in parallel, each with different learned projections:
+  </p>
+  \[
+  \text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, ..., \text{head}_h)W^O
+  \]
+  <p>where each head is:</p>
+  \[
+  \text{head}_i = \text{Attention}(QW_i^Q, KW_i^K, VW_i^V)
+  \]
+  <p>
+    Each head learns different weight matrices (\( W_i^Q \), \( W_i^K \), \( W_i^V \)), focusing on different relationships.
+    One head might capture subject-verb dependencies, another tracks long-range references,
+    another focuses on syntactic patterns.
+  </p>
+
+  <h4>Multi-Head Design Benefits</h4>
+  <p>Three advantages for production systems:</p>
+  <ol>
+    <li>
+      <strong>Embarrassingly Parallel</strong>: Each head computes independently,
+      which is perfect for GPU acceleration and essential for production throughput.
+    </li>
+    <li>
+      <strong>Multiple Representational Subspaces</strong>: The original paper notes multi-head attention
+      "allows the model to jointly attend to information from different representation subspaces at different positions".
+      Different heads specialize in different phenomena simultaneously.
+    </li>
+    <li>
+      <strong>Robustness Through Redundancy</strong>: No single attention pattern required.
+      Research shows certain heads can be pruned post-training without significant degradation,
+      suggesting built-in redundancy.
+    </li>
+  </ol>
+
+  <h4>What Attention Heads Learn</h4>
+  <p><strong>References</strong>: [22, 23]</p>
+  <p>Research shows attention heads develop distinct patterns:</p>
+  <ol>
+    <li><strong>Positional heads</strong>: Attend to adjacent tokens (position \( n \pm 1 \)) for local syntax</li>
+    <li><strong>Syntactic heads</strong>: Track grammatical relationships like subject-verb agreement</li>
+    <li><strong>Semantic heads</strong>: Capture long-range dependencies and coreference</li>
+    <li><strong>Rare-word heads</strong>: Attend to the least frequent tokens in the input</li>
+  </ol>
+  <p>
+    Voita et al. found the positional, syntactic, and rare-word heads in translation models.
+    Clark et al. found BERT heads tracking syntax and coreference,
+    and many heads parking most of their attention on <code>[SEP]</code> or punctuation,
+    effectively a no-op when the head has nothing useful to do.
+  </p>
+  <p>Tools like BertViz, and methods like attention rollout and attention flow, let you inspect these patterns.</p>
+  <p>
+    Studies show 10-20% of heads can be pruned with &lt;1% quality loss; useful for model compression.
+    Some heads are redundant, others critical.
+  </p>
+  <p>
+    Attention entropy as diagnostic:
+    Low entropy (peaked) = focused on specific tokens.
+    High entropy (uniform) = either not learning useful patterns or attending broadly.
+  </p>
+
+  <h4>The Permutation Equivariance Property</h4>
+  <p><strong>References</strong>: [3]</p>
+  <p>
+    Here's a subtle but important property: self-attention without a causal mask is permutation-equivariant.
+    If you swap input positions, outputs swap accordingly.
+    Mathematically, for any permutation matrix \( P \):
+  </p>
+  \[
+  \text{Attention}(PQ, PK, PV) = P \cdot \text{Attention}(Q, K, V)
+  \]
+  <p>
+    This means the attention mechanism itself has no inherent bias toward position; it treats all positions equally.
+    This is why positional encodings are necessary for sequence order.
+    (A causal mask breaks the symmetry and leaks some positional information,
+    which is why decoder-only models trained with no positional encoding at all still work,
+    but explicit encodings remain the norm.)
+    The mechanism is extremely flexible,
+    but requires careful position encoding design (which led to innovations like RoPE and other alternatives).
+  </p>
+
+  <h3 id="implementation-insights">Implementation Insights</h3>
+  <p><strong>References</strong>: [3, 4]</p>
+  <p>
+    <strong>Attention dropout</strong> (typically \( p=0.1 \)) is applied to attention weights after softmax.
+    This prevents overfitting to specific attention patterns and encourages robustness.
+    During training, it randomly zeros out some attention connections,
+    forcing the model to learn multiple paths to each value.
+    Most large LLM pretraining runs (Llama, for example) set attention dropout to 0,
+    since a single pass over trillions of tokens rarely overfits.
+  </p>
+  <p>
+    In practice, the per-head projections are fused:
+    one \( d_{model} \times d_{model} \) matrix each for \( Q \), \( K \), and \( V \),
+    whose outputs are reshaped into \( h \) heads of size \( d_k = d_{model}/h \).
+    Multi-head attention therefore costs about the same as single-head attention at full width.
+    Masks are applied to the scores before softmax by setting disallowed positions to \( -\infty \).
+  </p>
+
+  <h3 id="cross-attention-vs-self-attention">Cross-Attention vs Self-Attention</h3>
+  <p><strong>References</strong>: [1]</p>
+  <p>
+    While self-attention relates positions within a single sequence,
+    cross-attention relates positions between two different sequences.
+    This is fundamental for many architectures:
+  </p>
+  <ul>
+    <li>In self-attention: \( Q \), \( K \), \( V \) all come from the same sequence</li>
+    <li>In cross-attention: \( Q \) comes from one sequence (target), \( K \) and \( V \) come from another (source)</li>
+  </ul>
+  <p><strong>Applications:</strong></p>
+  <ul>
+    <li><strong>Encoder-decoder models</strong>: Decoder attends to encoder outputs (original Transformer, T5, BART)</li>
+    <li>
+      <strong>Vision-language models</strong>: Text attends to image features (Flamingo, BLIP-2's Q-Former).
+      CLIP is a dual encoder and has no cross-attention
+    </li>
+    <li>
+      <strong>Speech</strong>: A text decoder attends to audio encoder features (Whisper);
+      speech-to-speech models attend to source speech features
+    </li>
+    <li>
+      <strong>Retrieval-augmented generation</strong>:
+      The generator attends to encoded retrieved chunks (RETRO, Fusion-in-Decoder).
+      Most production RAG simply concatenates documents into the prompt and uses self-attention
+    </li>
+  </ul>
+  <p>The Transformer architecture uses both: self-attention in encoder and decoder, plus cross-attention connecting them.</p>
+
+  <h3 id="causal-attention">Causal Attention: Preventing Information Leakage</h3>
+  <p><strong>References</strong>: [1]</p>
+  <p>
+    Autoregressive models like GPT and Llama must generate tokens sequentially;
+    each token can only depend on previous tokens, not future ones.
+    Causal masking (also called autoregressive or look-ahead masking) enforces this constraint:
+  </p>
+  \[
+  \text{mask}[i, j] = \begin{cases}
+  0 & \text{if } j \leq i \\
+  {-\infty} & \text{if } j &gt; i
+  \end{cases}
+  \]
+  <p>
+    This ensures token \( i \) can only attend to positions \( \leq i \).
+    The mask is applied <strong>before softmax</strong>,
+    setting future positions to \( -\infty \) so they have zero weight after softmax.
+  </p>
+  <p><strong>In production:</strong></p>
+  <ul>
+    <li><strong>Training</strong>: Can parallelize across sequence (teacher forcing with causal mask)</li>
+    <li><strong>Inference</strong>: The prompt is processed in parallel (prefill), but output tokens are generated one at a time (decode)</li>
+    <li><strong>KV caching</strong>: Essential for efficient inference (cache previous tokens' K, V to avoid recomputation)</li>
+  </ul>
+  <p><strong>Bidirectional vs Causal:</strong></p>
+  <ul>
+    <li>BERT uses bidirectional attention (no mask) for understanding tasks</li>
+    <li>GPT uses causal attention for generation tasks</li>
+    <li>Encoder-decoder models use both: bidirectional in encoder, causal in decoder</li>
+  </ul>
+</section>

@@ -1,0 +1,30 @@
+<section id="hybrid-approach-process-supervision">
+  <h2>Hybrid Approach: Process Supervision</h2>
+  <p><strong>References</strong>: Lightman et al. [7]</p>
+  <p>This OpenAI work compared process supervision (rewarding each step) with outcome supervision (rewarding only final answers).</p>
+  <p>Train two reward models:</p>
+  <ol>
+    <li><strong>Outcome-based</strong>: Trained on final answer correctness</li>
+    <li><strong>Process-based</strong>: Trained on step-by-step correctness (800K human labels)</li>
+  </ol>
+  <p>They evaluated each reward model by using it to pick the best of many sampled solutions (best-of-N), not by running RL against it.</p>
+  <p>
+    Process supervision significantly outperformed outcome supervision on the MATH dataset.
+    Using the process reward model to pick the best of 1,860 samples solved 78% of problems from a representative test subset.
+  </p>
+  <p><strong>Why Process Supervision Works</strong></p>
+  <ol>
+    <li><strong>Better credit assignment</strong>: Knows which steps were correct/incorrect</li>
+    <li><strong>Harder to game</strong>: A right answer reached through wrong reasoning still gets penalized</li>
+    <li><strong>More reliable</strong>: Catches errors early in the reasoning chain</li>
+    <li><strong>Interpretable</strong>: Can see where the model went wrong</li>
+  </ol>
+  <p>
+    However, process supervision requires labeling intermediate steps, which is much more expensive than just labeling final answers.
+    OpenAI released PRM800K, a dataset of 800,000 step-level labels, to support research.
+  </p>
+  <p>
+    The work also showed that active learning significantly improves process supervision efficiency.
+    Instead of randomly labeling steps, focus on steps where the model is uncertain.
+  </p>
+</section>

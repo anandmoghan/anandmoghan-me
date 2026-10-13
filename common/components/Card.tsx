@@ -7,7 +7,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     return (
       <div
         ref={ref}
-        className={`rounded-lg border border-border bg-background p-6 shadow-sm ${className}`}
+        className={`card ${className}`}
         {...props}
       />
     );

@@ -1,0 +1,14 @@
+<section id="step-7-interactive-development">
+  <h2>Step 7: Interactive Development</h2>
+  <p>For development, you might want to run the container interactively:</p>
+  <pre><code class="language-bash">docker run -it --rm -v $(pwd):/app pytorch-mnist bash</code></pre>
+  <p>This opens a bash shell inside the container where you can:</p>
+  <ul>
+    <li>Run Python scripts manually</li>
+    <li>Install additional packages</li>
+    <li>Debug issues</li>
+    <li>Explore the environment</li>
+  </ul>
+  <p>Inside the container, you can run:</p>
+  <pre><code class="language-bash">python train.py</code></pre>
+</section>

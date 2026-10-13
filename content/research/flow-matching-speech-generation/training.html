@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How flow matching speech models are trained in practice</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false},
+        {left: '$', right: '$', display: false}
+      ],
+      ignoredTags: ['script', 'style', 'pre', 'code']
+    });"></script>
+</head>
+<body class="prose">
+  <header>
+    <h1>How flow matching speech models are trained in practice</h1>
+    <p>Research note for the flow matching and diffusion speech post. Checked 2026-10-13.</p>
+  </header>
+  <main>
+    <!-- == Scope == -->
+    <section id="scope">
+      <h2>Scope and grounding</h2>
+      <p>
+        Every claim carries a tag.
+        <span class="tag tag--confirmed">Confirmed</span> means I read the primary paper.
+        <span class="tag tag--reported">Reported</span> means a secondary source.
+        <span class="tag tag--inference">Inference</span> means my own reasoning.
+      </p>
+      <p>
+        Numbers appear only with the paper that states them.
+        Where a paper does not state a number, the note says so.
+      </p>
+      <p>
+        Notation: \( x_0 \) is Gaussian noise, \( x_1 \) is the target mel or latent, \( m \) is the binary frame mask, and \( x_{ctx} = (1-m) \odot x_1 \) is the visible context.
+        The Voicebox path and target are
+      </p>
+      \[
+        x_t = \big(1-(1-\sigma_{\min})t\big)x_0 + t\,x_1,
+        \qquad
+        u_t = x_1 - (1-\sigma_{\min})\,x_0 .
+      \]
+      <p>
+        The masked loss is \( \lVert m \odot (u_t - v_\theta(x_t, x_{ctx}, c, t)) \rVert^2 \), where \( c \) is the text condition.
+      </p>
+    </section>
+
+    <!-- == What is generated == -->
+    <section id="what-is-generated">
+      <h2>What is generated, and what comes after</h2>
+      <ul>
+        <li>
+          Voicebox generates an 80-dim log mel at 100 Hz.
+          A HiFi-GAN adapted from V1 (16 kHz, 13M parameters) renders it.
+          That vocoder was trained for 1.5M updates on 8 GPUs, which took 7.5 days.
+          Source: Voicebox (arXiv 2306.15687), Section 5.1 and Appendix A.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          E2 TTS generates a 100-dim log mel from 24 kHz audio, with a frame every 10.7 ms.
+          A BigVGAN-based vocoder renders it.
+          Source: E2 TTS (arXiv 2406.18009), Section 3.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS generates a 100-dim log mel at 24 kHz with hop length 256.
+          It uses the pre-trained Vocos vocoder.
+          Source: F5-TTS (arXiv 2410.06885), Section 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Matcha-TTS and P-Flow also generate mels and use pre-trained HiFi-GAN vocoders.
+          Matcha-TTS uses the LJ Speech checkpoint.
+          P-Flow uses the universal HiFi-GAN with a 22 kHz, 80-bin mel.
+          Source: Matcha-TTS (arXiv 2309.03199), Section 4; P-Flow (NeurIPS 2023, no arXiv id found), Section 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox predicts continuous latents instead of a mel.
+          These are the dense Encodec features taken before the residual quantiser.
+          The authors say HiFi-GAN does not generalise to non-speech audio, which motivated the change.
+          Source: Audiobox (arXiv 2312.15821), Section 4.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS has a diffusion-only variant, Seed-TTS_DiT.
+          It turns Gaussian noise directly into the vocoder's latent representation from text alone, then a vocoder makes the waveform.
+          The main Seed-TTS pipeline is AR LM, then a token diffusion model, then an acoustic vocoder.
+          Source: Seed-TTS (arXiv 2406.02430), Section 1 and the Seed-TTS_DiT section.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice and CosyVoice 2 generate a mel from semantic tokens with OT-CFM.
+          CosyVoice names HiFi-GAN as the vocoder.
+          CosyVoice 2 says only "a pre-trained vocoder".
+          Source: CosyVoice (arXiv 2407.05407), Section 1; CosyVoice 2 (arXiv 2412.10117), Section 2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          DiTTo-TTS is a latent diffusion DiT, and MiniMax-Speech has a "Flow-VAE".
+          I did not re-open either paper this session.
+          Source: local note speech-lit-review/03-speech-generation/30-diffusion-and-flow.html (cites arXiv 2406.11427 and 2505.07916).
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Among the papers I read, mel plus a separately trained vocoder is the default for the TTS-first flow models.
+          Latents appear when the target must cover non-speech audio (Audiobox) or when the system is a large production stack (Seed-TTS_DiT).
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Infilling == -->
+    <section id="infilling">
+      <h2>Masked infilling and how prompting falls out of it</h2>
+      <ul>
+        <li>
+          Voicebox sets the masked frames of the context to zero and feeds the context, the frame-level phones and the noisy input to the network.
+          The network is written to model all frames (Eq. 5), but the reported model uses a loss on masked frames only (Eq. 6).
+          Source: Voicebox (arXiv 2306.15687), Section 3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voicebox masks a contiguous segment of r% of the sequence, with r drawn from U[70, 100].
+          Source: Voicebox (arXiv 2306.15687), Section 5.1, Training.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          E2 TTS and F5-TTS use the same 70 to 100% mask range.
+          CosyVoice 2's flow model masks 70 to 100% of the final mel frames.
+          Source: E2 TTS (arXiv 2406.18009), Section 3.2; F5-TTS (arXiv 2410.06885), Section 4; CosyVoice 2 (arXiv 2412.10117), Section 2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          At inference, E2 TTS builds the input from the prompt mel, a zero block for the part to generate, and the character string "prompt transcript, target text, filler tokens".
+          F5-TTS does the same and then discards the prompt region of the output mel.
+          Source: E2 TTS (arXiv 2406.18009), Section 2.2; F5-TTS (arXiv 2410.06885), Section 3.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voicebox treats prompt plus target as one utterance in which the target speech is masked.
+          The same infilling objective gives it noise removal and content editing without extra training.
+          Source: Voicebox (arXiv 2306.15687), Sections 3.4 and 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voice cloning needs no speaker encoder because the voice is the visible context.
+          A 70 to 100% mask during training matches the inference shape: a short prompt followed by a long blank.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          P-Flow does not use infilling.
+          It feeds a random 3-second mel segment into a speech-prompted text encoder, with no prompt transcript.
+          It masks the loss over that segment, because the model otherwise collapses to copy-pasting the prompt.
+          Source: P-Flow (NeurIPS 2023), Section 3.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox pre-trains with infilling alone, with no transcript.
+          It then fine-tunes with the Voicebox-style transcript-guided objective.
+          During pre-training the input is fully masked with probability p_cond = 0.1, otherwise a subset of frames is masked with n_mask ~ U[70%, 100%] and minimum span 10.
+          Source: Audiobox (arXiv 2312.15821), Sections 4.1 and 4.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Conditioning == -->
+    <section id="conditioning">
+      <h2>Conditioning signals</h2>
+      <h3 id="text-aligned">Text: aligned phones versus padded characters</h3>
+      <ul>
+        <li>
+          Voicebox forced-aligns the transcript with the Montreal Forced Aligner and expands phones to frame level.
+          It concatenates phone embedding, noisy input and context frame by frame, then projects them.
+          The flow step embedding is added as one extra token in the sequence.
+          Source: Voicebox (arXiv 2306.15687), Section 3 and Section 5.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          E2 TTS replaces the frame-level phones with a character sequence padded with a filler token to the mel length.
+          This removes the grapheme-to-phoneme converter, the aligner and the duration model.
+          The character vocabulary has 399 entries, and case and punctuation are kept.
+          Source: E2 TTS (arXiv 2406.18009), Sections 2.1, 2.4 and 3.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS keeps the filler padding but passes the characters through ConvNeXt V2 blocks before concatenating with the speech input.
+          The base model uses 4 ConvNeXt layers (512/1024) with an absolute sinusoidal embedding, and a vocabulary of 2,546 symbols.
+          Chinese is converted to full pinyin.
+          Source: F5-TTS (arXiv 2410.06885), Sections 3.2 and 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Matcha-TTS uses monotonic alignment search (MAS) and a deterministic duration predictor.
+          The predicted durations (rounded up) duplicate the text-encoder vectors.
+          Source: Matcha-TTS (arXiv 2309.03199), Section 2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          P-Flow also uses MAS in training.
+          Its duration predictor regresses log durations with MSE.
+          Source: P-Flow (NeurIPS 2023), Section 3.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      <h3 id="semantic-tokens">Semantic tokens from an AR model</h3>
+      <ul>
+        <li>
+          CosyVoice's flow model is conditioned on a speaker embedding, the semantic tokens, and a masked mel.
+          The tokens come from a supervised ASR-derived tokenizer with one 4,096-entry codebook.
+          Source: CosyVoice (arXiv 2407.05407), Sections 2.1 and 3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 2 uses FSQ tokens at 25 Hz, up-sampled to match a 50 Hz mel at 24 kHz.
+          A look-ahead convolution precedes the up-sampling.
+          The speaker embedding comes from a CAM++ model in the 3D-Speaker toolkit.
+          Source: CosyVoice 2 (arXiv 2412.10117), Sections 2.1 and 2.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 2 removes the speaker embedding from its LM, to avoid information leaking.
+          It says the utterance-level vector carries language and paralinguistic information that hurts prosody naturalness and cross-lingual ability.
+          Speaker information is then recovered mainly by the flow model.
+          Source: CosyVoice 2 (arXiv 2412.10117), Sections 2.2 and 4 (ablation).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS's main pipeline has the AR LM write speech tokens and a diffusion transformer add acoustic detail.
+          The report gives no step counts, hours or GPUs for the main model.
+          It says only that data and model scale are "orders of magnitude larger" than previous work.
+          Source: Seed-TTS (arXiv 2406.02430), Section 1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Because AR tokens fix content and length, the hybrid needs no duration estimate.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Duration == -->
+    <section id="duration">
+      <h2>Duration modelling</h2>
+      <ul>
+        <li>
+          Voicebox's default duration model is a regression Transformer trained with L1 loss on masked phone durations.
+          It also considers a flow-matching duration model.
+          The English duration model has 8 layers, 512/2048 dimensions and 28M parameters.
+          Source: Voicebox (arXiv 2306.15687), Sections 3.3 and 5.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox trains a flow-matching duration model instead.
+          It cites Voicebox as showing better diversity than a regression model, and it averages over a small number of sampled durations for stability.
+          Source: Audiobox (arXiv 2312.15821), Section 5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          In E2 TTS the total length (prompt plus generated) can be chosen freely.
+          The main experiments still used a Voicebox-style regression duration model (8 layers, 75,000 updates), for a fair comparison.
+          Rates from 0.7 to 1.3 gave only a moderate WER increase and a high SIM-o.
+          Source: E2 TTS (arXiv 2406.18009), Sections 3.2 and 3.6.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS estimates the duration from the ratio of the character counts of the generated text and the reference transcript.
+          Results text describes it as the ratio of "audio prompt's transcript length and the text prompt length".
+          Source: F5-TTS (arXiv 2410.06885), Sections 3.1 and 5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS_DiT estimates only total duration and lets the network learn the local alignment.
+          The authors say adding a phoneme-level duration model reduced naturalness.
+          For its editing features they feed the total duration in directly.
+          Source: Seed-TTS (arXiv 2406.02430), Seed-TTS_DiT section.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          E2 TTS makes a similar claim: explicit duration models and carefully designed architectures are "sometimes even harmful to naturalness".
+          Source: E2 TTS (arXiv 2406.18009), Section 1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Total length doubles as a speech-rate control, since fewer frames means faster speech.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Time-step sampling == -->
+    <section id="timestep-sampling">
+      <h2>Time-step sampling</h2>
+      <ul>
+        <li>
+          Training samples \( t \sim U[0,1] \) in Voicebox, Matcha-TTS, F5-TTS and CosyVoice 2.
+          Source: Voicebox (arXiv 2306.15687), Appendix on flow matching; Matcha-TTS (arXiv 2309.03199), Eq. 2; F5-TTS (arXiv 2410.06885), Section 3.2; CosyVoice 2 (arXiv 2412.10117), Section 2.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS explicitly declines logit-normal sampling for training.
+          It cites Esser et al. (arXiv 2403.03206), who use a single-peak logit-normal on intermediate steps for images, and keeps uniform \( t \).
+          Source: F5-TTS (arXiv 2410.06885), Section 3.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          I did not find a time-step sampling statement in the E2 TTS text.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS applies the non-uniform choice at inference instead, as Sway Sampling.
+          It draws \( u \sim U[0,1] \) and maps it to
+        </li>
+      </ul>
+      \[
+        t = u + s\Big(\cos\big(\tfrac{\pi}{2}u\big) - 1 + u\Big),
+        \qquad s \in \big[-1, \tfrac{2}{\pi-2}\big].
+      \]
+      <ul>
+        <li>
+          The default is \( s = -1 \), which puts more steps at small \( t \).
+          The authors argue that early steps sketch the contour of the speech.
+          Their "leak and override" experiment starts from a noisy copy of the prompt mel at \( t' = 0.1 \) with different text.
+          The model follows the new text with Sway Sampling and repeats the prompt content with uniform steps.
+          It needs no retraining.
+          Source: F5-TTS (arXiv 2410.06885), Sections 3.2 and 5.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice and CosyVoice 2 use a cosine inference schedule \( t := 1 - \cos(\tfrac{1}{2}t\pi) \), which gives more steps to the early stage.
+          Source: CosyVoice (arXiv 2407.05407), Eq. 13; CosyVoice 2 (arXiv 2412.10117), Eq. 9.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voicebox's reduced-setup ablation finds the OT path trains faster than diffusion paths.
+          The OT flow-matching model reached its best result by 100K updates, and beat the score-matching model with only 50K.
+          Source: Voicebox (arXiv 2306.15687), Appendix B.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          So the speech papers I read keep training uniform and move all the non-uniformity to inference.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == CFG == -->
+    <section id="cfg-training">
+      <h2>CFG training: condition dropout</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>What is dropped in training</th>
+              <th>Inference strength as reported</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Voicebox</td>
+              <td>Conditioner (phones and context) dropped with p_uncond = 0.2, for audio and duration models</td>
+              <td>\( \alpha = 1.0 \) in one evaluation setup, 0.7 in another</td>
+              <td>arXiv 2306.15687, Sections 3.5 and 5.1, Appendix</td>
+            </tr>
+            <tr>
+              <td>E2 TTS</td>
+              <td>All conditioning dropped with 20% probability</td>
+              <td>1.0</td>
+              <td>arXiv 2406.18009, Sections 3.2 and 3.4</td>
+            </tr>
+            <tr>
+              <td>F5-TTS</td>
+              <td>Masked speech dropped at rate 0.3, then speech and text together at 0.2</td>
+              <td>2 (default)</td>
+              <td>arXiv 2410.06885, Section 4</td>
+            </tr>
+            <tr>
+              <td>CosyVoice</td>
+              <td>Conditions (speaker embedding, tokens, masked mel) dropped with fixed probability 0.2</td>
+              <td>0.7</td>
+              <td>arXiv 2407.05407, Section 2.3</td>
+            </tr>
+            <tr>
+              <td>CosyVoice 2</td>
+              <td>Trains conditional and unconditional; rate not stated in the text I read</td>
+              <td>0.7, with 10 NFE</td>
+              <td>arXiv 2412.10117, Section 2.3</td>
+            </tr>
+            <tr>
+              <td>Audiobox (pre-training)</td>
+              <td>Fully masked input with probability p_cond = 0.1</td>
+              <td>Not read</td>
+              <td>arXiv 2312.15821, Section 4.2</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        All of the CFG forms I read are the same combination.
+        Voicebox writes \( (1+\alpha)v_c - \alpha v_u \), and F5-TTS writes \( v_c + \alpha(v_c - v_u) \).
+        <span class="tag tag--inference">Inference</span>
+      </p>
+      <p>
+        Audiobox's fine-tuning stage uses a 0.3 chance of fully masking the audio, otherwise a contiguous 70 to 100% chunk.
+        This is the same 0.3 that Voicebox lists as "p_drop" without saying what is dropped.
+        That suggests F5-TTS's first 0.3 drop is a whole-context mask, followed by a 0.2 drop of everything.
+        Source: Audiobox (arXiv 2312.15821), Section 5; Voicebox (arXiv 2306.15687), Section 5.1.
+        <span class="tag tag--inference">Inference</span>
+      </p>
+      <p>
+        Every CFG pass costs two network evaluations, so NFE counts differ between papers.
+        F5-TTS states this in a footnote.
+        Source: F5-TTS (arXiv 2410.06885), footnote on Eq. 4.
+        <span class="tag tag--confirmed">Confirmed</span>
+      </p>
+    </section>
+
+    <!-- == Architectures == -->
+    <section id="architectures">
+      <h2>Architectures</h2>
+      <ul>
+        <li>
+          Matcha-TTS uses a 1D U-Net decoder: two down blocks, two mid blocks and two up blocks.
+          Each block has one Transformer layer (hidden size 256, 2 heads, snake-beta activations).
+          It states that Voicebox's 330M parameters are 18 times larger than its own model.
+          Source: Matcha-TTS (arXiv 2309.03199), Sections 2 and 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          The Voicebox audio model is a Transformer with 24 layers, 16 heads, 1024/4096 dimensions and 330M parameters.
+          It uses convolutional position embeddings and symmetric bi-directional ALiBi, with the ALiBi bias for the flow step set to 0.
+          U-Net-style skips join symmetric layers by channel-wise concatenation and a linear layer.
+          Source: Voicebox (arXiv 2306.15687), Section 5.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          E2 TTS uses the same skip-connected Transformer with 24 layers, 16 heads, 1024/4096 and 335M parameters.
+          Source: E2 TTS (arXiv 2406.18009), Section 3.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS drops the U-Net skips for a DiT with adaLN-zero and RoPE.
+          The base DiT has 22 layers, 16 heads and 1024/2048 dimensions.
+          With the ConvNeXt V2 text branch the total is 335.8M parameters.
+          The flow step conditions adaLN-zero, instead of being appended to the sequence as in Voicebox.
+          Source: F5-TTS (arXiv 2410.06885), Sections 3.2 and 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 2's flow network is a causal convolutional Transformer UNet.
+          It is trained with four attention masks (non-causal, full-causal, chunk-M, chunk-2M) sampled uniformly per example.
+          Its loss is L1 on the vector field, not L2.
+          Source: CosyVoice 2 (arXiv 2412.10117), Section 2.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          P-Flow uses a 3M-parameter Transformer text encoder and a WaveNet-based flow decoder.
+          Source: P-Flow (NeurIPS 2023), Section 3.3.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Data and compute == -->
+    <section id="data-and-compute">
+      <h2>Data scale and training compute</h2>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Data</th>
+              <th>Updates and batch</th>
+              <th>Hardware</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Voicebox VB-En / VB-Multi</td>
+              <td>60K h English audiobooks / 50K h in 6 languages</td>
+              <td>500K / 750K updates, 240K frames per batch</td>
+              <td>32 GPUs per its config table</td>
+              <td>arXiv 2306.15687, Section 5.1 and Table D13</td>
+            </tr>
+            <tr>
+              <td>E2 TTS</td>
+              <td>Libriheavy 50K h (6,736 speakers); proprietary 200K h for scaling</td>
+              <td>800K updates, 307,200 frames per batch, peak lr 7.5e-5, 20K warm-up</td>
+              <td>Not stated in the text</td>
+              <td>arXiv 2406.18009, Sections 3.1 and 3.2</td>
+            </tr>
+            <tr>
+              <td>F5-TTS base</td>
+              <td>Emilia, about 95K h English and Chinese after filtering</td>
+              <td>1.2M updates, 307,200 frames (0.91 h) per batch, peak lr 7.5e-5</td>
+              <td>8 A100 80G, over one week</td>
+              <td>arXiv 2410.06885, Section 4</td>
+            </tr>
+            <tr>
+              <td>F5-TTS small (ablations)</td>
+              <td>WenetSpeech4TTS Premium, 945 h Mandarin; also LibriTTS 585 h and LJSpeech 24 h</td>
+              <td>800K updates at half the base batch (155M models)</td>
+              <td>About 8 h per 100K updates on 8 H100 (B.7 runs)</td>
+              <td>arXiv 2410.06885, Section 5.1 and Appendix B.7</td>
+            </tr>
+            <tr>
+              <td>Matcha-TTS</td>
+              <td>LJ Speech (single speaker)</td>
+              <td>500K updates, batch 32, lr 1e-4</td>
+              <td>2 GPUs</td>
+              <td>arXiv 2309.03199, Section 4</td>
+            </tr>
+            <tr>
+              <td>P-Flow</td>
+              <td>LibriTTS 580 h, 256 h subset longer than 3 s</td>
+              <td>800K iterations, batch 64, lr 1e-4</td>
+              <td>1 A100</td>
+              <td>P-Flow, NeurIPS 2023, Section 4</td>
+            </tr>
+            <tr>
+              <td>CosyVoice</td>
+              <td>ZH 130,000 h, EN 30,000 h, Yue 5,000 h, JP 4,600 h, KO 2,200 h</td>
+              <td>Multi-lingual model: 800,000 steps</td>
+              <td>64 V100 (the text does not say which component this covers)</td>
+              <td>arXiv 2407.05407, Sections 3.2 and 4</td>
+            </tr>
+            <tr>
+              <td>CosyVoice 2</td>
+              <td>Same data as CosyVoice; the tokenizer used 200,000 h (110,884 zh, 99,918 en)</td>
+              <td>Flow model steps not stated</td>
+              <td>Not stated</td>
+              <td>arXiv 2412.10117, Sections 3.1 and 3.2</td>
+            </tr>
+            <tr>
+              <td>Audiobox SSL</td>
+              <td>160K+ h speech, 20K h music, 6K h sound</td>
+              <td>1M updates, 480K frames per batch, 330M parameters</td>
+              <td>Not stated in the text</td>
+              <td>arXiv 2312.15821, Section 4.2</td>
+            </tr>
+            <tr>
+              <td>Seed-TTS</td>
+              <td>Not stated, only "orders of magnitude larger"</td>
+              <td>Not stated</td>
+              <td>Not stated</td>
+              <td>arXiv 2406.02430, Section 1</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        All rows in this table are <span class="tag tag--confirmed">Confirmed</span> as what the paper states.
+        An empty or "not stated" cell means I found no figure in the text.
+      </p>
+      <ul>
+        <li>
+          F5-TTS says Seed-TTS was trained on "several million hours".
+          This is a secondary statement about another lab's system.
+          Source: F5-TTS (arXiv 2410.06885), Section 5.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Gradient-norm clipping appears in the Voicebox and Audiobox recipes at 0.2, and the Voicebox text says this is "for training stability".
+          F5-TTS uses a clip of 1.
+          Source: Voicebox (arXiv 2306.15687), Section 5.1; Audiobox (arXiv 2312.15821), Section 4.2; F5-TTS (arXiv 2410.06885), Section 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Loss masking == -->
+    <section id="loss-masking">
+      <h2>Loss masking</h2>
+      <ul>
+        <li>
+          Voicebox compares loss on all frames with loss on masked frames only, in a reduced setup (1K h, 12 layers, 150K steps).
+          For flow matching, masked loss gave SIM-r 0.597 against 0.528 for all frames, with WER 2.1 against 2.0.
+          The paper concludes that masking the loss improves similarity and diversity with little effect on intelligibility.
+          Source: Voicebox (arXiv 2306.15687), Appendix B.1, Table B2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox computes its flow-matching loss only on masked frames.
+          Source: Audiobox (arXiv 2312.15821), Section 4.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          P-Flow inverts the idea: the loss excludes the prompt segment, to stop copy-paste collapse.
+          Source: P-Flow (NeurIPS 2023), Section 3.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS writes its objective without a mask (Eq. 3) and says the model "is trained to reconstruct m ⊙ x1".
+          CosyVoice 2's L1 loss (its Eq. 8) also has no mask term.
+          I could not settle from the papers whether the loss covers all frames.
+          Source: F5-TTS (arXiv 2410.06885), Sections 2 and 3.1; CosyVoice 2 (arXiv 2412.10117), Eq. 8.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Failure modes == -->
+    <section id="failure-modes">
+      <h2>Common training failure modes</h2>
+      <h3 id="alignment-and-convergence">Alignment and slow convergence</h3>
+      <ul>
+        <li>
+          In E2 TTS's own convergence plots, Voicebox had good WER at 10% of training because of its frame-level alignment.
+          E2 TTS needed significantly more training to converge, and ended with the better WER.
+          The authors speculate it learned a better grapheme-to-phoneme mapping.
+          Source: E2 TTS (arXiv 2406.18009), Section 3.6.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS's reproduced E2 TTS converged slowly in Mandarin small-model experiments.
+          It consistently failed on 7% of test samples (WER above 50%) throughout training, and re-ranking could not fix it.
+          Dropping the audio prompt removed those failures.
+          The F5 authors read that as entanglement of semantic and acoustic features in E2 TTS.
+          This is their hypothesis, from their own reproduction and not from the E2 authors.
+          Source: F5-TTS (arXiv 2410.06885), Section 5.1 and Appendix B.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          A pure adaLN DiT without the ConvNeXt text branch failed to learn alignment from padded characters.
+          MMDiT "learned fast and collapsed fast", giving severe repeated utterances with wild timbre and prosody.
+          Source: F5-TTS (arXiv 2410.06885), Section 5.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Moving ConvNeXt text refinement into the flat U-Net Transformer, or adding long skips to the DiT, both degraded results.
+          F5-TTS's fixes are therefore a package, not independent add-ons.
+          Source: F5-TTS (arXiv 2410.06885), Section 5.1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS reports stable training on small data: 158M models on LibriTTS (585 h) and LJSpeech (24 h) learned text-speech alignment without a grapheme-to-phoneme step.
+          Source: F5-TTS (arXiv 2410.06885), Appendix B.7.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      <h3 id="robustness">Robustness and WER</h3>
+      <ul>
+        <li>
+          On ELLA-V hard sentences, F5-TTS shows a high deletion rate when the text contains stacks of repeated words, which the authors call word skipping.
+          Its insertion rate is low, so they say it avoids endless repetition.
+          Source: F5-TTS (arXiv 2410.06885), Appendix B.5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS uses REINFORCE-based RL (SIM and WER rewards) as a post-training step to improve robustness and speaker similarity.
+          Source: Seed-TTS (arXiv 2406.02430), RL section.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voicebox depends on a phonemizer and forced aligner.
+          Its authors say word-based phonemizers miss context-dependent pronunciation, such as liaisons in French.
+          Source: Voicebox (arXiv 2306.15687), Conclusion.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+      <h3 id="prompt-leakage">Prompt boundary and leakage</h3>
+      <ul>
+        <li>
+          E2 TTS must find the boundary between the prompt text and the target text inside the padded string.
+          If it gets this wrong, the output may contain part of the prompt text or miss part of the target.
+          In the paper's test, WER showed no obvious trend with prompt length up to about 10 s, while SIM-o improved with longer prompts.
+          Source: E2 TTS (arXiv 2406.18009), Section 3.6.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Leaked content can be overridden early in the flow, as the F5-TTS "leak and override" experiment shows (see time-step sampling above).
+          Source: F5-TTS (arXiv 2410.06885), Section 5.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Voicebox cannot control voice, style and acoustic condition independently.
+          A prompt transfers all of them.
+          It was also trained on read audiobook speech and may not transfer to conversational speech.
+          Source: Voicebox (arXiv 2306.15687), Conclusion.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS reports a self-distillation scheme for timbre disentanglement.
+          Source: Seed-TTS (arXiv 2406.02430), Section 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 2's removal of the LM speaker embedding is evidence that prompt-derived vectors leak more than speaker identity (see conditioning above).
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+    </section>
+  </main>
+
+  <!-- == Sources and open questions == -->
+  <section id="sources">
+    <h2>Sources</h2>
+    <ul>
+      <li>Voicebox: Text-Guided Multilingual Universal Speech Generation at Scale. Le, Vyas, Shi, et al. 2023. arXiv 2306.15687. Read in full.</li>
+      <li>E2 TTS: Embarrassingly Easy Fully Non-Autoregressive Zero-Shot TTS. Eskimez, Wang, Thakker, et al. 2024. arXiv 2406.18009. Read in full.</li>
+      <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching. Chen, Niu, Ma, et al. 2024. arXiv 2410.06885. Read in full.</li>
+      <li>Matcha-TTS: A fast TTS architecture with conditional flow matching. Mehta, Tu, Beskow, Szekely, Henter. 2023. arXiv 2309.03199. Read in full.</li>
+      <li>P-Flow: A Fast and Data-Efficient Zero-Shot TTS through Speech Prompting. Kim, Shih, Badlani, et al. 2023. NeurIPS 2023, https://proceedings.neurips.cc/paper_files/paper/2023/hash/eb0965da1d2cb3fbbbb8dbbad5fa0bfc-Abstract.html. No arXiv id found.</li>
+      <li>CosyVoice: A Scalable Multilingual Zero-shot Text-to-speech Synthesizer based on Supervised Semantic Tokens. Du, Chen, Zhang, et al. 2024. arXiv 2407.05407. Read.</li>
+      <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models. Du, Wang, Chen, et al. 2024. arXiv 2412.10117. Read.</li>
+      <li>Seed-TTS: A Family of High-Quality Versatile Speech Generation Models. Seed Team, ByteDance (Anastassiou et al.). 2024. arXiv 2406.02430. Read.</li>
+      <li>Audiobox: Unified Audio Generation with Natural Language Prompts. Vyas, Shi, Le, et al. 2023. arXiv 2312.15821. Read.</li>
+      <li>Scaling Rectified Flow Transformers for High-Resolution Image Synthesis. Esser, Kulal, Blattmann, et al. 2024. arXiv 2403.03206. Id and title confirmed on arXiv; logit-normal details taken from F5-TTS's description.</li>
+      <li>Flow Matching for Generative Modeling. Lipman, Chen, Ben-Hamu, Nickel, Le. 2022. arXiv 2210.02747. Id confirmed.</li>
+      <li>Local note (not re-verified here): ~/workspace/code/materials/pages/speech-lit-review/03-speech-generation/30-diffusion-and-flow.html, for DiTTo-TTS (arXiv 2406.11427) and MiniMax-Speech (arXiv 2505.07916).</li>
+    </ul>
+  </section>
+
+  <section id="open-questions">
+    <h2>Open questions and conflicts</h2>
+    <ul>
+      <li>
+        F5-TTS's abstract says a public 100K hour dataset.
+        Its experimental section says about 95K hours after filtering.
+        The figures are consistent but not identical, so the post should say "about 95K hours (Emilia, after filtering)".
+      </li>
+      <li>
+        Voicebox lists "p_drop = 0.3" without naming what is dropped.
+        My reading (whole-sequence mask) comes from Audiobox's clearer wording and is an inference.
+      </li>
+      <li>
+        Voicebox quotes CFG alpha as 1.0 in one setup and 0.7 in another.
+        I did not trace which applies to the headline zero-shot TTS numbers.
+      </li>
+      <li>
+        F5-TTS and CosyVoice 2 give no explicit statement of whether the flow-matching loss is restricted to masked frames.
+        This should be checked in the released code before the post says either way.
+      </li>
+      <li>
+        CosyVoice 2 does not state its CFG dropout rate, flow-model step count or GPU count in the text I read.
+        CosyVoice's "64 V100 for 800,000 steps" does not say which component it refers to.
+      </li>
+      <li>
+        E2 TTS gives no GPU count and no time-step sampling statement in its text.
+      </li>
+      <li>
+        F5-TTS's account of E2 TTS failures (7% of samples above 50% WER) comes from its own reproduction, in Mandarin small models.
+        It is not a result from the E2 authors.
+      </li>
+      <li>
+        Which number F5-TTS's duration ratio scales (prompt audio length or prompt text length) is not spelled out.
+        The two sections of the paper describe the ratio differently.
+      </li>
+      <li>
+        Seed-TTS's claim that a duration model reduces naturalness is unquantified in the report.
+        E2 TTS's similar claim is also qualitative.
+      </li>
+      <li>
+        P-Flow has no arXiv id that I could find.
+        The post should cite the NeurIPS 2023 proceedings.
+      </li>
+      <li>
+        Not covered: DiTTo-TTS and MiniMax-Speech latent details were not re-read.
+        VAE-latent flow models beyond Audiobox's Encodec features would need a separate pass.
+      </li>
+    </ul>
+  </section>
+  <footer>
+    <p>Prepared for the anandmoghan.me flow matching post. Primary sources read 2026-10-13.</p>
+  </footer>
+</body>
+</html>

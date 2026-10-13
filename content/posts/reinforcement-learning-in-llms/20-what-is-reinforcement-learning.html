@@ -1,0 +1,22 @@
+<section id="what-is-reinforcement-learning">
+  <h2>What is Reinforcement Learning?</h2>
+  <p>
+    If you're coming from supervised learning, RL is a different beast.
+    Instead of showing the model correct examples and having it imitate them, you give it a reward signal and let it figure out how to maximize that reward.
+  </p>
+  <p>The basic loop:</p>
+  <ol>
+    <li><strong>Agent</strong> (the model) takes an <strong>action</strong> (generates a response)</li>
+    <li><strong>Environment</strong> provides a <strong>reward</strong> (human preference, correctness score, etc.)</li>
+    <li>Agent updates its <strong>policy</strong> (how it generates responses) to get more reward</li>
+  </ol>
+  <p>
+    In the LLM context, the "policy" is the model itself, the "action" is generating text, and the "reward" comes from either human feedback (RLHF) or verifiable outcomes (GRPO).
+    The key difference from supervised learning: you're not telling the model what to do, you're telling it what's good and letting it learn how to get there.
+  </p>
+  <p>
+    This matters because some things are easier to evaluate than to demonstrate.
+    For example, it's hard to write perfect reasoning traces showing every step of solving a math problem, but it's trivial to check if "2+2=4" is correct.
+    That's why RL has become essential for alignment and reasoning.
+  </p>
+</section>

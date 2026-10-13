@@ -1,5 +1,7 @@
 import type { Config } from "tailwindcss";
 
+// Colours point at CSS variables so utility classes follow the shared tokens
+// (public/global/styles/tokens.css) and the light/dark theme.
 const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,29 +11,42 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: "var(--bg)",
+        foreground: "var(--fg)",
+        surface: "var(--surface)",
+        subtle: "var(--subtle)",
         muted: {
           DEFAULT: "var(--muted)",
-          foreground: "var(--foreground)",
+          foreground: "var(--fg)",
         },
         border: "var(--border)",
         accent: {
           DEFAULT: "var(--accent)",
-          foreground: "var(--background)",
+          foreground: "var(--bg)",
         },
+        warn: "var(--warn)",
         destructive: {
           DEFAULT: "var(--destructive)",
-          foreground: "var(--background)",
+          foreground: "var(--bg)",
         },
         success: {
           DEFAULT: "var(--success)",
-          foreground: "var(--background)",
+          foreground: "var(--bg)",
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['var(--font-ui)'],
+        serif: ['var(--font-prose)'],
+        mono: ['var(--font-mono)'],
+      },
+      boxShadow: {
+        card: "var(--shadow-card)",
+        lift: "var(--shadow-lift)",
+        float: "var(--shadow-float)",
+      },
+      borderRadius: {
+        card: "var(--radius-card)",
+        panel: "var(--radius-panel)",
       },
     },
   },

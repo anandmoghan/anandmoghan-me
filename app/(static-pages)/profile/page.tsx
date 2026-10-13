@@ -26,14 +26,11 @@ export default function AboutPage() {
     <main className="min-h-screen">
       {/* Hero Section */}
       <section className="relative py-12 px-6 sm:px-8 lg:px-12">
-        <div className="absolute inset-0 -z-10" style={{
-          background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)'
-        }}></div>
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl sm:text-6xl font-bold mb-4" style={{ color: 'var(--foreground)' }}>
+          <h1 className="page-title mb-4">
             Anand Mohan
           </h1>
-          <div className="w-20 h-1 rounded-full mb-6 mx-auto" style={{ backgroundColor: 'var(--accent)' }}></div>
+          <div className="accent-rule mb-6 mx-auto"></div>
           <p className="text-xl mb-6" style={{ color: 'var(--foreground)' }}>
             Applied Scientist at Amazon AGI
           </p>
@@ -66,11 +63,9 @@ export default function AboutPage() {
               {/* Current Role */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8 md:text-right">
-                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
-                       style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
+                  <div className="card ml-12 md:ml-0">
                     <div className="flex items-center gap-2 mb-2 md:justify-end flex-wrap">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium" 
-                            style={{ backgroundColor: 'var(--primary)', color: 'white' }}>Current</span>
+                      <span className="badge badge--accent">Current</span>
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Sep 2024 - Present</span>
                     </div>
                     <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
@@ -82,7 +77,7 @@ export default function AboutPage() {
                     </p>
                   </div>
                 </div>
-                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-surface shadow-lg z-10" 
                      style={{ backgroundColor: 'var(--primary)' }}></div>
                 <div className="md:w-1/2 md:pl-8"></div>
               </div>
@@ -90,11 +85,10 @@ export default function AboutPage() {
               {/* Previous Amazon Role */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8"></div>
-                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-surface shadow-lg z-10" 
                      style={{ backgroundColor: 'var(--accent)' }}></div>
                 <div className="md:w-1/2 md:pl-8">
-                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
-                       style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
+                  <div className="card ml-12 md:ml-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Jul 2019 - Sep 2024</span>
                     </div>
@@ -112,11 +106,9 @@ export default function AboutPage() {
               {/* Education - M.Tech */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8 md:text-right">
-                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
-                       style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
+                  <div className="card ml-12 md:ml-0">
                     <div className="flex items-center gap-2 mb-2 md:justify-end flex-wrap">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium" 
-                            style={{ backgroundColor: 'var(--card-bg)', color: 'var(--foreground)' }}>Education</span>
+                      <span className="badge badge--muted">Education</span>
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>2017 - 2019</span>
                     </div>
                     <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
@@ -128,19 +120,18 @@ export default function AboutPage() {
                     </p>
                   </div>
                 </div>
-                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
-                     style={{ backgroundColor: '#10b981' }}></div>
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-surface shadow-lg z-10" 
+                     style={{ backgroundColor: 'var(--accent)' }}></div>
                 <div className="md:w-1/2 md:pl-8"></div>
               </div>
 
               {/* Zoho */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8"></div>
-                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
-                     style={{ backgroundColor: '#8b5cf6' }}></div>
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-surface shadow-lg z-10" 
+                     style={{ backgroundColor: 'var(--muted)' }}></div>
                 <div className="md:w-1/2 md:pl-8">
-                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
-                       style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
+                  <div className="card ml-12 md:ml-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Jul 2015 - Jun 2016</span>
                     </div>
@@ -158,11 +149,9 @@ export default function AboutPage() {
               {/* Education - B.Tech */}
               <div className="relative flex flex-col md:flex-row md:items-center">
                 <div className="md:w-1/2 md:pr-8 md:text-right">
-                  <div className="ml-12 md:ml-0 p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
-                       style={{ backgroundColor: 'white', border: '1px solid var(--border)' }}>
+                  <div className="card ml-12 md:ml-0">
                     <div className="flex items-center gap-2 mb-2 md:justify-end flex-wrap">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium" 
-                            style={{ backgroundColor: 'var(--card-bg)', color: 'var(--foreground)' }}>Education</span>
+                      <span className="badge badge--muted">Education</span>
                       <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>2011 - 2015</span>
                     </div>
                     <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
@@ -174,8 +163,8 @@ export default function AboutPage() {
                     </p>
                   </div>
                 </div>
-                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-white shadow-lg z-10" 
-                     style={{ backgroundColor: '#10b981' }}></div>
+                <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-1/2 w-3 h-3 rounded-full border-4 border-surface shadow-lg z-10" 
+                     style={{ backgroundColor: 'var(--accent)' }}></div>
                 <div className="md:w-1/2 md:pl-8"></div>
               </div>
             </div>
@@ -184,23 +173,19 @@ export default function AboutPage() {
       </section>
 
       {/* Publications Section */}
-      <section className="py-12 px-6 sm:px-8 lg:px-12" style={{ backgroundColor: 'var(--card-bg)' }}>
+      <section className="py-12 px-6 sm:px-8 lg:px-12 border-y border-border bg-subtle">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-2xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Publications</h2>
           
-          <div className="p-6 rounded-xl shadow-sm" style={{ 
-            backgroundColor: 'white',
-            border: '1px solid var(--border)'
-          }}>
+          <div className="card">
             <div className="space-y-4">
               <a 
                 href="https://scholar.google.com/citations?user=D1KIt3cAAAAJ&hl=en"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity"
-                style={{ borderColor: 'var(--border)', textDecoration: 'none' }}
+                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity border-border"
               >
-                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: '#374151' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
                 <div>
@@ -217,10 +202,9 @@ export default function AboutPage() {
                 href="https://ieeexplore.ieee.org/document/9413428"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity"
-                style={{ borderColor: 'var(--border)', textDecoration: 'none' }}
+                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity border-border"
               >
-                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: '#374151' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
                 <div>
@@ -237,10 +221,9 @@ export default function AboutPage() {
                 href="https://ieeexplore.ieee.org/document/9052484"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity"
-                style={{ borderColor: 'var(--border)', textDecoration: 'none' }}
+                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity border-border"
               >
-                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: '#1f2937' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <div>
@@ -257,10 +240,9 @@ export default function AboutPage() {
                 href="https://www.isca-archive.org/interspeech_2019/padi19_interspeech.html"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity"
-                style={{ borderColor: 'var(--border)', textDecoration: 'none' }}
+                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity border-border"
               >
-                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: '#374151' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
                 <div>
@@ -277,10 +259,9 @@ export default function AboutPage() {
                 href="https://sigport.org/documents/end-end-language-recognition-using-attention-based-hierarchical-gated-recurrent-unit"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity"
-                style={{ borderColor: 'var(--border)', textDecoration: 'none' }}
+                className="pb-4 border-b flex items-start gap-3 hover:opacity-70 transition-opacity border-border"
               >
-                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: '#374151' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
                 <div>
@@ -298,9 +279,8 @@ export default function AboutPage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-start gap-3 hover:opacity-70 transition-opacity"
-                style={{ textDecoration: 'none' }}
               >
-                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: '#374151' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
                 <div>
@@ -326,15 +306,10 @@ export default function AboutPage() {
             href="https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/12488798"
             target="_blank"
             rel="noopener noreferrer"
-            className="block p-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-300" 
-            style={{ 
-              backgroundColor: 'white',
-              border: '1px solid var(--border)',
-              textDecoration: 'none'
-            }}
+            className="card tap"
           >
             <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 mt-1 flex-shrink-0" style={{ color: '#6b7280' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-6 h-6 mt-1 flex-shrink-0" style={{ color: 'var(--muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
               <div>
@@ -351,7 +326,7 @@ export default function AboutPage() {
       </section>
 
       {/* Skills & Highlights */}
-      <section className="py-12 px-6 sm:px-8 lg:px-12" style={{ backgroundColor: 'var(--card-bg)' }}>
+      <section className="py-12 px-6 sm:px-8 lg:px-12 border-y border-border bg-subtle">
         <div className="max-w-4xl mx-auto">
           <div className="grid gap-8 md:grid-cols-2">
             {/* Skills */}
@@ -409,25 +384,14 @@ export default function AboutPage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a 
               href="mailto:moghan.anand@gmail.com" 
-              className="px-6 py-3 rounded-lg font-medium transition-colors"
-              style={{ 
-                backgroundColor: 'var(--primary)', 
-                color: 'white',
-                textDecoration: 'none'
-              }}
+              className="btn btn--primary"
             >
               Get in Touch
             </a>
             <a 
               href="https://media.anandmoghan.me/public/docs/Anand%20Mohan%20-%20Resume.pdf" 
               target="_blank"
-              className="px-6 py-3 rounded-lg font-medium transition-colors"
-              style={{ 
-                backgroundColor: 'white', 
-                color: 'var(--primary)',
-                border: '2px solid var(--primary)',
-                textDecoration: 'none'
-              }}
+              className="btn btn--outline"
             >
               View Resume
             </a>

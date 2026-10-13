@@ -1,0 +1,25 @@
+<section id="introduction">
+  <h2>Introduction</h2>
+  <p>
+    Since Vaswani et al. dropped the Transformer paper in 2017,
+    we've basically been optimizing the same few equations for nearly a decade.
+    That elegant \( \text{softmax}(QK^T/\sqrt{d_k})V \) has spawned everything from GPT-4 to Llama to Claude,
+    but getting from that formula to a system that actually serves millions of requests at reasonable cost
+    is a different beast entirely.
+  </p>
+  <p>
+    This post is my attempt to go through the past decade.
+    We'll move quickly through the fundamentals (you probably know them),
+    then dig into what actually matters when you're trying to train on 100K token contexts
+    or serve at scale without burning through your infrastructure budget.
+  </p>
+  <div class="callout callout--note">
+    <strong>Disclaimer:</strong>
+    <p>
+      This post was written with the help of LLMs,
+      with the content carefully curated based on papers I've read and systems I've used over the years.
+      If you still notice any errors,
+      please don't hesitate to send a note to <a href="mailto:moghan.anand@gmail.com">moghan.anand@gmail.com</a>.
+    </p>
+  </div>
+</section>

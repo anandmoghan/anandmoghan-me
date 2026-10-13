@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outline: flow matching for speech generation</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+</head>
+<body class="prose">
+  <header>
+    <h1>Outline: flow matching for speech generation</h1>
+    <p>
+      Orchestrator outline for <code>content/posts/flow-matching-speech-generation/</code>.
+      Research notes live next to this file: <code>theory.html</code>, <code>training.html</code>,
+      <code>inference.html</code>, <code>papers.html</code>, <code>failure-modes-eval.html</code>.
+    </p>
+  </header>
+  <main>
+
+    <!-- == Post meta == -->
+    <section id="meta">
+      <h2>post.json</h2>
+      <ul>
+        <li>Title: Flow Matching for Speech Generation</li>
+        <li>
+          Excerpt: From diffusion to flow matching: how modern TTS models are trained, how they
+          sample fast enough to stream, and where they still break.
+        </li>
+        <li>Tags: machine-learning, deep-learning, speech (new tag to add to DEFAULT_TAGS).</li>
+        <li>published: false</li>
+      </ul>
+      <p>
+        Angle: flow matching has become the default acoustic generator in modern TTS and speech LLM
+        decoders. The reader is an ML engineer who knows transformers but has not shipped a
+        diffusion model. Voice and depth match the RL in LLMs and attention posts: practitioner
+        tone, equations with plain-language interpretation, tables for comparisons, one real
+        trade-off or failure mode per section.
+      </p>
+    </section>
+
+    <!-- == Sections == -->
+    <section id="sections">
+      <h2>Sections</h2>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>h2 and h3s</th>
+              <th>Point it makes</th>
+              <th>Notes</th>
+              <th>Must include</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>10-introduction.html</td>
+              <td>Introduction (no h3)</td>
+              <td>
+                Why speech generation moved from autoregressive codec tokens alone to flow matching
+                (or AR plus flow): parallel decoding, continuous targets, prompting by infilling.
+                What the post covers. Disclaimer callout (same text as the RL post).
+              </td>
+              <td>papers, training</td>
+              <td>The core tension: quality per step versus number of steps.</td>
+            </tr>
+            <tr>
+              <td>20-from-diffusion-to-flow-matching.html</td>
+              <td>
+                From Diffusion to Flow Matching; h3: Denoising diffusion; The SDE view and the
+                probability flow ODE; Flow matching; Rectified flow and straight paths; How the
+                two families relate
+              </td>
+              <td>
+                Diffusion and flow matching are one family under a Gaussian path; flow matching
+                picks a straight path and a velocity target, which is why it needs fewer steps.
+              </td>
+              <td>theory</td>
+              <td>
+                Time-direction convention gotcha (DDPM noise at T, FM noise at t=0); straighter is
+                not straight (marginal field averages), hence reflow. Diagram A.
+              </td>
+            </tr>
+            <tr>
+              <td>30-training.html</td>
+              <td>
+                Training a Flow Matching TTS Model; h3: What to generate; Masked infilling and
+                prompting; Text conditioning and alignment; Duration; Time sampling and guidance
+                dropout; Architectures and scale
+              </td>
+              <td>
+                The Voicebox recipe (masked infilling, 70 to 100% masks) became the template; the
+                real design choices are the target, the text conditioning and duration.
+              </td>
+              <td>training, papers</td>
+              <td>
+                E2 TTS slow convergence and the 7% Mandarin failure in F5's reproduction; MMDiT
+                collapse; loss masking result from Voicebox. Data and compute table. Diagram B.
+              </td>
+            </tr>
+            <tr>
+              <td>40-inference.html</td>
+              <td>
+                Inference: Solving the ODE; h3: Solvers and NFE; The cost of guidance; Time-step
+                schedules; The vocoder
+              </td>
+              <td>
+                Euler at 10 to 32 NFE is the norm; the schedule (Sway, EPSS, cosine) buys more
+                than a better solver; CFG doubles the cost.
+              </td>
+              <td>inference</td>
+              <td>
+                F5 solver table and Matcha NFE table; NFE counting conventions differ across
+                papers (CFG pass counted or not). Diagram C.
+              </td>
+            </tr>
+            <tr>
+              <td>50-fast-and-streaming.html</td>
+              <td>
+                Making It Fast and Streaming; h3: Few-step generation; Folding guidance into the
+                model; Streaming flow matching; Serving under load
+              </td>
+              <td>
+                Distillation (DMD, consistency, mean flow, reflow) reaches 1 to 4 NFE; streaming
+                needs chunked causal masks and look-ahead, and chunk size sets first-packet
+                latency.
+              </td>
+              <td>inference</td>
+              <td>
+                Pure velocity students blur at low NFE (Inference tag); RTF numbers are not
+                comparable across hardware; DiT decoders degrade under concurrency (Qwen3-TTS).
+                Diagram D.
+              </td>
+            </tr>
+            <tr>
+              <td>60-papers-and-trade-offs.html</td>
+              <td>
+                The Papers and Their Trade-offs; h3: The diffusion era; The flow matching era;
+                Flow matching inside speech LLMs; The trade-off axes
+              </td>
+              <td>
+                A guided tour from WaveGrad to CosyVoice 3, ending in the axes that separate
+                systems: AR plus flow versus fully non-autoregressive, explicit versus implicit
+                alignment, mel plus vocoder versus latents, quality versus NFE.
+              </td>
+              <td>papers</td>
+              <td>
+                NaturalSpeech 3 is masked discrete diffusion, not Gaussian; MaskGCT as the
+                non-flow contrast. Includes fragment speech/flow-tts-comparison.
+              </td>
+            </tr>
+            <tr>
+              <td>70-failure-modes-and-evaluation.html</td>
+              <td>
+                Failure Modes and Evaluation; h3: How these models are scored; Where they break;
+                Post-training with rewards; Safety
+              </td>
+              <td>
+                WER and SIM saturate and depend on the evaluator; skip and repeat, duration,
+                flat prosody, CFG text-versus-speaker tension and noisy prompts are the real
+                production failures.
+              </td>
+              <td>failure-modes-eval</td>
+              <td>
+                Reward hacking with single quality predictors; GRPO flattening prosody; ground
+                truth WER is not a floor.
+              </td>
+            </tr>
+            <tr>
+              <td>80-what-to-use.html</td>
+              <td>Techniques Simplified: What to Use? (no h3)</td>
+              <td>Decision guide in the RL post's style, plus a summary table.</td>
+              <td>all sections</td>
+              <td>Written after sections 20 to 70.</td>
+            </tr>
+            <tr>
+              <td>90-open-problems.html</td>
+              <td>Open Problems (no h3)</td>
+              <td>Bulleted open problems with one or two sentences each, like the RL post.</td>
+              <td>all notes, open-questions lists</td>
+              <td>Written after sections 20 to 70.</td>
+            </tr>
+            <tr>
+              <td>100-key-takeaways.html</td>
+              <td>Key Takeaways (no h3)</td>
+              <td>Numbered takeaways, 10 to 14 items, like the RL and attention posts.</td>
+              <td>all sections</td>
+              <td>Written after sections 20 to 70.</td>
+            </tr>
+            <tr>
+              <td>110-references.html</td>
+              <td>References</td>
+              <td>The numbered list below, as an ol with links.</td>
+              <td>this outline</td>
+              <td>Orchestrator writes it.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- == Fragments == -->
+    <section id="fragments">
+      <h2>Reuse plan</h2>
+      <p>
+        <code>content/fragments/</code> is empty, so this post creates the first shared blocks.
+        Each starts at h3 or below (or with a figure or table), has no section or h2, and is
+        adapted from the materials fragments of the same name where they exist.
+      </p>
+      <ul>
+        <li>
+          <code>content/fragments/generative/diffusion-objective.html</code>: DDPM forward process and
+          epsilon loss with symbols defined. Owner: section 20.
+        </li>
+        <li>
+          <code>content/fragments/generative/flow-matching-objective.html</code>: conditional flow
+          matching with the OT path, sigma_min, target and loss, symbols defined. Owner: section 20.
+        </li>
+        <li>
+          <code>content/fragments/generative/classifier-free-guidance.html</code>: CFG for epsilon and
+          velocity networks, condition dropout, the two-pass cost. Owner: section 20; included again by
+          section 40 is not allowed (duplicate ids), so section 40 links to it instead.
+        </li>
+        <li>
+          <code>content/fragments/speech/flow-tts-comparison.html</code>: the cross-model comparison
+          table (div.table-wrap.wide). Owner: section 60.
+        </li>
+      </ul>
+    </section>
+
+    <!-- == Diagrams == -->
+    <section id="diagrams">
+      <h2>Diagrams</h2>
+      <ul>
+        <li>A (section 20): noise to data, curved diffusion trajectories versus straight OT paths.</li>
+        <li>
+          B (section 30): training input layout: prompt mel visible, masked span zeroed, character
+          text plus filler tokens, into the DiT, loss on masked frames only.
+        </li>
+        <li>
+          C (section 40): the sampling loop: noise, N steps of conditional and unconditional velocity
+          combined by CFG, mel, vocoder, waveform.
+        </li>
+        <li>
+          D (section 50): streaming timeline in lanes: AR tokens, chunks with look-ahead, flow decoder,
+          vocoder, first packet marked.
+        </li>
+      </ul>
+    </section>
+
+    <!-- == References == -->
+    <section id="references">
+      <h2>Numbered references</h2>
+      <p>Cite as [n]. Group order follows the post.</p>
+      <ol>
+        <li>Ho, Jain, Abbeel (2020). Denoising Diffusion Probabilistic Models. arXiv 2006.11239.</li>
+        <li>Song et al. (2021). Score-Based Generative Modeling through Stochastic Differential Equations. arXiv 2011.13456.</li>
+        <li>Salimans, Ho (2022). Progressive Distillation for Fast Sampling of Diffusion Models. arXiv 2202.00512.</li>
+        <li>Ho, Salimans (2022). Classifier-Free Diffusion Guidance. arXiv 2207.12598.</li>
+        <li>Lipman et al. (2023). Flow Matching for Generative Modeling. arXiv 2210.02747.</li>
+        <li>Liu, Gong, Liu (2023). Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow. arXiv 2209.03003.</li>
+        <li>Albergo, Boffi, Vanden-Eijnden (2023). Stochastic Interpolants: A Unifying Framework for Flows and Diffusions. arXiv 2303.08797.</li>
+        <li>Esser et al. (2024). Scaling Rectified Flow Transformers for High-Resolution Image Synthesis. arXiv 2403.03206.</li>
+        <li>Chen et al. (2020). WaveGrad: Estimating Gradients for Waveform Generation. arXiv 2009.00713.</li>
+        <li>Kong et al. (2021). DiffWave: A Versatile Diffusion Model for Audio Synthesis. arXiv 2009.09761.</li>
+        <li>Popov et al. (2021). Grad-TTS: A Diffusion Probabilistic Model for Text-to-Speech. arXiv 2105.06337.</li>
+        <li>Shen et al. (2023). NaturalSpeech 2: Latent Diffusion Models are Natural and Zero-Shot Speech and Singing Synthesizers. arXiv 2304.09116.</li>
+        <li>Ju et al. (2024). NaturalSpeech 3: Zero-Shot Speech Synthesis with Factorized Codec and Diffusion Models. arXiv 2403.03100.</li>
+        <li>Lee et al. (2024). DiTTo-TTS: Diffusion Transformers for Scalable Text-to-Speech without Domain-Specific Factors. arXiv 2406.11427.</li>
+        <li>Le et al. (2023). Voicebox: Text-Guided Multilingual Universal Speech Generation at Scale. arXiv 2306.15687.</li>
+        <li>Vyas et al. (2023). Audiobox: Unified Audio Generation with Natural Language Prompts. arXiv 2312.15821.</li>
+        <li>Mehta et al. (2024). Matcha-TTS: A Fast TTS Architecture with Conditional Flow Matching. arXiv 2309.03199.</li>
+        <li>Kim et al. (2023). P-Flow: A Fast and Data-Efficient Zero-Shot TTS through Speech Prompting. NeurIPS 2023.</li>
+        <li>Guo et al. (2024). VoiceFlow: Efficient Text-to-Speech with Rectified Flow Matching. arXiv 2309.05027.</li>
+        <li>Eskimez et al. (2024). E2 TTS: Embarrassingly Easy Fully Non-Autoregressive Zero-Shot TTS. arXiv 2406.18009.</li>
+        <li>Chen et al. (2024). F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching. arXiv 2410.06885.</li>
+        <li>Anastassiou et al. (2024). Seed-TTS: A Family of High-Quality Versatile Speech Generation Models. arXiv 2406.02430.</li>
+        <li>Du et al. (2024). CosyVoice: A Scalable Multilingual Zero-shot Text-to-speech Synthesizer based on Supervised Semantic Tokens. arXiv 2407.05407.</li>
+        <li>Du et al. (2024). CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models. arXiv 2412.10117.</li>
+        <li>Du et al. (2025). CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training. arXiv 2505.17589.</li>
+        <li>Wang et al. (2024). MaskGCT: Zero-Shot Text-to-Speech with Masked Generative Codec Transformer. arXiv 2409.00750.</li>
+        <li>ZipVoice: Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching (2025). arXiv 2506.13053.</li>
+        <li>Zeng et al. (2024). GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot. arXiv 2412.02612.</li>
+        <li>Huang et al. (2025). Step-Audio: Unified Understanding and Generation in Intelligent Speech Interaction. arXiv 2502.11946.</li>
+        <li>Wu et al. (2025). Step-Audio 2 Technical Report. arXiv 2507.16632.</li>
+        <li>Kimi-Audio Technical Report (2025). arXiv 2504.18425.</li>
+        <li>Xu et al. (2025). Qwen2.5-Omni Technical Report. arXiv 2503.20215.</li>
+        <li>Qwen3-TTS Technical Report (2026). arXiv 2601.15621.</li>
+        <li>Zheng et al. (2025). Accelerating Flow-Matching-Based Text-to-Speech via Empirically Pruned Step Sampling. arXiv 2505.19931.</li>
+        <li>Song et al. (2023). Consistency Models. arXiv 2303.01469.</li>
+        <li>Ye et al. (2023). CoMoSpeech: One-Step Speech and Singing Voice Synthesis via Consistency Model. arXiv 2305.06908.</li>
+        <li>Guan et al. (2024). ReFlow-TTS: A Rectified Flow Model for High-fidelity Text-to-Speech. arXiv 2309.17056.</li>
+        <li>Park et al. (2025). RapFlow-TTS: Rapid and High-Fidelity Text-to-Speech with Improved Consistency Flow Matching. arXiv 2506.16741.</li>
+        <li>Frans et al. (2024). One Step Diffusion via Shortcut Models. arXiv 2410.12557.</li>
+        <li>Wang et al. (2025). IntMeanFlow: Few-step Speech Generation with Integral Velocity Distillation. arXiv 2510.07979.</li>
+        <li>Yin et al. (2024). Improved Distribution Matching Distillation for Fast Image Synthesis. arXiv 2405.14867.</li>
+        <li>DMOSpeech: Direct Metric Optimization via Distilled Diffusion Model in Zero-Shot Speech Synthesis (2024). arXiv 2410.11097.</li>
+        <li>Li et al. (2025). DMOSpeech 2: Reinforcement Learning for Duration Prediction in Metric-Optimized Speech Synthesis. arXiv 2507.14988.</li>
+        <li>Collin et al. (2026). Distill Locally, Schedule Globally: Flow Maps for Few-Step Text-to-Speech. arXiv 2609.36324.</li>
+        <li>Khan, Biswas, Islam (2026). DriftTTS: Few-Step Text-to-Speech Without Distillation via Distribution-Matching Drift. arXiv 2610.03390.</li>
+        <li>Xie et al. (2026). FlashTTS: Fast Streaming TTS with MTP Acceleration and X-pred Mean Flow Distillation. arXiv 2606.09141.</li>
+        <li>Liang et al. (2025). Towards Flow-Matching-based TTS without Classifier-Free Guidance. arXiv 2504.20334.</li>
+        <li>Yu et al. (2026). Enhancing Flow Matching with A Unified Guidance Framework for Efficient and Robust Speech Synthesis. arXiv 2607.00363.</li>
+        <li>Zhang et al. (2026). CuteTTS: Efficient and High-Quality Speech Synthesis via Autoregressive Modeling of Continuous Latents. arXiv 2608.08638.</li>
+        <li>Guo et al. (2025). StreamFlow: Streaming Flow Matching with Block-wise Guided Attention Mask for Speech Token Decoding. arXiv 2506.23986.</li>
+        <li>Guo et al. (2025). FireRedTTS-1S: An Upgraded Streamable Foundation Text-to-Speech System. arXiv 2503.20499.</li>
+        <li>Torgashov, Henter, Skantze (2025). VoXtream: Full-Stream Text-to-Speech with Extremely Low Latency. arXiv 2509.15969.</li>
+        <li>Wang et al. (2024). An Investigation of Noise Robustness for Flow-Matching-Based Zero-Shot TTS. arXiv 2406.05699.</li>
+        <li>Zhang et al. (2025). Advanced Zero-Shot TTS for Background Removal and Preservation with Controllable Masked Speech Prediction. arXiv 2502.07345.</li>
+        <li>Yang et al. (2026). RobustSpeechFlow. arXiv 2605.22083.</li>
+        <li>Shi et al. (2026). Joint Residual Reweighting for Classifier Free Guidance in Flow-Matching Zero-Shot TTS. arXiv 2606.25672.</li>
+        <li>Sun et al. (2025). F5R-TTS: Improving Flow-Matching based Text-to-Speech with Group Relative Policy Optimization. arXiv 2504.02407.</li>
+        <li>Yang et al. (2026). GROW: Group-Relative Advantage-Weighted On-Policy RL of Autoregressive-Diffusion TTS. arXiv 2608.03215.</li>
+        <li>Wang et al. (2026). FlowTTS-GRPO. arXiv 2606.23190.</li>
+        <li>Shin et al. (2025). No Verifiable Reward for Prosody. arXiv 2509.18531.</li>
+        <li>Asonitis et al. (2026). The Limits of Reference-Free Speech Quality Metrics as Evaluators and Rewards on Modern TTS. arXiv 2609.13150 (verify id and date before citing).</li>
+        <li>Yu, Kang (2026). Best-of-N TTS Evaluation is Confounded by ASR Family Alignment. arXiv 2607.08256.</li>
+        <li>San Roman et al. (2024). Proactive Detection of Voice Cloning with Localized Watermarking (AudioSeal). arXiv 2401.17264.</li>
+        <li>Lian et al. (2026). dots.tts Technical Report. arXiv 2606.07080.</li>
+        <li>Lee et al. (2023). BigVGAN: A Universal Neural Vocoder with Large-Scale Training. arXiv 2206.04658.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

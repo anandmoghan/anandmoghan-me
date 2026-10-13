@@ -1,0 +1,218 @@
+<section id="outcome-based-rl-for-reasoning">
+  <h2>Outcome-Based RL for Reasoning</h2>
+  <p>A recent shift: instead of learning from preferences, what if we learn from verifiable outcomes?</p>
+  <p>
+    For tasks like mathematics and coding, we don't need human preferences. We can check if the answer is correct.
+    This enables a different class of RL methods.
+  </p>
+
+  <!-- == RLVR == -->
+  <h3 id="rl-with-verifiable-rewards-rlvr-openais-o1">RL with Verifiable Rewards (RLVR): OpenAI's o1</h3>
+  <p><strong>References</strong>: OpenAI Blog [10], OpenAI System Card [11]</p>
+  <p>
+    While OpenAI hasn't published a full technical paper on o1, we know the broad principles from their announcements and system card.
+    (The term RLVR itself was coined later, in AI2's Tülu 3 work, but it describes the same idea.)
+  </p>
+  <p>
+    <strong>The core idea:</strong> train models to "think" through problems using chain-of-thought reasoning, with rewards based on verifiable outcomes.
+  </p>
+  <p><strong>Key differences from preference-based RLHF:</strong></p>
+  <ul>
+    <li><strong>Verifiable rewards</strong>: Math correctness, code execution, not human preferences</li>
+    <li><strong>Large-scale RL on chain of thought</strong>: OpenAI says the model learns to refine its reasoning through RL, without disclosing whether rewards target steps or only outcomes</li>
+    <li><strong>Test-time compute</strong>: Models can "think longer" for harder problems</li>
+  </ul>
+  <p><strong>Outcome rewards</strong>: Only reward the final answer</p>
+  <ul>
+    <li>Simpler to implement</li>
+    <li>Works for straightforward problems</li>
+    <li>Can lead to reward hacking (right answer, wrong reasoning)</li>
+  </ul>
+  <p><strong>Process rewards</strong>: Reward each reasoning step</p>
+  <ul>
+    <li>More expensive (requires labeling intermediate steps)</li>
+    <li>Better credit assignment</li>
+    <li>Reduces (but doesn't eliminate) reward hacking</li>
+    <li>Leads to more reliable reasoning</li>
+  </ul>
+  <p>
+    OpenAI hasn't said which of these o1 uses.
+    Its earlier process supervision work [7] is often cited as a likely ingredient, but that is speculation.
+    DeepSeek-R1 later showed that outcome rewards alone are enough to get strong reasoning.
+  </p>
+  <p><strong>Test-Time Compute Scaling</strong></p>
+  <p>
+    A key insight: reasoning models can trade compute for accuracy at inference time.
+    Generate multiple reasoning traces, verify them, and select the best one.
+  </p>
+  <p>
+    Traditional LLMs also benefit from extra inference compute through best-of-N sampling or majority voting.
+    Reasoning models scale it more directly: a longer chain of thought on a single sample keeps improving accuracy.
+  </p>
+  <p><strong>Deliberative Alignment</strong></p>
+  <p>
+    The o1 system card discusses "deliberative alignment": using the model's reasoning capabilities for safety:
+  </p>
+  <ul>
+    <li>The model can reason about whether a request is harmful</li>
+    <li>It can explain why it's refusing certain requests</li>
+    <li>This makes alignment more robust and transparent</li>
+  </ul>
+
+  <!-- == GRPO == -->
+  <h3 id="group-relative-policy-optimization-grpo">Group Relative Policy Optimization (GRPO)</h3>
+  <p><strong>References</strong>: Shao et al. [5]</p>
+  <p>GRPO is a memory-efficient alternative to PPO that removes the critic network entirely.</p>
+  <figure>
+    <img src="https://media.anandmoghan.me/public/images/reinforcement-learning/ppo-grpo-demonstration.png" alt="Comparison of PPO and GRPO architectures showing the removal of the critic network">
+    <figcaption>Comparison of PPO and GRPO architectures showing the removal of the critic network</figcaption>
+  </figure>
+  <p><strong>The Core Idea</strong></p>
+  <p>
+    Standard PPO uses an actor-critic architecture where the critic (value function) estimates expected rewards to reduce variance in policy gradients.
+    However, the critic is memory-intensive and adds training complexity.
+    GRPO replaces it with group-based advantage estimation.
+  </p>
+  <p><strong>Algorithm</strong>:</p>
+  <ol>
+    <li>Sample a group of \( N \) outputs per prompt (DeepSeekMath used 64; DeepSeek-R1 used 16)</li>
+    <li>Evaluate each output (e.g., check math correctness)</li>
+    <li>Compute group-relative advantage: \( A_i = \frac{r_i - \mu_{\text{group}}}{\sigma_{\text{group}}} \)</li>
+    <li>Update the policy with PPO's clipped objective using these advantages, adding the KL penalty to the reference model directly to the loss instead of folding it into the reward</li>
+  </ol>
+  <p>
+    <strong>Advantages</strong>: No critic network (saves memory, simplifies training); group normalization reduces variance without a value function; ideal for outcome-based rewards in verifiable tasks (math, code).
+  </p>
+  <p>
+    <strong>Results</strong>: DeepSeekMath 7B achieved 51.7% on MATH benchmark (approaching GPT-4/Gemini-Ultra) and 60.9% with self-consistency over 64 samples.
+    Key: 120B math tokens from Common Crawl + GRPO fine-tuning.
+  </p>
+  <p>
+    <strong>When to Use</strong>: Outcome-based rewards (math correctness, code execution, game scores); memory constraints (large models where critic doesn't fit); simpler pipeline (fewer hyperparameters than PPO).
+  </p>
+  <p>
+    <strong>When PPO Wins Over GRPO</strong>: Fine-grained credit assignment (a learned critic gives per-token value estimates, while GRPO gives every token in a response the same advantage); settings where sampling a whole group per prompt is too expensive.
+    GRPO isn't limited to verifiable rewards, though: DeepSeekMath ran it against a learned reward model, and DeepSeek-R1's final stage used reward models for helpfulness and harmlessness.
+  </p>
+  <p>
+    <strong>Production Adoption</strong>: DeepSeek-R1, Qwen3's reasoning RL stage, and most open-source reasoning recipes.
+    Proven effective for training reasoning models at scale.
+  </p>
+
+  <!-- == RBR == -->
+  <h3 id="rule-based-rewards-rbr">Rule-Based Rewards (RBR)</h3>
+  <p><strong>References</strong>: DeepSeek-AI [6], Mu et al. [16], Xie et al. [17]</p>
+  <p>
+    While outcome rewards (correctness) are the primary signal for reasoning models, production systems augment them with rule-based rewards to enforce desirable behaviors.
+  </p>
+  <p>
+    RBR are programmatic checks that reward or penalize specific patterns in model outputs.
+    Unlike learned reward models, these are explicit rules that enforce constraints.
+  </p>
+  <p>
+    <strong>Common RBR Categories</strong> (penalty values here are illustrative, not from a specific paper):
+  </p>
+  <ul>
+    <li>Format enforcers (regex for required tags, JSON schema validation, markdown formatting, small penalties such as -0.5 to -1.0)</li>
+    <li>Language consistency (detect mid-response switching, penalize language mixing, critical for R1-Zero issue)</li>
+    <li>Safety constraints (block prohibited content, enforce refusal patterns, larger penalties for violations)</li>
+    <li>Reasoning quality heuristics (minimum length, maximum repetition, step diversity, verification checks)</li>
+  </ul>
+  <p>
+    <strong>Why RBR Matter</strong>: Stability: hard constraints prevent catastrophic failures and unparseable outputs during training.
+    Efficiency: instant regex checks vs. minutes for human evaluation.
+    Composability: combine multiple RBR with outcome rewards: \( r_{\text{total}} = r_{\text{outcome}} + \sum_i w_i \cdot r_{\text{rule}_i} \) where \( w_i \) are typically 0.1-0.5.
+  </p>
+  <p>
+    <strong>Production Examples</strong>: DeepSeek-R1 uses RBR for language consistency and format validation; Logic-RL [17] trains on synthetic Knights-and-Knaves logic puzzles with only rule-based format and answer rewards, and the gains transfer to math benchmarks like AIME and AMC; OpenAI's safety RBR [16] uses an LLM grader to score responses against fine-grained rules about how to refuse or comply, reaching a better safety vs. over-refusal balance than a human-feedback baseline.
+  </p>
+  <p>
+    <strong>Design Principles</strong>: Keep rules simple (complex rules are hard to debug); weight carefully (RBR should guide, not dominate outcome rewards); monitor rule violations (high rates indicate overly strict rules or poor initialization); iterate (start with critical rules, add more as failure modes emerge).
+  </p>
+  <h4>Limitations</h4>
+  <p>
+    <strong>Brittleness</strong>: Rules can be gamed.
+    A model might satisfy the letter of the rule while violating its spirit.
+  </p>
+  <p>
+    <strong>Maintenance</strong>: As models improve, rules may need updating.
+    What was necessary for a 7B model might be unnecessary for a 70B model.
+  </p>
+  <p>
+    <strong>Specification</strong>: Writing good rules requires domain expertise.
+    Bad rules can hurt more than help.
+  </p>
+  <p>
+    Despite these limitations, RBR have become standard practice in production reasoning systems.
+    They provide a practical middle ground between pure outcome rewards (which can be sparse) and learned reward models (which are expensive to train).
+  </p>
+
+  <!-- == GenRM == -->
+  <h3 id="generative-reward-models-genrm">Generative Reward Models (GenRM)</h3>
+  <p><strong>References</strong>: Zhang et al. [19], DeepSeek-AI [6]</p>
+  <p>
+    What happens when we can't verify the outcome with a compiler or calculator?
+    We use generative verifiers.
+  </p>
+  <p>
+    Instead of training a scalar reward model (which outputs a single number like 0.8), we train an LLM to act as a judge.
+    The judge:
+  </p>
+  <ol>
+    <li>Reads the student model's response</li>
+    <li>Generates a "reasoning trace" (critique) explaining why the response is good or bad</li>
+    <li>Assigns a score based on that reasoning</li>
+  </ol>
+  <p>
+    <strong>Why it matters</strong>: Standard reward models are black boxes: we don't know why they scored something high.
+    GenRMs force the reward signal to be interpretable.
+    DeepSeek-R1, for example, used DeepSeek-V3 as a generative judge during rejection sampling for data that rule-based checks can't grade.
+    The same approach extends to domains like essay quality, creative problem-solving, and open-ended reasoning.
+  </p>
+  <p>
+    <strong>In practice</strong>: The generative verifier acts as an LLM-as-a-Judge during RL training, providing both a score and an explanation.
+    This is particularly useful for distillation and data synthesis, where you need to understand why certain reasoning paths are better.
+  </p>
+
+  <!-- == DeepSeek-R1 == -->
+  <h3 id="deepseek-r1">DeepSeek-R1</h3>
+  <p><strong>References</strong>: DeepSeek-AI [6]</p>
+  <p>
+    DeepSeek-R1 demonstrated something remarkable: reasoning capabilities can emerge from reinforcement learning without extensive human-labeled reasoning trajectories.
+  </p>
+  <figure>
+    <img src="https://media.anandmoghan.me/public/images/reinforcement-learning/deepseek-r1-pipeline.png" alt="DeepSeek-R1 training pipeline showing cold start and RL phases">
+    <figcaption>DeepSeek-R1 training pipeline showing cold start and RL phases</figcaption>
+  </figure>
+  <p>
+    OpenAI never disclosed how much human-written chain-of-thought data o1 needed.
+    DeepSeek-R1 was the first openly documented recipe showing that RL with simple rewards does most of the work.
+  </p>
+  <p><strong>Training approach:</strong></p>
+  <ol>
+    <li>Start with a strong base model (DeepSeek-V3-Base)</li>
+    <li>Cold start: SFT on a few thousand long chain-of-thought examples to fix readability and language mixing</li>
+    <li>Reasoning RL: GRPO with rule-based accuracy and format rewards, plus a language-consistency reward</li>
+    <li>Rejection sampling: generate ~600K reasoning samples from the RL checkpoint, add ~200K non-reasoning samples, and run SFT again on the ~800K total</li>
+    <li>Final RL across all scenarios: rule-based rewards for reasoning, reward models for helpfulness and harmlessness</li>
+  </ol>
+  <p>
+    <strong>The Cold Start Challenge</strong>: DeepSeek-R1-Zero was trained with pure RL directly on the base model, with no SFT at all.
+    It worked (AIME 2024 pass@1 rose from 15.6% to 71.0%), but its outputs had poor readability and mixed languages.
+    The production DeepSeek-R1 addresses this with a "cold start" approach: a few thousand examples of well-formatted reasoning traces that teach the model how to format its reasoning (not how to reason).
+    This provides guardrails that constrain the format space, allowing RL to focus on improving reasoning quality rather than discovering basic formatting conventions.
+    This has become standard practice for training reasoning models.
+  </p>
+  <p>
+    <strong>Emergent Capabilities</strong>: DeepSeek observed several emergent behaviors during RL, most clearly in R1-Zero, which had no cold start data to imitate: self-reflection (checking own work), verification (validating intermediate steps), dynamic strategy adaptation (trying different approaches when stuck), and an "aha moment" (an intermediate checkpoint learned to stop, re-evaluate its approach, and spend more thinking time).
+    Response length also grew on its own as training progressed.
+    These patterns weren't explicitly programmed. They emerged from the training process.
+  </p>
+  <p>
+    <strong>Results</strong>: DeepSeek-R1 performed comparably to OpenAI-o1-1217 on reasoning benchmarks: 79.8% pass@1 on AIME 2024, 97.3% on MATH-500, and a 2,029 Codeforces rating, with strong results on GPQA Diamond and LiveCodeBench.
+  </p>
+  <p>
+    <strong>Distillation</strong>: Once trained, reasoning capabilities can be distilled into smaller models by generating reasoning traces from the large model and fine-tuning smaller models on these traces, enabling lower-cost deployment.
+    DeepSeek found that distilling into Qwen and Llama models beat running RL directly on those small models.
+  </p>
+</section>

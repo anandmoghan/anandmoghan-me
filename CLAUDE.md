@@ -1,6 +1,87 @@
-# Blog Post Writing Style Guide
+# anandmoghan.me
 
-Reference for writing technical ML/engineering blog posts in this repo. Based on analysis of Eugene Yan, Chip Huyen, Lilian Weng, Sebastian Raschka, and Hugging Face blog posts.
+Public portfolio and blog at https://anandmoghan.me. Next.js (App Router, `output: "export"`),
+Tailwind for the site chrome, deployed to Cloudflare Pages (project `anandmoghan-me`).
+`apps/` is a separate Vite app (apps.anandmoghan.me) with its own build and deploy; this file
+does not cover it.
+
+Blog posts are hand-written HTML, not Markdown. There is no MDX in this repo any more.
+Rollback point from before the migration: git tag `pre-html-revamp`.
+
+## Layout
+
+```
+content/
+  posts/<slug>/
+    post.json            {"title","excerpt","publishedAt","updatedAt"?,"tags","author"?,"published"?}
+    10-introduction.html section fragments, ordered by numeric prefix (gaps of 10)
+    20-....html
+  fragments/<topic>/<name>.html   reusable blocks, pulled in with @include
+  research/<slug>/                source notes for a post (not built)
+common/utils/html.ts     renders fragments: includes, KaTeX, code highlighting, heading ids, TOC
+common/utils/post.ts     loads posts (post.json + sections), tags, reading time
+public/global/styles/    COPY of ~/workspace/code/global/styles (committed; see Styles)
+```
+
+## Post content model
+
+- A post is a folder `content/posts/<slug>/` with `post.json` and section files `NN-name.html`.
+  The URL is `/posts/<slug>`; keep existing slugs stable.
+- `published: false` builds the page with `noindex` and hides it from lists.
+- `tags` are ids from `DEFAULT_TAGS` in `common/utils/post.ts`; add a tag there before using it.
+- Each section file is exactly one `<section id="kebab-id">`, one `<h2>` (no id; it reuses the
+  section id), optional `<h3 id="...">` subsections, then `</section>`. The build throws otherwise.
+  The first section is usually `10-introduction.html`. No `<h1>`: the page header renders the title.
+- The table of contents shows `h2` and `h3`. Use `h4` for run-in sub-headings that should stay out
+  of the TOC (Data, Training strategy, Evaluation framework).
+- Ids must be unique across the post (the build throws on duplicates). Missing `h3` ids are
+  generated from the heading text.
+- Reusable blocks (a definition, an equation set, a comparison table, a diagram) used by more than
+  one post live in `content/fragments/<topic>/<name>.html` and are included with
+  `<!-- @include content/fragments/<topic>/<name>.html -->` (path relative to the repo root, must
+  stay inside `content/`). Fragments start at `h3` or below and hold no `section` or `h2`.
+  Check `content/fragments/` before writing a block that might already exist.
+- Maths: `\( ... \)` inline, `\[ ... \]` display, rendered with KaTeX at build time.
+- Code: `<pre><code class="language-python">...</code></pre>` is highlighted at build time
+  (highlight.js language names); copy buttons are added at runtime. Escape `<`, `>`, `&`.
+- Images live in R2 (`https://media.anandmoghan.me/public/images/<post>/...`, upload with
+  `npm run upload-media`) and go in `<figure>` with a `<figcaption>`.
+- Architecture and pipeline diagrams are inline SVG in `figure.diagram` using the `d-*` classes,
+  never images or ASCII art.
+
+## Authoring rules
+
+Invoke the `html-authoring` skill and read `~/workspace/code/global/guides/html-authoring.html`
+before writing or editing any post. That guide is the source of truth for source formatting
+(2-space indent, one sentence per line, no inline styles), components (callouts, tags, table-wrap,
+cols-2, details, figure, diagrams) and maths. This file adds the blog voice below.
+
+New posts go through the `blog-post` skill (`/blog-post <topic>`): research into
+`content/research/<slug>/`, an outline you approve (sections, fragments to reuse or create,
+diagrams), parallel Writer agents per section, a fact check, then `npm run build`.
+
+## Styles
+
+The site loads the shared design system from `public/global/styles/` (tokens, prose, print, ui).
+Those files are copies: edit `~/workspace/code/global/styles/`, then run `npm run sync-global` and
+commit the copies (CI builds without the global folder). Site-only chrome styles live in
+`app/globals.css` and Tailwind, built on the global tokens. A component a post needs that the
+global CSS lacks gets added to `global/styles/` and documented in the guide, never to a post.
+
+## Build and deploy
+
+```bash
+npm run dev          # local dev server
+npm run build        # static export to out/; fails on malformed post fragments
+npm run deploy       # build + wrangler pages deploy (confirm with the user first)
+```
+
+Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy.yml`).
+
+# Blog post writing style guide
+
+Reference for writing technical ML/engineering posts. Based on analysis of Eugene Yan, Chip Huyen,
+Lilian Weng, Sebastian Raschka, and Hugging Face blog posts.
 
 ## Target Voice
 
@@ -41,37 +122,27 @@ Senior practitioner writing from real experience — not a tutorial, not an acad
 - Code-first examples; concrete GPU specs and model names
 - Trade-off structure: symmetric A→B, with C as the named downside
 
-## Structure for Technical Problem Posts
+## Structure for technical problem posts
 
 Each problem section should be self-contained and follow this pattern:
 
-```
-## N. Problem Title
+One section file per problem (`<section id>` + `<h2>Problem title</h2>`):
 
-[1–2 paragraph setup: what the problem is, why the naive approach fails, what's hard about it]
+- 1 to 2 paragraphs of setup: what the problem is, why the naive approach fails, what's hard about it.
+- `<h4>Data</h4>`: sources, collection, cleaning, labeling strategy. Include the failure mode in the data itself.
+- `<h4>Training strategy</h4>`: model choice rationale, fine-tuning approach, loss, key hyperparameters, serving.
+- `<h4>Evaluation framework</h4>`: offline metrics, then online metrics, then production monitoring. Each distinct.
 
-#### Data
-[Sources, collection, cleaning, labeling strategy. Include the failure mode in the data itself.]
+## Formatting
 
-#### Training Strategy
-[Model choice rationale, fine-tuning approach, loss function, key hyperparameters, serving considerations.]
-
-#### Evaluation Framework
-[Offline metrics → online metrics → production monitoring. Each distinct.]
-```
-
-## MDX Formatting Rules
-
-- Use `##` for main section headings (these appear in TOC)
-- Use `####` for all sub-headings (Data, Training Strategy, Evaluation Framework, etc.) — keeps TOC clean
-- LaTeX math in `$$` blocks for display equations, `$...$` for inline
-- **Never use bare `{variable}` in prose** — MDX treats it as JSX. Use `[variable]` for placeholders or wrap in a code span
-- Bold for key terms on first use, not for decoration
-- No emojis unless explicitly requested
+- `h2` for main sections (one per section file, these form the TOC), `h3` for subsections,
+  `h4` for run-in sub-headings that stay out of the TOC.
+- Bold key terms on first use, not for decoration. No emojis unless explicitly requested.
+- Comparisons go in tables (`div.table-wrap`), not bullet dumps.
 
 ## Punctuation
 
-- Do not use em dashes (—) anywhere in prose. Rewrite the sentence instead.
+- Do not use em dashes anywhere in prose. Rewrite the sentence instead.
 - Do not number sections or subsections (no "1.", "2.", "1.1", etc. in headings).
 
 ## What to Avoid

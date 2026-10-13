@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow matching speech: failure modes and evaluation</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      ignoredTags: ['script', 'style', 'pre', 'code']
+    });"></script>
+</head>
+<body class="prose">
+  <header>
+    <h1>Flow matching speech: failure modes and evaluation</h1>
+    <p>Research note, 2026-10-13. Claims carry a source and a grounding tag.</p>
+  </header>
+  <main>
+    <section id="how-grounded">
+      <h2>How to read this note</h2>
+      <p>
+        <span class="tag tag--confirmed">Confirmed</span> means I read the primary page or paper abstract.
+        <span class="tag tag--reported">Reported</span> means a secondary source or a search summary.
+        <span class="tag tag--inference">Inference</span> means my own reasoning.
+        Numbers appear only next to the source that states them.
+      </p>
+    </section>
+
+    <section id="evaluation">
+      <h2>How these models are evaluated</h2>
+      <ul>
+        <li>
+          F5-TTS evaluates on a 1,127-sample LibriSpeech-PC test-clean subset (4 to 10 s),
+          Seed-TTS test-en (1,088 samples) and test-zh (2,020 samples).
+          Source: F5-TTS, arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          WER uses Whisper-large-v3 for English and Paraformer-zh for Mandarin.
+          SIM is the cosine of WavLM-large speaker-verification embeddings.
+          Source: arXiv 2410.06885; github.com/BytedanceSpeech/seed-tts-eval.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS-eval also ships a Mandarin hard-case list (zh/hardcase.lst).
+          The model weights are not released, only the test sets and metric scripts.
+          Source: github.com/BytedanceSpeech/seed-tts-eval.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5-TTS reports CMOS on a -3 to +3 integer scale against ground truth, and SMOS on 1 to 5 in 0.5 steps.
+          Raters: 20 native speakers.
+          UTMOS is used for objective naturalness in the appendix ablations.
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reference points on LibriSpeech-PC test-clean: ground truth WER 2.23 and SIM-o 0.69.
+          F5-TTS at 16 NFE gets WER 2.53 and SIM-o 0.66.
+          Source: arXiv 2410.06885, Table 1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox uses Whisper large-v2 for WER, because HuBERT-L is less robust on non-audiobook data.
+          Its table values computed with HuBERT-L are marked as not directly comparable.
+          Source: Audiobox, arXiv 2312.15821, Section 5.2.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox's SIM model is WavLM-TDCNN, but this was inferred from surrounding context by the page reader, not stated explicitly.
+          Source: arXiv 2312.15821.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          CosyVoice 3 evaluates on Seed-TTS-Eval (test-zh, test-en, test-hard) and its own CV3-Eval.
+          It uses Whisper-large V3 and Paraformer for ASR.
+          It reports speaker similarity with two encoders (WavLM-based and ERes2Net), plus DNSMOS and 1 to 5 MOS from 10 native raters on 200 sentences.
+          Source: CosyVoice 3, arXiv 2505.17589.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="metric-pitfalls">
+      <h2>Known pitfalls of the metrics</h2>
+      <ul>
+        <li>
+          The ASR family changes verifier rankings.
+          On LibriSpeech-PC with F5-TTS, best-of-N verifier rankings shift across Whisper, wav2vec 2.0 and HuBERT evaluators.
+          Same-family verifier and evaluator pairs recover more oracle headroom than cross-family pairs.
+          Source: Best-of-N TTS Evaluation is Confounded by ASR Family Alignment, arXiv 2607.08256.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Different papers use different speaker encoders (WavLM-large in Seed-TTS-eval, ERes2Net alongside WavLM in CosyVoice 3).
+          A SIM value from one encoder does not compare with another's.
+          Source: arXiv 2505.17589; Seed-TTS-eval readme.
+          <span class="tag tag--confirmed">Confirmed</span>
+          The conclusion about cross-paper comparison is
+          <span class="tag tag--inference">Inference</span>.
+        </li>
+        <li>
+          Reference-free quality predictors (UTMOS, DNSMOS, SCOREQ) agree with listeners when a clip has audible defects, but not when both clips are clean.
+          Some do worse than choosing the longer clip.
+          Source: The Limits of Reference-Free Speech Quality Metrics..., arXiv 2609.13150.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          WER near zero is mostly evaluator noise, and text normalisation changes counts.
+          Source: a practitioner blog (altsoph.substack.com) and search summaries, not a paper.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Ground truth is not a perfect floor.
+          In F5-TTS, F5-TTS at 32 NFE has test-en WER 1.83 against ground truth 2.06, and test-zh 1.56 against 1.26.
+          WER therefore cannot rank systems that already match human recordings.
+          Source: arXiv 2410.06885, Table 2 (numbers); the conclusion is
+          <span class="tag tag--inference">Inference</span>.
+        </li>
+        <li>
+          F5-TTS urges more rigorous, transparent subjective evaluation, noting that some earlier work used few raters.
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="failure-modes">
+      <h2>Failure modes of flow matching and diffusion TTS</h2>
+
+      <h3 id="skip-repeat">Word skipping and repetition</h3>
+      <ul>
+        <li>
+          E2 TTS consistently failed on about 7% of Mandarin test samples (WER above 50%) during training, and re-ranking could not fix it.
+          An MMDiT variant of F5-TTS collapsed into repeated utterances with unstable timbre and prosody.
+          A pure adaLN DiT without text refinement failed to learn alignment.
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          On ELLA-V hard sentences, F5-TTS WER is 4.40 against E2 TTS 8.58 and CosyVoice 8.30.
+          The authors attribute part of the error to deletions on stacks of repeated words.
+          Source: arXiv 2410.06885, Table 7.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Flow-matching TTS remains prone to skip and repeat errors from imperfect alignment.
+          An augmentation method drops Seed-TTS-eval WER from 1.44 to 1.38.
+          Source: RobustSpeechFlow, arXiv 2605.22083.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="duration">Duration and speaking rate</h3>
+      <ul>
+        <li>
+          F5-TTS has no duration predictor.
+          Total length is set from the character-count ratio of prompt text to target text.
+          Replacing it with ground-truth duration moved the small-model WER only from 4.17 to 3.87.
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          A wrong global length estimate is a plausible cause of rushed or stretched speech on unusual text.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+        <li>
+          DMOSpeech 2 trains the duration predictor with GRPO using speaker similarity and WER rewards.
+          Source: arXiv 2507.14988 (abstract gives no metric values).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="prosody">Prosody flatness</h3>
+      <ul>
+        <li>
+          GRPO on CER and NLL rewards lowered error rates but made speech flat.
+          Adding speaker similarity as a reward destabilised training.
+          Iterative DPO with a few hundred human preference pairs per round recovered naturalness.
+          Source: No Verifiable Reward for Prosody, arXiv 2509.18531.
+          <span class="tag tag--confirmed">Confirmed</span>
+          The model there is a TTS policy trained on Korean call-centre data, not a flow-matching model specifically.
+        </li>
+        <li>
+          F5-TTS lists a lack of fine-grained paralinguistic control (emotion) as a limitation.
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 3 reports accuracy dropping sharply for sad and angry when the emotion is not in the text.
+          Source: arXiv 2505.17589.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="low-nfe">Low NFE and few-step generation</h3>
+      <ul>
+        <li>
+          F5-TTS goes from 16 to 32 NFE with slightly better WER on LibriSpeech-PC (2.53 to 2.42) and RTF from 0.15 to 0.31.
+          Source: arXiv 2410.06885, Table 1.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Without Sway Sampling, 32 NFE WER is 2.84 and SIM 0.62, against 2.41 and 0.66 with it.
+          Euler sampling degrades without Sway Sampling.
+          Source: arXiv 2410.06885, Table 5.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Applying MeanFlow directly to TTS causes GPU memory overhead and training instability from self-bootstrapping.
+          IntMeanFlow reports 1-NFE token-to-spectrogram and 3-NFE text-to-spectrogram synthesis.
+          Source: IntMeanFlow, arXiv 2510.07979.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          I found no source that measures over-smoothing at low NFE in speech.
+          Treat "low NFE blurs prosody" as unsupported.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+
+      <h3 id="cfg">CFG artifacts</h3>
+      <ul>
+        <li>
+          F5-TTS uses CFG strength 2 by default.
+          CFG needs two forward passes, roughly doubling inference cost.
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Single-weight CFG ties text and speaker conditioning together.
+          Branch-selective guidance trades text accuracy against speaker similarity.
+          Reweighting text, speaker and joint residuals independently improves both on F5-TTS, CosyVoice 2 and GLM-TTS, with no retraining.
+          Source: Joint Residual Reweighting for CFG..., arXiv 2606.25672.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          A search summary reports a CFG sweep from 2.5 to 10.0 in which WER improves with stronger guidance and SIM-o peaks at 3.5.
+          The paper's abstract does not mention a sweep, so I could not confirm it.
+          Source: BareWave, arXiv 2606.09048.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          Training the model to absorb CFG removes the second pass.
+          Source: arXiv 2504.20334 (9x inference speed-up on F5-TTS with LibriTTS training, comparable quality, authors' claim).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="leakage">Prompt leakage and noisy prompts</h3>
+      <ul>
+        <li>
+          Noise in the audio prompt significantly degrades flow-matching zero-shot TTS.
+          Masked-speech-denoising pre-training, DNSMOS-based data filtering and noise-mixing fine-tuning outperformed enhancing the prompt first.
+          Source: arXiv 2406.05699.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Existing zero-shot systems often struggle with prompts that contain background sound.
+          A dual speaker encoder with a control signal chooses to keep or remove the background.
+          Source: arXiv 2502.07345.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Timbre leakage in flow matching is blamed on residual acoustic traces in the content representation.
+          Heterogeneous data augmentation targets it.
+          Source: arXiv 2607.00363 (abstract; the authors' framing is about speaker identity, not channel).
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          In-context conditioning copies the prompt's channel and noise into the output by the same mechanism as timbre.
+          The papers above support the noisy-prompt problem, not the copy mechanism itself.
+          <span class="tag tag--inference">Inference</span>
+        </li>
+      </ul>
+
+      <h3 id="streaming">Chunked streaming boundaries</h3>
+      <ul>
+        <li>
+          CosyVoice 2 uses a chunk-aware causal flow-matching model, so one model serves streaming and non-streaming.
+          Source: arXiv 2412.10117.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          BinauralFlow argues CosyVoice 2 lacks feature buffers for its causal convolution layers, which could cause interruptions and discontinuities in real streaming.
+          Source: arXiv 2505.22865, Appendix G.
+          <span class="tag tag--confirmed">Confirmed</span>
+          This is a competing group's claim, not a measurement.
+        </li>
+        <li>
+          FireRedTTS-1S adds look-ahead convolution to smooth chunk transitions; JoyVoice randomises chunk size.
+          Sources: arXiv 2503.20499, arXiv 2512.19090, from a search summary only.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+      </ul>
+
+      <h3 id="long-code-switch">Long text and code-switching</h3>
+      <ul>
+        <li>
+          F5-TTS reports code-switching and speed control as capabilities, with no failure analysis.
+          Source: arXiv 2410.06885 abstract.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 3 gives no discussion of hallucination, code-switching or long text.
+          It does report language-specific errors, with Japanese CER about 9% and Korean about 6% in a polyglot experiment.
+          Source: arXiv 2505.17589.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Autoregressive Transformer TTS drops or repeats words on long utterances.
+          Very Attentive Tacotron adds relative-location cross-attention to fix it.
+          Source: Battenberg et al., arXiv 2410.22179.
+          <span class="tag tag--confirmed">Confirmed</span>
+          This is autoregressive, not flow matching.
+        </li>
+      </ul>
+
+      <h3 id="hybrids">AR plus flow hybrids</h3>
+      <ul>
+        <li>
+          dots.tts is a 2B continuous autoregressive model with a flow-matching head conditioned on full history, to reduce drift.
+          It reports Seed-TTS-Eval WER 0.94 (zh), 1.30 (en), 6.60 (zh-hard).
+          These are the authors' own numbers.
+          Source: arXiv 2606.07080.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          A search summary says RobustSpeechFlow states that hybrid LM-diffusion systems also show alignment errors.
+          The abstract I read does not say that.
+          Source: arXiv 2605.22083.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+        <li>
+          In CosyVoice 3, hard test-hard CER stays at 5.09 to 5.66 after RL, and the 1.5B model trails the 0.5B on test-hard.
+          The authors blame limited challenging training data.
+          Source: arXiv 2505.17589.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="mitigations">
+      <h2>Mitigations reported</h2>
+      <ul>
+        <li>
+          Better text conditioning: F5-TTS refines text with ConvNeXt before alignment, and credits it for the robustness gain over E2 TTS.
+          On the small model, WER is 4.17 against 9.63 for E2 TTS.
+          Source: arXiv 2410.06885, Table 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Training-time augmentation of skip and repeat latents (RobustSpeechFlow) needs no external aligner.
+          Source: arXiv 2605.22083.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Best-of-N reranking with an ASR verifier; a cross-family ensemble gives a 12% relative WER reduction over F5-TTS at N=10.
+          Source: arXiv 2607.08256.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          F5R-TTS applies GRPO to a flow-matching model by turning outputs into Gaussians, with WER and SIM rewards.
+          It reports a 29.5% relative WER reduction and 4.6% relative SIM gain over conventional flow-matching TTS.
+          Source: F5R-TTS, arXiv 2504.02407.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          CosyVoice 3 post-trains with a differentiable reward model (DiffRO) on speech tokens.
+          The RL targets the token language model, not the flow stage.
+          On Seed-TTS, 0.5B CER goes 1.16 to 0.75 (test-zh) and WER 2.02 to 1.76 (test-en).
+          The authors state RL slightly lowers speaker similarity and attribute it to hacking.
+          The abstract does not name "DiffRO"; the term appears in the full text.
+          Source: arXiv 2505.17589, Table 4.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          GROW (on DiTAR) avoids the ODE-to-SDE conversion.
+          Average WER goes 2.016 to 1.558 and SIM 0.676 to 0.715, with UTMOS unchanged.
+          Source: arXiv 2608.03215.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          FlowTTS-GRPO converts ODE paths to SDE and fine-tunes CosyVoice 3.0 and F5-TTS.
+          Omitting CFG during training speeds convergence, and synthesising hard cases helps robustness.
+          Source: arXiv 2606.23190.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Reward hacking is reported across these methods.
+          A single quality predictor as reward leads to worse held-out and human ratings; an equal-weighted ensemble resists it.
+          Source: arXiv 2609.13150.
+          <span class="tag tag--confirmed">Confirmed</span>
+          RRPO reports that DiffRO-style reward models can be exploited with acoustic artifacts.
+          Source: arXiv 2512.04552.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Stepwise preference optimisation scores noisy intermediate states of diffusion TTS (EASPO, emotion focus).
+          Source: arXiv 2509.25416.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Data filtering: DNSMOS-based filtering of pre-training data for noise robustness.
+          Source: arXiv 2406.05699.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="safety">
+      <h2>Safety</h2>
+      <ul>
+        <li>
+          The F5-TTS ethics statement warns of voice-identification spoofing and recommends watermarks and detection models.
+          Source: arXiv 2410.06885.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Seed-TTS-eval states weights and code are withheld "due to considerations for AI safety".
+          Source: github.com/BytedanceSpeech/seed-tts-eval.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          AudioSeal trains a generator and detector jointly with a localisation loss.
+          Detection is localised down to the sample level, and the detector is up to two orders of magnitude faster than prior models.
+          Source: AudioSeal, arXiv 2401.17264.
+          <span class="tag tag--confirmed">Confirmed</span>
+        </li>
+        <li>
+          Audiobox applies the Seamless Watermark to its TTS and sound outputs.
+          Averaged over tasks with no augmentation, FPR is 0.001 and FNR is 0.
+          The highest FNR among augmentations is 0.003 (slower speed).
+          Source: arXiv 2312.15821, Section 9.2 and Table 16.
+          <span class="tag tag--confirmed">Confirmed</span>
+          Audiobox voice authentication was not found in the text I read.
+        </li>
+        <li>
+          Watermark removal, deepfake-detector shortcuts and fingerprint drift under fine-tuning are covered in the existing materials page 06-control-and-quality/30-safety-provenance.html.
+          I did not re-fetch those papers.
+          <span class="tag tag--reported">Reported</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicts</h2>
+      <ul>
+        <li>
+          Over-smoothing at low NFE in speech: no direct source found.
+        </li>
+        <li>
+          The CFG sweep numbers from BareWave (arXiv 2606.09048) are unconfirmed.
+          The abstract has no sweep.
+          Check the paper body.
+        </li>
+        <li>
+          arXiv 2609.13150 shows a submission date of 2 July 2026, which does not match a 2609 identifier.
+          Verify before citing.
+        </li>
+        <li>
+          The CosyVoice GRPO result in the research file (CER 4.08% to 3.36%) comes from a mirror search summary.
+          I did not confirm it against the first-party repo.
+        </li>
+        <li>
+          The CosyVoice 3 SS values are ambiguous between WavLM and ERes2Net in my page extraction, so I quote no SS numbers.
+        </li>
+        <li>
+          Whether Audiobox uses WavLM-TDCNN for SIM is inferred, not stated.
+        </li>
+        <li>
+          Prompt channel and noise leakage into outputs is not directly measured in any source above.
+        </li>
+        <li>
+          Long-text and code-switching failure rates for flow-matching TTS: no quantitative source found.
+        </li>
+        <li>
+          Whether "hybrid" AR plus flow systems hallucinate less than pure flow is not established by anything I read.
+        </li>
+        <li>
+          DiffRO's own paper (the materials page cites arXiv 2507.05911) was not fetched.
+        </li>
+        <li>
+          The Audiobox voice-authentication and fingerprint claim needs the full PDF.
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching. Chen, Niu, Ma, Deng, Wang, Zhao, Yu, Chen. 2024. arXiv 2410.06885.</li>
+        <li>F5R-TTS: Improving Flow-Matching based Text-to-Speech with Group Relative Policy Optimization. Sun, Xiao, Mo, Wu, Yu, Wang. 2025. arXiv 2504.02407.</li>
+        <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models. Du et al. 2024. arXiv 2412.10117.</li>
+        <li>CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training. Du et al. 2025. arXiv 2505.17589.</li>
+        <li>Seed-TTS: A Family of High-Quality Versatile Speech Generation Models. Anastassiou et al. 2024. arXiv 2406.02430.</li>
+        <li>Seed-TTS-eval. ByteDance Speech. github.com/BytedanceSpeech/seed-tts-eval.</li>
+        <li>DMOSpeech 2: Reinforcement Learning for Duration Prediction in Metric-Optimized Speech Synthesis. Li, Jiang, Tao, Niu, Xu, Song, Mesgarani. 2025. arXiv 2507.14988.</li>
+        <li>GROW: Group-Relative Advantage-Weighted On-Policy RL of Autoregressive-Diffusion TTS. Yang et al. 2026. arXiv 2608.03215.</li>
+        <li>FlowTTS-GRPO. Wang, Tian, Li, Lv, Zhao, Li. 2026. arXiv 2606.23190.</li>
+        <li>No Verifiable Reward for Prosody. Shin, Ahn, Kim, Jeon. 2025. arXiv 2509.18531.</li>
+        <li>The Limits of Reference-Free Speech Quality Metrics as Evaluators and Rewards on Modern TTS. Asonitis et al. 2026. arXiv 2609.13150.</li>
+        <li>RRPO: Robust Reward Policy Optimization for LLM-based Emotional TTS. Wang et al. 2025. arXiv 2512.04552.</li>
+        <li>Emotion-Aligned Generation in Diffusion TTS via Preference-Guided Optimization (EASPO). Shi et al. 2025. arXiv 2509.25416.</li>
+        <li>Joint Residual Reweighting for Classifier Free Guidance in Flow-Matching Zero-Shot TTS. Shi et al. 2026. arXiv 2606.25672.</li>
+        <li>Towards Flow-Matching-based TTS without Classifier-Free Guidance. Liang et al. 2025. arXiv 2504.20334.</li>
+        <li>BareWave: Waveform-Native Flow-Matching TTS. Fan et al. 2026. arXiv 2606.09048.</li>
+        <li>An Investigation of Noise Robustness for Flow-Matching-Based Zero-Shot TTS. Wang et al. 2024. arXiv 2406.05699.</li>
+        <li>Advanced Zero-Shot TTS for Background Removal and Preservation with Controllable Masked Speech Prediction. Zhang, Zhang, Chen, Qian. 2025. arXiv 2502.07345.</li>
+        <li>Enhancing Flow Matching with A Unified Guidance Framework for Efficient and Robust Speech Synthesis. Yu et al. 2026. arXiv 2607.00363.</li>
+        <li>BinauralFlow. Authors not retrieved. 2025. arXiv 2505.22865.</li>
+        <li>RobustSpeechFlow. Yang, Kim, Yu, Byun, Bous, Lee. 2026. arXiv 2605.22083.</li>
+        <li>Best-of-N TTS Evaluation is Confounded by ASR Family Alignment. Yu, Kang. 2026. arXiv 2607.08256.</li>
+        <li>Robust and Unbounded Length Generalization in Autoregressive Transformer-Based TTS. Battenberg et al. 2024. arXiv 2410.22179.</li>
+        <li>dots.tts Technical Report. Lian et al. 2026. arXiv 2606.07080.</li>
+        <li>IntMeanFlow. Wang, Cao, Guo, Chen, Chen, Huo. 2025. arXiv 2510.07979.</li>
+        <li>Audiobox: Unified Audio Generation with Natural Language Prompts. Vyas et al. 2023. arXiv 2312.15821.</li>
+        <li>Proactive Detection of Voice Cloning with Localized Watermarking (AudioSeal). San Roman, Fernandez, Defossez, Furon, Tran, Elsahar. 2024. arXiv 2401.17264.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Starting material: speech-lit-review chapters 06 and 08, speech-to-speech chapter 10, research files 13 and 14.</p>
+  </footer>
+</body>
+</html>
