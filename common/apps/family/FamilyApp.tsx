@@ -16,6 +16,9 @@ import { useLocation } from '@/common/apps/family/router'
 
 function Members({ children }: { children: ReactNode }) {
   const { access } = useData()
+  const { pathname } = useLocation()
+  // Home links to every area through its cards, so the bottom tabs (and their padding) are for sub pages only.
+  const onHome = pathname === '/'
   if (access === 'loading') return <ListSkeleton rows={3} />
   if (access === 'denied') return <RestrictedNotice />
   return (
@@ -23,10 +26,10 @@ function Members({ children }: { children: ReactNode }) {
       <HeaderSlot>
         <MacPill />
       </HeaderSlot>
-      <div className="with-tab-bar">
+      <div className={onHome ? undefined : 'with-tab-bar'}>
         {children}
       </div>
-      <TabBar />
+      {!onHome && <TabBar />}
     </>
   )
 }
