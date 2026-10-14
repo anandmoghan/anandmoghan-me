@@ -9,6 +9,8 @@ export interface AppDefinition {
   /** Absolute site path, e.g. /apps/wealth */
   path: string
   requiresAuth: boolean
+  /** Listed on the hub for admins only (the route and rules check the admin claim too). */
+  adminOnly?: boolean
 }
 
 export interface UserProfile {

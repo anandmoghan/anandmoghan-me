@@ -6,6 +6,7 @@ import 'highlight.js/styles/github.css';
 import CodeCopyButtons from '@/common/components/CodeCopyButtons';
 import TableOfContents from '@/common/components/TableOfContents';
 import PrintButton from '@/common/components/PrintButton';
+import { PostComments } from '@/common/visitors/comments/PostComments';
 import type { Metadata } from 'next';
 
 interface PostPageProps {
@@ -155,6 +156,7 @@ export default async function PostPage({ params }: PostPageProps) {
                 dangerouslySetInnerHTML={{ __html: post.html }}
               />
               <CodeCopyButtons containerId="post-body" />
+              {post.published && <PostComments slug={post.slug} />}
             </div>
 
             {/* Table of Contents */}

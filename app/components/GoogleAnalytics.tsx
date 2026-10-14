@@ -1,8 +1,21 @@
 'use client';
 
+import { useEffect } from 'react';
 import Script from 'next/script';
+import { useConsent } from '@/common/visitors/ConsentProvider';
 
+// Loads GA only after the visitor accepts analytics in the consent banner. Declining later
+// sets GA's opt-out flag, which stops a script that is already loaded.
 export default function GoogleAnalytics({ gaId }: { gaId: string }) {
+  const { consent } = useConsent();
+
+  useEffect(() => {
+    const flags = window as unknown as Record<string, boolean>;
+    flags[`ga-disable-${gaId}`] = consent !== 'granted';
+  }, [consent, gaId]);
+
+  if (consent !== 'granted') return null;
+
   return (
     <>
       <Script

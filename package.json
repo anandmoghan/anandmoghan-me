@@ -16,7 +16,7 @@
     "migrate-media": "tsx scripts/migrate-r2-to-storage.ts",
     "rules": "node scripts/merge-rules.mjs",
     "rules:check": "node scripts/merge-rules.mjs --check",
-    "test:rules": "npm run rules:check && firebase emulators:exec --only firestore,auth --project demo-anandmoghan-me \"node --test tests/rules/*.test.mjs\"",
+    "test:rules": "npm run rules:check && firebase emulators:exec --only firestore,auth --project demo-anandmoghan-me \"node --test --test-concurrency=1 tests/rules/*.test.mjs\"",
     "seed-roles": "tsx scripts/seed-roles.ts",
     "sync-materials": "node scripts/sync-materials.mjs"
   },

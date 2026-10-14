@@ -7,3 +7,6 @@ export const REGION = 'us-central1'
 export const ENCRYPTION_SECRET = defineSecret('ENCRYPTION_SECRET')
 
 export const SYNC_RATE_LIMIT_PER_MINUTE = 5
+
+// Page views per user per minute (POST /api/visit).
+export const VISIT_RATE_LIMIT_PER_MINUTE = 30

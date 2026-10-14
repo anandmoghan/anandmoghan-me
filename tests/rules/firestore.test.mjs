@@ -131,10 +131,9 @@ describe("private app data", () => {
     await assertSucceeds(getDoc(doc(db, "t212Creds/alice")));
   });
 
-  test("ladder and visits are denied by default", async () => {
+  test("ladder is denied by default", async () => {
     const db = real("boss", { admin: true, apps: ["ladder"] });
     await assertFails(getDoc(doc(db, "ladder/anand")));
-    await assertFails(getDoc(doc(db, "visits/v1")));
   });
 });
 
