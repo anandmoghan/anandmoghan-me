@@ -62,7 +62,7 @@ export function JobsPage() {
   if (!config) return null
 
   return (
-    <div className="site-container site-container--wide flex flex-col pb-6 pt-3 md:min-h-0 md:flex-1">
+    <div className="site-container site-container--wide flex flex-col pb-6 pt-3 md:min-h-0 md:flex-1 md:pb-0">
       <div className={`shrink-0 ${explicit ? 'hidden md:block' : ''}`}>
         <FilterBar params={params} setParam={setParam} clearAll={() => router.push(pathname)} />
         <StatusTabs jobs={ignoringStatus} active={filters?.status ?? ''} setStatus={(s) => setParam('status', s)} />

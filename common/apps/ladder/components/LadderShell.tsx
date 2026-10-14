@@ -100,12 +100,13 @@ export function LadderShell({ children }: { children: ReactNode }) {
   }
 
   // The jobs split fits the viewport on desktop and scrolls its two panes; other pages scroll as a page.
+  // On wide screens the split stops just above the floating tab pill rather than the page-wide clearance.
   const fitsViewport = pathname === '/apps/ladder' || pathname === '/apps/ladder/'
 
   return (
     <div
       className={`with-tab-bar relative flex-1 ${
-        fitsViewport ? 'md:flex md:h-[calc(100dvh-var(--topbar-height))] md:flex-none md:flex-col' : ''
+        fitsViewport ? 'md:flex md:h-[calc(100dvh-var(--topbar-height))] md:flex-none md:flex-col lg:!pb-[calc(var(--tabbar-height)+2rem)]' : ''
       }`}
     >
       {body}
