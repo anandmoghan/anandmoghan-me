@@ -73,7 +73,7 @@ export function AskBox({ p }: { p: UseParenting }) {
     try {
       await parentingApi.ask(p.ctx, text.trim());
       setText("");
-      toast.show({ message: "Question sent, the answer will appear under Your questions" });
+      toast.show({ message: "Question sent, the answer will appear under Questions" });
       await p.refresh();
     } catch {
       toast.show({ message: "Could not send your question, try again", error: true });

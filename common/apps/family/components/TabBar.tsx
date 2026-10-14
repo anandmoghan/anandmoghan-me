@@ -59,9 +59,9 @@ function tabsFor(domain: Domain, pathname: string, params: URLSearchParams, sugg
     return [...FITNESS_TABS.map(([t, label]) => ({ to: url(`/fitness/${t}`, { p }), label, icon: icons[t], active: tab === t }))];
   }
   if (domain === "parenting") {
-    // About Nila, a past week and the cards on Today open pages of their own, so Today stays lit there; Your questions belongs to Help.
+    // About Nila, a past week and the cards on Today open pages of their own, so Today stays lit there.
     const raw = /^\/nila\/([a-z]+)/.exec(pathname)?.[1] ?? "today";
-    const tab = ["about", "week", "overview", "jabs", "works", "focus", "research", "weeks"].includes(raw) ? "today" : raw === "questions" ? "help" : raw;
+    const tab = ["about", "week", "overview", "jabs", "works", "focus", "research", "weeks"].includes(raw) ? "today" : raw;
     const icons: Record<string, ReactNode> = { today: <ChildIcon />, milestones: <StepsIcon />, food: <BowlIcon />, sleep: <MoonIcon />, help: <HelpIcon /> };
     return [...PARENTING_TABS.map(([t, label]) => ({ to: `/nila/${t}`, label, icon: icons[t], active: tab === t }))];
   }
