@@ -31,11 +31,11 @@ export default function MacPill() {
         title={label + detail}
         aria-label={`${label}${detail}. Open Mac status`}
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 min-w-0 items-center"
+        className="tap inline-flex min-h-11 shrink-0 items-center rounded-full px-2 hover:bg-subtle"
       >
-        <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-[0.8rem] font-semibold shadow-card hover:bg-subtle">
+        <span className="inline-flex items-center gap-1.5 text-[0.8rem] font-semibold">
           <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
-          <span className="truncate">{label}<span className="hidden md:inline">{detail}</span></span>
+          Mac
         </span>
       </button>
       <MacSheet open={open} onClose={() => setOpen(false)} />
