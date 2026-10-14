@@ -85,7 +85,7 @@ function NeedRow({ n }: { n: Need }) {
 }
 
 /** Six cards: on phones two by three squares; on wider screens three by two, a little wider than tall. */
-const CARD_LAYOUT = "aspect-square md:col-span-2 md:aspect-[5/4]";
+const CARD_LAYOUT = "aspect-square";
 
 function DomainCard({ domain, to, name, line, highlight }: { domain: Domain; to: string; name: string; line: string; highlight: boolean }) {
   const Icon = DOMAIN_ICON[domain];
@@ -211,7 +211,7 @@ export default function Home() {
         )}
       </section>
 
-      <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-6" data-testid="home-cards">
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6" data-testid="home-cards">
         {cards.map((c) => <DomainCard key={c.domain} {...c} />)}
       </ul>
 
