@@ -44,6 +44,18 @@ export interface Habit {
   archived: boolean
 }
 
+export interface Task {
+  id: string
+  /** The planner uid of the task's owner. */
+  ownerUid: string
+  title: string
+  notes: string
+  due: Date | null
+  dueHasTime: boolean
+  done: boolean
+  shared: boolean
+}
+
 export function weekStart(date: Date): Date {
   return startOfWeek(date, { weekStartsOn: 1 })
 }

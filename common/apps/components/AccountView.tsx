@@ -10,7 +10,7 @@ import { NicknameEditor } from '@/common/visitors/NicknameEditor'
 import { Card } from '../shell/Card'
 import { Field } from '../shell/Field'
 import { ButtonSpinner } from '../shell/Skeleton'
-import { GoogleLoginButton } from './GoogleLoginButton'
+import { SocialLoginButtons } from './SocialLoginButtons'
 import { Spinner } from './Spinner'
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -137,7 +137,7 @@ export function AccountPanel() {
             <p className="text-sm text-muted">
               Your comments, reading history and settings stay with you, also when you sign in to an account you already have.
             </p>
-            <GoogleLoginButton />
+            <SocialLoginButtons />
 
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-border" />

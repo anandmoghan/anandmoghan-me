@@ -51,6 +51,23 @@ service cloud.firestore {
       return name is string && name.matches('^[A-Za-z0-9_-][A-Za-z0-9 _-]{0,28}[A-Za-z0-9_-]$');
     }
 
+    // liveActivities is a map keyed by activity ("sleep:<id>"); rules cannot loop over entries, so
+    // only its type and size are checked.
+    function validDevice(d) {
+      return d.keys().hasOnly(['app', 'platform', 'fcmToken', 'apnsEnv', 'liveActivityStartToken',
+          'liveActivities', 'timezone', 'updatedAt'])
+        && d.keys().hasAll(['app', 'platform', 'fcmToken', 'apnsEnv', 'timezone', 'updatedAt'])
+        && d.app in ['nila', 'planner', 'wealth']
+        && d.platform == 'ios'
+        && d.fcmToken is string && d.fcmToken.size() >= 1 && d.fcmToken.size() <= 4096
+        && d.apnsEnv in ['sandbox', 'production']
+        && (!('liveActivityStartToken' in d)
+          || (d.liveActivityStartToken is string && d.liveActivityStartToken.size() <= 4096))
+        && (!('liveActivities' in d) || (d.liveActivities is map && d.liveActivities.size() <= 20))
+        && d.timezone is string && d.timezone.size() >= 1 && d.timezone.size() <= 64
+        && d.updatedAt is timestamp;
+    }
+
     match /users/{uid} {
       // Owner reads their own doc (anonymous included). Real users can fetch a profile, and look one
       // up by email one at a time (group members and invites in the wealth app); only admins list.
@@ -68,6 +85,14 @@ service cloud.firestore {
       // App-level prefs (theme, etc.) — single doc at prefs/p
       match /prefs/{doc} {
         allow read, write: if isOwner(uid);
+      }
+
+      // Devices (iOS apps): { app, platform, fcmToken, apnsEnv, liveActivityStartToken?,
+      // liveActivities?, timezone, updatedAt }, one doc per app install. The owner (a real account)
+      // writes them; nobody reads them from a client, the Mac reads with the admin SDK.
+      match /devices/{installationId} {
+        allow create, update: if isRealOwner(uid) && validDevice(request.resource.data);
+        allow delete: if isRealOwner(uid);
       }
 
       // Notifications: { title, body?, app?, link?, createdAt, readAt }. Written only by the server
@@ -381,6 +406,21 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    function plannerValidTask(d) {
+      return d.keys().hasOnly(['title', 'notes', 'due', 'dueHasTime', 'done', 'doneAt', 'shared',
+          'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['title', 'dueHasTime', 'done', 'shared', 'createdAt', 'updatedAt'])
+        && d.title is string && d.title.size() >= 1 && d.title.size() <= 200
+        && (!('notes' in d) || (d.notes is string && d.notes.size() <= 2000))
+        && (!('due' in d) || d.due is timestamp)
+        && d.dueHasTime is bool
+        && d.done is bool
+        && (!('doneAt' in d) || d.doneAt == null || d.doneAt is timestamp)
+        && d.shared is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
     match /planner/{uid} {
       allow read: if plannerAccess();
       allow create, update: if isOwner(uid) && plannerAccess() && plannerValidProfile(request.resource.data);
@@ -390,6 +430,20 @@ service cloud.firestore {
       match /events/{eventId} {
         allow read: if plannerAccess();
         allow write: if false;
+      }
+
+      // Tasks: the owner has full access. Household members with the planner app read the tasks marked
+      // shared and may only tick them (done, doneAt, updatedAt).
+      match /tasks/{taskId} {
+        allow read: if (isOwner(uid) && plannerAccess())
+          || (plannerAccess() && resource.data.shared == true);
+        allow create, update: if isOwner(uid) && plannerAccess() && plannerValidTask(request.resource.data);
+        allow update: if plannerAccess() && !isOwner(uid) && resource.data.shared == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneAt', 'updatedAt'])
+          && request.resource.data.done is bool
+          && (request.resource.data.doneAt == null || request.resource.data.doneAt is timestamp)
+          && request.resource.data.updatedAt is timestamp;
+        allow delete: if isOwner(uid) && plannerAccess();
       }
 
       match /habits/{habitId} {

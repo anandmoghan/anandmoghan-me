@@ -6,8 +6,9 @@ import { addDays, addWeeks, format, isSameDay, isSameWeek } from 'date-fns'
 import { collection, limit, onSnapshot, orderBy, query, Timestamp, where } from 'firebase/firestore'
 import { getDb } from '@/common/firebase/client'
 import { Card } from '../../shell/Card'
-import { COLOUR_VAR, timeAgo, weekDays, weekStart, type Person, type PlannerEvent } from '../lib'
+import { COLOUR_VAR, timeAgo, weekDays, weekStart, type Person, type PlannerEvent, type Task } from '../lib'
 import { usePlanner } from '../PlannerProvider'
+import { useTasks } from '../useTasks'
 
 interface Row extends PlannerEvent {
   person: Person
@@ -99,6 +100,26 @@ function EventRow({ row }: { row: Row }) {
   )
 }
 
+function TaskLine({ task, person }: { task: Task; person: Person | undefined }) {
+  return (
+    <li className="flex items-start gap-3 py-2">
+      <span className="w-14 shrink-0 pt-0.5 text-sm font-bold tabular-nums text-muted">
+        {task.due && task.dueHasTime ? format(task.due, 'HH:mm') : 'Task'}
+      </span>
+      {person && (
+        <span
+          className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: COLOUR_VAR[person.colour] }}
+          title={person.displayName}
+        />
+      )}
+      <Link href="/apps/planner/tasks" className={`min-w-0 font-bold${task.done ? ' text-muted line-through' : ''}`}>
+        {task.title}
+      </Link>
+    </li>
+  )
+}
+
 export function CalendarPage() {
   const { people, me } = usePlanner()
   const [anchor, setAnchor] = useState(() => weekStart(new Date()))
@@ -108,11 +129,20 @@ export function CalendarPage() {
   const shown = people.filter((p) => !hidden.has(p.uid))
   const shownUids = useMemo(() => shown.map((p) => p.uid), [shown])
   const { events, error } = useWeekEvents(shownUids, from, to)
+  const { tasks, error: tasksError } = useTasks(me?.uid ?? '', shownUids)
   const synced = useLastSynced(useMemo(() => people.map((p) => p.uid), [people]))
 
   const rows: Row[] = shown
     .flatMap((person) => (events[person.uid] ?? []).map((e) => ({ ...e, person })))
     .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.getTime() - b.start.getTime())
+
+  const dueTasks = shown.flatMap((person) =>
+    (tasks[person.uid] ?? []).filter((t) => t.due !== null && t.due >= from && t.due < to).map((t) => ({ task: t, person })),
+  )
+  const tasksOn = (day: Date) =>
+    dueTasks
+      .filter(({ task }) => task.due !== null && isSameDay(task.due, day))
+      .sort((a, b) => Number(a.task.dueHasTime) - Number(b.task.dueHasTime) || a.task.due!.getTime() - b.task.due!.getTime())
 
   const now = new Date()
   const onCurrentWeek = isSameWeek(anchor, now, { weekStartsOn: 1 })
@@ -156,6 +186,7 @@ export function CalendarPage() {
         {format(from, 'd MMM')} to {format(addDays(from, 6), 'd MMM yyyy')}
       </p>
       {error && <p className="field-error">Could not load events: {error}</p>}
+      {tasksError && <p className="field-error">Could not load tasks: {tasksError}</p>}
 
       {onCurrentWeek && today.length > 0 && (
         <Card>
@@ -168,7 +199,7 @@ export function CalendarPage() {
         </Card>
       )}
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && dueTasks.length === 0 ? (
         <Card>
           <p className="text-sm text-muted">
             Nothing this week. If no calendar has synced yet, set up the iPhone Shortcut in{' '}
@@ -181,7 +212,8 @@ export function CalendarPage() {
       ) : (
         days.map((day) => {
           const dayRows = rows.filter((r) => isSameDay(r.start, day))
-          if (dayRows.length === 0) return null
+          const dayTasks = tasksOn(day)
+          if (dayRows.length === 0 && dayTasks.length === 0) return null
           return (
             <section key={day.toISOString()}>
               <h2 className="mb-1 text-sm font-bold uppercase tracking-wide text-muted">
@@ -191,6 +223,9 @@ export function CalendarPage() {
               <ul className="card card--compact divide-y divide-border">
                 {dayRows.map((r) => (
                   <EventRow key={`${r.person.uid}-${r.id}`} row={r} />
+                ))}
+                {dayTasks.map(({ task, person }) => (
+                  <TaskLine key={`${task.ownerUid}-${task.id}`} task={task} person={person} />
                 ))}
               </ul>
             </section>

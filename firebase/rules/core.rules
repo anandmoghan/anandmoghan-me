@@ -45,6 +45,23 @@ function validNickname(name) {
   return name is string && name.matches('^[A-Za-z0-9_-][A-Za-z0-9 _-]{0,28}[A-Za-z0-9_-]$');
 }
 
+// liveActivities is a map keyed by activity ("sleep:<id>"); rules cannot loop over entries, so
+// only its type and size are checked.
+function validDevice(d) {
+  return d.keys().hasOnly(['app', 'platform', 'fcmToken', 'apnsEnv', 'liveActivityStartToken',
+      'liveActivities', 'timezone', 'updatedAt'])
+    && d.keys().hasAll(['app', 'platform', 'fcmToken', 'apnsEnv', 'timezone', 'updatedAt'])
+    && d.app in ['nila', 'planner', 'wealth']
+    && d.platform == 'ios'
+    && d.fcmToken is string && d.fcmToken.size() >= 1 && d.fcmToken.size() <= 4096
+    && d.apnsEnv in ['sandbox', 'production']
+    && (!('liveActivityStartToken' in d)
+      || (d.liveActivityStartToken is string && d.liveActivityStartToken.size() <= 4096))
+    && (!('liveActivities' in d) || (d.liveActivities is map && d.liveActivities.size() <= 20))
+    && d.timezone is string && d.timezone.size() >= 1 && d.timezone.size() <= 64
+    && d.updatedAt is timestamp;
+}
+
 match /users/{uid} {
   // Owner reads their own doc (anonymous included). Real users can fetch a profile, and look one
   // up by email one at a time (group members and invites in the wealth app); only admins list.
@@ -62,6 +79,14 @@ match /users/{uid} {
   // App-level prefs (theme, etc.) — single doc at prefs/p
   match /prefs/{doc} {
     allow read, write: if isOwner(uid);
+  }
+
+  // Devices (iOS apps): { app, platform, fcmToken, apnsEnv, liveActivityStartToken?,
+  // liveActivities?, timezone, updatedAt }, one doc per app install. The owner (a real account)
+  // writes them; nobody reads them from a client, the Mac reads with the admin SDK.
+  match /devices/{installationId} {
+    allow create, update: if isRealOwner(uid) && validDevice(request.resource.data);
+    allow delete: if isRealOwner(uid);
   }
 
   // Notifications: { title, body?, app?, link?, createdAt, readAt }. Written only by the server

@@ -411,3 +411,115 @@ describe("planner", () => {
     await assertFails(setDoc(doc(real("alice"), `plannerKeys/${"c".repeat(64)}`), { uid: "alice", label: "Phone", createdAt: serverTimestamp() }));
   });
 });
+
+describe("devices", () => {
+  const device = (over = {}) => ({
+    app: "nila",
+    platform: "ios",
+    fcmToken: "tok",
+    apnsEnv: "sandbox",
+    timezone: "Europe/London",
+    updatedAt: serverTimestamp(),
+    ...over,
+  });
+
+  test("a real owner creates, updates and deletes their device docs", async () => {
+    const db = real("alice");
+    const ref = doc(db, "users/alice/devices/inst-1");
+    await assertSucceeds(setDoc(ref, device()));
+    await assertSucceeds(setDoc(ref, device({
+      liveActivityStartToken: "start",
+      liveActivities: { "sleep:s1": { updateToken: "u", startedAt: new Date() } },
+    })));
+    await assertSucceeds(deleteDoc(ref));
+  });
+
+  test("fields, types and sizes are validated", async () => {
+    const ref = doc(real("alice"), "users/alice/devices/inst-1");
+    await assertFails(setDoc(ref, device({ app: "other" })));
+    await assertFails(setDoc(ref, device({ platform: "android" })));
+    await assertFails(setDoc(ref, device({ apnsEnv: "dev" })));
+    await assertFails(setDoc(ref, device({ fcmToken: "x".repeat(4097) })));
+    await assertFails(setDoc(ref, device({ fcmToken: 5 })));
+    await assertFails(setDoc(ref, device({ extra: true })));
+    await assertFails(setDoc(ref, device({ liveActivities: "no" })));
+    const { timezone, ...missing } = device();
+    await assertFails(setDoc(ref, missing));
+  });
+
+  test("nobody else reads or writes, and anonymous sessions cannot write", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/alice/devices/inst-1"), { app: "nila" });
+    });
+    for (const db of [real("alice"), real("mallory"), real("boss", { admin: true })]) {
+      await assertFails(getDoc(doc(db, "users/alice/devices/inst-1")));
+      await assertFails(getDocs(collection(db, "users/alice/devices")));
+    }
+    await assertFails(setDoc(doc(real("mallory"), "users/alice/devices/inst-2"), device()));
+    await assertFails(deleteDoc(doc(real("mallory"), "users/alice/devices/inst-1")));
+    await assertFails(setDoc(doc(anon("anon1"), "users/anon1/devices/inst-1"), device()));
+  });
+});
+
+describe("planner tasks", () => {
+  const planner = (uid, claims = {}) => real(uid, { apps: ["planner"], ...claims });
+  const task = (over = {}) => ({
+    title: "Buy milk",
+    dueHasTime: false,
+    done: false,
+    shared: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    ...over,
+  });
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      const base = { title: "T", dueHasTime: false, done: false, createdAt: new Date(), updatedAt: new Date() };
+      await setDoc(doc(db, "planner/anand/tasks/shared1"), { ...base, shared: true });
+      await setDoc(doc(db, "planner/anand/tasks/private1"), { ...base, shared: false });
+    });
+  });
+
+  test("the owner has full access with validated fields", async () => {
+    const db = planner("anand");
+    await assertSucceeds(setDoc(doc(db, "planner/anand/tasks/t1"), task({ notes: "2 pints", due: new Date(), dueHasTime: true, shared: true })));
+    await assertSucceeds(updateDoc(doc(db, "planner/anand/tasks/t1"), { done: true, doneAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(db, "planner/anand/tasks/t1"), { done: false, doneAt: null, updatedAt: serverTimestamp() }));
+    await assertSucceeds(getDocs(collection(db, "planner/anand/tasks")));
+    await assertSucceeds(deleteDoc(doc(db, "planner/anand/tasks/t1")));
+  });
+
+  test("invalid owner writes are rejected", async () => {
+    const db = planner("anand");
+    await assertFails(setDoc(doc(db, "planner/anand/tasks/t2"), task({ title: "" })));
+    await assertFails(setDoc(doc(db, "planner/anand/tasks/t2"), task({ title: "x".repeat(201) })));
+    await assertFails(setDoc(doc(db, "planner/anand/tasks/t2"), task({ notes: "x".repeat(2001) })));
+    await assertFails(setDoc(doc(db, "planner/anand/tasks/t2"), task({ shared: "yes" })));
+    await assertFails(setDoc(doc(db, "planner/anand/tasks/t2"), task({ extra: 1 })));
+    await assertFails(setDoc(doc(planner("kavya"), "planner/anand/tasks/t2"), task()));
+    await assertFails(setDoc(doc(real("anand"), "planner/anand/tasks/t2"), task()));
+  });
+
+  test("household members read only shared tasks and may only tick them", async () => {
+    const db = planner("kavya");
+    await assertSucceeds(getDoc(doc(db, "planner/anand/tasks/shared1")));
+    await assertSucceeds(getDocs(query(collection(db, "planner/anand/tasks"), where("shared", "==", true))));
+    await assertFails(getDoc(doc(db, "planner/anand/tasks/private1")));
+    await assertFails(getDocs(collection(db, "planner/anand/tasks")));
+    await assertSucceeds(updateDoc(doc(db, "planner/anand/tasks/shared1"), { done: true, doneAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(db, "planner/anand/tasks/shared1"), { title: "Hijack", updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(db, "planner/anand/tasks/shared1"), { shared: false, updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(db, "planner/anand/tasks/private1"), { done: true, updatedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(db, "planner/anand/tasks/shared1")));
+    await assertFails(setDoc(doc(db, "planner/anand/tasks/new"), task({ shared: true })));
+  });
+
+  test("users without the planner app and anonymous sessions get nothing", async () => {
+    for (const db of [real("alice"), anon("anon1")]) {
+      await assertFails(getDoc(doc(db, "planner/anand/tasks/shared1")));
+      await assertFails(updateDoc(doc(db, "planner/anand/tasks/shared1"), { done: true, updatedAt: serverTimestamp() }));
+    }
+  });
+});

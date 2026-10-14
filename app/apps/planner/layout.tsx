@@ -6,6 +6,7 @@ import { PlannerShell } from '@/common/apps/planner/PlannerShell'
 // Planner: a shared calendar (mirrored from the iPhone by a Shortcut and the Mac server) and
 // private habits. One static page per route:
 //   /apps/planner          calendar, one week at a time
+//   /apps/planner/tasks    tasks, yours and the ones shared with the household
 //   /apps/planner/habits   habit list with this week's ticks
 //   /apps/planner/setup    colour, Shortcut keys and the Shortcut steps
 export const metadata: Metadata = {

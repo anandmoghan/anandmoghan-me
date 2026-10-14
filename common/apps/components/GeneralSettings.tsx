@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
+import { providerErrorMessage, SOCIAL_PROVIDER_NAMES, type SocialProviderId } from '@/common/firebase/providers'
 import { RESET_NEUTRAL_NOTICE, requestPasswordReset } from '@/common/firebase/passwordReset'
 import { useTheme } from '@/common/components/ThemeProvider'
 import { AnalyticsSwitch } from '@/common/visitors/AnalyticsSwitch'
@@ -15,6 +16,7 @@ import { SettingsCard, SettingsRow as Row } from './SettingsRows'
 
 const PROVIDER_NAMES: Record<string, string> = {
   'google.com': 'Google',
+  'apple.com': 'Apple',
   password: 'Email',
 }
 
@@ -46,12 +48,13 @@ function Avatar({ name }: { name: string }) {
 }
 
 export function GeneralSettings() {
-  const { user, loading, isAnonymous, isAdmin, apps, displayName, refresh, signOut } = useAuth()
+  const { user, loading, isAnonymous, isAdmin, apps, displayName, refresh, signOut, linkProvider } = useAuth()
   const { theme, setTheme } = useTheme()
   const deletion = useDeleteMyData()
   const [refreshing, setRefreshing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [linking, setLinking] = useState<SocialProviderId | null>(null)
 
   // Linked providers can change outside this tab (another device, the console), and the cached
   // user only learns of them on reload, so re-read the account once.
@@ -94,6 +97,22 @@ export function GeneralSettings() {
     const problem = await requestPasswordReset(user.email, '/account')
     if (problem) setError(problem)
     else setNotice(RESET_NEUTRAL_NOTICE)
+  }
+
+  const handleLink = async (id: SocialProviderId) => {
+    setError(null)
+    setNotice(null)
+    setLinking(id)
+    try {
+      await linkProvider(id)
+      setProviderIds(user?.providerData.map((p) => p.providerId) ?? null)
+      setNotice(`${SOCIAL_PROVIDER_NAMES[id]} linked.`)
+    } catch (err) {
+      console.error(err)
+      setError(providerErrorMessage(err, id, 'link'))
+    } finally {
+      setLinking(null)
+    }
   }
 
   const profileName = displayName || user?.displayName || user?.email || 'Guest'
@@ -151,6 +170,20 @@ export function GeneralSettings() {
               <span key={name} className="badge badge--fg">
                 {name}
               </span>
+            ))}
+          </Row>
+          <Row label="Link an account" description="Add another way to sign in to this same account.">
+            {(Object.keys(SOCIAL_PROVIDER_NAMES) as SocialProviderId[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                disabled={linking !== null || providerKeys.includes(id)}
+                aria-busy={linking === id}
+                onClick={() => handleLink(id)}
+                className="btn btn--sm"
+              >
+                {providerKeys.includes(id) ? `${SOCIAL_PROVIDER_NAMES[id]} linked` : `Link ${SOCIAL_PROVIDER_NAMES[id]}`}
+              </button>
             ))}
           </Row>
           {hasPassword && (
