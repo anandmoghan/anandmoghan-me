@@ -18,6 +18,9 @@
     "rules:check": "node scripts/merge-rules.mjs --check",
     "test:rules": "npm run rules:check && firebase emulators:exec --only firestore,auth --project demo-anandmoghan-me \"node --test --test-concurrency=1 tests/rules/*.test.mjs\"",
     "seed-roles": "tsx scripts/seed-roles.ts",
+    "emulators": "npm --prefix functions run build && mkdir -p .emulator-data && firebase emulators:start --only auth,firestore,storage,functions --project demo-anandmoghan-me --import .emulator-data --export-on-exit .emulator-data",
+    "seed:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8181 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9098 tsx scripts/seed-emulator.ts",
+    "dev:emulated": "NEXT_PUBLIC_USE_EMULATORS=true next dev -p 3300",
     "sync-materials": "node scripts/sync-materials.mjs"
   },
   "keywords": [],

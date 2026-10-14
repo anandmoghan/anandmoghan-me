@@ -41,6 +41,7 @@ next-env.d.ts
 /scripts/*
 !/scripts/merge-rules.mjs
 !/scripts/seed-roles.ts
+!/scripts/seed-emulator.ts
 !/scripts/sync-global.mjs
 !/scripts/sync-materials.mjs
 
@@ -49,3 +50,6 @@ next-env.d.ts
 
 # Firebase emulator logs
 *-debug.log
+
+# Local emulator state
+.emulator-data/

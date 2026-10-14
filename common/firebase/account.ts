@@ -1,7 +1,6 @@
 import type { User } from 'firebase/auth';
 
-// Same-origin `api` Cloud Function (Hosting rewrite); override for the emulator or another host.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api';
+import { API_BASE } from './client';
 
 async function post(user: User, path: string, body: unknown): Promise<Response> {
   const res = await fetch(`${API_BASE}${path}`, {

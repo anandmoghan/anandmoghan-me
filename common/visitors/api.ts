@@ -1,7 +1,8 @@
 import type { User } from 'firebase/auth';
 
-// Visitor routes of the same-origin `api` Cloud Function (functions/src/visits.ts).
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api';
+import { API_BASE } from '../firebase/client';
+
+// Visitor routes of the `api` Cloud Function (functions/src/visits.ts).
 
 async function post(user: User, path: string, body: unknown): Promise<Response> {
   const res = await fetch(`${API_BASE}${path}`, {
