@@ -56,4 +56,9 @@ export const DOMAIN_ICON: Record<Domain, (p: P) => ReactNode> = {
   home: HomeIcon, health: HeartPulseIcon, fitness: DumbbellIcon, parenting: ChildIcon, shopping: BagIcon, style: SparkleIcon, updates: BellIcon,
 };
 
-export const PinIcon = ic(<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Zm3 11v5" />);
+/** Filled while the page is pinned. */
+export const PinIcon = ({ size = 22, filled = false }: P & { filled?: boolean }) => (
+  <svg {...base} width={size} height={size} strokeWidth={1.8} fill={filled ? "currentColor" : "none"}>
+    <path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Zm3 11v5" />
+  </svg>
+);

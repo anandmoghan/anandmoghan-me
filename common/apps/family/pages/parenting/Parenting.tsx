@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from "react";
 import { Navigate, useParams } from "@/common/apps/family/router";
-import { BackLink, PageTitle } from "@/common/apps/family/components/ui";
+import { BackLink, PageTitle, softBtn } from "@/common/apps/family/components/ui";
 import { BrokenNote } from "@/common/apps/family/components/health/parts";
 import { ListSkeleton } from "@/common/apps/family/components/Skeleton";
 import { ParentingNotice, ParentingOffline } from "@/common/apps/family/components/parenting/parts";
@@ -28,6 +29,7 @@ const EXTRA_PAGES: Record<string, string> = {
 export default function Parenting() {
   const { tab: raw, id } = useParams();
   const p = useParenting();
+  const [aboutEditing, setAboutEditing] = useState(false);
   const foodPage = raw === "food" && id !== undefined && id in FOOD_PAGES ? (id as FoodPage) : undefined;
   const tab = id !== undefined
     ? raw === "week" ? (["week", "Week summary"] as const) : raw === "help" ? (["problem", "Help"] as const) : foodPage ? (["foodpage", FOOD_PAGES[foodPage]] as const) : undefined
@@ -53,7 +55,7 @@ export default function Parenting() {
   return (
     <div className="space-y-5 px-4 pt-5 pb-6">
       {backTo && <div className="-mb-3"><BackLink to={backTo[0]} label={backTo[1]} /></div>}
-      <PageTitle title={label} sub={key === "today" ? <span data-testid="nila-age">{[todayLabel, age && `${age} old`].filter(Boolean).join(" · ")}</span> : undefined} />
+      <PageTitle title={label} action={key === "about" && p.status === "ready" && !aboutEditing ? <button type="button" onClick={() => setAboutEditing(true)} className={softBtn}>Edit text</button> : undefined} sub={key === "today" ? <span data-testid="nila-age">{[todayLabel, age && `${age} old`].filter(Boolean).join(" · ")}</span> : undefined} />
       {p.status === "loading" && <ListSkeleton rows={4} />}
       {(p.status === "offline" || p.status === "error") && <ParentingOffline offline={p.status === "offline"} onRetry={() => p.refresh()} />}
       {p.status === "ready" && p.data && needsMac && <ParentingOffline offline onRetry={() => p.refresh()} />}
@@ -61,7 +63,7 @@ export default function Parenting() {
         <div role="tabpanel" aria-label={label}>
           {key === "today" && <BrokenNote broken={p.data.broken} />}
           {key === "today" && <Today p={p} data={p.data} />}
-          {key === "about" && <About p={p} />}
+          {key === "about" && <About p={p} editing={aboutEditing} setEditing={setAboutEditing} />}
           {key === "week" && id !== undefined && <Week p={p} id={id} />}
           {key === "problem" && id !== undefined && <ProblemPage p={p} data={p.data} id={id} />}
           {key === "jabs" && <JabsPage data={p.data} />}

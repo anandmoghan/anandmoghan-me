@@ -7,6 +7,10 @@ import { useConsent } from './ConsentProvider';
 import { logVisit } from './api';
 
 const SESSION_KEY = 'visitSessionId';
+// When this browser last logged a visit. The function also drops visits under an hour apart, so
+// this only saves the request.
+const LOGGED_KEY = 'visitLoggedAt';
+const INTERVAL_MS = 60 * 60_000;
 // The admin panel's own page views would only skew the dashboard.
 const SKIP_PREFIX = '/apps/admin';
 
@@ -19,8 +23,20 @@ function sessionId(): string {
   return id;
 }
 
-// Logs a page view on every route change once analytics consent is recorded. The first view
-// sends document.referrer; later ones send the previous in-site path.
+function dueForLog(): boolean {
+  try {
+    const at = Number(localStorage.getItem(LOGGED_KEY));
+    if (at && Date.now() - at < INTERVAL_MS) return false;
+    localStorage.setItem(LOGGED_KEY, String(Date.now()));
+  } catch {
+    // Storage blocked: the function's own hourly check still applies.
+  }
+  return true;
+}
+
+// Logs a page view at most once an hour (the first page, then the first route change after the
+// hour) once analytics consent is recorded. The first view sends document.referrer; later ones
+// send the previous in-site path.
 export function VisitLogger() {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -31,7 +47,7 @@ export function VisitLogger() {
     if (!analyticsReady || !user || !pathname || pathname === lastPath.current) return;
     const referrer = lastPath.current ?? (document.referrer || null);
     lastPath.current = pathname;
-    if (pathname.startsWith(SKIP_PREFIX)) return;
+    if (pathname.startsWith(SKIP_PREFIX) || !dueForLog()) return;
     logVisit(user, { path: pathname, referrer, sessionId: sessionId() }).catch((err) =>
       console.warn('Visit not logged', err),
     );

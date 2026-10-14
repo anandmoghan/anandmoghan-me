@@ -17,13 +17,13 @@ export function PinButton({ title }: { title: string }) {
   return (
     <button
       type="button"
-      aria-pressed={pinned}
-      aria-label={pinned ? "Unpin this page" : "Pin this page"}
+      title={pinned ? "Unpin this page" : "Pin this page"}
       disabled={!ready}
       onClick={() => toggle(path, label)}
-      className={`tap inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-subtle disabled:opacity-50 ${pinned ? "text-domain" : "text-muted"}`}
+      className={`tap inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors hover:bg-subtle disabled:opacity-50 ${pinned ? "text-domain" : "text-muted"}`}
     >
-      <PinIcon size={20} />
+      <PinIcon size={18} filled={pinned} />
+      {pinned ? "Unpin" : "Pin"}
     </button>
   );
 }
