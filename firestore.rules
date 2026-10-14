@@ -72,7 +72,7 @@ service cloud.firestore {
     }
 
     // ── roles (admin only) ────────────────────────────────────────────────────
-    // roles/{emailLowercase}: { admin: bool, apps: string[], ladderTrackers: string[] }.
+    // roles/{emailLowercase}: { admin: bool, apps: string[], ladderTrackers: string[], ladderHome?: string }.
     // Seeded with scripts/seed-roles.ts; edited from the admin panel.
 
     match /roles/{email} {

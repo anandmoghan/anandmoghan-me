@@ -15,7 +15,7 @@ export function ResumePage() {
         <h1 className="mb-4 text-[1.65rem] font-extrabold leading-tight">Resume</h1>
         {trackerDoc?.resume_html ? (
           // Sanitised by the migration script; clients cannot write it.
-          <div className="card prose" dangerouslySetInnerHTML={{ __html: trackerDoc.resume_html }} />
+          <div className="card prose overflow-x-auto" dangerouslySetInnerHTML={{ __html: trackerDoc.resume_html }} />
         ) : (
           <p className="text-sm italic text-muted">No resume content yet.</p>
         )}
