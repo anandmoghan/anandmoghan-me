@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useMemo } from 'react';
 import PostCard from '@/common/components/PostCard';
 import TagFilter from '@/common/components/TagFilter';
 import Pagination from '@/common/components/Pagination';
@@ -15,22 +14,8 @@ interface PostsClientProps {
 const POSTS_PER_PAGE = 9; // 3x3 grid
 
 export default function PostsClient({ posts }: PostsClientProps) {
-  const searchParams = useSearchParams();
-  const showUnpublished = searchParams.get('unpublished') === 'true';
-  
-  // Filter posts based on published status
-  const visiblePosts = useMemo(() => {
-    return showUnpublished ? posts : posts.filter(post => post.published);
-  }, [posts, showUnpublished]);
-
-  const [filteredPosts, setFilteredPosts] = useState<Post[]>(visiblePosts);
+  const [filteredPosts, setFilteredPosts] = useState<Post[]>(posts);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Update filtered posts when visibility changes
-  useEffect(() => {
-    setFilteredPosts(visiblePosts);
-    setCurrentPage(1);
-  }, [visiblePosts]);
 
   // Reset to page 1 when filtered posts change
   const handleFilteredPostsChange = (newFilteredPosts: Post[]) => {
@@ -61,16 +46,6 @@ export default function PostsClient({ posts }: PostsClientProps) {
           <p className="text-sm sm:text-base text-muted">
             Thoughts on AI, technology, and life
           </p>
-          {showUnpublished && (
-            <div className="badge badge--warn mt-4">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-              Showing unpublished posts
-            </div>
-          )}
         </div>
       </section>
 
@@ -82,11 +57,11 @@ export default function PostsClient({ posts }: PostsClientProps) {
       </div>
 
       {/* Tag Filter Section */}
-      {visiblePosts.length > 0 && (
+      {posts.length > 0 && (
         <section className="pb-6">
           <div className="site-container">
             <TagFilter 
-              posts={visiblePosts}
+              posts={posts}
               onFilteredPostsChange={handleFilteredPostsChange}
             />
           </div>
@@ -96,7 +71,7 @@ export default function PostsClient({ posts }: PostsClientProps) {
       {/* Posts Section */}
       <section className="pb-8">
         <div className="site-container">
-          {filteredPosts.length === 0 && visiblePosts.length > 0 ? (
+          {filteredPosts.length === 0 && posts.length > 0 ? (
             <div className="card p-10 text-center">
               <div className="w-14 h-14 mx-auto mb-5 rounded-full flex items-center justify-center bg-subtle text-accent">
                 <svg 

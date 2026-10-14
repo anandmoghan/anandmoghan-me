@@ -7,7 +7,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Home',
-  description: 'Anand Mohan is an Applied Scientist at Amazon AGI specializing in Speech-to-Speech LLMs, incremental learning, and multilingual speech recognition. M.Tech from IISc Bangalore, B.Tech from NIT Calicut. Based in United Kingdom with expertise in AI research and machine learning.',
+  description: 'Anand Mohan is an Applied Scientist at Amazon AGI specializing in Speech-to-Speech LLMs, post-training speech LLMs, incremental learning, and multilingual speech recognition. M.Tech from IISc Bangalore, B.Tech from NIT Calicut. Based in United Kingdom with expertise in AI research and machine learning.',
   keywords: 'Anand Mohan, Anand Mohan Amazon, Anand Mohan AI, Anand Mohan IISc, Anand Mohan NITC, Anand Mohan UK, Amazon AGI, Applied Scientist, AI Scientist, Speech Recognition, Machine Learning, Speech-to-Speech LLM, ASR Systems, Federated Learning, AI Research, Indian Institute of Science, NIT Calicut',
   openGraph: {
     title: 'Anand Mohan - Applied Scientist at Amazon AGI',
@@ -53,8 +53,8 @@ export default function Home() {
           <TerminalAnimation className="w-full" />
           <noscript>
             <div className="p-6 rounded-lg" style={{ backgroundColor: '#1a1a1a', color: '#e2e8f0' }}>
-              <p className="mb-4">Applied Scientist at Amazon AGI specializing in Speech-to-Speech LLMs and incremental learning.</p>
-              <p className="mb-4">With 5+ years at Amazon and M.Tech in AI from Indian Institute of Science, I've published 6+ papers in top conferences like ICASSP and INTERSPEECH.</p>
+              <p className="mb-4">Applied Scientist at Amazon AGI specializing in Speech-to-Speech LLMs, post-training speech LLMs and incremental learning.</p>
+              <p className="mb-4">With 7+ years at Amazon and M.Tech in AI from Indian Institute of Science, I've published 6+ papers in top conferences like ICASSP and INTERSPEECH.</p>
               <p>Based in United Kingdom, working on the future of AI communication.</p>
             </div>
           </noscript>

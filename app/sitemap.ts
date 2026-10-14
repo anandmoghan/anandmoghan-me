@@ -7,7 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://anandmoghan.me';
   
   // Only include published posts in sitemap
-  const posts = getAllPosts(false);
+  const posts = getAllPosts(true).filter(post => post.published);
   
   const postEntries: MetadataRoute.Sitemap = posts.map((post) => ({
     url: `${baseUrl}/posts/${post.slug}`,

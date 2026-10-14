@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 interface TerminalCommand {
   command: string;
@@ -27,7 +27,6 @@ export default function TerminalAnimation({ className = '' }: TerminalAnimationP
   });
   const [showCursor, setShowCursor] = useState(true);
   const [currentTime, setCurrentTime] = useState('');
-  const terminalContentRef = useRef<HTMLDivElement>(null);
 
   const commands: TerminalCommand[] = [
     {
@@ -36,7 +35,7 @@ export default function TerminalAnimation({ className = '' }: TerminalAnimationP
     },
     {
       command: 'whoami',
-      output: ['Applied Scientist at Amazon AGI', 'Specializing in Speech-to-Speech LLMs and incremental learning']
+      output: ['Applied Scientist at Amazon AGI', 'Specializing in Speech-to-Speech LLMs, post-training speech LLMs and incremental learning']
     },
     // {
     //   command: 'pwd',
@@ -46,10 +45,10 @@ export default function TerminalAnimation({ className = '' }: TerminalAnimationP
       command: 'cat about.txt',
       output: [
         'I lead research on Speech-to-Speech Large Language Models at Amazon AGI.',
-        'My work spans production ASR systems, federated learning frameworks,',
+        'My work spans post-training speech LLMs, production ASR systems, federated learning frameworks,',
         'and multilingual speech recognition that powers AI at scale.',
         '',
-        'With 6+ years at Amazon and Masters in AI from Indian Institute of Science,',
+        'With 7+ years at Amazon and Masters in AI from Indian Institute of Science,',
         'I\'ve published 6+ papers in top conferences like ICASSP and INTERSPEECH.'
       ]
     },
@@ -57,6 +56,7 @@ export default function TerminalAnimation({ className = '' }: TerminalAnimationP
       command: 'ls projects/',
       output: [
         'speech-to-speech-llms/',
+        'post-training-speech-llms/',
         'incremental-learning/',
         'multilingual-asr/',
         'federated-learning-framework/',
@@ -122,12 +122,30 @@ export default function TerminalAnimation({ className = '' }: TerminalAnimationP
     }
   }, [state.currentCommandIndex, state.currentCharIndex]);
 
-  // Auto-scroll to bottom when content changes
-  useEffect(() => {
-    if (terminalContentRef.current) {
-      terminalContentRef.current.scrollTop = terminalContentRef.current.scrollHeight;
-    }
-  }, [state.completedCommands, state.currentTypedCommand]);
+  const renderCompleted = (done: TerminalState['completedCommands']) => (
+    <>
+          {done.map((cmd, index) => (
+            <div key={index} className="mb-1">
+              <div className="text-sm" style={{ color: '#00ff00' }}>
+                <span className="text-blue-400">anandmoghan@universe</span>
+                <span className="text-white">:</span>
+                <span className="text-green-400">~</span>
+                <span className="text-white">$ </span>
+                <span className="text-white">{cmd.command}</span>
+              </div>
+              
+              <div className="ml-0 mt-0 mb-1">
+                {cmd.output.map((line, lineIndex) => (
+                  <div key={lineIndex} className="text-sm" style={{ color: '#e2e8f0' }}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          
+    </>
+  );
 
   return (
     <div className={`font-mono ${className}`}>
@@ -152,35 +170,16 @@ export default function TerminalAnimation({ className = '' }: TerminalAnimationP
         
         {/* Terminal Content */}
         <div 
-          ref={terminalContentRef}
-          className="p-4 h-96 overflow-y-auto" 
+          className="p-4 grid"
           style={{ backgroundColor: '#1a1a1a' }}
         >
+          <div className="col-start-1 row-start-1 min-w-0">
           <div className="text-sm mb-2" style={{ color: '#888' }}>
             Last login: {currentTime} on ttys000
           </div>
           
-          {/* Display completed commands */}
-          {state.completedCommands.map((cmd, index) => (
-            <div key={index} className="mb-1">
-              <div className="text-sm" style={{ color: '#00ff00' }}>
-                <span className="text-blue-400">anandmoghan@universe</span>
-                <span className="text-white">:</span>
-                <span className="text-green-400">~</span>
-                <span className="text-white">$ </span>
-                <span className="text-white">{cmd.command}</span>
-              </div>
-              
-              <div className="ml-0 mt-0 mb-1">
-                {cmd.output.map((line, lineIndex) => (
-                  <div key={lineIndex} className="text-sm" style={{ color: '#e2e8f0' }}>
-                    {line}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          
+          {renderCompleted(state.completedCommands)}
+
           {/* Current typing command */}
           {state.currentCommandIndex < commands.length && (
             <div className="text-sm" style={{ color: '#00ff00' }}>
@@ -203,6 +202,14 @@ export default function TerminalAnimation({ className = '' }: TerminalAnimationP
               {showCursor && <span className="text-white">_</span>}
             </div>
           )}
+          </div>
+
+          {/* Invisible copy of the finished terminal: reserves the final height so nothing scrolls or jumps */}
+          <div aria-hidden="true" className="col-start-1 row-start-1 min-w-0 invisible">
+            <div className="text-sm mb-2">Last login: {currentTime} on ttys000</div>
+            {renderCompleted(commands)}
+            <div className="text-sm">anandmoghan@universe:~$ _</div>
+          </div>
         </div>
       </div>
     </div>
