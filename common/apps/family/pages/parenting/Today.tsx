@@ -72,8 +72,8 @@ function TodaysHabit({ data }: { data: ParentingData }) {
   if (!t) return null;
   const detail = [t.why, t.aim && `Fits the aim: ${t.aim}`, `From the playbook: ${t.title}`].filter(Boolean).join("\n\n");
   return (
-    <section id="tip" aria-label="Today's habit" className="card space-y-0.5 !px-4 !py-2.5">
-      <p className="text-sm font-bold text-domain">Today's habit</p>
+    <section id="tip" aria-label="Today's habit" className="card space-y-0.5 !px-4 !py-2.5" style={{ backgroundImage: "linear-gradient(200deg, color-mix(in srgb, var(--gold) 16%, var(--surface)) 0%, var(--surface) 70%)" }}>
+      <p className="text-sm font-bold" style={{ color: "var(--gold)" }}>Today's habit</p>
       <PointList items={[{ id: "tip", text: t.text, detail, sources: t.sources }]} label="Today's habit" />
     </section>
   );
@@ -163,9 +163,9 @@ export default function Today({ p, data }: { p: UseParenting; data: ParentingDat
   if (!data.summary) {
     return (
       <div className="space-y-5">
-        <TodayPlans data={data} />
         <ThisWeek p={p} data={data} />
         <TodaysHabit data={data} />
+        <TodayPlans data={data} />
         <ResearchComing title="Her summary is not ready yet" busy={researching(data)} />
         <AboutLink />
         <RemindersLink />
@@ -174,9 +174,9 @@ export default function Today({ p, data }: { p: UseParenting; data: ParentingDat
   }
   return (
     <div className="space-y-5">
-      <TodayPlans data={data} />
-      <TodaysHabit data={data} />
       <ThisWeek p={p} data={data} />
+      <TodaysHabit data={data} />
+      <TodayPlans data={data} />
       <HubCards data={data} />
       <AboutLink />
       <RemindersLink />
