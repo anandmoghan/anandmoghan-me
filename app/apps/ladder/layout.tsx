@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { RequireAuth } from '@/common/apps/components/RequireAuth'
+import { RequireApp } from '@/common/apps/components/RequireApp'
 import { LadderProvider } from '@/common/apps/ladder/LadderProvider'
 import { LadderShell } from '@/common/apps/ladder/components/LadderShell'
 
@@ -19,10 +19,10 @@ export const metadata: Metadata = {
 
 export default function LadderLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RequireAuth>
+    <RequireApp app="ladder">
       <LadderProvider>
         <LadderShell>{children}</LadderShell>
       </LadderProvider>
-    </RequireAuth>
+    </RequireApp>
   )
 }

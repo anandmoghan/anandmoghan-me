@@ -82,7 +82,7 @@ export function LadderShell({ children }: { children: ReactNode }) {
         <Card className="max-w-xl">
           <h1 className="text-xl font-extrabold">No ladder access</h1>
           <p className="mt-2 text-sm text-muted">
-            This account has no job trackers. Ask Anand to add ladder and a tracker to your role.
+            This account has the ladder app but no job trackers. Ask Anand to add a tracker to your role.
           </p>
         </Card>
       </div>
