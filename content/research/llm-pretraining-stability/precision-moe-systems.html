@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pretraining stability: precision, MoE and systems</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+</head>
+<body class="prose">
+  <header>
+    <h1>Pretraining stability: precision, MoE and systems</h1>
+    <p>Research note for the LLM pretraining stability post. Date: 2026-10-14.</p>
+  </header>
+  <main>
+    <section id="legend">
+      <h2>How to read this note</h2>
+      <ul>
+        <li><span class="tag tag--confirmed">confirmed</span> I read the statement in the primary paper text.</li>
+        <li><span class="tag tag--reported">reported</span> Taken from an abstract, a search summary or a secondary write-up; not checked in the full paper.</li>
+        <li><span class="tag tag--inference">inference</span> My own reading, not stated by a source.</li>
+      </ul>
+      <p>Each block ends with what it stabilises, its cost and who uses it.</p>
+    </section>
+
+    <section id="number-formats">
+      <h2>fp16, loss scaling and bf16</h2>
+      <ul>
+        <li>
+          fp16 mixed precision keeps an fp32 master copy of weights, scales the loss so small gradients do not underflow, and accumulates fp16 arithmetic in fp32.
+          <span class="tag tag--reported">reported</span>
+          Source: Mixed Precision Training, arXiv 1710.03740 (abstract).
+        </li>
+        <li>
+          bf16 has the same 8 exponent bits as fp32 but only 7 mantissa bits (fp16 has 10, fp32 has 23), so it trades precision for range and needs no loss scaling.
+          <span class="tag tag--reported">reported</span>
+          Source: A Study of BFLOAT16 for Deep Learning Training, arXiv 1905.12322; PyTorch docs say bf16 autocast needs no GradScaler.
+        </li>
+        <li>
+          BLOOM saw irreversible divergences on 104B experiments with fp16 on V100s, hypothesised they came from fp16's narrow range, and trained the final 176B model in bf16 on A100s, which resolved the instability.
+          <span class="tag tag--reported">reported</span>
+          Source: BLOOM, arXiv 2211.05100 (via search summary of the paper).
+        </li>
+        <li>
+          ST-MoE stores weights in fp32, runs matmuls and activations in bf16, and notes bf16 has up to 65,536x worse roundoff error than fp32 at large magnitudes.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: ST-MoE, arXiv 2202.08906, section 3.4 and Figure 2.
+        </li>
+        <li>
+          Llama 3 405B accumulates gradients over micro-batches in fp32 and reduce-scatters gradients in fp32 across FSDP data-parallel workers.
+          The paper says this was one of several numerical fixes found by comparing loss across parallelism setups.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: The Llama 3 Herd of Models, arXiv 2407.21783, "Numerical stability".
+        </li>
+        <li>
+          Stabilises: gradient underflow (fp16), summation error in gradient and optimizer paths (fp32 accumulation).
+          Cost: fp32 master weights and gradient buffers use more memory and bandwidth.
+          Used by: essentially every frontier lab (bf16 compute, fp32 master weights and accumulation).
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          A 2025 RL paper reports fp16 was more stable than bf16 in RL fine-tuning, the reverse of the pretraining folk wisdom, because of training-inference mismatch.
+          <span class="tag tag--reported">reported</span>
+          Source: Defeating the Training-Inference Mismatch via FP16, arXiv 2510.26788 (search summary only; a different regime from pretraining).
+        </li>
+      </ul>
+    </section>
+
+    <section id="fp8">
+      <h2>FP8 training at scale</h2>
+      <h3 id="fp8-deepseek">DeepSeek-V3: fine-grained scaling and fp32 promotion</h3>
+      <ul>
+        <li>
+          Activations are scaled per 1x128 tile (per token per 128 channels); weights per 128x128 block.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: DeepSeek-V3 Technical Report, arXiv 2412.19437, section 3.3.
+        </li>
+        <li>
+          All tensors use E4M3, not the hybrid E4M3 forward plus E5M2 gradient format; the paper attributes this to tile and block scaling sharing exponent range across small groups.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, "Mantissa over Exponents".
+        </li>
+        <li>
+          Scales are computed online from the current max-abs of each tile or block, instead of delayed scaling from an amax history.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, "Online Quantization".
+        </li>
+        <li>
+          On H800, FP8 tensor-core accumulation retains about 14 bits, and the paper measured a maximum relative error of nearly 2% in preliminary tests.
+          The fix promotes partial sums to FP32 registers on CUDA cores every 128 elements.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, "Increasing Accumulation Precision".
+        </li>
+        <li>
+          Kept in BF16 or FP32: embedding, output head, MoE gating, normalization and attention operators.
+          Master weights and gradients stay FP32; AdamW moments are BF16; MoE combine stays BF16.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, sections 3.3.1 and 3.3.3.
+        </li>
+        <li>
+          Relative loss error versus a BF16 baseline stayed below 0.25% in validation runs on two model scales of about 1T tokens (V2-Lite and V2 sized, not V3 itself).
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, section 3.3 and Appendix B.1.
+        </li>
+        <li>
+          The full training "did not experience any irrecoverable loss spikes or perform any rollbacks".
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437 (abstract and introduction).
+        </li>
+        <li>
+          Cost: custom kernels, dequantisation overhead, and the paper itself calls the 14-bit accumulation a Hopper hardware deficiency.
+          Used by: DeepSeek-V3 (pretraining at 14.8T tokens).
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="fp8-te">Delayed scaling (Transformer Engine style)</h3>
+      <ul>
+        <li>
+          Delayed scaling picks scale factors from earlier iterations' statistics; it is practical because it needs no extra pass, but it assumes stable statistics across iterations and so is vulnerable to outliers.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: Scaling FP8 training to trillion-token LLMs, arXiv 2409.12517, related work.
+        </li>
+        <li>
+          Standard FP8 recipe: E4M3 for weights and activations, E5M2 for gradients.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2409.12517 body
+        </li>
+        <li>
+          I could not fetch the Transformer Engine docs page (404), so recipe parameters (amax history length, margin) are not cited here.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+
+      <h3 id="fp8-swiglu">SwiGLU outlier amplification and Smooth-SwiGLU</h3>
+      <ul>
+        <li>
+          Llama2 7B in FP8 showed a dramatic loss divergence after about 220B tokens, twice the dataset size of prior FP8 work.
+          Outliers emerge only after roughly 200B tokens.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2409.12517, introduction.
+        </li>
+        <li>
+          Mechanism: SwiGLU multiplies two linear branches, so when the weights w1 and w2 become aligned the output grows quadratically-ish and creates strong outliers; the paper links it to a weight alignment process.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2409.12517 body
+        </li>
+        <li>
+          Smooth-SwiGLU rescales channels so the quantiser sees no outlier, without changing the function the network computes.
+          Also first FP8 quantisation of both Adam moments.
+          7B model, 256 Intel Gaudi2 accelerators, on-par with BF16, up to about 34% throughput gain; trained to 2 trillion tokens.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2409.12517 abstract.
+        </li>
+        <li>
+          Cost: the scaling step per channel; a 7B model on Gaudi2 is far from frontier scale.
+          Used by: the authors (Intel); I found no frontier lab citing Smooth-SwiGLU.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="fp4">
+      <h2>MXFP8, NVFP4 and FP4 attempts</h2>
+      <ul>
+        <li>
+          NVFP4 pretraining: a 12B hybrid Mamba-Transformer trained on 10T tokens; the paper describes it as the longest publicly documented 4-bit run.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: Pretraining Large Language Models with NVFP4, arXiv 2509.25149.
+        </li>
+        <li>
+          Format: E2M1 elements, blocks of 16 (MXFP8 and MXFP4 use 32), E4M3 block scale plus a per-tensor FP32 scale.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2509.25149, format section.
+        </li>
+        <li>
+          Recipe: Random Hadamard transforms (16x16) on Wgrad inputs only, 2D block scaling for weights, stochastic rounding for gradients and round-to-nearest-even for weights and activations, and a few blocks in higher precision.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2509.25149, section 4.
+        </li>
+        <li>
+          The 12B run kept the first 2 and last 8 blocks in BF16 (16% of linear layers).
+          Embeddings, output head, norms, non-linearities, softmax and QK/attention GEMMs stay BF16 or FP32; master weights, weight gradients and optimizer states are FP32.
+          Tensor parallel reductions are in BF16.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2509.25149, section 4.1.
+        </li>
+        <li>
+          Validation loss relative error versus FP8 stayed below 1% in the stable phase and widened to slightly above 1.5% as the learning rate decayed.
+          Switching to BF16 (or MXFP8) during the decay phase closes much of that gap.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2509.25149, results and Appendix D.
+        </li>
+        <li>
+          Quartet: all matmuls in MXFP4, near-lossless in the large-data regime per the authors, almost 2x over FP8 for linear layers on an RTX 5090.
+          Evaluated on Llama-type models; I did not verify the scale.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: Quartet, arXiv 2505.14669, contributions section.
+        </li>
+        <li>
+          Used by: NVIDIA's research demo (NVFP4); Quartet is academic (ISTA).
+          No lab has published a frontier model trained in FP4 as far as I found.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Cost: Blackwell-only hardware, extra transform kernels, most of the quality recovery depends on a hand-picked list of layers kept in BF16.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="outliers">
+      <h2>Outliers and massive activations</h2>
+      <ul>
+        <li>
+          A handful of activations in LLMs are far larger than the rest and are roughly input-independent; in LLaMA2-7B the largest is about 2,000 against a median near 0.2.
+          They act as implicit bias terms and concentrate attention on their tokens.
+          <span class="tag tag--reported">reported</span>
+          Source: Massive Activations in Large Language Models, arXiv 2402.17762 (abstract and search summary).
+        </li>
+        <li>
+          Why it is a precision problem: block or tensor scales are set by the max, so one outlier wastes the dynamic range of the whole group.
+          Fixes in the sources: finer groups (DeepSeek-V3 tiles of 128, NVFP4 blocks of 16), Hadamard rotation (NVFP4, Quartet), channel rescaling (Smooth-SwiGLU), and keeping the outlier-heavy ops in BF16.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Attention-logit growth is a separate outlier route: OLMo 2 adds QK-norm "to avoid attention logits being too large, which can lead to training loss divergence", and z-loss on the output logits.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: 2 OLMo 2 Furious, arXiv 2501.00656, section 3.3.
+        </li>
+      </ul>
+    </section>
+
+    <section id="fp32-islands">
+      <h2>What stays in higher precision</h2>
+      <ul>
+        <li>
+          DeepSeek-V3 (FP8 run): embeddings, output head, MoE gating, norms and attention in BF16 or FP32.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437.
+        </li>
+        <li>
+          NVFP4 12B: embeddings, head, norms, non-linearities, softmax, attention GEMMs in BF16 or FP32; optimizer master weights FP32.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2509.25149.
+        </li>
+        <li>
+          BLOOM: precision-sensitive operations such as gradient accumulation and softmax in fp32.
+          <span class="tag tag--reported">reported</span>
+          Source: arXiv 2211.05100 (search summary).
+        </li>
+        <li>
+          Cost is small because these ops are a small share of FLOPs; the DeepSeek paper says some low-cost operators use higher precision "with a negligible overhead".
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, section 3.3.1.
+        </li>
+      </ul>
+    </section>
+
+    <section id="moe">
+      <h2>MoE instabilities and fixes</h2>
+      <h3 id="moe-zloss">Router z-loss and router precision</h3>
+      <ul>
+        <li>
+          ST-MoE computes the router distribution in float32 (selective precision, from Switch Transformer), found this insufficient at the largest scale, and added the router z-loss, the mean squared log-sum-exp of the router logits.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: ST-MoE, arXiv 2202.08906, section 3.
+        </li>
+        <li>
+          Fraction of runs stable: baseline 4/6, update clipping 3/3, z-loss 3/3.
+          Quality score: baseline -1.755, clipping -4.206, z-loss -1.741 (the paper's table; higher is better).
+          So z-loss stabilised with no loss of quality, while clipping hurt quality badly.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2202.08906, Table 4.
+        </li>
+        <li>
+          Coefficient chosen: c_z = 0.001 by a sweep on pretraining quality.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2202.08906, section 3.
+        </li>
+        <li>
+          Mechanism as the authors give it: z-loss keeps logits small, which shrinks bf16 roundoff before the exponential.
+          Example in the paper: at a logit of 128.5, bf16 roundoff of 0.5 changes the softmax output by 36%.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2202.08906, section 3.4.
+        </li>
+        <li>
+          ST-MoE halved allreduce precision for speed on the 32B model but found it could destabilise training, so it kept the allreduce in float32 throughout.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2202.08906, section 3.4.
+        </li>
+        <li>
+          Cost: one extra hyperparameter, a tiny compute overhead.
+          Used by: ST-MoE; z-loss on final logits is also adopted by OLMo 2 (following PaLM and Chameleon).
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2501.00656.
+        </li>
+      </ul>
+
+      <h3 id="moe-balance">Load balancing: auxiliary loss versus bias</h3>
+      <ul>
+        <li>
+          DeepSeek-V3 says unbalanced expert load causes routing collapse and hurts efficiency under expert parallelism, and that too large an auxiliary loss impairs model quality.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, auxiliary-loss-free load balancing paragraph.
+        </li>
+        <li>
+          Auxiliary-loss-free balancing: a per-expert bias is added to affinity scores for top-K selection only; gate values use the original score.
+          After each step the bias drops by gamma for overloaded experts and rises by gamma for underloaded ones.
+          gamma = 0.001 for the first 14.3T tokens, then 0.0 for the last 500B.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, auxiliary-loss-free section and training hyper-parameters.
+        </li>
+        <li>
+          A complementary sequence-wise balance loss with alpha = 0.0001 remains "just to avoid extreme imbalance within any single sequence".
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437.
+        </li>
+        <li>
+          DeepSeek-V3 uses sigmoid affinity scores with normalisation among selected experts, rather than a softmax over all experts.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437.
+        </li>
+        <li>
+          Qwen team: computing the balance loss at global-batch level instead of micro-batch level improved pretraining perplexity by about 0.1 and downstream tasks, because micro-batch balance forces uniform use within every sequence, including narrow domains.
+          <span class="tag tag--reported">reported</span>
+          Source: Demons in the Detail: global-batch load balancing, arXiv 2501.11873 (abstract and intro skimmed).
+        </li>
+        <li>
+          Stabilises: routing collapse and hot experts, which also cause out-of-memory and straggler effects under expert parallelism.
+          Cost: aux loss trades quality for balance; the bias method needs a per-step load statistic and a tuned gamma.
+          Used by: DeepSeek-V3 (bias), Qwen3 MoE (global-batch loss, per the Qwen paper's claim; I did not verify the Qwen3 report).
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="spikes">
+      <h2>Loss spikes: detection, skip and rollback</h2>
+      <ul>
+        <li>
+          PaLM 540B had about 20 loss spikes despite gradient clipping.
+          The fix was to restart from a checkpoint roughly 100 steps before the spike and skip roughly 200 to 500 data batches.
+          Replaying the same batches from an earlier checkpoint did not spike, so the authors attribute spikes to the combination of specific batches and a particular parameter state, not bad data alone.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: PaLM, arXiv 2204.02311, section 5.1.
+        </li>
+        <li>
+          PaLM was bitwise reproducible from any checkpoint, using a deterministic dataset pipeline where a batch's contents depend only on the step number.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2204.02311, training setup
+        </li>
+        <li>
+          OLMo 2 found gradient-norm spikes often precede loss spikes, spike frequency grew with model size, and long repeated n-gram sequences were associated with spikes.
+          It removes documents with 32 or more repeated n-grams (n from 1 to 13) and masks such sequences in the loss at load time.
+          The paper says this mitigates but does not eliminate spikes, and the effect is not clean: the same sequence spikes for one model size or ordering but not another.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2501.00656, section 3.1.
+        </li>
+        <li>
+          Llama 3 405B used a smaller batch early (4M tokens, then 8M after 252M tokens, then 16M after 2.87T) and reports few loss spikes and no interventions for divergence.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2407.21783, section 3.4.1.
+        </li>
+        <li>
+          DeepSeek-V3 reports no irrecoverable spikes and no rollbacks.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437.
+        </li>
+        <li>
+          Cost of skip-and-rollback: a few hundred steps of lost compute per spike plus operator attention; it needs deterministic data order to be repeatable.
+          Automated spike detection thresholds are not published in any of the sources I read.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Marin community tests found no measurable effect of z-loss at 1.4B parameters, though it increased the lm_head norm; this is a small-scale result and the source is a W&amp;B report.
+          <span class="tag tag--reported">reported</span>
+          Source: https://wandb.ai/marin-community/marin/reports/ZLoss-vs-Not-1-4B--VmlldzoxMjEzMzA1NA
+        </li>
+      </ul>
+    </section>
+
+    <section id="faults">
+      <h2>Hardware faults and silent data corruption</h2>
+      <ul>
+        <li>
+          Llama 3 405B, 54-day snapshot on 16,384 H100s: 466 job interruptions, 47 planned and 419 unexpected.
+          About 78% of unexpected interruptions were confirmed or suspected hardware issues; GPU issues were 58.7%.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2407.21783, section 3.3.4 and Table 5.
+        </li>
+        <li>
+          Table 5 lines: faulty GPU 148 (30.1%), GPU HBM3 memory 72 (17.2%), software bug 54 (12.9%), network switch or cable 35 (8.4%), silent data corruption 6 (1.4%).
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2407.21783, Table 5.
+        </li>
+        <li>
+          Effective training time above 90%, with manual intervention needed only three times in the period.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2407.21783, section 3.3.4.
+        </li>
+        <li>
+          Stragglers: a single slow GPU can slow thousands of others, appearing as slow communication.
+          Meta used NCCLX tracing, with a watchdog and heartbeat dump, to find them.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2407.21783, section 3.3.4.
+        </li>
+        <li>
+          Gemini: with redundant in-memory copies of model state, recovery from an intact replica raised goodput of the largest job from 85% to 97% versus periodic checkpoints to persistent storage.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: Gemini: A Family of Highly Capable Multimodal Models, arXiv 2312.11805, section 3.
+        </li>
+        <li>
+          Gemini on SDC: the authors expect silent data corruption to impact training "every week or two" at this scale.
+          They detect it with deterministic replay to isolate incorrect computations, proactive SDC scanners on idle machines and hot standbys, and call the fully deterministic infrastructure "a crucial ingredient towards stable training".
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2312.11805, section 3.
+        </li>
+        <li>
+          Cost: spare capacity, scanners that burn idle cycles, deterministic kernels and ordering that may be slower.
+          Used by: Meta (Llama 3), Google (PaLM, Gemini).
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="comm">
+      <h2>Communication numerics</h2>
+      <ul>
+        <li>
+          Llama 3 reduce-scatters gradients in fp32 across FSDP workers.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2407.21783.
+        </li>
+        <li>
+          ST-MoE: bf16 allreduce gave a speed-up but could destabilise training, so allreduce stayed in float32.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2202.08906.
+        </li>
+        <li>
+          NVFP4 recipe does the opposite for tensor parallel reductions (BF16), an accepted choice for a 12B model.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2509.25149, section 4.1.
+        </li>
+        <li>
+          DeepSeek-V3 dispatches activations in FP8 and keeps combine in BF16.
+          <span class="tag tag--confirmed">confirmed</span>
+          Source: arXiv 2412.19437, section 3.3.3.
+        </li>
+        <li>
+          Reading: reduction precision is a bandwidth versus stability knob that depends on summation width (data-parallel size), so the safe setting changes with scale.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicting sources</h2>
+      <ul>
+        <li>
+          Allreduce and reductions: ST-MoE found bf16 allreduce risky at 32B; NVFP4 uses bf16 tensor-parallel reductions at 12B; Llama 3 chose fp32 gradient reduce-scatter.
+          No source tests the same model at both settings.
+        </li>
+        <li>
+          Z-loss: ST-MoE and OLMo 2 report it helps stability; a Marin experiment at 1.4B saw no measurable effect.
+          The small scale may explain it, since ST-MoE's problem showed up at the largest scale.
+        </li>
+        <li>
+          QK-norm versus post-norm in OLMo 2 changed together, so their separate stability contributions are unclear (secondary commentary).
+        </li>
+        <li>
+          Spikes: PaLM says not bad data, OLMo 2 says repeated n-grams matter, and the OLMo 2 authors themselves show the same sequence spikes in one setting and not another.
+        </li>
+        <li>
+          FP8 validation scale: DeepSeek-V3's 0.25% figure is from about 1T-token runs of smaller models, not the 14.8T V3 run; FP8 divergence in the Intel paper appeared after about 200B tokens, so short-horizon validation can mislead.
+        </li>
+        <li>
+          SDC counts differ in kind: Llama 3 counts 6 suspected SDC events in 54 days (1.4% of unexpected interruptions), while Gemini says weekly to biweekly.
+          Different hardware, scale and detection methods; one source cited the interruption total as 417, but the paper says 419.
+        </li>
+        <li>
+          Not found: published thresholds for automatic loss-spike detection, a primary source for OPT-175B's fp16 loss-scale collapses, and the Transformer Engine delayed-scaling parameters.
+        </li>
+        <li>
+          Not covered: Kimi K2 MuonClip and other optimizer-side stability, which belong to another research note.
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li>Mixed Precision Training, arXiv 1710.03740.</li>
+        <li>A Study of BFLOAT16 for Deep Learning Training, arXiv 1905.12322.</li>
+        <li>ST-MoE: Designing Stable and Transferable Sparse Expert Models, arXiv 2202.08906.</li>
+        <li>PaLM: Scaling Language Modeling with Pathways, arXiv 2204.02311.</li>
+        <li>BLOOM: A 176B-Parameter Open-Access Multilingual Language Model, arXiv 2211.05100.</li>
+        <li>Gemini: A Family of Highly Capable Multimodal Models, arXiv 2312.11805.</li>
+        <li>Massive Activations in Large Language Models, arXiv 2402.17762.</li>
+        <li>The Llama 3 Herd of Models, arXiv 2407.21783.</li>
+        <li>Scaling FP8 training to trillion-token LLMs, arXiv 2409.12517.</li>
+        <li>DeepSeek-V3 Technical Report, arXiv 2412.19437.</li>
+        <li>2 OLMo 2 Furious, arXiv 2501.00656.</li>
+        <li>Demons in the Detail: On Implementing Load Balancing Loss for Training Specialized Mixture-of-Expert Models, arXiv 2501.11873.</li>
+        <li>Quartet: Native FP4 Training Can Be Optimal for Large Language Models, arXiv 2505.14669.</li>
+        <li>Pretraining Large Language Models with NVFP4, arXiv 2509.25149.</li>
+        <li>Defeating the Training-Inference Mismatch via FP16, arXiv 2510.26788.</li>
+        <li>Marin community, ZLoss vs Not 1.4B: https://wandb.ai/marin-community/marin/reports/ZLoss-vs-Not-1-4B--VmlldzoxMjEzMzA1NA</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Research note, not published. Verify any number against the cited paper before using it in the post.</p>
+  </footer>
+</body>
+</html>

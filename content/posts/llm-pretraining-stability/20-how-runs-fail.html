@@ -1,0 +1,17 @@
+<section id="how-runs-fail">
+  <h2>How long runs fail</h2>
+  <aside class="callout callout--note">
+    <p>Outline: Spikes and slow divergence have a handful of mechanisms, and each has a signal that shows up before the loss does.</p>
+    <p>Must include: Recovering from a spike (rollback, skip batches) works but hides the cause; spikes come back at larger scale.</p>
+    <p>Diagram: Anatomy of a spike: timeline with grad norm rising first, then max attention logit, then loss; rollback point marked.</p>
+    <p>Budget: about 950 words.</p>
+  </aside>
+  <h3 id="how-runs-fail-attention-logit-growth">Attention logit growth</h3>
+  <p>To be written.</p>
+  <h3 id="how-runs-fail-output-logit-drift">Output logit drift</h3>
+  <p>To be written.</p>
+  <h3 id="how-runs-fail-when-adam-s-statistics-go-stale">When Adam's statistics go stale</h3>
+  <p>To be written.</p>
+  <h3 id="how-runs-fail-data-and-model-state-together">Data and model state together</h3>
+  <p>To be written.</p>
+</section>

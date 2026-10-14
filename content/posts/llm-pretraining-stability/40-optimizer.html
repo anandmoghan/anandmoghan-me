@@ -1,0 +1,14 @@
+<section id="optimizer">
+  <h2>Optimizer settings that keep AdamW steady</h2>
+  <aside class="callout callout--note">
+    <p>Outline: AdamW with beta2 0.95, clipping at 1.0, small epsilon and selective weight decay is the default, and each setting addresses a named failure.</p>
+    <p>Must include: Lower epsilon helps at scale but underflows in low precision; muP reduces tuning risk but few labs say they use it in the final run.</p>
+    <p>Budget: about 1000 words.</p>
+  </aside>
+  <h3 id="optimizer-beta2-epsilon-and-update-clipping">Beta2, epsilon and update clipping</h3>
+  <p>To be written.</p>
+  <h3 id="optimizer-warmup-clipping-and-weight-decay">Warmup, clipping and weight decay</h3>
+  <p>To be written.</p>
+  <h3 id="optimizer-transferring-hyperparameters-across-scale">Transferring hyperparameters across scale</h3>
+  <p>To be written.</p>
+</section>

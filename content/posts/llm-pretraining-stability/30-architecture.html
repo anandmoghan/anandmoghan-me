@@ -1,0 +1,19 @@
+<section id="architecture">
+  <h2>Fixes in the architecture</h2>
+  <aside class="callout callout--note">
+    <p>Outline: Most of today's stability comes from a few cheap changes to the block: normalise queries and keys, keep output logits small, place norms where they bound each sub-layer, and treat embeddings carefully.</p>
+    <p>Must include: QK-norm does not fit MLA (why Kimi K2 needed QK-Clip); soft-capping fights fused attention kernels; reordered norms change residual-stream scale.</p>
+    <p>Diagram: Transformer block annotated with where QK-norm, post-sublayer norm, z-loss and the attention gate act.</p>
+    <p>Budget: about 1150 words.</p>
+  </aside>
+  <h3 id="architecture-qk-norm-and-the-end-of-soft-capping">QK-norm and the end of soft-capping</h3>
+  <p>To be written.</p>
+  <h3 id="architecture-z-loss-on-the-output">Z-loss on the output</h3>
+  <p>To be written.</p>
+  <h3 id="architecture-where-the-norms-go">Where the norms go</h3>
+  <p>To be written.</p>
+  <h3 id="architecture-embeddings-and-initialisation">Embeddings and initialisation</h3>
+  <p>To be written.</p>
+  <h3 id="architecture-gated-attention">Gated attention</h3>
+  <p>To be written.</p>
+</section>

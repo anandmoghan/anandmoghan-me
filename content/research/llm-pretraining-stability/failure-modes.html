@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM pretraining stability: failure modes</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+</head>
+<body class="prose">
+  <header>
+    <h1>LLM pretraining stability: failure modes</h1>
+    <p>Research note, 2026-10-14. Claims carry a source and a grounding tag.</p>
+  </header>
+  <main>
+    <section id="scope">
+      <h2>Scope and grounding</h2>
+      <ul>
+        <li>
+          Covers what loss spikes and divergence look like, their proposed mechanisms, how teams detect them, and the classic operational responses.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Papers were downloaded from arXiv and read as full text for the sections quoted below.
+          The OPT-175B logbook PDF and the BLOOM chronicles were not read in full: OPT claims come from the OPT paper, and BLOOM chronicle claims come from a page summary.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Tag meaning: confirmed = primary source text read; reported = secondary or summarised source; inference = my own reasoning.
+        </li>
+      </ul>
+    </section>
+
+    <section id="what-it-looks-like">
+      <h2>What spikes and divergence look like in big runs</h2>
+      <ul>
+        <li>
+          PaLM 540B: loss spiked roughly 20 times despite gradient clipping (global norm 1.0).
+          The spikes came at highly irregular intervals, sometimes late in training, and did not appear in the smaller models.
+          Source: PaLM: Scaling Language Modeling with Pathways, arXiv:2204.02311, section 5.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          PaLM response: restart from a checkpoint roughly 100 steps before the spike and skip roughly 200 to 500 data batches.
+          The loss did not spike again at the same point.
+          Source: arXiv:2204.02311, section 5.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          PaLM did not blame bad data: re-training on the same batches from an earlier checkpoint did not spike.
+          The authors conclude spikes come from the combination of specific batches with a particular parameter state.
+          Source: arXiv:2204.02311, section 5.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          PaLM also used an auxiliary z-loss of 1e-4 times log^2 Z to keep the softmax normaliser near 0, which the authors say increased stability.
+          Source: arXiv:2204.02311, section 5.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Meta replicated PaLM-style spikes on GPUs with a different codebase, data and AdamW, at 7B, 30B, 65B and 546B.
+          Severity grew with size: 546B had prominent spikes, 65B moderate instability, and 30B and 7B no explosive divergence.
+          Source: A Theory on Adam Instability in Large-Scale Machine Learning (Molybog et al.), arXiv:2304.09871, introduction.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          In the Meta 546B run most spikes recovered on their own within about a dozen iterations.
+          Only the harder ones needed batch skipping.
+          Source: arXiv:2304.09871, introduction.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OPT-175B: loss divergences were fixed by lowering the learning rate and restarting from an earlier checkpoint.
+          Restart points were chosen where the dynamic loss scalar was still healthy (at least 1.0) and activation norms trended down afterwards.
+          Source: OPT: Open Pre-trained Transformer Language Models, arXiv:2205.01068, training processes section.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OPT-175B correlated divergence with the dynamic loss scalar crashing to 0 and the L2 norm of final-layer activations spiking.
+          Source: arXiv:2205.01068.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OPT-175B other mid-flight changes: gradient clip lowered from 1.0 to 0.3 early on; a switch to vanilla SGD (plateaued, reverted to AdamW); resetting the loss scalar (fixed some, not all); a newer Megatron version that reduced pressure on activation norms.
+          Source: arXiv:2205.01068.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OPT-175B dropped some Pile subsets because they raised instability risk, measured as gradient-norm spikes at 1.3B scale.
+          Source: arXiv:2205.01068, data section.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OPT-175B also suffered at least 35 manual restarts from hardware failures, over 100 hosts cycled in 2 months, and an estimated 70+ automatic restarts.
+          Hardware restarts are a separate issue from divergence but share the rollback machinery.
+          Source: arXiv:2205.01068.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          GLM-130B: precision-related loss spikes were frequent and became more frequent as training went on.
+          Some recovered on their own; others were preceded by a sudden rise in gradient norm and ended in a spike or NaN.
+          Source: GLM-130B: An Open Bilingual Pre-trained Model, arXiv:2210.02414, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          GLM-130B states OPT-175B handled spikes by manually skipping data and adjusting hyperparameters, and BLOOM by an embedding norm.
+          Source: arXiv:2210.02414, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Gopher: the Adafactor optimiser showed more instability than Adam at scale.
+          A 7.1B Adafactor run at half the peak learning rate of the Adam run (6e-5 versus 1.2e-4) still showed instabilities.
+          Source: Scaling Language Models: Methods, Analysis and Insights from Training Gopher, arXiv:2112.11446, appendix C.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          BLOOM 104B preliminary runs in float16 had numerical instabilities causing irreversible divergence.
+          The authors hypothesise float16 overflow; final training in bfloat16 mixed precision solved it.
+          Source: BLOOM: A 176B-Parameter Open-Access Multilingual Language Model, arXiv:2211.05100, section 3.4.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          BLOOM 176B had only one loss spike, from which it recovered swiftly, so little human intervention was needed.
+          Source: arXiv:2211.05100, section 3.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          BLOOM chronicles: the single spike was around iteration 31219 (loss 5.098, grad norm 960.351) and recovered in about 30 iterations.
+          The 176B run passed the 24B-token point where the 104B run had failed.
+          The author lists clean data, bf16, FP32 gradient accumulation, lower init and embedding layer norm as a mix with no ablations.
+          Source: bigscience-workshop/bigscience, train/tr11-176B-ml/chronicles.md (page summary).
+          <span class="tag tag--reported">reported</span>
+        </li>
+        <li>
+          Llama 3 405B: batch size started at 4M tokens and doubled twice, to 16M tokens after 2.87T tokens, "to improve training stability" early on.
+          The report says it saw few loss spikes and needed no interventions for divergence.
+          Source: The Llama 3 Herd of Models, arXiv:2407.21783, section 3.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Llama 3 405B interruptions: 466 in a 54-day window, 47 planned and 419 unexpected; about 78% of unexpected ones were confirmed or suspected hardware, GPU issues alone 58.7%; manual intervention was needed only three times.
+          Source: arXiv:2407.21783, section 3.3.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Llama 3 fixed several numerical issues by comparing loss across parallelism setups, using FP32 gradient accumulation and FP32 reduce-scatter of gradients.
+          Source: arXiv:2407.21783, section 3.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Llama 3 vision adapters: bf16 gradient accumulation caused numerical instabilities after the image encoder was added, so they moved to FP32 accumulation.
+          Source: arXiv:2407.21783, vision experiments section.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Llama 3 reports that in interruption terms instability was dominated by hardware, not optimisation, at 16K GPU scale.
+          That contrast with PaLM, OPT and GLM is my reading of the report.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="mechanisms">
+      <h2>Mechanisms</h2>
+
+      <h3 id="attention-logit-growth">Attention logit growth and entropy collapse</h3>
+      <ul>
+        <li>
+          Attention logits z = q.k / sqrt(d) grow large, softmax weights collapse to near one-hot (low entropy), and training diverges.
+          Named attention logit growth by Dehghani et al. and attention entropy collapse by Zhai et al.
+          Source: Wortsman et al., Small-scale proxies for large-scale Transformer training instabilities, arXiv:2309.14322, section 3.1.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          In ViT-22B, divergent loss appeared after a few thousand steps at around 8B parameters.
+          The cause was extremely large attention logits giving almost one-hot attention weights with near-zero entropy; LayerNorm on queries and keys fixed it.
+          Source: Scaling Vision Transformers to 22 Billion Parameters, arXiv:2302.05442, section 2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Zhai et al. track per-head attention entropy as a sharpness proxy and find low entropy coincides with oscillating or diverging loss.
+          They prove a lower bound on entropy that decays exponentially with the spectral norm of the attention logits, and propose sigma-Reparam.
+          Source: Stabilizing Transformer Training by Preventing Attention Entropy Collapse, arXiv:2303.06296 (abstract page).
+          <span class="tag tag--reported">reported</span>
+        </li>
+        <li>
+          Wortsman et al. find the logit growth is due to growth of the queries and keys, not better alignment between them.
+          Their hypothesis is the quadratic dependence of attention logits on parameter norms.
+          Source: arXiv:2309.14322, section 3.1.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Without qk-layernorm the maximum learning rate at which models train stably shrinks with model size.
+          With qk-layernorm a 1.2B model trains at learning rate 0.3.
+          Source: arXiv:2309.14322, section 3.1.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Predictable: tracking the max attention logit across scales and fitting a quadratic, they saw every point above 1e4 diverge and predicted a 4.8B model without qk-layernorm would diverge at LR 1e-2.
+          It did.
+          Source: arXiv:2309.14322, section 3.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Transplanting scaled attention logits into a 10M model, loss degraded around a logit scale of 1e3 and beat a bigram model only below 1e4.
+          Source: arXiv:2309.14322, section 3.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          GLM-130B also saw attention scores grow past the FP16 range as the model scaled.
+          PB-Relax did not help there; BLOOM sidestepped it with bf16.
+          Source: arXiv:2210.02414, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="output-logit-divergence">Output logit divergence and norm drift</h3>
+      <ul>
+        <li>
+          Output logits diverge from log probabilities and become very negative, late in training.
+          The PaLM z-loss (log^2 Z, coefficient 1e-4) resolves it in small models.
+          Source: arXiv:2309.14322, section 3.1.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          In Wortsman et al. the instability appeared at any scale without weight decay, and weight decay also mitigated it for the larger models they tested.
+          Source: arXiv:2309.14322, section 3.1.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Chameleon: standard Llama architecture diverged from slow norm growth in mid-to-late training.
+          The explanation is softmax translation invariance, softmax(z) = softmax(z + c): with shared weights, modalities compete by growing norms until bf16 range is exceeded.
+          Divergence appeared as late as 20 to 30 percent into training.
+          Source: Chameleon: Mixed-Modal Early-Fusion Foundation Models, arXiv:2405.09818, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Chameleon calls this the logit drift problem (after Wortsman et al.) and says monitoring output-norm growth strongly correlates with predicting later divergence.
+          Source: arXiv:2405.09818, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Chameleon fixes: QK-norm (7B diverged after about 20 percent of an epoch without it), dropout 0.1 for 7B, norm re-ordering (Swin style) for 34B, and z-loss.
+          Source: arXiv:2405.09818, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="adam">Adam second moment, epsilon and time-correlated updates</h3>
+      <ul>
+        <li>
+          Molybog et al.: Adam can enter a state where the update vector has large norm and is essentially uncorrelated with the descent direction, leading to divergence.
+          More likely in deep models with large batch sizes.
+          Source: arXiv:2304.09871, abstract.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Proposed sequence: gradients of a group of parameters (most likely earlier layers) vanish below epsilon, so the Adam moments and updates vanish.
+          Parameters barely move and the large batch makes consecutive gradient estimates strongly correlated in time.
+          Meanwhile other layers keep changing until a rare batch makes the early-layer gradient exceed epsilon.
+          The update ratio m/sqrt(v) then becomes large and bimodal near +/-1 for many entries, and a chain reaction follows.
+          Source: arXiv:2304.09871, section 6.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          In their runs, the gradient norm of earlier layers exploded one training step before the perplexity spike.
+          Source: arXiv:2304.09871, section 6.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The theory also explains self-recovery (the gradient loses time correlation) and why the same data does not spike from another state.
+          Source: arXiv:2304.09871, sections 1 and 6.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The authors attribute the nature of the problem to Adam itself, but note that testing a different optimiser such as SGD in the same setup is still needed to confirm.
+          Source: arXiv:2304.09871, introduction.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          In smaller-scale experiments they saw that dataset composition changes how many layers have gradients diminishing to zero.
+          For natural language this happened with a high-quality corpus of lower variety of text modalities.
+          Source: arXiv:2304.09871, section 7.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Mitigations they discuss: skipping batches (works mainly early in training, needs manual tracking, spikes get more frequent later as gradients drop below epsilon); lower learning rate; lower epsilon (conflicts with low-precision arithmetic); smaller batch size; lower beta1 and beta2 (stale updates); setting epsilon to 0 and mapping updates to 0 when v is 0; monitoring a unimodality statistic of m/sqrt(v) and resetting optimizer state or lowering epsilon when it turns bimodal.
+          The authors conclude there is no silver bullet.
+          Source: arXiv:2304.09871, section 7.1 and 9.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Wortsman et al. observe gradient RMS shrinks with both model size and learning rate until it nears the default AdamW epsilon of 1e-8 at their largest setting.
+          The AdamW update then shrinks and parameters stop receiving learning signal.
+          Source: arXiv:2309.14322, section 3.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Lowering epsilon to 1e-15 for a 4.8B model at LR 0.3 improved loss and prevented the gradient RMS collapse; raising it to 1e-6 caused an instability.
+          Source: arXiv:2309.14322, section 3.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Interpretation: Molybog et al. and Wortsman et al. both point to gradients falling to the epsilon scale as a risk, but describe opposite end states: spike versus stalled learning.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+
+      <h3 id="embedding-layernorm">Embedding and LayerNorm instabilities</h3>
+      <ul>
+        <li>
+          GLM-130B: the embedding layer's gradient norm was often several orders of magnitude larger than other layers early on.
+          A collapse usually trailed a gradient-norm spike by a few steps.
+          Source: arXiv:2210.02414, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          GLM-130B embedding gradient shrink: word_embedding = word_embedding * a + word_embedding.detach() * (1 - a), with a = 0.1, removed most spikes at negligible latency.
+          The final run had only three late-stage divergences, further handled by shrinking more.
+          Source: arXiv:2210.02414, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          GLM-130B: Pre-LN let main-branch value scale grow extremely large in deep layers; Pre-LN and Sandwich-LN both crashed, and DeepNorm-initialised Post-LN was the stable choice.
+          Source: arXiv:2210.02414, sections 2.1 and 2.3 and appendix.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          BLOOM added a LayerNorm directly after the embedding (from bitsandbytes StableEmbedding), which significantly improved stability in 104B tests.
+          It also penalised zero-shot generalisation in earlier work, and the authors suggest bf16 might remove the need for it.
+          Source: arXiv:2211.05100, section 3.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OLMo 2 excluded token embeddings from weight decay.
+          Weight decay on embeddings shrank their norm, and small embeddings give large gradients in early layers because the LayerNorm Jacobian grows when its input is small.
+          Source: 2 OLMo 2 Furious, arXiv:2501.00656, section 3.4.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Chameleon's norm re-ordering bounds the norm growth of the SwiGLU feed-forward block, which is multiplicative and can become problematic.
+          Source: arXiv:2405.09818, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Spike No More: spikes are linked to sudden gradient-norm growth; analysis of sub-layer Jacobian spectral norms says stability needs small sub-layers and a large shortcut path.
+          Source: Spike No More: Stabilizing the Pre-training of Large Language Models, arXiv:2312.16903 (abstract page).
+          <span class="tag tag--reported">reported</span>
+        </li>
+      </ul>
+
+      <h3 id="massive-activations">Massive activations and outlier features</h3>
+      <ul>
+        <li>
+          LLMs contain a handful of activations far larger than others (e.g. 100,000 times the median), numbering fewer than 10 among tens of millions, with values above 15,000 in LLaMA2-70B.
+          They sit in fixed feature dimensions at specific tokens (start token, first period or newline) and stay roughly constant regardless of input.
+          Source: Massive Activations in Large Language Models, arXiv:2402.17762, abstract and introduction.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          They act as fixed bias terms and concentrate attention on those tokens, an implicit attention bias.
+          Source: arXiv:2402.17762.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          This paper studies trained models, not the dynamics of divergence.
+          Linking massive activations to loss spikes in pretraining is my own connection and is not stated by the source.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          GLM-130B notes outlier dimensions (about 0.1 percent of feature dimensions, per Dettmers et al.) in the context of quantisation, not training stability.
+          Source: arXiv:2210.02414, quantisation discussion.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="data-and-init">Data, initialisation and slow gradient-norm growth</h3>
+      <ul>
+        <li>
+          OLMo-0424 had frequent loss spikes, often preceded by gradient-norm spikes, and a slow growth in gradient norm that correlated with spike frequency.
+          Larger models spiked more often.
+          Source: arXiv:2501.00656, section 3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Spike batches often contained long repeated n-gram sequences, but the link is not deterministic: the same sequence may spike a large model and not a small one, or not after reshuffling.
+          Masking loss on such sequences mitigated gradient spikes without removing them and did not change the slow norm growth.
+          Source: arXiv:2501.00656, section 3.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OLMo 2 stability recipe: repeated-n-gram filtering, plain initialisation instead of scaled, QK-norm, reordered norm, z-loss, no weight decay on embeddings.
+          Source: arXiv:2501.00656, section 3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OLMo 2 test of initialisation with a short warmup: the new init had no loss spikes and the gradient-norm spike score fell from 0.40 to 0.03.
+          Source: arXiv:2501.00656, section 3.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="proxies">
+      <h2>Small-scale proxies</h2>
+      <ul>
+        <li>
+          Wortsman et al. reproduce attention logit growth and output logit divergence in small models at high learning rates, and mitigations used at scale work equally in this regime.
+          Source: arXiv:2309.14322, abstract.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Metric: LR sensitivity, the expected deviation of final loss from optimal when varying learning rate across three orders of magnitude.
+          Source: arXiv:2309.14322, section 2.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          qk-layernorm and z-loss reduce LR sensitivity; longer warmup helps larger models; independent weight decay helps; muParam helps; scaling depth raises LR sensitivity faster than scaling width.
+          Source: arXiv:2309.14322, sections 3.1 and 3.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Even with qk-layernorm, LR sensitivity still grows with model scale.
+          Source: arXiv:2309.14322, figure 1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Their setup: AdamW, default warmup 5e3 steps, 1e5 total steps, independent weight decay 1e-4, z-loss coefficient 1e-4.
+          Sizes in the main plots run from 2.4M to 1.2B parameters, plus a 4.8B check.
+          Source: arXiv:2309.14322, section 2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OLMo 2 uses the same idea: reproduce spikes quickly at small scale by shortening warmup, then ablate fixes.
+          Source: arXiv:2501.00656, section 3.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Molybog et al. argue the opposite caution: reproductions of spikes at smaller scale are not necessarily caused or fixed by the same factors as at large scale, so they analyse 7B to 546B runs directly.
+          Source: arXiv:2304.09871, introduction.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="detection">
+      <h2>How practitioners detect problems</h2>
+      <ul>
+        <li>
+          Gradient norm: GLM-130B calls it an informative indicator of collapse, with the collapse lagging a gradient-norm spike by a few steps.
+          Source: arXiv:2210.02414, section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Gradient norm spikes precede loss spikes in OLMo 2 experiments, and OLMo 2 defines a spike score as the share of values at least seven standard deviations from a rolling average of the last 1,000 values.
+          Source: arXiv:2501.00656, section 3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Per-layer gradient norms: early-layer gradient norm blew up one step before perplexity in the Meta 546B run.
+          Source: arXiv:2304.09871, section 6.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Per-layer gradient and update RMS compared with the AdamW epsilon, to see parameters stop learning.
+          Source: arXiv:2309.14322, section 3.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Max attention logit per layer, with a fitted trend across scales as an early warning; attention entropy per head as a sharpness measure.
+          Sources: arXiv:2309.14322; arXiv:2303.06296.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Output norm of the last transformer layer for logit drift (Chameleon), final-layer activation L2 norm and dynamic loss scale (OPT).
+          Sources: arXiv:2405.09818; arXiv:2205.01068.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Statistic for the optimiser: the shape (uni- versus bimodal) of m/sqrt(v) over a layer.
+          Proposed by Molybog et al. with initial experiments only.
+          Source: arXiv:2304.09871, section 7.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Update-norm monitoring as such is not a named metric in any source I read; the Adam theory implies it, which is my inference.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="responses">
+      <h2>Classic operational responses</h2>
+      <ul>
+        <li>
+          Rollback and skip data: PaLM (about 100 steps back, skip 200 to 500 batches), Meta 546B (also skipped batches where needed).
+          Sources: arXiv:2204.02311; arXiv:2304.09871.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Rollback and lower learning rate: OPT-175B, with careful choice of the restart checkpoint.
+          Source: arXiv:2205.01068.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Tighter gradient clipping: OPT lowered it from 1.0 to 0.3 early on.
+          PaLM spiked with clipping at 1.0, so clipping alone did not prevent spikes.
+          Sources: arXiv:2205.01068; arXiv:2204.02311.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Optimiser state reset (loss scale reset in OPT; optimiser state reset suggested by Molybog et al.).
+          Sources: arXiv:2205.01068; arXiv:2304.09871.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Preventive changes: z-loss, QK-norm, norm re-ordering, embedding gradient shrink or embedding norm, higher precision for sensitive ops (bf16 over fp16, FP32 accumulation), data filters, smaller initial batch size.
+          Sources: arXiv:2204.02311; arXiv:2302.05442; arXiv:2405.09818; arXiv:2210.02414; arXiv:2211.05100; arXiv:2501.00656; arXiv:2407.21783.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Costs of the rollback approach: needs manual loss tracking, more frequent checkpoints, and lost compute; frequency of spikes can rise later in training.
+          Source: arXiv:2304.09871, section 7.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          BLOOM chronicle: checkpoints every 100 iterations after a hardware loss, about 3 hours maximum lost; each checkpoint 2.3 TB and about 40 seconds to save.
+          Source: bigscience chronicles.md (page summary).
+          <span class="tag tag--reported">reported</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicting sources</h2>
+      <ul>
+        <li>
+          Root cause. Molybog et al. attribute spikes to Adam's time-correlated, epsilon-dominated updates; Wortsman, Dehghani and Zhai attribute them to attention logit growth, and others to output-logit drift or embedding gradients.
+          These may be different failure modes or different views of one chain; no source tests them head to head.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Epsilon. Wortsman et al. report lowering epsilon to 1e-15 helps at 4.8B; Molybog et al. warn lowering epsilon conflicts with low-precision training.
+          Wortsman et al. also find raising epsilon to 1e-6 triggers instability.
+          Sources: arXiv:2309.14322; arXiv:2304.09871.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Data blame. PaLM says the spike batches are not bad data in themselves; OLMo 2 finds repeated n-grams associated with spikes and filtering helps on average, but not deterministically.
+          Not strictly contradictory but different emphasis.
+          Sources: arXiv:2204.02311; arXiv:2501.00656.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          fp16 versus bf16. BLOOM and GLM-130B authors attribute many instabilities to fp16 range; GLM-130B chose to stay in FP16 for hardware portability and relied on EGS and DeepNorm instead.
+          BLOOM bf16 explanation is a hypothesis, not an ablation.
+          Sources: arXiv:2211.05100; arXiv:2210.02414.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Embedding LayerNorm. BLOOM found it helped stability but hurt zero-shot results in a separate study; whether bf16 makes it unnecessary is untested.
+          Source: arXiv:2211.05100, section 3.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Post-LN versus Pre-LN. GLM-130B found DeepNorm Post-LN stable and Pre-LN crashing; much of the field (and Wortsman et al.) uses Pre-LN with qk-layernorm.
+          I did not find a direct comparison across these two stances.
+          Source: arXiv:2210.02414.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Llama 3 reports few spikes with no divergence interventions, and the section read does not credit specific stabilisers beyond small initial batch size and FP32 accumulation.
+          Which recipe elements mattered is not stated.
+          Source: arXiv:2407.21783, section 3.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Not verified: the OPT-175B logbook PDF and the BLOOM chronicles in full; the Spike No More and Zhai et al. details beyond the abstract pages; Gopher's own stability text beyond the Adafactor appendix.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Tied to massive activations: no source read ties massive activations to training divergence.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li>Chowdhery et al., PaLM: Scaling Language Modeling with Pathways, arXiv:2204.02311</li>
+        <li>Molybog et al., A Theory on Adam Instability in Large-Scale Machine Learning, arXiv:2304.09871</li>
+        <li>Wortsman et al., Small-scale proxies for large-scale Transformer training instabilities, arXiv:2309.14322</li>
+        <li>Zhang et al., OPT: Open Pre-trained Transformer Language Models, arXiv:2205.01068</li>
+        <li>OPT-175B logbook, https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/chronicles/OPT175B_Logbook.pdf (existence confirmed, not read)</li>
+        <li>BigScience Workshop, BLOOM: A 176B-Parameter Open-Access Multilingual Language Model, arXiv:2211.05100</li>
+        <li>BLOOM 176B chronicles, https://github.com/bigscience-workshop/bigscience/blob/master/train/tr11-176B-ml/chronicles.md</li>
+        <li>Rae et al., Scaling Language Models: Methods, Analysis and Insights from Training Gopher, arXiv:2112.11446</li>
+        <li>Zeng et al., GLM-130B: An Open Bilingual Pre-trained Model, arXiv:2210.02414</li>
+        <li>Llama Team, The Llama 3 Herd of Models, arXiv:2407.21783</li>
+        <li>Dehghani et al., Scaling Vision Transformers to 22 Billion Parameters, arXiv:2302.05442</li>
+        <li>Zhai et al., Stabilizing Transformer Training by Preventing Attention Entropy Collapse, arXiv:2303.06296 (abstract page only)</li>
+        <li>Takase et al., Spike No More: Stabilizing the Pre-training of Large Language Models, arXiv:2312.16903 (abstract page only)</li>
+        <li>Chameleon Team, Chameleon: Mixed-Modal Early-Fusion Foundation Models, arXiv:2405.09818</li>
+        <li>Sun et al., Massive Activations in Large Language Models, arXiv:2402.17762</li>
+        <li>OLMo Team, 2 OLMo 2 Furious, arXiv:2501.00656</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Section numbers refer to the version of each paper downloaded on 2026-10-14 and may differ across versions.</p>
+  </footer>
+</body>
+</html>
