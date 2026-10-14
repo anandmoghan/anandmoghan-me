@@ -66,11 +66,9 @@ async function syncUserDoc(user: User): Promise<void> {
   const profile = user.isAnonymous
     ? { isAnonymous: true }
     : { isAnonymous: false, email: user.email, displayName: user.displayName, photoURL: user.photoURL };
-  await setDoc(
-    ref,
-    { ...profile, lastSeenAt: serverTimestamp(), ...(snap.exists() ? {} : { createdAt: serverTimestamp() }) },
-    { merge: true },
-  );
+  // No lastSeenAt here: last seen, country and visit counts are written by the visit function,
+  // and only after the visitor accepts cookies.
+  await setDoc(ref, { ...profile, ...(snap.exists() ? {} : { createdAt: serverTimestamp() }) }, { merge: true });
 }
 
 function errorCode(err: unknown): string | null {

@@ -37,15 +37,24 @@ service cloud.firestore {
     }
 
     // ── users (profile + app-level prefs) ─────────────────────────────────────
-    // Every visitor, anonymous included, has users/{uid}: isAnonymous, createdAt, lastSeenAt, and
-    // for real accounts email, displayName, photoURL.
+    // Every visitor, anonymous included, has users/{uid}: isAnonymous, createdAt, consent, and for
+    // real accounts email, displayName, photoURL. lastSeenAt, firstSeenAt, country and visitCount
+    // are written only by the visit function (admin SDK), after the visitor accepts cookies.
+
+    function serverOnlyUserFields() {
+      return ['lastSeenAt', 'firstSeenAt', 'country', 'visitCount'];
+    }
 
     match /users/{uid} {
-      // Owner reads their own doc (anonymous included). Real users can read any profile
-      // (group member display and invite lookup by email in the wealth app).
-      allow read: if isOwner(uid) || isRealAuth();
-      // Only owner can write
-      allow create, update, delete: if isOwner(uid);
+      // Owner reads their own doc (anonymous included). Real users can fetch a profile, and look one
+      // up by email one at a time (group members and invites in the wealth app); only admins list.
+      allow get: if isOwner(uid) || isRealAuth() || isAdmin();
+      allow list: if isAdmin() || (isRealAuth() && request.query.limit <= 1);
+      allow create: if isOwner(uid)
+        && !request.resource.data.keys().hasAny(serverOnlyUserFields());
+      allow update: if isOwner(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyUserFields());
+      allow delete: if isOwner(uid);
 
       // App-level prefs (theme, etc.) — single doc at prefs/p
       match /prefs/{doc} {

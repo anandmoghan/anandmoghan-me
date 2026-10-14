@@ -79,7 +79,9 @@ describe("users", () => {
     const db = anon("anon2");
     await assertSucceeds(setDoc(doc(db, "users/anon2"), { isAnonymous: true, createdAt: serverTimestamp() }));
     await assertSucceeds(getDoc(doc(db, "users/anon2")));
-    await assertSucceeds(updateDoc(doc(db, "users/anon2"), { lastSeenAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(db, "users/anon2"), { consent: "granted" }));
+    await assertFails(updateDoc(doc(db, "users/anon2"), { visitCount: 99 }));
+    await assertFails(updateDoc(doc(db, "users/anon2"), { lastSeenAt: serverTimestamp() }));
     await assertSucceeds(setDoc(doc(db, "users/anon2/prefs/p"), { th: "dark" }));
   });
 
@@ -95,7 +97,8 @@ describe("users", () => {
     await assertSucceeds(getDoc(doc(db, "users/alice")));
     await assertFails(updateDoc(doc(db, "users/alice"), { email: "x@example.com" }));
     await assertFails(getDoc(doc(db, "users/alice/prefs/p")));
-    await assertSucceeds(updateDoc(doc(real("alice"), "users/alice"), { lastSeenAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(real("alice"), "users/alice"), { displayName: "Alice" }));
+    await assertFails(updateDoc(doc(real("alice"), "users/alice"), { country: "GB" }));
   });
 
   test("signed-out visitors are denied", async () => {

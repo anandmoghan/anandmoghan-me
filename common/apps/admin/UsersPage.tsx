@@ -44,7 +44,7 @@ export function UsersPage() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      const snap = await getDocs(query(collection(getDb(), 'users'), orderBy('lastSeenAt', 'desc'), limit(MAX_USERS)))
+      const snap = await getDocs(query(collection(getDb(), 'users'), orderBy('createdAt', 'desc'), limit(MAX_USERS)))
       setUsers(snap.docs.map((d) => rowFrom(d.id, d.data())))
     } catch (err) {
       console.error('Loading users failed', err)
