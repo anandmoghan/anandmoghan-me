@@ -6,7 +6,7 @@ import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { RESET_NEUTRAL_NOTICE, requestPasswordReset } from '@/common/firebase/passwordReset'
 import { useTheme } from '@/common/components/ThemeProvider'
-import { useConsent } from '@/common/visitors/ConsentProvider'
+import { AnalyticsSwitch } from '@/common/visitors/AnalyticsSwitch'
 import { useDeleteMyData } from '@/common/visitors/DeleteMyData'
 import { NicknameEditor } from '@/common/visitors/NicknameEditor'
 import { Card } from '../shell/Card'
@@ -69,7 +69,6 @@ function Avatar({ name }: { name: string }) {
 export function GeneralSettings() {
   const { user, loading, isAnonymous, isAdmin, apps, displayName, refresh, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
-  const { consent, loaded: consentLoaded, choose } = useConsent()
   const deletion = useDeleteMyData()
   const [refreshing, setRefreshing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -211,28 +210,7 @@ export function GeneralSettings() {
       </SettingsCard>
 
       <SettingsCard title="Privacy">
-        <Row
-          label="Analytics"
-          description={
-            <>
-              Page visits and Google Analytics, only while this is on.{' '}
-              <Link href="/privacy#analytics" className="underline underline-offset-2">
-                What is recorded
-              </Link>
-            </>
-          }
-        >
-          {consentLoaded && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={consent === 'granted'}
-              aria-label="Analytics"
-              onClick={() => choose(consent === 'granted' ? 'denied' : 'granted')}
-              className="switch"
-            />
-          )}
-        </Row>
+        <AnalyticsSwitch linkToPrivacy />
       </SettingsCard>
 
       <SettingsCard title="App">
