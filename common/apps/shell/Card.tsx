@@ -34,13 +34,13 @@ interface HubCardProps {
 // badge, up to two summary lines and a chevron.
 export function HubCard({ href, title, icon, badge, lines = [], domain }: HubCardProps) {
   const shown = lines.filter((line): line is string => Boolean(line)).slice(0, 2)
-  const classes = ['card card--compact tap flex w-full items-center', domain ? `domain-${domain}` : '']
+  const classes = ['card card--compact tap block h-full w-full', domain ? `domain-${domain}` : '']
     .filter(Boolean)
     .join(' ')
 
   return (
     <Link href={href} className={classes}>
-      <span className="flex min-h-10 w-full items-center gap-3">
+      <span className="flex h-full min-h-10 w-full items-center gap-3">
         {icon && (
           <span className="icon-tile icon-tile--lg" aria-hidden>
             {icon}
