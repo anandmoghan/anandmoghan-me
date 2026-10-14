@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github.css';
 import { RequireApp } from '@/common/apps/components/RequireApp';
@@ -14,8 +14,23 @@ import './materials.css';
 // layout so only materials routes load it.
 export const metadata: Metadata = {
   title: 'Materials',
+  manifest: '/apps/manifest-materials.json',
+  icons: {
+    icon: { url: '/apps/icon-materials.svg', type: 'image/svg+xml' },
+    apple: '/apps/icon-materials-180.png',
+  },
+  appleWebApp: { capable: true, title: 'Materials', statusBarStyle: 'default' },
+  other: { 'mobile-web-app-capable': 'yes' },
   robots: { index: false, follow: false },
   alternates: { canonical: null },
+};
+
+export const viewport: Viewport = {
+  // The page background of the light and dark themes (global tokens.css --bg).
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f7f4ef' },
+    { media: '(prefers-color-scheme: dark)', color: '#1b1815' },
+  ],
 };
 
 export default function MaterialsLayout({ children }: { children: React.ReactNode }) {

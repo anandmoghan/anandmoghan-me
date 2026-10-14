@@ -6,7 +6,10 @@ import { ServiceWorkerRegister } from "@/common/apps/expense/components/ServiceW
 export const metadata: Metadata = {
   title: "Expense",
   manifest: "/apps/manifest-expense.json",
-  icons: { icon: "/apps/icon-expense.svg", apple: "/apps/icon-expense.svg" },
+  icons: {
+    icon: { url: "/apps/icon-expense.svg", type: "image/svg+xml" },
+    apple: "/apps/icon-expense-180.png",
+  },
   appleWebApp: { capable: true, title: "Expense", statusBarStyle: "default" },
   other: { "mobile-web-app-capable": "yes" },
 };
