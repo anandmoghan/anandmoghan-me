@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Platform Plan</title>
+  <link rel="stylesheet" href="../../global/styles/standalone.css">
+</head>
+<body class="prose">
+  <header>
+    <h1>Platform plan: one site for family, ladder, materials and visitors</h1>
+    <p>Spec for the coder agents. Written 2026-10-14. Owner: Anand.</p>
+  </header>
+  <main>
+    <section id="goals">
+      <h2>Goals</h2>
+      <ul>
+        <li>One Next.js site (anandmoghan.me) hosts the blog, materials, and every app under <code>/apps/*</code>: family, ladder, wealth, expense, time, share, plus an admin panel.</li>
+        <li>One design: the family PWA's look (warm palette, Nunito Sans, cards, sticky header, bottom tab bar, per-domain accents) becomes the shared app design in <code>~/workspace/code/global/styles</code>, used by the whole site.</li>
+        <li>One auth: every visitor gets a Firebase anonymous session; they can upgrade to Google or email, keeping their data; roles in Firestore drive app access and the admin panel.</li>
+        <li>One server folder: <code>~/workspace/code/anandmoghan-me-apis</code> holds the Mac-side services (family bridge and worker, ladder worker).</li>
+        <li>No markdown as a source of truth for ladder or family: structured data in Firestore (or, for Mac-only private data, JSON on the Mac) and HTML for long text.</li>
+      </ul>
+    </section>
+
+    <section id="hard-rules">
+      <h2>Hard rules for every agent</h2>
+      <ul>
+        <li>Never edit, move or delete anything in <code>personal-manager</code>, <code>ladder</code>, <code>ladder-kavya</code> or <code>materials</code>. Read and copy only.</li>
+        <li>The old systems keep running until cutover. New code must not run against the same queues or ports at the same time: the new bridge uses port 3201 (old: 3101) and stays stopped until cutover; new workers read new Firestore paths or are disabled by default.</li>
+        <li>Never read, print or commit secrets, <code>.env*</code> values, service accounts, <code>data/</code>, or health, fitness and parenting content.</li>
+        <li>Work in your own git worktree and branch; commit there with a clear message; do not push; do not deploy to the live site. Preview channels only (<code>firebase hosting:channel:deploy &lt;name&gt;</code>) when asked.</li>
+        <li>Shared files have one owner per phase (see below). Firestore rules are split into part files under <code>firebase/rules/</code> and merged by <code>scripts/merge-rules.mjs</code>; edit only your own part.</li>
+        <li>Build must pass (<code>npm run build</code>, functions build, rules tests) before you report done.</li>
+        <li>No em dashes in UI copy. No <code>@ts-ignore</code>, no <code>eslint-disable</code>.</li>
+      </ul>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture</h2>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr><th>Piece</th><th>Where</th><th>Runs on</th><th>Data</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Site and apps</td><td><code>anandmoghan-me</code></td><td>Firebase Hosting (static export)</td><td>Firestore, Storage, client SDK</td></tr>
+            <tr><td>Cloud API</td><td><code>anandmoghan-me/functions</code></td><td>Cloud Functions us-central1</td><td>visits, account merge, role claims, Trading212</td></tr>
+            <tr><td>Family bridge and worker</td><td><code>anandmoghan-me-apis/family</code></td><td>Mac, launchd, cloudflared (familyapi)</td><td>Firestore <code>family/household</code>; Mac-only JSON for health, fitness, parenting</td></tr>
+            <tr><td>Ladder worker</td><td><code>anandmoghan-me-apis/ladder</code></td><td>Mac, launchd, no tunnel</td><td>Firestore <code>ladder/{tracker}</code>, Storage PDFs</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3 id="ladder-choice">Ladder: recommended design</h3>
+      <p>
+        Ladder drops the local Next server and tunnel.
+        Jobs, companies, notes and requests live in Firestore under <code>ladder/{tracker}</code> (<code>anand</code>, <code>kavya</code>), owner-only by role.
+        The UI is a client app at <code>/apps/ladder</code>, so new roles appear the moment a worker writes them, with no rebuild or deploy.
+        Buttons such as "prepare materials" or "refresh" write a request doc; the Mac worker listens with the admin SDK (the same pattern as the family bridge's request queue), runs the Claude agent loops headlessly, writes results back to Firestore, and uploads PDFs to Storage.
+        Job descriptions are stored as sanitised HTML strings.
+        This needs no inbound port on the Mac.
+      </p>
+    </section>
+
+    <section id="data-model">
+      <h2>Data model and access</h2>
+      <ul>
+        <li><code>users/{uid}</code>: profile (displayName, email, isAnonymous, createdAt, lastSeenAt, country). Owner read and write.</li>
+        <li><code>roles/{emailLowercase}</code>: <code>{ admin: bool, apps: string[], ladderTrackers: string[] }</code>. Admin read and write only. A function mirrors it into custom claims (<code>admin</code>, <code>apps</code>) on write and on sign-in; rules check claims plus <code>email_verified</code>.</li>
+        <li>Bootstrap: <code>moghan.anand@gmail.com</code> admin with all apps; the test user from <code>.env.local</code> (<code>VITE_TEST_USER1_EMAIL</code>) admin for tests. Seed with a script using the admin SDK, never in client code.</li>
+        <li><code>visits/{autoId}</code>: uid, path, referrer, country, createdAt, session id. Written only by the <code>api</code> function (<code>POST /api/visit</code>), which reads the country from the request headers Firebase Hosting forwards; verify the header name and fall back to null. Admin read only. Recorded only after the visitor accepts analytics in the consent banner (UK PECR); anonymous sign-in itself is functional and needs no consent.</li>
+        <li><code>posts/{slug}/comments/{id}</code>: uid, displayName, body (plain text, max 2000 chars), createdAt, status (visible or hidden). Any signed-in user, anonymous included, creates; author edits or deletes own; admin hides.</li>
+        <li>Family keeps <code>family/household/**</code> as today; access stays household membership, and admins with app <code>family</code> also pass.</li>
+        <li>Ladder: <code>ladder/{tracker}/jobs/{slug}</code>, <code>companies/{slug}</code>, <code>requests/{id}</code>; Storage <code>ladder/{tracker}/generated/{slug}/*.pdf</code>. Access: claim apps contains <code>ladder</code> and tracker listed for the user.</li>
+      </ul>
+      <h3 id="anon-upgrade">Anonymous to signed-in</h3>
+      <p>
+        On first visit the root layout signs in anonymously.
+        Upgrading uses <code>linkWithPopup</code> (Google) or <code>linkWithCredential</code> (email), which keeps the same uid and therefore all data.
+        If the Google or email account already exists (<code>auth/credential-already-in-use</code>), sign in to it and call <code>POST /api/account/merge</code> with the old anonymous ID token; the function copies the anonymous user's comments and prefs to the existing uid and deletes the anonymous user.
+      </p>
+    </section>
+
+    <section id="phases">
+      <h2>Phases and owners</h2>
+      <h3 id="phase-0">Phase 0: foundation (one agent, sequential)</h3>
+      <ul>
+        <li>Design: port the family PWA's tokens and components (from <code>personal-manager/web/src/styles.css</code> and <code>web/src/components/</code>) into <code>global/styles/app.css</code> plus token updates, documented in the HTML guide; app shell components in <code>common/apps/shell/</code> (Header, TabBar, Card, Badge, Field, Skeleton, NavProgress). Existing apps adopt the shell.</li>
+        <li>Auth: move <code>AuthProvider</code> to the root layout with automatic anonymous sign-in; account page <code>/apps/account</code> with upgrade and merge; roles and claims function; seed script; rules split into <code>firebase/rules/*.rules</code> with the merge script and emulator rules tests.</li>
+        <li>Owns: root layout, <code>common/firebase/*</code>, <code>functions/</code>, <code>firestore.rules</code>, <code>storage.rules</code>, global styles, <code>app/apps/layout.tsx</code> and the apps hub.</li>
+      </ul>
+      <h3 id="phase-1">Phase 1: features (parallel agents, one worktree each)</h3>
+      <div class="table-wrap wide">
+        <table>
+          <thead>
+            <tr><th>Agent</th><th>Builds</th><th>Owns</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Family</td><td>Port the PWA into <code>/apps/family</code> (React Router routes to Next client routes; static export, so dynamic ids via query or a client catch-all); bridge base URL from env.</td><td><code>app/apps/family</code>, <code>common/apps/family</code>, <code>firebase/rules/family.rules</code></td></tr>
+            <tr><td>APIs</td><td>Create <code>anandmoghan-me-apis</code>: copy bridge, worker and agents; port 3201; <code>DATA_DIR</code> config pointing to a new data folder; ladder worker (request listener, Claude loop runner, admin-SDK CLI for agents); launchd plists written but not loaded.</td><td>the new repo</td></tr>
+            <tr><td>Ladder</td><td><code>/apps/ladder</code> UI (tracker switcher, status tabs, filters, detail tabs, notes, apply prep, materials), Firestore model, migration script from both markdown repos (body to sanitised HTML), rules part.</td><td><code>app/apps/ladder</code>, <code>common/apps/ladder</code>, <code>scripts/ladder-migrate.ts</code>, <code>firebase/rules/ladder.rules</code></td></tr>
+            <tr><td>Materials</td><td>Copy materials content into <code>content/materials/</code>; render under <code>/apps/materials</code> with the post renderer (add <code>$</code> maths, arXiv links, chapter sidebar); public and indexed.</td><td><code>app/apps/materials</code>, <code>content/materials</code>, renderer additions</td></tr>
+            <tr><td>Visitors</td><td>Consent banner, visit logging, blog comments, admin panel <code>/apps/admin</code> (users, roles editor, visits by page, country and returning visitors, comment moderation).</td><td><code>app/apps/admin</code>, comments component, <code>firebase/rules/visitors.rules</code>, functions <code>visit</code> route</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3 id="phase-2">Phase 2: cutover (needs Anand, one step at a time)</h3>
+      <ul>
+        <li>Copy family Mac data to the new data folder and convert markdown to JSON and HTML; stop old bridge and worker, load the new plists, repoint the familyapi tunnel to 3201.</li>
+        <li>Run the ladder migration against production Firestore; retire the ladder tunnel route and the ladder-kavya Pages snapshot.</li>
+        <li>Redirect family.anandmoghan.me, ladder.anandmoghan.me and materials.anandmoghan.me to the new paths.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
