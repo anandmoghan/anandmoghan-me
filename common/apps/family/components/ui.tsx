@@ -121,6 +121,19 @@ export function HubCard({ to, title, icon, badge, lines = [], testId }: { to: st
   );
 }
 
+/** The box form of HubCard for grids: a tinted icon, the title, a short secondary line and at most one clamped detail
+ * line. The whole card is the link. `urgent` tints the card with the domain colour. */
+export function BoxCard({ to, title, icon, sub, detail, urgent = false, testId }: { to: string; title: string; icon: ReactNode; sub?: string | false | null; detail?: string | false | null; urgent?: boolean; testId?: string }) {
+  return (
+    <Link to={to} data-testid={testId} className={`tap card flex h-full min-w-0 flex-col gap-1.5 !p-3 hover:bg-subtle ${urgent ? "!border-domain/40 !bg-domain/[0.1]" : ""}`}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-domain/[0.14] text-domain" aria-hidden>{icon}</span>
+      <span className="line-clamp-2 break-words font-bold leading-snug">{title}</span>
+      {sub && <span className={`line-clamp-1 break-words text-sm ${urgent ? "font-semibold text-domain" : "text-muted"}`}>{sub}</span>}
+      {detail && <span className="line-clamp-2 break-words text-xs text-muted">{detail}</span>}
+    </Link>
+  );
+}
+
 /** Back link at the top of a hub card's page, to the tab it came from. */
 export function BackLink({ to, label }: { to: string; label: string }) {
   return (
