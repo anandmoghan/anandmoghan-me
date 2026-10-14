@@ -228,7 +228,7 @@ export function PostComments({ slug }: { slug: string }) {
               {isAnonymous && (
                 <>
                   {' '}
-                  You are a guest; <Link href="/apps/account" className="underline">create an account</Link> to keep
+                  You are a guest; <Link href="/account" className="underline">create an account</Link> to keep
                   your comments on any device.
                 </>
               )}

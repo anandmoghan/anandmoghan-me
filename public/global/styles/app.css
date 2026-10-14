@@ -11,9 +11,6 @@
 /* == App scope == */
 
 .app {
-  --radius-card: var(--radius-app-card);
-  --radius-panel: var(--radius-app-panel);
-  --radius: var(--radius-app);
   font-family: var(--font-ui);
   color: var(--fg);
   background: var(--bg);
@@ -221,7 +218,7 @@ input[type="date"].field {
 
 /* Skeleton: a shimmering placeholder block; size it with width and height utilities. */
 .skeleton {
-  border-radius: var(--radius-app);
+  border-radius: var(--radius);
   background-color: color-mix(in srgb, var(--muted) 14%, transparent);
   background-image: linear-gradient(
     90deg,
@@ -360,7 +357,8 @@ input[type="date"].field {
 }
 
 .app-header__sep {
-  color: var(--border);
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .app-header__actions {

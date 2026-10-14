@@ -46,7 +46,7 @@ export default function PrivacyPage() {
 
             <h2>How to delete it</h2>
             <p>
-              Open your <Link href="/apps/account">account page</Link> and choose
+              Open your <Link href="/account">account page</Link> and choose
               {' '}<strong>Delete my data</strong>.
               That deletes your recorded visits, your comments, your profile and the session or
               account itself.

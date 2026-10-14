@@ -19,7 +19,7 @@ export function AppsHub() {
         {listed.map((app) => {
           const needsLogin = app.requiresAuth && (!user || isAnonymous)
           const href = needsLogin
-            ? `/apps/login?return=${encodeURIComponent(app.path)}`
+            ? `/login?return=${encodeURIComponent(app.path)}`
             : app.path
           const Icon = DOMAIN_ICON[app.domain]
           return (

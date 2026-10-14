@@ -161,7 +161,7 @@ export function AccountView() {
 
             <p className="text-center text-xs text-muted">
               Already have an account?{' '}
-              <Link href="/apps/login?return=/apps/account" className="underline hover:text-foreground transition-colors">
+              <Link href="/login?return=/account" className="underline hover:text-foreground transition-colors">
                 Sign in
               </Link>
             </p>

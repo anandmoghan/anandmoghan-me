@@ -22,7 +22,7 @@ export function ConsentChoice() {
           aria-pressed={consent === 'denied'}
           onClick={() => choose('denied')}
         >
-          No thanks
+          Reject
         </button>
         <button
           type="button"
@@ -30,7 +30,7 @@ export function ConsentChoice() {
           aria-pressed={consent === 'granted'}
           onClick={() => choose('granted')}
         >
-          Allow
+          Accept
         </button>
       </div>
     </div>

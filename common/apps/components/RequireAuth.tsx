@@ -16,7 +16,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!loading && !signedIn) {
-      router.replace(`/apps/login?return=${encodeURIComponent(pathname)}`)
+      router.replace(`/login?return=${encodeURIComponent(pathname)}`)
     }
   }, [loading, signedIn, router, pathname])
 

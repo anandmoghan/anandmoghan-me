@@ -54,7 +54,7 @@ export function ProfileMenu() {
             <p className="truncate font-bold">{user.displayName || 'Signed in'}</p>
             <p className="truncate text-sm text-muted">{user.email}</p>
           </div>
-          <Link href="/apps/account" className={itemClass} onClick={() => setOpen(false)}>
+          <Link href="/account" className={itemClass} onClick={() => setOpen(false)}>
             <UserIcon />
             Account
           </Link>

@@ -7,6 +7,10 @@ import { ThemeProvider } from "@/common/components/ThemeProvider";
 import { AuthProvider } from "@/common/firebase/AuthProvider";
 import { ConsentBanner } from "@/common/visitors/ConsentBanner";
 import { ConsentProvider } from "@/common/visitors/ConsentProvider";
+import { SiteHeader } from "@/common/components/SiteHeader";
+import { SiteFooter } from "@/common/components/SiteFooter";
+import { NavProgress } from "@/common/apps/shell/NavProgress";
+import { ThemeSync } from "@/common/apps/components/ThemeSync";
 import { VisitLogger } from "@/common/visitors/VisitLogger";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://anandmoghan.me';
@@ -230,7 +234,13 @@ export default function RootLayout({
                 <RedirectTracker />
               </Suspense>
               <VisitLogger />
-              {children}
+              <ThemeSync />
+              <div className="flex min-h-screen flex-col">
+                <NavProgress />
+                <SiteHeader />
+                <main className="flex flex-1 flex-col">{children}</main>
+                <SiteFooter />
+              </div>
               <ConsentBanner />
             </ConsentProvider>
           </AuthProvider>
