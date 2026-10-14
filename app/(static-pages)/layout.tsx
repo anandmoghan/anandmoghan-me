@@ -47,6 +47,10 @@ export default function StaticPagesLayout({
                 <Link href="/privacy" className="underline underline-offset-2">
                   Privacy
                 </Link>
+                {' · '}
+                <Link href="/privacy#analytics" className="underline underline-offset-2">
+                  Cookie settings
+                </Link>
               </p>
               <p className="text-xs mt-2">
                 Made with{' '}

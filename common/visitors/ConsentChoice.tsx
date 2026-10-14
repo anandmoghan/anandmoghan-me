@@ -3,8 +3,8 @@
 import { useConsent } from './ConsentProvider';
 
 const LABEL = {
-  granted: 'You accepted analytics.',
-  denied: 'You declined analytics.',
+  granted: 'Analytics is on.',
+  denied: 'Analytics is off.',
 } as const;
 
 // Privacy page: shows the current analytics choice and lets the visitor change it.
@@ -22,7 +22,7 @@ export function ConsentChoice() {
           aria-pressed={consent === 'denied'}
           onClick={() => choose('denied')}
         >
-          Decline
+          No thanks
         </button>
         <button
           type="button"
@@ -30,7 +30,7 @@ export function ConsentChoice() {
           aria-pressed={consent === 'granted'}
           onClick={() => choose('granted')}
         >
-          Accept
+          Allow
         </button>
       </div>
     </div>

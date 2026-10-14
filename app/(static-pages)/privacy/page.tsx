@@ -52,7 +52,7 @@ export default function PrivacyPage() {
               account itself.
             </p>
 
-            <h2>Your analytics choice</h2>
+            <h2 id="analytics">Your analytics choice</h2>
           </div>
           <div className="mt-4">
             <ConsentChoice />
