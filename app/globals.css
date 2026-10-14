@@ -112,14 +112,29 @@ button:disabled {
   color: var(--muted);
 }
 
-.meta-line > * + *:not(.meta-line__end)::before {
+.meta-line > * + *::before {
   content: "\2022";
   margin-right: 0.75rem;
   color: var(--border);
 }
 
-.meta-line__end {
-  margin-left: auto;
+/* Post tags keep their own colour from DEFAULT_TAGS, passed in as --tag. */
+.badge.tag-color,
+.chip.tag-color {
+  color: color-mix(in srgb, var(--tag) 80%, var(--fg));
+  background: color-mix(in srgb, var(--tag) 12%, transparent);
+  border-color: color-mix(in srgb, var(--tag) 35%, transparent);
+}
+
+.chip.tag-color:hover {
+  background: color-mix(in srgb, var(--tag) 20%, transparent);
+}
+
+.chip.tag-color.is-active,
+.chip.tag-color[aria-pressed="true"] {
+  color: #fff;
+  background: var(--tag);
+  border-color: var(--tag);
 }
 
 /* Header and footer chrome */

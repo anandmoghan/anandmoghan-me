@@ -120,9 +120,6 @@ export default async function PostPage({ params }: PostPageProps) {
             </time>
             <span>{post.metadata.readingTime} min read</span>
             <span>{post.metadata.wordCount} words</span>
-            <span className="meta-line__end">
-              <PrintButton />
-            </span>
           </div>
 
           {post.tags.length > 0 && (
@@ -130,7 +127,8 @@ export default async function PostPage({ params }: PostPageProps) {
               {post.tags.map(tag => (
                 <span
                   key={tag.id}
-                  className="badge badge--accent"
+                  className="badge tag-color"
+                  style={{ '--tag': tag.color } as React.CSSProperties}
                   title={tag.description}
                 >
                   {tag.name}
@@ -138,6 +136,10 @@ export default async function PostPage({ params }: PostPageProps) {
               ))}
             </div>
           )}
+
+          <div className="mt-4">
+            <PrintButton />
+          </div>
         </div>
       </section>
 

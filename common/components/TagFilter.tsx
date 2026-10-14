@@ -134,7 +134,8 @@ export default function TagFilter({ posts, onFilteredPostsChange, className = ''
             <button
               key={tag.id}
               onClick={() => handleTagClick(tag.id)}
-              className={`chip ${isSelected ? 'is-active' : ''}`}
+              className={`chip tag-color ${isSelected ? 'is-active' : ''}`}
+              style={{ '--tag': tag.color } as React.CSSProperties}
               aria-pressed={isSelected}
               title={tag.description}
             >

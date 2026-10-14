@@ -58,7 +58,8 @@ export default function TagList({
                   <button
                     key={tag.id}
                     onClick={() => onTagClick?.(tag.id)}
-                    className={`chip ${isSelected ? 'is-active' : ''}`}
+                    className={`chip tag-color ${isSelected ? 'is-active' : ''}`}
+                    style={{ '--tag': tag.color } as React.CSSProperties}
                     aria-pressed={isSelected}
                     title={tag.description}
                   >
@@ -94,7 +95,8 @@ export function InlineTagList({ tags, className = '', size = 'sm' }: InlineTagLi
       {tags.map(tag => (
         <span
           key={tag.id}
-          className={`badge badge--accent ${size === 'md' ? 'text-sm' : ''}`}
+          className={`badge tag-color ${size === 'md' ? 'text-sm' : ''}`}
+          style={{ '--tag': tag.color } as React.CSSProperties}
           title={tag.description}
         >
           {tag.name}
