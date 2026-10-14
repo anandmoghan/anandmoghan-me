@@ -51,7 +51,7 @@ export const SESSION_WHERE: readonly (readonly [SessionWhere, string])[] = [
   ["cot", "Cot"], ["bed", "Bed"], ["arms", "In arms"], ["pram", "Pram"], ["car", "Car"], ["carrier", "Carrier"], ["nursery", "Nursery"], ["other", "Other"],
 ];
 /** One timed nap or night; `end` is null while she is asleep. Times are ISO with an offset. */
-export interface SleepSession { id: string; kind: SessionKind; start: string; end: string | null; down?: string; where?: SessionWhere; note?: string; logged_by?: string; logged_at?: string }
+export interface SleepSession { id: string; kind: SessionKind; start: string; end: string | null; down?: string; where?: SessionWhere; note?: string; auto_end?: boolean; logged_by?: string; logged_at?: string }
 export interface NapWindow { start: string; end: string }
 /** The bridge's answer to "where is she now and when is the next nap" (bridge/parentingNaps.mjs predictNextNap). */
 export interface NapPrediction {
@@ -464,9 +464,18 @@ export const hm = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { h
 /** Minutes from `iso` to `now` (ms). */
 export const minutesSince = (iso: string, now: number) => (now - Date.parse(iso)) / 60_000;
 
-/** "Awake for 1 h 25 m", "Asleep for 40 m", or "No sleep logged yet". */
-export function statusLine(p: NapPrediction | null, now: number): string {
+/** Longest a nap or night is taken to last; the bridge closes an open session this old by itself (parentingNaps.mjs). */
+export const SESSION_CAP_MINUTES: Record<SessionKind, number> = { nap: 240, night: 840 };
+
+/** "Awake for 1 h 25 m", "Asleep for 40 m", "Timer still running since Sat 14:10. Did she wake up?" when the open session is
+ *  past its cap (the Mac was offline), or "No sleep logged yet". `sessions` holds the open one. */
+export function statusLine(p: NapPrediction | null, now: number, sessions: SleepSession[]): string {
   if (!p || p.state === "unknown" || !p.since) return "No sleep logged yet";
+  const open = p.state === "asleep" ? sessions.find((s) => s.id === p.open_session_id) : undefined;
+  if (open && minutesSince(open.start, now) > SESSION_CAP_MINUTES[open.kind]) {
+    const day = new Date(open.start).toLocaleDateString("en-GB", { weekday: "short" });
+    return `Timer still running since ${day} ${hm(open.start)}. Did she wake up?`;
+  }
   return `${p.state === "asleep" ? "Asleep" : "Awake"} for ${fmtDuration(minutesSince(p.since, now))}`;
 }
 
@@ -474,9 +483,9 @@ export function statusLine(p: NapPrediction | null, now: number): string {
 export const windowPhase = (w: NapWindow, now: number): "before" | "open" | "after" => (now < Date.parse(w.start) ? "before" : now <= Date.parse(w.end) ? "open" : "after");
 
 /** "Next nap 12:40 to 13:10", the one-line version for Today; "Asleep for 40 m" while she sleeps; null with nothing to say. */
-export function napLine(p: NapPrediction | null, now: number): string | null {
+export function napLine(p: NapPrediction | null, now: number, sessions: SleepSession[]): string | null {
   if (!p) return null;
-  if (p.state === "asleep") return statusLine(p, now);
+  if (p.state === "asleep") return statusLine(p, now, sessions);
   if (p.state === "awake" && p.window) return `Next nap ${hm(p.window.start)} to ${hm(p.window.end)}`;
   return null;
 }
