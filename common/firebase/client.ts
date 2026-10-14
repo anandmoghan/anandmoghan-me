@@ -49,33 +49,33 @@ function readConfig() {
   return config;
 }
 
+// Every SDK is pointed at its emulator once, when the app is created and before any use: the
+// Firestore and Storage SDKs throw if their emulator is connected after the first request.
 export function getFirebaseApp(): FirebaseApp {
-  return getApps().length > 0 ? getApp() : initializeApp(readConfig());
+  if (getApps().length > 0) return getApp();
+  const app = initializeApp(readConfig());
+  if (USE_EMULATORS) {
+    connectAuthEmulator(getAuth(app), `http://${EMULATOR_HOST}:${PORTS.auth}`, { disableWarnings: true });
+    connectFirestoreEmulator(getFirestore(app), EMULATOR_HOST, PORTS.firestore);
+    connectStorageEmulator(getStorage(app), EMULATOR_HOST, PORTS.storage);
+    connectFunctionsEmulator(getFunctions(app, 'us-central1'), EMULATOR_HOST, PORTS.functions);
+  }
+  return app;
 }
 
 export function getFirebaseAuth(): Auth {
-  const auth = getAuth(getFirebaseApp());
-  // The Auth emulator also serves the fake Google popup used by signInWithPopup / linkWithPopup.
-  if (USE_EMULATORS && !auth.emulatorConfig) {
-    connectAuthEmulator(auth, `http://${EMULATOR_HOST}:${PORTS.auth}`, { disableWarnings: true });
-  }
-  return auth;
+  // In emulator mode the Auth emulator also serves the fake Google popup (signInWithPopup).
+  return getAuth(getFirebaseApp());
 }
 
 export function getDb(): Firestore {
-  const db = getFirestore(getFirebaseApp());
-  if (USE_EMULATORS) connectFirestoreEmulator(db, EMULATOR_HOST, PORTS.firestore);
-  return db;
+  return getFirestore(getFirebaseApp());
 }
 
 export function getFirebaseStorage(): FirebaseStorage {
-  const storage = getStorage(getFirebaseApp());
-  if (USE_EMULATORS) connectStorageEmulator(storage, EMULATOR_HOST, PORTS.storage);
-  return storage;
+  return getStorage(getFirebaseApp());
 }
 
 export function getFirebaseFunctions(): Functions {
-  const functions = getFunctions(getFirebaseApp(), 'us-central1');
-  if (USE_EMULATORS) connectFunctionsEmulator(functions, EMULATOR_HOST, PORTS.functions);
-  return functions;
+  return getFunctions(getFirebaseApp(), 'us-central1');
 }
