@@ -14,6 +14,7 @@ import { formatMoney } from "@/common/apps/family/lib/format";
 import TryOnSection, { GeneratingNote, Lightbox, TryonHero, useTryonRequest } from "@/common/apps/family/components/TryOn";
 import { DISCLAIMER, itemPerson, latestLookTryon } from "@/common/apps/family/lib/tryon";
 import { buildLooks, buyLabel, fullName, lookItems, lookName, lookTotal, retailerLabel, shortTitle } from "@/common/apps/family/lib/shop";
+import { PinButton } from "@/common/apps/family/components/Pinned";
 
 export default function LookDetail() {
   const { bottomId = "", topId = "" } = useParams();
@@ -39,7 +40,10 @@ export default function LookDetail() {
         </div>
         {tryon && <p className="mt-2 text-sm text-muted">{DISCLAIMER}</p>}
       </div>
-      <h1 className="mt-4 text-[1.5rem] font-extrabold leading-snug">{lookName(look)}</h1>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <h1 className="min-w-0 text-[1.5rem] font-extrabold leading-snug">{lookName(look)}</h1>
+        <PinButton title={lookName(look)} />
+      </div>
       {total && (
         <p className="mt-1 text-muted">
           <span className="text-lg font-extrabold text-foreground">{formatMoney(total.amount, total.currency)}</span>, {items.length} pieces

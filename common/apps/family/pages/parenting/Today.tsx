@@ -154,7 +154,7 @@ function HubCards({ data }: { data: ParentingData }) {
         {sections > 0 && <li><BoxCard to="/nila/research" testId="hub-research" title="More from the research" icon={<BookIcon />} sub={plural(sections, "section", "sections")} /></li>}
         {data.weeks.length > 0 && <li><BoxCard to="/nila/weeks" testId="hub-weeks" title="Past weeks" icon={<ListIcon />} sub={plural(data.weeks.length, "week", "weeks")} /></li>}
         <li><BoxCard to="/nila/about" title="About Nila" icon={<ChildIcon />} sub="Your notes" detail="Her sleep, feeding, routines and aims" /></li>
-        <li><BoxCard to="/nila/sleep#reminders" title="Reminders" icon={<BellIcon />} sub="Bedtime and updates" detail="The night log, today's habit and this week's update" /></li>
+        <li><BoxCard to="/nila/sleep?view=reminders" title="Reminders" icon={<BellIcon />} sub="Bedtime and updates" detail="The night log, today's habit and this week's update" /></li>
       </ul>
     </section>
   );

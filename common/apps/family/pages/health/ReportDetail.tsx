@@ -12,6 +12,7 @@ import { BackLink } from "@/common/apps/family/pages/Product";
 import {
   HealthOfflineError, fmtDate, healthApi, isAbnormal, openOriginal, parseHealthPerson, useHealthApi, type ReportDetail as Detail,
 } from "@/common/apps/family/lib/health";
+import { PinButton } from "@/common/apps/family/components/Pinned";
 
 export default function ReportDetail() {
   const { person: personParam, id = "" } = useParams();
@@ -49,7 +50,10 @@ export default function ReportDetail() {
       {report && status === "ready" && (
         <>
           <header className="space-y-2">
-            <h1 className="text-[1.5rem] font-extrabold leading-snug">{report.title}</h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="min-w-0 text-[1.5rem] font-extrabold leading-snug">{report.title}</h1>
+              <PinButton title={report.title} />
+            </div>
             <Meta parts={[report.lab, report.lab_city, report.collected_at && `Collected ${fmtDate(report.collected_at)}`, report.reported_at && `Reported ${fmtDate(report.reported_at)}`, report.referred_by && `Referred by ${report.referred_by}`, report.sample_id && `Sample ${report.sample_id}`]} />
             <div className="flex flex-wrap gap-1.5">
               <CountryBadge country={report.country} />

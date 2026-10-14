@@ -16,7 +16,7 @@ import { PastAsks } from "@/common/apps/family/pages/parenting/Ask";
 import { FocusPage, JabsPage, ResearchPage, WeeksPage, WorksPage } from "@/common/apps/family/pages/parenting/TodayPages";
 import Week from "@/common/apps/family/pages/parenting/Week";
 import ProblemPage from "@/common/apps/family/pages/parenting/Problem";
-import { ageLabel, useParenting } from "@/common/apps/family/lib/parenting";
+import { ageLabel, isGuide, isStepPlan, useParenting } from "@/common/apps/family/lib/parenting";
 import { PARENTING_TABS } from "@/common/apps/family/lib/tabs";
 
 /** Pages that open from a card: Today's cards, and Help's "Your questions". */
@@ -46,10 +46,15 @@ export default function Parenting() {
   const todayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const age = p.data ? ageLabel(p.data.dob, undefined, true) ?? p.data.summary?.age : null;
 
+  // A problem's page goes back to the Help tab its kind lives in.
+  const problem = raw === "help" ? p.data?.problems.find((x) => x.id === id) : undefined;
+  const helpView = problem && isStepPlan(problem) ? "plans" : problem && isGuide(problem) ? "habits" : "problems";
+
   // Pages that open from a card go back to where the card is, shown above the title.
   const backTo = raw === "week" || raw === "about" || (id === undefined && raw !== undefined && raw in EXTRA_PAGES && raw !== "questions") ? (["/nila/today", "Today"] as const)
-    : raw === "questions" || (raw === "help" && id !== undefined) ? (["/nila/help", "Help"] as const)
-    : foodPage ? (["/nila/food#plan", "Food plan"] as const)
+    : raw === "questions" ? (["/nila/help", "Help"] as const)
+    : raw === "help" && id !== undefined ? ([`/nila/help?view=${helpView}`, "Help"] as const)
+    : foodPage ? (["/nila/food?view=plan", "Food plan"] as const)
     : null;
 
   return (

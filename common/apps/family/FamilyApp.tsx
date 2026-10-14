@@ -5,6 +5,7 @@ import { useAuth } from '@/common/firebase/AuthProvider'
 import { DomainScope } from '@/common/apps/shell/DomainScope'
 import { DataProvider, useData } from '@/common/apps/family/hooks/useData'
 import { ToastProvider } from '@/common/apps/family/hooks/useToast'
+import { SubLabelProvider } from '@/common/apps/family/hooks/useViewTab'
 import { HeaderSlot } from '@/common/components/HeaderSlot'
 import MacPill from '@/common/apps/family/components/MacPill'
 import TabBar from '@/common/apps/family/components/TabBar'
@@ -50,15 +51,17 @@ export function FamilyApp({ children }: { children: ReactNode }) {
       className="family-app site-container family-content flex flex-1 flex-col"
     >
       <ToastProvider>
-        {loading ? (
-          <ListSkeleton rows={3} />
-        ) : (
-          <RequireAuth>
-            <DataProvider>
-              <Members>{children}</Members>
-            </DataProvider>
-          </RequireAuth>
-        )}
+        <SubLabelProvider>
+          {loading ? (
+            <ListSkeleton rows={3} />
+          ) : (
+            <RequireAuth>
+              <DataProvider>
+                <Members>{children}</Members>
+              </DataProvider>
+            </RequireAuth>
+          )}
+        </SubLabelProvider>
       </ToastProvider>
     </DomainScope>
   )

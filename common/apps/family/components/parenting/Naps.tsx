@@ -151,7 +151,7 @@ export function NextNap({ data }: { data: ParentingData }) {
       {line && <p className="text-muted">{line}</p>}
       {p?.bedtime && <p className="font-semibold" data-testid="bedtime-suggestion">Suggested bedtime {hm(p.bedtime.start)} to {hm(p.bedtime.end)}</p>}
       {!asleep && (
-        <Link to="/nila/sleep#settle" className="inline-flex min-h-11 items-center text-sm font-semibold text-domain underline">
+        <Link to="/nila/sleep?view=plan#settle" className="inline-flex min-h-11 items-center text-sm font-semibold text-domain underline">
           How to help her settle
         </Link>
       )}
