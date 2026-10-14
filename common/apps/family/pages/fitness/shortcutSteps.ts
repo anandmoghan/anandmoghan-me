@@ -64,7 +64,7 @@ const shortcutSteps: { title: string; steps: ShortcutStep[] } = {
     {
       action: "Get Contents of URL",
       settings:
-        "URL https://familyapi.anandmoghan.me/fitness/ingest. Tap Show More: Method POST; Headers: add Authorization with value " +
+        "URL https://api.anandmoghan.me/fitness/ingest. Tap Show More: Method POST; Headers: add Authorization with value " +
         '"Bearer " then the Key variable (one space after Bearer); Request Body JSON, add these Text fields: date = Day, ' +
         "steps = Steps, active_kcal = ActiveKcal, resting_hr = RestingHR, hrv_ms = HRV, vo2max = VO2Max, weight_kg = Weight, " +
         "body_fat_pct = BodyFat, lean_mass_kg = LeanMass, bp_sys = BPSys, bp_dia = BPDia, sleep_h = SleepHours.",
