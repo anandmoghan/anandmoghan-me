@@ -201,3 +201,13 @@
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--muted) 75%, transparent);
 }
+
+/* .scroll-bare: scrolls (swipe, trackpad, shift + wheel) with no visible bar, for a pill
+   track whose bar would run past its rounded ends. */
+.scroll-bare {
+  scrollbar-width: none;
+}
+
+.scroll-bare::-webkit-scrollbar {
+  display: none;
+}

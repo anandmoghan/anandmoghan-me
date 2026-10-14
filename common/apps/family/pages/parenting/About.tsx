@@ -17,15 +17,16 @@ function errorText(e: unknown): string {
 }
 
 /** context.md by section, "Add a note" (section plus text) and an edit view for the raw text. */
-export default function About({ p }: { p: UseParenting }) {
+/** Notes about Nila. Editing the raw text is started from the page title's Edit text button (Parenting). */
+export default function About({ p, editing, setEditing }: { p: UseParenting; editing: boolean; setEditing: (on: boolean) => void }) {
   const toast = useToast();
   const [body, setBody] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [section, setSection] = useState(CONTEXT_SECTIONS[0]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
+  // null until the text is changed: the editor starts from the stored notes.
+  const [draft, setDraft] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -62,8 +63,9 @@ export default function About({ p }: { p: UseParenting }) {
     setSaving(true);
     setEditError(null);
     try {
-      await parentingApi.saveContext(p.ctx, draft);
+      await parentingApi.saveContext(p.ctx, draft ?? body ?? "");
       setEditing(false);
+      setDraft(null);
       toast.show({ message: "Saved" });
       await Promise.all([load(), p.refresh()]);
     } catch (e) {
@@ -95,12 +97,12 @@ export default function About({ p }: { p: UseParenting }) {
         </ul>
         <label className="block">
           <span className="sr-only">Notes about Nila</span>
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={18} spellCheck className="field font-mono text-[0.9rem] leading-relaxed" />
+          <textarea value={draft ?? body} onChange={(e) => setDraft(e.target.value)} rows={18} spellCheck className="field font-mono text-[0.9rem] leading-relaxed" />
         </label>
         {editError && <p className="font-semibold text-destructive" role="alert">{editError}</p>}
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={saving} onClick={() => void saveEdit()} className={primaryBtn}>{saving ? <><Spinner />Saving...</> : "Save"}</button>
-          <button type="button" disabled={saving} onClick={() => { setEditing(false); setEditError(null); }} className={outlineBtn}>Cancel</button>
+          <button type="button" disabled={saving} onClick={() => { setEditing(false); setDraft(null); setEditError(null); }} className={outlineBtn}>Cancel</button>
         </div>
       </div>
     );
@@ -108,10 +110,6 @@ export default function About({ p }: { p: UseParenting }) {
 
   return (
     <div className="space-y-7">
-      <div className="flex justify-end">
-        <button type="button" onClick={() => { setDraft(body); setEditing(true); }} className={softBtn}>Edit text</button>
-      </div>
-
       <section className="card space-y-3 !p-4" aria-label="Add a note">
         <SectionTitle title="Add a note" />
         <label className="block">

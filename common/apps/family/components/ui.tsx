@@ -39,7 +39,7 @@ export function FilterChip({ active, onClick, children, role }: { active: boolea
 /** Segmented control: a soft track with the chosen option raised. Options are pressed-state buttons. */
 /** Pills in a track that hugs its options from sm up; `center` centres it, for a page's view tabs. */
 export function Segmented<T extends string>({ options, value, onChange, label, scroll = false, center = false }: { options: readonly (readonly [T, string])[]; value: T; onChange: (v: T) => void; label: string; scroll?: boolean; center?: boolean }) {
-  const track = `flex w-full gap-1 rounded-full bg-subtle p-1 sm:w-fit${scroll ? " overflow-x-auto" : ""}${center ? " sm:mx-auto" : ""}`;
+  const track = `flex w-full gap-1 rounded-full bg-subtle p-1 sm:w-fit${scroll ? " scroll-bare max-w-full overflow-x-auto" : ""}${center ? " sm:mx-auto" : ""}`;
   return (
     <div role="group" aria-label={label} className={track}>
       {options.map(([v, text]) => (
