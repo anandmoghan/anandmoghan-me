@@ -128,7 +128,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={type === 'cash' ? 'e.g. Barclays Current Account' : 'e.g. Flat in London'}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
               autoFocus
             />
           </div>
@@ -188,7 +188,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
                 onChange={(e) => setCurrentValue(e.target.value)}
                 placeholder="0"
                 min="0"
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="field"
               />
             </div>
           ) : (
@@ -203,7 +203,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
                     onChange={(e) => setInitialValue(e.target.value)}
                     placeholder="0"
                     min="0"
-                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="field"
                   />
                 </div>
                 <div>
@@ -214,7 +214,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
                     onChange={(e) => setCurrentValue(e.target.value)}
                     placeholder="0"
                     min="0"
-                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="field"
                   />
                 </div>
               </div>
@@ -229,7 +229,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
                     onChange={(e) => setGrowthRate(e.target.value)}
                     placeholder="7"
                     step="0.5"
-                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="field"
                   />
                 </div>
                 <div>
@@ -240,7 +240,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
                     onChange={(e) => setYearlyContribution(e.target.value)}
                     placeholder="0"
                     min="0"
-                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="field"
                   />
                 </div>
               </div>
@@ -252,7 +252,7 @@ function AssetForm({ initial, onSave, onCancel }: AssetFormProps) {
                   type="date"
                   value={purchaseDate}
                   onChange={(e) => setPurchaseDate(e.target.value)}
-                  className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="field"
                 />
               </div>
             </>

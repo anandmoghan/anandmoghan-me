@@ -2,62 +2,58 @@
 
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { useTheme } from '@/common/components/ThemeProvider'
+import { Card } from '../shell/Card'
 
 export function SettingsView() {
   const { user } = useAuth()
   const { theme, setTheme } = useTheme()
 
-  const themeOptions: Array<{ value: 'light' | 'dark' | 'system'; label: string; icon: string }> = [
-    { value: 'light', label: 'Light', icon: '☀️' },
-    { value: 'dark', label: 'Dark', icon: '🌙' },
-    { value: 'system', label: 'System', icon: '💻' },
+  const themeOptions: Array<{ value: 'light' | 'dark' | 'system'; label: string }> = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'system', label: 'System' },
   ]
 
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
-      <h1 className="text-2xl font-bold mb-8">Settings</h1>
+    <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
+      <h1 className="mb-6 text-[1.65rem] font-extrabold leading-tight">Settings</h1>
 
-      {/* Profile */}
       <section className="mb-8">
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Profile</h2>
-        <div className="rounded-lg border border-border bg-background p-5">
+        <h2 className="mb-3 text-lg font-extrabold">Profile</h2>
+        <Card>
           <div className="flex items-center gap-4">
             {user?.photoURL ? (
-              <img src={user.photoURL} alt="Profile" className="w-14 h-14 rounded-full border border-border" />
+              <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full" />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center text-xl font-medium text-background">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-domain text-xl font-bold text-domain-foreground">
                 {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
-              </div>
+              </span>
             )}
-            <div>
-              <p className="font-semibold">{user?.displayName}</p>
-              <p className="text-sm text-muted">{user?.email}</p>
+            <div className="min-w-0">
+              <p className="truncate font-bold">{user?.displayName}</p>
+              <p className="truncate text-sm text-muted">{user?.email}</p>
             </div>
           </div>
-        </div>
+        </Card>
       </section>
 
-      {/* Theme */}
       <section className="mb-8">
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Appearance</h2>
-        <div className="rounded-lg border border-border bg-background p-5">
-          <div className="flex gap-2">
+        <h2 className="mb-3 text-lg font-extrabold">Appearance</h2>
+        <Card>
+          <div role="group" aria-label="Theme" className="flex flex-wrap gap-2">
             {themeOptions.map((opt) => (
               <button
                 key={opt.value}
+                type="button"
+                aria-pressed={theme === opt.value}
                 onClick={() => setTheme(opt.value)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  theme === opt.value
-                    ? 'bg-foreground text-background'
-                    : 'border border-border hover:bg-muted/20'
-                }`}
+                className="chip"
               >
-                <span>{opt.icon}</span>
                 {opt.label}
               </button>
             ))}
           </div>
-        </div>
+        </Card>
       </section>
     </div>
   )

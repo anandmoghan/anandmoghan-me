@@ -96,7 +96,7 @@ export function SessionEditModal({ session, categories, uid, tz, onClose }: Sess
             <select
               value={categoryId}
               onChange={e => setCategoryId(e.target.value)}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             >
               {categories.map(cat => (
                 <option key={cat.id} value={cat.id}>
@@ -113,7 +113,7 @@ export function SessionEditModal({ session, categories, uid, tz, onClose }: Sess
               type="datetime-local"
               value={startedAt}
               onChange={e => setStartedAt(e.target.value)}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             />
           </div>
 
@@ -125,7 +125,7 @@ export function SessionEditModal({ session, categories, uid, tz, onClose }: Sess
                 type="datetime-local"
                 value={endedAt}
                 onChange={e => setEndedAt(e.target.value)}
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="field"
               />
               <p className="text-xs text-muted mt-1">
                 Duration: {endedAt ? formatDuration(duration({ startedAt: inputToDate(startedAt), endedAt: inputToDate(endedAt) })) : '—'}

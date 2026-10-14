@@ -5,6 +5,10 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { GoogleLoginButton } from './GoogleLoginButton'
+import { Card } from '../shell/Card'
+import { Field } from '../shell/Field'
+import { ButtonSpinner } from '../shell/Skeleton'
+import { BackIcon, LockIcon } from '../shell/icons'
 
 // Only same-site absolute paths are accepted as a post-login destination.
 function safeReturnPath(raw: string | null): string {
@@ -63,13 +67,18 @@ export function LoginForm() {
     }
   }
 
+  const submitLabel = mode === 'signin' ? 'Sign in' : 'Create account'
+  const busyLabel = mode === 'signin' ? 'Signing in...' : 'Creating account...'
+
   return (
-    <div className="flex items-center justify-center flex-1">
+    <div className="flex flex-1 items-center justify-center py-8">
       <div className="w-full max-w-sm px-4">
-        <div className="text-center mb-8">
-          <div className="text-4xl mb-4">🔐</div>
-          <h1 className="text-2xl font-bold">{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-          <p className="text-muted mt-2 text-sm">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <span className="icon-tile icon-tile--lg mb-4" aria-hidden>
+            <LockIcon />
+          </span>
+          <h1 className="text-[1.65rem] font-extrabold leading-tight">{submitLabel}</h1>
+          <p className="mt-1 text-[0.95rem] text-muted">
             {mode === 'signin' ? 'Sign in to access your apps.' : 'Create an account to get started.'}
           </p>
           {isAnonymous && (
@@ -79,72 +88,81 @@ export function LoginForm() {
           )}
         </div>
 
-        <div className="rounded-lg border border-border bg-background p-6 shadow-sm space-y-4">
-          <GoogleLoginButton onSuccess={() => router.replace(returnTo)} />
+        <Card>
+          <div className="space-y-4">
+            <GoogleLoginButton onSuccess={() => router.replace(returnTo)} />
 
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted">or</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted">or</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {mode === 'signup' && (
-              <input
-                type="text"
-                placeholder="Display name"
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
+            <form onSubmit={handleSubmit} className="space-y-3">
+              {mode === 'signup' && (
+                <Field
+                  type="text"
+                  placeholder="Display name"
+                  aria-label="Display name"
+                  autoComplete="name"
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  required
+                />
+              )}
+              <Field
+                type="email"
+                placeholder="Email"
+                aria-label="Email"
+                autoComplete="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
                 required
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
               />
-            )}
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-            />
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? (mode === 'signin' ? 'Signing in...' : 'Creating account...') : (mode === 'signin' ? 'Sign in' : 'Create account')}
-            </button>
-          </form>
+              <Field
+                type="password"
+                placeholder="Password"
+                aria-label="Password"
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <button
+                type="submit"
+                disabled={submitting}
+                aria-busy={submitting}
+                className="btn btn--primary w-full"
+              >
+                {submitting ? <><ButtonSpinner />{busyLabel}</> : submitLabel}
+              </button>
+            </form>
 
-          <p className="text-center text-xs text-muted">
-            {mode === 'signin' ? (
-              <>No account?{' '}
-                <button onClick={() => { setMode('signup'); setError(null) }} className="underline hover:text-foreground transition-colors">
-                  Sign up
-                </button>
-              </>
-            ) : (
-              <>Already have an account?{' '}
-                <button onClick={() => { setMode('signin'); setError(null) }} className="underline hover:text-foreground transition-colors">
-                  Sign in
-                </button>
-              </>
-            )}
-          </p>
-        </div>
+            <p className="text-center text-sm text-muted">
+              {mode === 'signin' ? (
+                <>No account?{' '}
+                  <button type="button" onClick={() => { setMode('signup'); setError(null) }} className="font-semibold text-domain underline underline-offset-2">
+                    Sign up
+                  </button>
+                </>
+              ) : (
+                <>Already have an account?{' '}
+                  <button type="button" onClick={() => { setMode('signin'); setError(null) }} className="font-semibold text-domain underline underline-offset-2">
+                    Sign in
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        </Card>
 
-        <p className="text-center text-xs text-muted mt-6">
-          <Link href="/apps" className="hover:text-foreground transition-colors">← Back to apps</Link>
+        <p className="mt-4 text-center">
+          <Link href="/apps" className="back-link">
+            <BackIcon />
+            Back to apps
+          </Link>
         </p>
       </div>
     </div>

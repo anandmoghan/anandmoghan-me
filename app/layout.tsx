@@ -114,6 +114,7 @@ export default function RootLayout({
         <link rel="stylesheet" href="/global/styles/tokens.css" />
         <link rel="stylesheet" href="/global/styles/prose.css" />
         <link rel="stylesheet" href="/global/styles/ui.css" />
+        <link rel="stylesheet" href="/global/styles/app.css" />
         <link rel="stylesheet" href="/global/styles/print.css" media="print" />
         <script
           dangerouslySetInnerHTML={{

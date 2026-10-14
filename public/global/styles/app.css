@@ -1,0 +1,572 @@
+/* App components: the family app's design (personal-manager/web) for every app surface.
+   Load after tokens.css and ui.css. Colours, radii and shadows come from tokens.css;
+   nothing here hard-codes a colour.
+
+   An app's root element carries .app (rounder radii, pill buttons, accent-filled
+   primary actions) and one .domain-<name> class, which points --domain and --accent
+   at that area's colour so the header, tabs, badges and focus rings follow it.
+   Classes outside .app (field, badge tones, skeleton, spinner, icon tile) also work
+   on plain pages, in the default home accent. */
+
+/* == App scope == */
+
+.app {
+  --radius-card: var(--radius-app-card);
+  --radius-panel: var(--radius-app-panel);
+  --radius: var(--radius-app);
+  font-family: var(--font-ui);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app :focus-visible {
+  outline-color: var(--domain);
+}
+
+/* == Area accents == */
+
+.domain-home { --domain: var(--home); --accent: var(--home); }
+.domain-health { --domain: var(--health); --accent: var(--health); }
+.domain-shopping { --domain: var(--shopping); --accent: var(--shopping); }
+.domain-style { --domain: var(--style); --accent: var(--style); }
+.domain-updates { --domain: var(--updates); --accent: var(--updates); }
+.domain-fitness { --domain: var(--fitness); --accent: var(--fitness); }
+.domain-parenting { --domain: var(--parenting); --accent: var(--parenting); }
+.domain-wealth { --domain: var(--wealth); --accent: var(--wealth); }
+.domain-expense { --domain: var(--expense); --accent: var(--expense); }
+.domain-time { --domain: var(--time); --accent: var(--time); }
+.domain-share { --domain: var(--share); --accent: var(--share); }
+.domain-ladder { --domain: var(--ladder); --accent: var(--ladder); }
+.domain-materials { --domain: var(--materials); --accent: var(--materials); }
+.domain-admin { --domain: var(--admin); --accent: var(--admin); }
+
+/* == Buttons and chips in apps == */
+
+/* Every button in an app is a pill; the primary action is filled in the area colour. */
+.app .btn {
+  border-radius: 9999px;
+}
+
+.app .btn--primary,
+.app .btn--primary:hover {
+  color: var(--on-domain);
+  background: var(--domain);
+  border-color: var(--domain);
+  box-shadow: var(--shadow-card);
+}
+
+.app .btn--primary:hover {
+  opacity: 0.9;
+}
+
+/* Soft: a quiet action tinted in the area colour. */
+.btn--soft {
+  color: var(--domain);
+  background: color-mix(in srgb, var(--domain) 12%, transparent);
+  border-color: transparent;
+}
+
+.btn--soft:hover {
+  color: var(--domain);
+  background: color-mix(in srgb, var(--domain) 20%, transparent);
+  box-shadow: none;
+}
+
+/* Danger: a destructive action, outlined in the destructive colour. */
+.btn--danger,
+.btn--danger:hover {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 45%, transparent);
+}
+
+.app .chip.is-active,
+.app .chip[aria-pressed="true"] {
+  color: var(--on-domain);
+  background: var(--domain);
+  border-color: var(--domain);
+  box-shadow: var(--shadow-card);
+}
+
+/* == Cards == */
+
+/* .card (ui.css) is the surface. Flush: no padding, clipped corners, for a card that
+   holds an image, a list or a table. Compact: the tighter padding of a list row. */
+.card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.card--compact {
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Icon tile: a rounded square tinted in the area colour, holding a 20px icon. */
+.icon-tile {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--domain);
+  background: color-mix(in srgb, var(--domain) 14%, transparent);
+  border-radius: var(--radius-panel);
+}
+
+.icon-tile--lg {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+/* == Fields == */
+
+/* Text input, select or textarea. 1rem text so iOS does not zoom on focus. */
+.field {
+  display: block;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.6rem 0.9rem;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.field::placeholder {
+  color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.field:focus {
+  outline: 2px solid color-mix(in srgb, var(--domain) 60%, transparent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.field:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.field[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+
+textarea.field {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+/* iOS Safari gives date and time inputs an intrinsic min width (so a full-width one
+   overflows a two-column grid) and collapses an empty one. */
+input[type="time"].field,
+input[type="date"].field {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.field::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.field-hint,
+.field-error {
+  margin-top: var(--space-1);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.field-error {
+  color: var(--destructive);
+}
+
+/* == Badge tones == */
+
+/* Extra tones for .badge (ui.css); the badge tints itself from its text colour. */
+.badge--success { color: var(--success); }
+.badge--destructive { color: var(--destructive); }
+.badge--gold { color: var(--gold); }
+.badge--domain { color: var(--domain); }
+
+/* Pulsing dot inside a badge, for live or in-progress states. */
+.badge__dot {
+  flex: none;
+  width: 0.375rem;
+  height: 0.375rem;
+  background: currentColor;
+  border-radius: 9999px;
+  animation: app-pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes app-pulse-dot {
+  50% { opacity: 0.35; }
+}
+
+/* == Loading == */
+
+/* Skeleton: a shimmering placeholder block; size it with width and height utilities. */
+.skeleton {
+  border-radius: var(--radius-app);
+  background-color: color-mix(in srgb, var(--muted) 14%, transparent);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--surface) 60%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: app-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes app-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Button spinner: put it before the busy label ("Saving...") of a disabled button. */
+.btn-spinner {
+  display: inline-block;
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.4rem;
+  vertical-align: -0.15em;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 9999px;
+  animation: app-spin 0.7s linear infinite;
+}
+
+.btn .btn-spinner,
+.chip .btn-spinner {
+  margin-right: 0;
+}
+
+@keyframes app-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Navigation progress: a thin bar in the area colour under the safe-area inset.
+   Add .is-running while a navigation is in flight, .is-done when it lands. */
+.nav-progress {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  height: 3px;
+  pointer-events: none;
+}
+
+.nav-progress__bar {
+  height: 100%;
+  background: var(--domain);
+  transform-origin: left;
+  opacity: 0;
+  transition: opacity 250ms ease-out, transform 150ms;
+}
+
+.nav-progress__bar.is-running {
+  opacity: 1;
+  transition: none;
+  animation: app-nav-creep 12s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+.nav-progress__bar.is-done {
+  opacity: 0;
+  transform: scaleX(1);
+}
+
+@keyframes app-nav-creep {
+  from { transform: scaleX(0.02); }
+  to { transform: scaleX(0.92); }
+}
+
+/* == App header == */
+
+/* Sticky top bar: area icon and title on the left, actions on the right. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding-top: env(safe-area-inset-top);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.app-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  max-width: 80rem;
+  height: var(--topbar-height);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+.app-header__start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-header__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: var(--tap);
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--fg);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Parent link before the title, for example "Apps" above an app. */
+.app-header__parent {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.app-header__parent:hover {
+  color: var(--fg);
+}
+
+.app-header__sep {
+  color: var(--border);
+}
+
+.app-header__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* == Tab bar == */
+
+/* Bottom tabs: a full-width bar on phones (tabs share the width, no sideways scroll)
+   and a floating pill on wide screens. The active link has aria-current="page".
+   Give the page body .with-tab-bar so the last row clears the bar. */
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: var(--shadow-float);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.tab-bar__list {
+  display: flex;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.tab-bar__item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tab-bar__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-height: var(--tabbar-height);
+  padding: 0 0.125rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease, transform 0.08s ease-out;
+}
+
+.tab-bar__link:hover {
+  color: var(--fg);
+}
+
+.tab-bar__link:active {
+  transform: scale(0.98);
+}
+
+.tab-bar__link[aria-current="page"] {
+  color: var(--domain);
+}
+
+.tab-bar__icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  max-width: 100%;
+  height: 2rem;
+  border-radius: 9999px;
+  transition: background-color 0.15s ease;
+}
+
+.tab-bar__link:hover .tab-bar__icon {
+  background: var(--subtle);
+}
+
+.tab-bar__link[aria-current="page"] .tab-bar__icon {
+  background: color-mix(in srgb, var(--domain) 15%, transparent);
+}
+
+/* Tinted: a link into another area (it carries that .domain-<name>) shows its icon
+   in that area's colour while inactive. */
+.tab-bar__link--tinted .tab-bar__icon {
+  color: color-mix(in srgb, var(--domain) 80%, transparent);
+}
+
+.tab-bar__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unread dot on a tab icon. */
+.tab-bar__dot {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.75rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  background: var(--domain);
+  border: 2px solid var(--surface);
+  border-radius: 9999px;
+}
+
+/* More than five tabs: smaller labels so they still fit at 390px. */
+.tab-bar--dense .tab-bar__link {
+  font-size: 0.66rem;
+}
+
+.with-tab-bar {
+  padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + var(--space-4));
+}
+
+@media (min-width: 1024px) {
+  .tab-bar {
+    left: 50%;
+    right: auto;
+    bottom: 1.25rem;
+    padding: 0 var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: 9999px;
+    transform: translateX(-50%);
+  }
+
+  .tab-bar__list {
+    max-width: none;
+  }
+
+  .tab-bar__item {
+    flex: none;
+  }
+
+  .tab-bar__link,
+  .tab-bar--dense .tab-bar__link {
+    flex-direction: row;
+    gap: var(--space-2);
+    min-height: var(--topbar-height);
+    padding: 0 var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .tab-bar__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .tab-bar__dot {
+    top: 0.125rem;
+    right: 0.125rem;
+  }
+
+  .with-tab-bar {
+    padding-bottom: calc(var(--topbar-height) + 1.25rem + var(--space-6));
+  }
+}
+
+/* == Motion and print == */
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background-image: none;
+  }
+
+  .badge__dot,
+  .nav-progress__bar.is-running {
+    animation: none;
+  }
+
+  .btn-spinner {
+    animation-duration: 2s;
+  }
+
+  .tab-bar__link,
+  .tab-bar__icon {
+    transition: none;
+  }
+
+  .tab-bar__link:active {
+    transform: none;
+  }
+}
+
+@media print {
+  .app-header,
+  .tab-bar,
+  .nav-progress {
+    display: none !important;
+  }
+
+  .with-tab-bar {
+    padding-bottom: 0;
+  }
+
+  .app {
+    background: none;
+  }
+}

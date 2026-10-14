@@ -56,7 +56,7 @@ export function AccountForm({ initial, onSave, onCancel }: Props) {
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               placeholder="e.g. HSBC Current"
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
               autoFocus
             />
           </div>
@@ -108,7 +108,7 @@ export function AccountForm({ initial, onSave, onCancel }: Props) {
                 value={last4}
                 onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 5))}
                 placeholder="1234"
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent tabular-nums"
+                className="field tabular-nums"
               />
             </div>
             <div>
@@ -116,7 +116,7 @@ export function AccountForm({ initial, onSave, onCancel }: Props) {
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value as Currency)}
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="field"
               >
                 {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>

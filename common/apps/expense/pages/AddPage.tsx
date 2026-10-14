@@ -332,7 +332,7 @@ function PreviewView({ status, uid, accounts, onCancel, onCommitted }: PreviewPr
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             />
           </div>
         )}

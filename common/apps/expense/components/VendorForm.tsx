@@ -60,7 +60,7 @@ export function VendorForm({ initial, onSave, onDelete, onCancel }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Amazon"
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
               autoFocus
             />
           </div>
@@ -83,7 +83,7 @@ export function VendorForm({ initial, onSave, onDelete, onCancel }: Props) {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent capitalize"
+              className="field capitalize"
             >
               {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{prettifyCategory(c)}</option>)}
             </select>

@@ -9,18 +9,22 @@ export const metadata: Metadata = {
     icon: { url: '/apps/icon-time.svg', type: 'image/svg+xml' },
     apple: '/apps/icon-time.svg',
   },
-  appleWebApp: { capable: true, title: 'Time', statusBarStyle: 'black-translucent' },
+  appleWebApp: { capable: true, title: 'Time', statusBarStyle: 'default' },
   other: { 'mobile-web-app-capable': 'yes' },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0f172a',
+  // The page background of the light and dark themes (global tokens.css --bg).
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f7f4ef' },
+    { media: '(prefers-color-scheme: dark)', color: '#1b1815' },
+  ],
 }
 
 export default function TimeLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth>
-      <div className="relative min-h-[calc(100vh-56px-env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <div className="with-tab-bar relative min-h-[calc(100vh-56px-env(safe-area-inset-top))]">
         {children}
         <BottomTabBar />
       </div>

@@ -17,7 +17,7 @@ export function WealthShell({ children }: { children: ReactNode }) {
   useServiceWorker()
 
   return (
-    <div className="relative min-h-[calc(100vh-56px-env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
+    <div className="with-tab-bar relative min-h-[calc(100vh-56px-env(safe-area-inset-top))]">
       {children}
       <BottomTabBar />
     </div>

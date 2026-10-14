@@ -86,7 +86,7 @@ export function CategoryForm({ initial, onSave, onCancel, isEdit }: CategoryForm
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. Work"
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
               autoFocus
             />
           </div>
@@ -102,7 +102,7 @@ export function CategoryForm({ initial, onSave, onCancel, isEdit }: CategoryForm
               onChange={e => setMinMins(e.target.value)}
               placeholder="e.g. 5"
               min="1"
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             />
             <p className="text-xs text-muted mt-1">Sessions shorter than this are discarded at close time.</p>
           </div>

@@ -7,19 +7,23 @@ export const metadata: Metadata = {
   title: "Expense",
   manifest: "/apps/manifest-expense.json",
   icons: { icon: "/apps/icon-expense.svg", apple: "/apps/icon-expense.svg" },
-  appleWebApp: { capable: true, title: "Expense", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Expense", statusBarStyle: "default" },
   other: { "mobile-web-app-capable": "yes" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  // The page background of the light and dark themes (global tokens.css --bg).
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f4ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#1b1815" },
+  ],
 };
 
 export default function ExpenseLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth>
       <ServiceWorkerRegister />
-      <div className="relative min-h-[calc(100vh-56px-env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <div className="with-tab-bar relative min-h-[calc(100vh-56px-env(safe-area-inset-top))]">
         {children}
         <BottomTabBar />
       </div>

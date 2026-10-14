@@ -1,8 +1,11 @@
+import type { Domain } from './shell/DomainScope'
+
 export interface AppDefinition {
   id: string
   name: string
   description: string
-  icon: string
+  /** Area colour and icon (global tokens.css, app.css .domain-<name>). */
+  domain: Domain
   /** Absolute site path, e.g. /apps/wealth */
   path: string
   requiresAuth: boolean

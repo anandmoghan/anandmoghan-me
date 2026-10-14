@@ -81,7 +81,7 @@ export function TransactionForm({ initial, accounts, vendors = [], defaultAccoun
             <select
               value={accountId}
               onChange={(e) => handleAccountChange(e.target.value)}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             >
               {accounts.length === 0 && <option value="">— No accounts —</option>}
               {accounts.map(a => (
@@ -123,7 +123,7 @@ export function TransactionForm({ initial, accounts, vendors = [], defaultAccoun
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent tabular-nums"
+                className="field tabular-nums"
               />
             </div>
             <div>
@@ -131,7 +131,7 @@ export function TransactionForm({ initial, accounts, vendors = [], defaultAccoun
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value as Currency)}
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="field"
               >
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -144,7 +144,7 @@ export function TransactionForm({ initial, accounts, vendors = [], defaultAccoun
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             />
           </div>
 
@@ -155,7 +155,7 @@ export function TransactionForm({ initial, accounts, vendors = [], defaultAccoun
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. AMZN MKTPLACE"
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             />
           </div>
 
@@ -166,7 +166,7 @@ export function TransactionForm({ initial, accounts, vendors = [], defaultAccoun
               value={vendorName}
               onChange={(e) => setVendorName(e.target.value)}
               placeholder="e.g. Amazon"
-              className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              className="field"
             />
           </div>
 
@@ -176,7 +176,7 @@ export function TransactionForm({ initial, accounts, vendors = [], defaultAccoun
               <select
                 value={vendorId}
                 onChange={(e) => setVendorId(e.target.value)}
-                className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="field"
               >
                 <option value="">— None —</option>
                 {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}

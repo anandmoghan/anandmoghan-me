@@ -30,6 +30,13 @@ const config: Config = {
           foreground: withAlpha("--bg"),
         },
         warn: withAlpha("--warn"),
+        gold: withAlpha("--gold"),
+        raised: withAlpha("--raised"),
+        // The current app area's colour (.domain-<name> in global app.css).
+        domain: {
+          DEFAULT: withAlpha("--domain"),
+          foreground: withAlpha("--on-domain"),
+        },
         destructive: {
           DEFAULT: withAlpha("--destructive"),
           foreground: withAlpha("--bg"),

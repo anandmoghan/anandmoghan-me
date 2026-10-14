@@ -8,14 +8,12 @@
 @tailwind utilities;
 
 /* Old variable names used by components, mapped onto the shared tokens.
-   --muted, --border and --accent are defined by tokens.css and kept as they are. */
+   --muted, --border, --accent, --destructive and --success are defined by tokens.css. */
 :root {
   --background: var(--bg);
   --foreground: var(--fg);
   --card-bg: var(--surface);
   --primary: var(--accent);
-  --destructive: var(--warn);
-  --success: var(--accent);
 }
 
 html {

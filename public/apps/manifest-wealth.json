@@ -5,8 +5,8 @@
   "start_url": "/apps/wealth",
   "scope": "/apps/wealth",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#f7f4ef",
+  "theme_color": "#f7f4ef",
   "orientation": "portrait",
   "icons": [
     {

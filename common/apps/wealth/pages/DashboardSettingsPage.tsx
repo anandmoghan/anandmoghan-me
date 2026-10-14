@@ -113,7 +113,7 @@ export function DashboardSettingsPage() {
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                     placeholder="e.g. Family"
-                    className="w-full text-sm border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="field"
                     autoFocus
                   />
                 </div>
