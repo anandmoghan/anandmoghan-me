@@ -47,6 +47,12 @@ export const SlidesIcon = icon(
   </>,
 )
 export const LadderIcon = icon(<path d="M8 3v18M16 3v18M8 7h8M8 12h8M8 17h8" />)
+export const CalendarIcon = icon(
+  <>
+    <rect x="3.5" y="5" width="17" height="15" rx="2" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" />
+  </>,
+)
 export const BookIcon = icon(
   <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5v-15Zm0 15A1.5 1.5 0 0 0 6.5 21H19" />,
 )
@@ -88,5 +94,6 @@ export const DOMAIN_ICON: Partial<Record<Domain, (p: IconProps) => ReactNode>> =
   share: SlidesIcon,
   ladder: LadderIcon,
   materials: BookIcon,
+  planner: CalendarIcon,
   admin: ShieldIcon,
 }

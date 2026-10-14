@@ -342,6 +342,76 @@ service cloud.firestore {
       }
     }
 
+    // ── planner ───────────────────────────────────────────────────────────────
+    // Personal planner per Firebase uid: planner/{uid} profile, events mirrored from the iPhone by
+    // the Mac server (admin SDK, never the client), and private habits with one day doc per tick.
+    // "Household" for the shared calendar view = a verified admin or a user with app 'planner'
+    // (claims mirrored from roles/{email} by syncRoleClaims).
+    // plannerKeys/{sha256 hex} holds the Shortcut keys: the app stores only the hash and shows the
+    // key once; the Mac reads the collection with the admin SDK.
+
+    function plannerAccess() {
+      return isAdmin() || hasApp('planner');
+    }
+
+    function plannerValidProfile(d) {
+      return d.keys().hasOnly(['displayName', 'colour', 'updatedAt'])
+        && d.keys().hasAll(['displayName', 'colour', 'updatedAt'])
+        && d.displayName is string && d.displayName.size() >= 1 && d.displayName.size() <= 40
+        && d.colour in ['a', 'b', 'c', 'd']
+        && d.updatedAt == request.time;
+    }
+
+    function plannerValidHabit(d) {
+      return d.keys().hasOnly(['name', 'perWeek', 'colour', 'archived', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['name', 'perWeek', 'archived', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 60
+        && d.perWeek is int && d.perWeek >= 1 && d.perWeek <= 7
+        && (!('colour' in d) || d.colour is string)
+        && d.archived is bool
+        && d.updatedAt == request.time;
+    }
+
+    match /planner/{uid} {
+      allow read: if plannerAccess();
+      allow create, update: if isOwner(uid) && plannerAccess() && plannerValidProfile(request.resource.data);
+      allow delete: if false;
+
+      // Written only by the Mac (admin SDK).
+      match /events/{eventId} {
+        allow read: if plannerAccess();
+        allow write: if false;
+      }
+
+      match /habits/{habitId} {
+        allow read: if isOwner(uid) && plannerAccess();
+        allow create, update: if isOwner(uid) && plannerAccess() && plannerValidHabit(request.resource.data);
+        allow delete: if isOwner(uid) && plannerAccess();
+
+        match /days/{day} {
+          allow read, delete: if isOwner(uid) && plannerAccess();
+          allow create, update: if isOwner(uid) && plannerAccess()
+            && day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && request.resource.data.keys().hasOnly(['done', 'at'])
+            && request.resource.data.done == true
+            && request.resource.data.at == request.time;
+        }
+      }
+    }
+
+    match /plannerKeys/{hash} {
+      allow get, list, delete: if isAuth() && resource.data.uid == request.auth.uid;
+      allow create: if isAuth() && plannerAccess()
+        && hash.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['uid', 'label', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'label', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.label is string
+        && request.resource.data.label.size() >= 1 && request.resource.data.label.size() <= 40
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+    }
+
     // ── visitors ──────────────────────────────────────────────────────────────
     // Visit log and blog comments. Owned by the Visitors agent.
 

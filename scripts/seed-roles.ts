@@ -2,8 +2,8 @@
 // users who sign in later pick them up via POST /api/account/refresh-claims.
 //
 // Default: the bootstrap admins (owner, plus the test user from VITE_TEST_USER1_EMAIL).
-// --grant-household: instead, every email in family/household.members gets the family and
-// materials apps added to its role (other apps, admin and trackers are kept; a missing role is
+// --grant-household: instead, every email in family/household.members gets the family,
+// materials and planner apps added to its role (other apps, admin and trackers are kept; a missing role is
 // created with admin false). "Anand and family" for the restricted apps is the owner plus them.
 //
 // Emulator (default target; FIRESTORE_EMULATOR_HOST defaults to firebase.json's port):
@@ -24,9 +24,9 @@ const ROOT = path.resolve(__dirname, "..");
 dotenv.config({ path: path.join(ROOT, ".env.local"), quiet: true });
 
 const EMULATOR_HOST = "127.0.0.1:8181";
-const ALL_APPS = ["family", "ladder", "wealth", "expense", "time", "share", "materials", "admin"];
+const ALL_APPS = ["family", "ladder", "wealth", "expense", "time", "share", "materials", "planner", "admin"];
 const ALL_TRACKERS = ["anand", "kavya"];
-const HOUSEHOLD_APPS = ["family", "materials"];
+const HOUSEHOLD_APPS = ["family", "materials", "planner"];
 
 interface Role {
   admin: boolean;

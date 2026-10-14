@@ -63,6 +63,15 @@ export const apps: AppDefinition[] = [
     requiresAuth: true,
     restricted: true,
   },
+  {
+    id: 'planner',
+    name: 'Planner',
+    description: 'Shared calendar mirrored from the iPhone, plus personal habit tracking.',
+    domain: 'planner',
+    path: '/apps/planner',
+    requiresAuth: true,
+    restricted: true,
+  },
 ]
 
 /** The app a site path belongs to (by path prefix), if any. */
