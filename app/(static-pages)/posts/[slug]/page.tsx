@@ -137,7 +137,7 @@ export default async function PostPage({ params }: PostPageProps) {
             </div>
           )}
 
-          <div className="mt-4">
+          <div className="mt-4 flex justify-end">
             <PrintButton />
           </div>
         </div>
