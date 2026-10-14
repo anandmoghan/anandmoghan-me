@@ -2,7 +2,7 @@
 // while visible. A request goes to POST /request when the Mac is live, otherwise (or on any
 // failure or timeout) it becomes a requests doc that the bridge applies later. Both carry the
 // same client-generated request_id so a timed-out call that did succeed is not run twice.
-export const DEFAULT_API_URL = "https://familyapi.anandmoghan.me";
+export const DEFAULT_API_URL = "https://api.anandmoghan.me";
 export const STATUS_TIMEOUT_MS = 4000;
 
 export function apiBase(docUrl: string | undefined): string {
