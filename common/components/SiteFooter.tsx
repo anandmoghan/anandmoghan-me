@@ -1,7 +1,13 @@
-import Link from 'next/link';
+'use client';
 
-// Footer on every page of the site.
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+// Footer on every page of the site except the apps, which have their own tab bars.
 export function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname.startsWith('/apps')) return null;
+
   return (
     <footer className="site-footer py-12">
       <div className="site-container">
