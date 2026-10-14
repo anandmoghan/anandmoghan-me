@@ -12,7 +12,7 @@ export function JobPage() {
   const job = slug ? jobs.find((j) => j.slug === slug) : undefined
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-6 pt-3 sm:px-6">
+    <div className="site-container pb-6 pt-3">
       <Link href={slug ? `/apps/ladder?job=${encodeURIComponent(slug)}` : '/apps/ladder'} className="back-link mb-3">
         All jobs
       </Link>

@@ -10,7 +10,7 @@ export function ResumePage() {
   const withMaterials = jobs.filter((job) => job.resume_pdf || job.cover_letter_pdf)
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-6 pt-3 sm:px-6">
+    <div className="site-container space-y-8 pb-6 pt-3">
       <section>
         <h1 className="mb-4 text-[1.65rem] font-extrabold leading-tight">Resume</h1>
         {trackerDoc?.resume_html ? (

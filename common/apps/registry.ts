@@ -61,5 +61,6 @@ export const apps: AppDefinition[] = [
     domain: 'ladder',
     path: '/apps/ladder',
     requiresAuth: true,
+    restricted: true,
   },
 ]

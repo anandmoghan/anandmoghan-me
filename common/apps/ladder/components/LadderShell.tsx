@@ -78,8 +78,8 @@ export function LadderShell({ children }: { children: ReactNode }) {
     body = <ListSkeleton />
   } else if (trackers.length === 0) {
     body = (
-      <div className="mx-auto w-full max-w-xl px-4 py-12">
-        <Card>
+      <div className="site-container py-12">
+        <Card className="max-w-xl">
           <h1 className="text-xl font-extrabold">No ladder access</h1>
           <p className="mt-2 text-sm text-muted">
             This account has no job trackers. Ask Anand to add ladder and a tracker to your role.
@@ -90,7 +90,7 @@ export function LadderShell({ children }: { children: ReactNode }) {
   } else {
     body = (
       <>
-        <div className="mx-auto w-full max-w-7xl px-4 pt-3 sm:px-6">
+        <div className="site-container pt-3">
           <TrackerSwitcher />
           {error && <p className="field-error mt-2">Could not load ladder data: {error}</p>}
         </div>

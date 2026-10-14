@@ -60,7 +60,7 @@ export function JobsPage() {
   if (!config) return null
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 pb-6 pt-3 sm:px-6">
+    <div className="site-container pb-6 pt-3">
       <div className={explicit ? 'hidden md:block' : ''}>
         <FilterBar params={params} setParam={setParam} clearAll={() => router.push(pathname)} />
         <StatusTabs jobs={ignoringStatus} active={filters?.status ?? ''} setStatus={(s) => setParam('status', s)} />

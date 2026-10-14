@@ -9,7 +9,7 @@ export function CompaniesPage() {
   const { companies } = useLadder()
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-6 pt-3 sm:px-6">
+    <div className="site-container pb-6 pt-3">
       <h1 className="mb-4 text-[1.65rem] font-extrabold leading-tight">Companies</h1>
       {companies.length === 0 ? (
         <p className="text-sm italic text-muted">No companies tracked yet.</p>
