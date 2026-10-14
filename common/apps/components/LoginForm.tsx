@@ -172,13 +172,6 @@ export function LoginForm() {
                 minLength={6}
               />
               {error && <p className="text-sm text-destructive">{error}</p>}
-              {mode === 'signin' && (
-                <p className="text-right text-sm">
-                  <button type="button" onClick={() => switchMode('reset')} className="font-semibold text-domain underline underline-offset-2">
-                    Forgot password?
-                  </button>
-                </p>
-              )}
               <button
                 type="submit"
                 disabled={submitting}
@@ -187,23 +180,24 @@ export function LoginForm() {
               >
                 {submitting ? <><ButtonSpinner />{busyLabel}</> : submitLabel}
               </button>
-            </form>
-
-            <p className="text-center text-sm text-muted">
               {mode === 'signin' ? (
-                <>No account?{' '}
+                <div className="flex items-center justify-between text-sm">
+                  <button type="button" onClick={() => switchMode('reset')} className="font-semibold text-domain underline underline-offset-2">
+                    Forgot password?
+                  </button>
                   <button type="button" onClick={() => switchMode('signup')} className="font-semibold text-domain underline underline-offset-2">
                     Sign up
                   </button>
-                </>
+                </div>
               ) : (
-                <>Already have an account?{' '}
+                <p className="text-center text-sm text-muted">
+                  Already have an account?{' '}
                   <button type="button" onClick={() => switchMode('signin')} className="font-semibold text-domain underline underline-offset-2">
                     Sign in
                   </button>
-                </>
+                </p>
               )}
-            </p>
+            </form>
           </div>
           )}
         </Card>
