@@ -12,16 +12,15 @@ import About from "@/common/apps/family/pages/parenting/About";
 import Milestones from "@/common/apps/family/pages/parenting/Milestones";
 import Sleep from "@/common/apps/family/pages/parenting/Sleep";
 import Help from "@/common/apps/family/pages/parenting/Help";
-import { PastAsks } from "@/common/apps/family/pages/parenting/Ask";
 import { FocusPage, JabsPage, ResearchPage, WeeksPage, WorksPage } from "@/common/apps/family/pages/parenting/TodayPages";
 import Week from "@/common/apps/family/pages/parenting/Week";
 import ProblemPage from "@/common/apps/family/pages/parenting/Problem";
 import { ageLabel, isGuide, isStepPlan, useParenting } from "@/common/apps/family/lib/parenting";
 import { PARENTING_TABS } from "@/common/apps/family/lib/tabs";
 
-/** Pages that open from a card: Today's cards, and Help's "Your questions". */
+/** Pages that open from a card on Today. */
 const EXTRA_PAGES: Record<string, string> = {
-  jabs: "Checks and jabs", works: "What works for Nila", focus: "Focus areas", research: "More from the research", weeks: "Past weeks", questions: "Your questions",
+  jabs: "Checks and jabs", works: "What works for Nila", focus: "Focus areas", research: "More from the research", weeks: "Past weeks",
 };
 
 /** /nila/:tab, the tab chosen from the bottom bar; /nila/about and /nila/week/:id open from Today, /nila/help/:id
@@ -36,13 +35,15 @@ export default function Parenting() {
     : raw && raw in EXTRA_PAGES ? ([raw, EXTRA_PAGES[raw]] as const) : raw === "about" ? (["about", "About Nila"] as const) : PARENTING_TABS.find(([t]) => t === raw);
   if (raw === "overview" && id === undefined) return <Navigate to="/nila/today" replace />;
   // Ask moved into Help; old links and pushes still land on the ask box.
-  if (raw === "ask" && id === undefined) return <Navigate to="/nila/help#ask" replace />;
+  if (raw === "ask" && id === undefined) return <Navigate to="/nila/help" replace />;
+  // Your questions is the Questions tab of Help now.
+  if (raw === "questions" && id === undefined) return <Navigate to="/nila/help" replace />;
   if (!tab) return <Navigate to="/nila/today" replace />;
   const [key, tabLabel] = tab;
   // A problem's page is titled with the problem itself.
   const label = key === "problem" ? p.data?.problems.find((x) => x.id === id)?.title ?? tabLabel : tabLabel;
-  // Logs and questions are working details that live on the Mac; the rest shows from the Firestore copy.
-  const needsMac = p.live === false && (key === "sleep" || key === "food" || key === "questions");
+  // Logs are working details that live on the Mac; the rest shows from the Firestore copy.
+  const needsMac = p.live === false && (key === "sleep" || key === "food");
   const todayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const age = p.data ? ageLabel(p.data.dob, undefined, true) ?? p.data.summary?.age : null;
 
@@ -51,8 +52,7 @@ export default function Parenting() {
   const helpView = problem && isStepPlan(problem) ? "plans" : problem && isGuide(problem) ? "habits" : "problems";
 
   // Pages that open from a card go back to where the card is, shown above the title.
-  const backTo = raw === "week" || raw === "about" || (id === undefined && raw !== undefined && raw in EXTRA_PAGES && raw !== "questions") ? (["/nila/today", "Today"] as const)
-    : raw === "questions" ? (["/nila/help", "Help"] as const)
+  const backTo = raw === "week" || raw === "about" || (id === undefined && raw !== undefined && raw in EXTRA_PAGES) ? (["/nila/today", "Today"] as const)
     : raw === "help" && id !== undefined ? ([`/nila/help?view=${helpView}`, "Help"] as const)
     : foodPage ? (["/nila/food?view=plan", "Food plan"] as const)
     : null;
@@ -76,7 +76,6 @@ export default function Parenting() {
           {key === "focus" && <FocusPage data={p.data} />}
           {key === "research" && <ResearchPage data={p.data} />}
           {key === "weeks" && <WeeksPage data={p.data} />}
-          {key === "questions" && <PastAsks data={p.data} />}
           {key === "foodpage" && foodPage && <FoodPlanPage data={p.data} page={foodPage} />}
           {key === "milestones" && <Milestones p={p} data={p.data} />}
           {key === "food" && <Food p={p} data={p.data} />}

@@ -209,13 +209,13 @@ function TodayView({ p, data, plan }: { p: UseParenting; data: ParentingData; pl
   const stamp = day?.logged_at ?? "";
   return (
     <div className="space-y-5">
+      <Totals plan={plan} day={day} />
       {menu && <p className="text-sm font-semibold text-muted" data-testid="menu-kind">{MENU_KIND_LABEL[menu.kind]}</p>}
       {MENU_SLOTS.map(([slot, title]) => (
         <SlotCard key={`${slot}-${stamp}`} slot={slot} title={title} planned={menuLine(menu, slot)} day={day} date={date} log={log} />
       ))}
       <MilkCard key={`milk-${stamp}`} day={day} date={date} log={log} />
       <BodyCard key={`body-${stamp}`} day={day} date={date} log={log} />
-      <Totals plan={plan} day={day} />
     </div>
   );
 }

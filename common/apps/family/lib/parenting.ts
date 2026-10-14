@@ -145,6 +145,9 @@ export interface FoodMilk { what: FoodMilkKind; amount_ml?: number; count?: numb
 export interface FoodDay { date: string; meals: FoodMeal[]; milk: FoodMilk[]; poo?: FoodPoo; reaction?: string; logged_by?: string; logged_at?: string }
 export interface FoodLogInput { date: string; slot?: FoodSlot; items?: string; amount?: FoodAmount; note?: string; milk?: FoodMilk[]; poo?: FoodPoo; reaction?: string }
 
+export interface MilestoneResult { id?: string; title: string; action: "seen" | "emerging" | "added" | "none"; seen_on?: string; note?: string }
+export interface MilestoneRequest { id: string; requested_at: string; status: "pending" | "done" | "failed"; result?: MilestoneResult[] }
+
 export interface ParentingData {
   person: string;
   /** Records the Mac could not read (paths relative to content/). */
@@ -171,6 +174,8 @@ export interface ParentingData {
   jobs: HealthJob[];
   /** Every weekly dashboard by id, from the Firestore copy (the Mac's overview carries only the newest). */
   weekDocs?: Record<string, Weekly>;
+  /** Free-text milestone notes sent to the Mac, newest first. Only the Mac's answer carries them. */
+  milestone_requests?: MilestoneRequest[];
 }
 
 /** An error answer from the Mac, with the bridge's message (for example why a context edit was refused). */
@@ -235,9 +240,12 @@ export const parentingApi = {
       weeks: d.weeks ?? [],
       jobs: d.jobs ?? [],
       broken: d.broken ?? [],
+      milestone_requests: d.milestone_requests ?? [],
     };
   },
   milestone: (ctx: HealthCtx, m: { id?: string; title?: string; area?: Area; status?: MilestoneStatus; seen_on?: string; note?: string }) => call(ctx, "/milestones", "POST", m),
+  /** Sends a free-text note about what she did; the Mac works out which milestones it covers. */
+  describeMilestones: async (ctx: HealthCtx, text: string) => (await call(ctx, "/milestones/describe", "POST", { text })) as { request_id: string; job_id: string },
   sleep: (ctx: HealthCtx, night: NightInput) => call(ctx, "/sleep", "POST", night),
   problem: async (ctx: HealthCtx, text: string, choices: string[]) =>
     (await call(ctx, "/problems", "POST", choices.length ? { text, choices } : { text })) as { problem_id: string; duplicate: boolean },
@@ -363,6 +371,18 @@ export function ageLabel(dob: string | null | undefined, today: string = dayKey(
 export function comingWindows(windows: CatalogWindow[], months: number | null): CatalogWindow[] {
   const sorted = [...windows].sort((a, b) => a.from_months - b.from_months);
   return months === null ? sorted : sorted.filter((w) => w.to_months >= months);
+}
+
+/** Her whole months when a milestone was seen; null without a date of birth or a usable date. */
+export function ageAtSeen(dob: string | null | undefined, seenOn: string | undefined): number | null {
+  return ageParts(dob, seenKey(seenOn))?.months ?? null;
+}
+
+/** How a month age sits against a window: early or late by whole months, otherwise on time. */
+export function windowTiming(w: CatalogWindow, months: number): { kind: "early" | "on-time" | "late"; by: number } {
+  if (months < w.from_months) return { kind: "early", by: w.from_months - months };
+  if (months > w.to_months) return { kind: "late", by: months - w.to_months };
+  return { kind: "on-time", by: 0 };
 }
 
 // ---- sleep ----
