@@ -6,6 +6,7 @@ import { useAuth } from '@/common/firebase/AuthProvider';
 import { ThemeToggle } from './ThemeToggle';
 import { ProfileMenu } from '@/common/apps/components/ProfileMenu';
 import { apps } from '@/common/apps/registry';
+import { NotificationBell } from '@/common/notifications/NotificationBell';
 import { HEADER_SLOT_ID } from './HeaderSlot';
 
 const SHARE_PATH = '/apps/share';
@@ -19,6 +20,7 @@ const SECTION_LABEL: Record<string, string> = {
   login: 'Sign in',
   account: 'Account',
   settings: 'Settings',
+  notifications: 'Notifications',
 };
 
 const NAV_LINKS = [
@@ -98,6 +100,7 @@ export function SiteHeader() {
             </nav>
           )}
           <ThemeToggle />
+          <NotificationBell />
           <AccountAction pathname={pathname} />
         </div>
       </div>

@@ -80,6 +80,14 @@ export const UserIcon = icon(
   2,
   18,
 )
+export const BellIcon = icon(
+  <>
+    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15l1.5-2Z" />
+    <path d="M10 21a2 2 0 0 0 4 0" />
+  </>,
+  1.8,
+  20,
+)
 export const SignOutIcon = icon(<path d="M15 16l4-4-4-4M19 12H9M12 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h6" />, 2, 18)
 export const ChevronRightIcon = icon(<path d="M9 6l6 6-6 6" />, 2.2, 18)
 export const BackIcon = icon(<path d="M15 6l-6 6 6 6" />, 2.2, 18)

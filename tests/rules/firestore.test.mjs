@@ -133,6 +133,48 @@ describe("users", () => {
   });
 });
 
+describe("notifications", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/alice/notifications/n1"), {
+        title: "Hello",
+        createdAt: new Date(),
+        readAt: null,
+      });
+    });
+  });
+
+  test("the owner reads and lists their notifications", async () => {
+    const db = real("alice");
+    await assertSucceeds(getDoc(doc(db, "users/alice/notifications/n1")));
+    await assertSucceeds(getDocs(query(collection(db, "users/alice/notifications"), where("readAt", "==", null))));
+  });
+
+  test("the owner marks one read, unread, and deletes it", async () => {
+    const db = real("alice");
+    await assertSucceeds(updateDoc(doc(db, "users/alice/notifications/n1"), { readAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(db, "users/alice/notifications/n1"), { readAt: null }));
+    await assertSucceeds(deleteDoc(doc(db, "users/alice/notifications/n1")));
+  });
+
+  test("the owner cannot change other fields or create notifications", async () => {
+    const db = real("alice");
+    await assertFails(updateDoc(doc(db, "users/alice/notifications/n1"), { title: "Changed" }));
+    await assertFails(updateDoc(doc(db, "users/alice/notifications/n1"), { readAt: serverTimestamp(), title: "Changed" }));
+    await assertFails(updateDoc(doc(db, "users/alice/notifications/n1"), { readAt: "yes" }));
+    await assertFails(setDoc(doc(db, "users/alice/notifications/n2"), { title: "Mine", createdAt: serverTimestamp(), readAt: null }));
+  });
+
+  test("other users, anonymous sessions and signed-out visitors are denied", async () => {
+    for (const db of [real("bob"), anon("alice"), env.unauthenticatedContext().firestore()]) {
+      await assertFails(getDoc(doc(db, "users/alice/notifications/n1")));
+      await assertFails(getDocs(collection(db, "users/alice/notifications")));
+      await assertFails(updateDoc(doc(db, "users/alice/notifications/n1"), { readAt: serverTimestamp() }));
+      await assertFails(deleteDoc(doc(db, "users/alice/notifications/n1")));
+    }
+  });
+});
+
 describe("private app data", () => {
   const paths = (uid) => [
     `wealth/${uid}`,
