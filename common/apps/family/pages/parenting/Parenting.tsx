@@ -36,7 +36,9 @@ export default function Parenting() {
   // Ask moved into Help; old links and pushes still land on the ask box.
   if (raw === "ask" && id === undefined) return <Navigate to="/nila/help#ask" replace />;
   if (!tab) return <Navigate to="/nila/today" replace />;
-  const [key, label] = tab;
+  const [key, tabLabel] = tab;
+  // A problem's page is titled with the problem itself.
+  const label = key === "problem" ? p.data?.problems.find((x) => x.id === id)?.title ?? tabLabel : tabLabel;
   // Logs and questions are working details that live on the Mac; the rest shows from the Firestore copy.
   const needsMac = p.live === false && (key === "sleep" || key === "food" || key === "questions");
   const todayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });

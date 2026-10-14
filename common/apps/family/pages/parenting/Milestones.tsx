@@ -15,6 +15,9 @@ import {
 
 interface Pick { id?: string; title: string; area: Area }
 
+type View = "coming" | "working" | "done";
+const VIEWS: readonly (readonly [View, string])[] = [["coming", "Coming up"], ["working", "Working on"], ["done", "Done"]];
+
 /** Mark one milestone seen: the date defaults to today, a note is optional. Also adds one by hand (no id). */
 function SeenForm({ pick, onDone, p }: { pick: Pick | null; onDone: () => void; p: UseParenting }) {
   const toast = useToast();
@@ -129,14 +132,20 @@ export default function Milestones({ p, data }: { p: UseParenting; data: Parenti
   const months = ageParts(data.dob)?.months ?? null;
   const windows = comingWindows(data.catalog?.windows ?? [], months);
 
+  const [view, setView] = useState<View>("coming");
+  const views = VIEWS.filter(([v]) => v !== "working" || working.length > 0);
+  const shown = views.some(([v]) => v === view) ? view : "coming";
+
   function choose(next: Pick | null) {
     setPick(next);
     setOpen(true);
   }
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-2.5" aria-label="Coming up">
+    <div className="space-y-5">
+      <Segmented center label="Milestones view" value={shown} onChange={setView} options={views} />
+
+      {shown === "coming" && <section className="space-y-2.5" aria-label="Coming up">
         <div className="flex items-end justify-between gap-3">
           <SectionTitle title="Coming up" />
           <button type="button" onClick={() => choose(null)} className={outlineBtn}>Add one</button>
@@ -150,9 +159,9 @@ export default function Milestones({ p, data }: { p: UseParenting; data: Parenti
             ))}
           </ul>
         )}
-      </section>
+      </section>}
 
-      {working.length > 0 && (
+      {shown === "working" && (
         <section className="space-y-2.5" aria-label="Working on">
           <SectionTitle title="Working on" />
           <ul className="card card--flush divide-y divide-border">
@@ -169,8 +178,11 @@ export default function Milestones({ p, data }: { p: UseParenting; data: Parenti
         </section>
       )}
 
-      <section className="space-y-2.5" aria-label="What she has done">
-        <SectionTitle title="What she has done" count={done.length ? `${done.length} so far` : undefined} />
+      {shown === "done" && <section className="space-y-2.5" aria-label="What she has done">
+        <div className="flex items-end justify-between gap-3">
+          <SectionTitle title="What she has done" count={done.length ? `${done.length} so far` : undefined} />
+          <button type="button" onClick={() => choose(null)} className={outlineBtn}>Add one</button>
+        </div>
         {done.length === 0 ? (
           <p className="card !px-4 !py-3.5 text-muted">Nothing marked yet. Tap "Seen it" on a milestone, or add one.</p>
         ) : (
@@ -187,7 +199,7 @@ export default function Milestones({ p, data }: { p: UseParenting; data: Parenti
             ))}
           </ol>
         )}
-      </section>
+      </section>}
 
       <Sheet open={open} title={pick?.id ? "Mark as seen" : "Add a milestone"} onClose={() => setOpen(false)}>
         <SeenForm key={`${pick?.id ?? "new"}-${String(open)}`} pick={pick} p={p} onDone={() => setOpen(false)} />

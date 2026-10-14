@@ -254,7 +254,7 @@ export default function Sleep({ p, data }: { p: UseParenting; data: ParentingDat
 
   return (
     <div className="space-y-6">
-      <Segmented label="Sleep view" value={view} onChange={setView} options={VIEWS} />
+      <Segmented center label="Sleep view" value={view} onChange={setView} options={VIEWS} />
       {view === "today" && (
         <div className="space-y-8">
           <SleepTimeline

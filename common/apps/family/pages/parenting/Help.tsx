@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "@/common/apps/family/router";
-import { Badge, HubCard, SectionTitle, outlineBtn, primaryBtn, type Tone } from "@/common/apps/family/components/ui";
+import { Badge, HubCard, SectionTitle, Segmented, outlineBtn, primaryBtn, type Tone } from "@/common/apps/family/components/ui";
 import { ChevronRightIcon } from "@/common/apps/family/components/Icons";
 import { ChoiceChips, STATUS_TONE } from "@/common/apps/family/components/parenting/parts";
 import Spinner from "@/common/apps/family/components/Spinner";
@@ -86,11 +86,13 @@ function ProblemRow({ pr, kind }: { pr: Problem; kind: SectionKey }) {
   );
 }
 
-const SECTIONS: [SectionKey, string, string][] = [
-  ["plans", "Step by step plans", "No step by step plans yet. Pick \"Step by step\" when you add a problem."],
-  ["habits", "Good habits", "No good habits yet. Pick \"Prevention\" when you add one."],
-  ["problems", "Problems we're working on", "Nothing open. Use Add a problem above to get a playbook for it."],
+const SECTIONS: [SectionKey, string, string, string][] = [
+  ["plans", "Step by step plans", "Plans", "No step by step plans yet. Pick \"Step by step\" when you add a problem."],
+  ["habits", "Good habits", "Habits", "No good habits yet. Pick \"Prevention\" when you add one."],
+  ["problems", "Problems we're working on", "Problems", "Nothing open. Use Add a problem above to get a playbook for it."],
 ];
+// The open tab, kept for the session so coming back from a problem lands on the same tab.
+const TAB_KEY = "nila-help-tab";
 
 /** A one-tap card that opens a form in place, so a question or a new problem is one tap away without a long page. */
 function ExpandCard({ title, hint, startOpen = false, testId, children }: { title: string; hint: string; startOpen?: boolean; testId: string; children: ReactNode }) {
@@ -113,7 +115,6 @@ function Group({ kind, title, empty, items }: { kind: SectionKey; title: string;
   const shown = all ? items : items.slice(0, SHOWN);
   return (
     <section className="space-y-2.5" aria-label={title}>
-      <SectionTitle title={title} count={items.length ? String(items.length) : undefined} />
       {items.length === 0 ? (
         <p className="card !px-4 !py-3.5 text-muted">{empty}</p>
       ) : (
@@ -146,6 +147,23 @@ export default function Help({ p, data }: { p: UseParenting; data: ParentingData
     habits: data.problems.filter(isGuide),
     problems: data.problems.filter((x) => !isStepPlan(x) && !isGuide(x)).sort((a, b) => order[a.status] - order[b.status]),
   };
+  const [tab, setTab] = useState<SectionKey>(() => {
+    try {
+      const stored = sessionStorage.getItem(TAB_KEY);
+      if (SECTIONS.some(([key]) => key === stored)) return stored as SectionKey;
+    } catch {
+      // storage blocked
+    }
+    return SECTIONS.find(([key]) => byKind[key].length)?.[0] ?? "plans";
+  });
+  function choose(next: SectionKey) {
+    setTab(next);
+    try {
+      sessionStorage.setItem(TAB_KEY, next);
+    } catch {
+      // storage blocked
+    }
+  }
   const latest = [...data.asks].sort((a, b) => (toMillis(b.asked_at) ?? 0) - (toMillis(a.asked_at) ?? 0))[0];
   return (
     <div className="space-y-6">
@@ -154,7 +172,14 @@ export default function Help({ p, data }: { p: UseParenting; data: ParentingData
         <HubCard to="/nila/questions" testId="hub-questions" title="Your questions" lines={data.asks.length ? [`${data.asks.length} ${data.asks.length === 1 ? "question" : "questions"}`, latest && `Latest: ${ASK_LABEL[latest.status]}`] : ["No questions yet"]} />
         <ExpandCard title="Add a problem" hint="Get a researched playbook for something you see" testId="hub-add-problem"><AddProblem p={p} /></ExpandCard>
       </div>
-      {SECTIONS.map(([key, title, empty]) => <Group key={key} kind={key} title={title} empty={empty} items={byKind[key]} />)}
+      <Segmented
+        center
+        label="Help"
+        value={tab}
+        onChange={choose}
+        options={SECTIONS.map(([key, , short]) => [key, byKind[key].length ? `${short} · ${byKind[key].length}` : short] as const)}
+      />
+      {SECTIONS.filter(([key]) => key === tab).map(([key, title, , empty]) => <Group key={key} kind={key} title={title} empty={empty} items={byKind[key]} />)}
     </div>
   );
 }

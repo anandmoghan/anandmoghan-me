@@ -88,9 +88,14 @@
 /* == Cards == */
 
 /* .card (ui.css) is the surface. Flush: no padding, clipped corners, for a card that
-   holds an image, a list or a table. Compact: the tighter padding of a list row. */
+   holds an image, a list or a table. The clip sits at zero specificity so an overflow
+   utility (a list that scrolls inside the card) wins. Compact: the tighter padding of a
+   list row. */
 .card--flush {
   padding: 0;
+}
+
+:where(.card--flush) {
   overflow: hidden;
 }
 

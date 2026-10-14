@@ -15,7 +15,7 @@ export function CompanyPage() {
   const company = slug ? companies.find((c) => c.slug === slug) : undefined
 
   return (
-    <div className="site-container pb-6 pt-3">
+    <div className="site-container site-container--wide pb-6 pt-3">
       <div>
         <Link href="/apps/ladder/companies" className="back-link mb-3">
           Companies

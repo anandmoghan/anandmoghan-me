@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { familyHref, useLocation } from "@/common/apps/family/router";
 import { TabBar as ShellTabBar } from "@/common/apps/shell/TabBar";
 import {
-  BagIcon, BellIcon, BookIcon, BowlIcon, BoxIcon, CameraIcon, ChartIcon, ChatIcon, CheckListIcon, ChildIcon, DocIcon, FlagIcon, FlaskIcon, HelpIcon, MoonIcon, StepsIcon, TargetIcon, TrendIcon, GridIcon, HeartPulseIcon, HomeIcon, ImageIcon, LayersIcon, ListIcon, DotIcon, SparkleIcon,
+  BagIcon, BellIcon, BookIcon, BowlIcon, BoxIcon, CameraIcon, ChartIcon, ChatIcon, CheckListIcon, ChildIcon, DocIcon, FlagIcon, FlaskIcon, HelpIcon, MoonIcon, StepsIcon, TargetIcon, TrendIcon, GridIcon, HeartPulseIcon, ImageIcon, LayersIcon, ListIcon, DotIcon, SparkleIcon,
 } from "@/common/apps/family/components/Icons";
 import { useData } from "@/common/apps/family/hooks/useData";
 import { domainOf, type Domain } from "@/common/apps/family/lib/domain";
@@ -20,8 +20,6 @@ const url = (path: string, params: Record<string, string | null | undefined>) =>
   return s ? `${path}?${s}` : path;
 };
 
-const home = (active: boolean): Tab => ({ to: "/", label: "Home", icon: <HomeIcon />, active });
-
 /** The brief the shop tabs should keep: from the URL, or the brief of the product or look on screen. */
 function currentBrief(pathname: string, params: URLSearchParams, suggestions: Suggestion[]): string | null {
   const fromUrl = params.get("brief");
@@ -36,7 +34,6 @@ function tabsFor(domain: Domain, pathname: string, params: URLSearchParams, sugg
     const onShop = pathname === "/shop";
     const view = onShop ? params.get("view") ?? "picks" : pathname.startsWith("/shop/looks/") ? "looks" : pathname.startsWith("/shop/p/") ? "picks" : null;
     return [
-      home(false),
       { to: url("/shop", { brief }), label: "Picks", icon: <GridIcon />, active: view === "picks" || view === "products" },
       { to: url("/shop", { brief, view: "looks" }), label: "Looks", icon: <SparkleIcon />, active: view === "looks" },
       { to: url("/shop", { brief, view: "matches" }), label: "Matches", icon: <LayersIcon />, active: view === "matches" },
@@ -48,7 +45,6 @@ function tabsFor(domain: Domain, pathname: string, params: URLSearchParams, sugg
     const p = params.get("p") ?? report?.[1];
     const tab = report ? "reports" : params.get("tab") ?? "overview";
     return [
-      home(false),
       { to: url("/health", { p, tab: null }), label: "Overview", icon: <HeartPulseIcon />, active: tab === "overview" },
       { to: url("/health", { p, tab: "reports" }), label: "Reports", icon: <DocIcon />, active: tab === "reports" },
       { to: url("/health", { p, tab: "results" }), label: "Results", icon: <ChartIcon />, active: tab === "results" },
@@ -59,18 +55,17 @@ function tabsFor(domain: Domain, pathname: string, params: URLSearchParams, sugg
     const p = params.get("p");
     const tab = /^\/fitness\/([a-z]+)/.exec(pathname)?.[1] ?? "today";
     const icons: Record<string, ReactNode> = { today: <CheckListIcon />, plan: <TargetIcon />, trends: <TrendIcon />, food: <BowlIcon />, tests: <FlaskIcon /> };
-    return [home(false), ...FITNESS_TABS.map(([t, label]) => ({ to: url(`/fitness/${t}`, { p }), label, icon: icons[t], active: tab === t }))];
+    return [...FITNESS_TABS.map(([t, label]) => ({ to: url(`/fitness/${t}`, { p }), label, icon: icons[t], active: tab === t }))];
   }
   if (domain === "parenting") {
     // About Nila, a past week and the cards on Today open pages of their own, so Today stays lit there; Your questions belongs to Help.
     const raw = /^\/nila\/([a-z]+)/.exec(pathname)?.[1] ?? "today";
     const tab = ["about", "week", "overview", "jabs", "works", "focus", "research", "weeks"].includes(raw) ? "today" : raw === "questions" ? "help" : raw;
     const icons: Record<string, ReactNode> = { today: <ChildIcon />, milestones: <StepsIcon />, food: <BowlIcon />, sleep: <MoonIcon />, help: <HelpIcon /> };
-    return [home(false), ...PARENTING_TABS.map(([t, label]) => ({ to: `/nila/${t}`, label, icon: icons[t], active: tab === t }))];
+    return [...PARENTING_TABS.map(([t, label]) => ({ to: `/nila/${t}`, label, icon: icons[t], active: tab === t }))];
   }
   if (domain === "style") {
     return [
-      home(false),
       { to: "/style", label: "Guide", icon: <BookIcon />, active: pathname === "/style" },
       { to: "/tryons", label: "Try-ons", icon: <CameraIcon />, active: pathname === "/tryons" },
       { to: "/upload", label: "Photos", icon: <ImageIcon />, active: pathname === "/upload" },
@@ -80,14 +75,12 @@ function tabsFor(domain: Domain, pathname: string, params: URLSearchParams, sugg
     const show = pathname === "/updates" ? params.get("show") ?? "all" : null;
     const p = params.get("p");
     return [
-      home(false),
       { to: url("/updates", { p }), label: "All", icon: <ListIcon />, active: show === "all" },
       { to: url("/updates", { p, show: "unread" }), label: "Unread", icon: <DotIcon />, active: show === "unread", dot: unread > 0 },
       { to: url("/updates", { p, show: "todo" }), label: "Needs you", icon: <FlagIcon />, active: show === "todo" },
     ];
   }
   return [
-    home(pathname === "/"),
     { to: "/health", label: "Health", icon: <HeartPulseIcon />, active: false, colour: "health" },
     { to: "/shop", label: "Shopping", icon: <BagIcon />, active: false, colour: "shopping" },
     { to: "/style", label: "Style", icon: <SparkleIcon />, active: false, colour: "style" },
@@ -96,7 +89,7 @@ function tabsFor(domain: Domain, pathname: string, params: URLSearchParams, sugg
 }
 
 /** Bottom tabs for the area on screen (shell TabBar: a full-width bar on phones, a floating pill on wide screens).
- * Home is always first; the rest are that area's own sections. Links into another area are tinted in its colour. */
+ * The area's own sections, its main page first (family home is in the header). Links into another area are tinted in its colour. */
 export default function TabBar() {
   const { feed, suggestions } = useData();
   const { pathname, search } = useLocation();

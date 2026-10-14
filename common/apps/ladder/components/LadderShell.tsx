@@ -78,7 +78,7 @@ export function LadderShell({ children }: { children: ReactNode }) {
     body = <PageSkeleton />
   } else if (trackers.length === 0) {
     body = (
-      <div className="site-container py-12">
+      <div className="site-container site-container--wide py-12">
         <Card className="max-w-xl">
           <h1 className="text-xl font-extrabold">No ladder access</h1>
           <p className="mt-2 text-sm text-muted">
@@ -90,7 +90,7 @@ export function LadderShell({ children }: { children: ReactNode }) {
   } else {
     body = (
       <>
-        <div className="site-container pt-3">
+        <div className="site-container site-container--wide pt-3">
           <TrackerSwitcher />
           {error && <p className="field-error mt-2">Could not load ladder data: {error}</p>}
         </div>
