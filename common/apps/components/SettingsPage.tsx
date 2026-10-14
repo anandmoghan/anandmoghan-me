@@ -8,6 +8,8 @@ import Shortcuts from '@/common/apps/family/components/Shortcuts'
 import MacStatusCard from '@/common/apps/family/components/MacStatusCard'
 import { ExpenseSettingsPage } from '@/common/apps/expense/pages/SettingsPage'
 import { SettingsPage as TimeSettingsPage } from '@/common/apps/time/pages/SettingsPage'
+import { LadderSettings } from '@/common/apps/ladder/LadderSettings'
+import { useLadderAccess } from '@/common/apps/ladder/useLadderPrefs'
 import { DashboardSettingsPage } from '@/common/apps/wealth/pages/DashboardSettingsPage'
 import { apps } from '../registry'
 import type { AppDefinition } from '../types'
@@ -46,6 +48,7 @@ const APP_PANELS: Record<string, ComponentType> = {
   dashboard: DashboardSettingsPage,
   time: TimeSettingsPage,
   expense: ExpenseSettingsPage,
+  ladder: LadderSettings,
 }
 
 interface SettingsTab {
@@ -74,11 +77,14 @@ export function SettingsPage() {
   const { isAdmin, apps: grantedApps } = useAuth()
   const router = useRouter()
   const requested = useSearchParams().get('app')
+  const ladderAccess = useLadderAccess()
 
   const appTabs = apps
     .filter((app) => !app.restricted || isAdmin || grantedApps.includes(app.id))
     .map(tabFor)
     .filter((tab): tab is SettingsTab => tab !== null)
+    // The ladder tab only matters to someone whose role has more than one tracker.
+    .filter((tab) => tab.id !== 'ladder' || (ladderAccess?.allowed.length ?? 0) > 1)
   const tabs = [GENERAL_TAB, ...appTabs]
   const selected = tabs.find((tab) => tab.id === requested) ?? GENERAL_TAB
 

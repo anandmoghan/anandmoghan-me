@@ -9,7 +9,7 @@ import { Card } from '../shell/Card'
 import { Field } from '../shell/Field'
 import { ListSkeleton } from '../shell/Skeleton'
 
-// roles/{emailLowercase}: { admin, apps, ladderTrackers }. The syncRoleClaims function mirrors a
+// roles/{emailLowercase}: { admin, apps, ladderTrackers, ladderHome? }. The syncRoleClaims function mirrors a
 // saved role into that user's claims; they pick it up on their next sign-in or token refresh.
 
 interface Role {
@@ -17,6 +17,8 @@ interface Role {
   admin: boolean
   apps: string[]
   ladderTrackers: string[]
+  /** Empty means the default: the only tracker, else the first listed. */
+  ladderHome: string
 }
 
 // App claims the rules check, plus every registry area. Values already on a role are kept even
@@ -30,7 +32,7 @@ function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
 }
 
-const EMPTY: Role = { email: '', admin: false, apps: [], ladderTrackers: [] }
+const EMPTY: Role = { email: '', admin: false, apps: [], ladderTrackers: [], ladderHome: '' }
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
@@ -82,6 +84,7 @@ export function RolesPage() {
                 admin: d.get('admin') === true,
                 apps: strings(d.get('apps')),
                 ladderTrackers: strings(d.get('ladderTrackers')),
+                ladderHome: typeof d.get('ladderHome') === 'string' ? d.get('ladderHome') : '',
               }))
               .sort((a, b) => a.email.localeCompare(b.email)),
           )
@@ -114,6 +117,7 @@ export function RolesPage() {
         admin: draft.admin,
         apps: draft.apps,
         ladderTrackers: draft.ladderTrackers,
+        ...(draft.ladderTrackers.includes(draft.ladderHome) ? { ladderHome: draft.ladderHome } : {}),
       })
       startNew()
     } catch (err) {
@@ -171,6 +175,25 @@ export function RolesPage() {
             selected={draft.ladderTrackers}
             onChange={(ladderTrackers) => setDraft({ ...draft, ladderTrackers })}
           />
+          <div>
+            <label className="field-label" htmlFor="ladder-home">
+              Home tracker
+            </label>
+            <select
+              id="ladder-home"
+              className="field max-w-60"
+              value={draft.ladderTrackers.includes(draft.ladderHome) ? draft.ladderHome : ''}
+              onChange={(e) => setDraft({ ...draft, ladderHome: e.target.value })}
+              disabled={draft.ladderTrackers.length === 0}
+            >
+              <option value="">Default</option>
+              {draft.ladderTrackers.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
           {error && <p className="field-error">{error}</p>}
           <div className="flex gap-2">
             <button type="submit" className="btn btn--primary" disabled={saving}>
@@ -200,7 +223,7 @@ export function RolesPage() {
                     {role.admin && <Badge tone="domain">Admin</Badge>}
                   </p>
                   <p className="text-xs text-muted">
-                    Apps: {role.apps.join(', ') || 'none'}. Trackers: {role.ladderTrackers.join(', ') || 'none'}.
+                    Apps: {role.apps.join(', ') || 'none'}. Trackers: {role.ladderTrackers.join(', ') || 'none'}{role.ladderHome ? ` (home ${role.ladderHome})` : ''}.
                   </p>
                 </div>
                 <div className="flex gap-2">

@@ -2,10 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '@/common/firebase/AuthProvider'
+import { ladderAccessFromClaims, visibleTrackers, type LadderAccess } from './access'
+import { useLadderShowAll } from './useLadderPrefs'
 import { subscribeCompanies, subscribeJobs, subscribeRequests, subscribeTracker } from './data'
 import { compareJobs, type CurrencyPreference } from './lib'
 import { TRACKER_CONFIG, isTracker, type TrackerConfig } from './trackers'
-import { TRACKERS, type CompanyDoc, type JobDoc, type RequestDoc, type Tracker, type TrackerDoc } from './types'
+import { type CompanyDoc, type JobDoc, type RequestDoc, type Tracker, type TrackerDoc } from './types'
 
 // Ladder state shared by every /apps/ladder page: which trackers the user may open (custom
 // claims, mirrored from roles/{email}), the current tracker, live jobs, companies and requests,
@@ -50,20 +52,11 @@ function writeStored(key: string, value: string) {
   }
 }
 
-/** Admins open every tracker; others need app `ladder` and the tracker in `ladderTrackers`. */
-function trackersFromClaims(claims: Record<string, unknown>): Tracker[] {
-  if (claims.email_verified !== true) return []
-  if (claims.admin === true) return [...TRACKERS]
-  const apps = Array.isArray(claims.apps) ? claims.apps : []
-  if (!apps.includes('ladder')) return []
-  const listed = Array.isArray(claims.ladderTrackers) ? claims.ladderTrackers : []
-  return TRACKERS.filter((t) => listed.includes(t))
-}
-
 export function LadderProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const [trackers, setTrackers] = useState<Tracker[]>([])
-  const [accessReady, setAccessReady] = useState(false)
+  const [access, setAccess] = useState<LadderAccess>({ allowed: [], home: null })
+  const [claimsReady, setClaimsReady] = useState(false)
+  const { showAll, ready: prefsReady } = useLadderShowAll()
   const [chosen, setChosen] = useState<Tracker | null>(null)
   const [jobs, setJobs] = useState<JobDoc[]>([])
   const [companies, setCompanies] = useState<CompanyDoc[]>([])
@@ -80,12 +73,12 @@ export function LadderProvider({ children }: { children: ReactNode }) {
       .getIdTokenResult()
       .then(({ claims }) => {
         if (cancelled) return
-        setTrackers(trackersFromClaims(claims))
-        setAccessReady(true)
+        setAccess(ladderAccessFromClaims(claims))
+        setClaimsReady(true)
       })
       .catch((err) => {
         console.error('[ladder] reading claims failed', err)
-        if (!cancelled) setAccessReady(true)
+        if (!cancelled) setClaimsReady(true)
       })
     return () => {
       cancelled = true
@@ -100,7 +93,10 @@ export function LadderProvider({ children }: { children: ReactNode }) {
     if (isTracker(pick)) setChosen(pick)
   }, [])
 
-  const tracker: Tracker | null = chosen && trackers.includes(chosen) ? chosen : (trackers[0] ?? null)
+  // A tracker from the URL or storage that is not visible falls back to the user's own.
+  const accessReady = claimsReady && prefsReady
+  const trackers = useMemo(() => visibleTrackers(access, showAll), [access, showAll])
+  const tracker: Tracker | null = chosen && trackers.includes(chosen) ? chosen : (access.home ?? null)
   const config = tracker ? TRACKER_CONFIG[tracker] : null
 
   useEffect(() => {

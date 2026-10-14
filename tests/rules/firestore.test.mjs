@@ -104,6 +104,11 @@ describe("users", () => {
     await assertSucceeds(updateDoc(doc(real("carol"), "users/carol"), { consent: "granted" }));
   });
 
+  test("the owner stores the ladderShowAll pref; others cannot", async () => {
+    await assertSucceeds(setDoc(doc(real("alice"), "users/alice/prefs/p"), { ladderShowAll: true }, { merge: true }));
+    await assertFails(setDoc(doc(real("bob"), "users/alice/prefs/p"), { ladderShowAll: false }, { merge: true }));
+  });
+
   test("anonymous users cannot read or write other users", async () => {
     const db = anon("anon1");
     await assertFails(getDoc(doc(db, "users/alice")));
