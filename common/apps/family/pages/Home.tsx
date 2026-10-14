@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import NextLink from "next/link";
 import { Link } from "@/common/apps/family/router";
 import { useAuth } from "@/common/firebase/AuthProvider";
 import { useData } from "@/common/apps/family/hooks/useData";
@@ -108,16 +109,21 @@ function DomainCard({ domain, to, name, line, highlight }: { domain: Domain; to:
   );
 }
 
-function SmallCard({ to, icon, title, hint }: { to: string; icon: ReactNode; title: string; hint: string }) {
+function SmallCard({ to, site, icon, title, hint }: { to: string; site?: boolean; icon: ReactNode; title: string; hint: string }) {
+  const className = "tap card flex min-h-16 items-center gap-3 !px-3.5 !py-3 hover:bg-subtle";
+  const body = (
+    <>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-subtle text-foreground/80" aria-hidden>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-bold">{title}</span>
+        <span className="block truncate text-sm text-muted">{hint}</span>
+      </span>
+    </>
+  );
   return (
     <li>
-      <Link to={to} className="tap card flex min-h-16 items-center gap-3 !px-3.5 !py-3 hover:bg-subtle">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-subtle text-foreground/80" aria-hidden>{icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-bold">{title}</span>
-          <span className="block truncate text-sm text-muted">{hint}</span>
-        </span>
-      </Link>
+      {/* `site` links leave the family app for a site page such as /settings. */}
+      {site ? <NextLink href={to} className={className}>{body}</NextLink> : <Link to={to} className={className}>{body}</Link>}
     </li>
   );
 }
@@ -217,7 +223,7 @@ export default function Home() {
 
       <ul className="grid gap-2 sm:grid-cols-2">
         <SmallCard to="/upload" icon={<UploadIcon size={20} />} title="Upload photos" hint="Wardrobe items and reference photos" />
-        <SmallCard to="/more" icon={<GearIcon size={20} />} title="Settings and more" hint="New brief, sign out" />
+        <SmallCard to="/settings?app=family" site icon={<GearIcon size={20} />} title="Settings" hint="Shortcuts, new brief, Mac bridge" />
       </ul>
     </div>
   );

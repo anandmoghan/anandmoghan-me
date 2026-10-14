@@ -1,6 +1,6 @@
 'use client'
 
-import type { ComponentType } from 'react'
+import { useState, type ComponentType } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
@@ -8,6 +8,7 @@ import { useTheme } from '@/common/components/ThemeProvider'
 import { ConsentChoice } from '@/common/visitors/ConsentChoice'
 import { DeleteMyData } from '@/common/visitors/DeleteMyData'
 import { DataProvider } from '@/common/apps/family/hooks/useData'
+import Shortcuts from '@/common/apps/family/components/Shortcuts'
 import MacStatusCard from '@/common/apps/family/components/MacStatusCard'
 import { ExpenseSettingsPage } from '@/common/apps/expense/pages/SettingsPage'
 import { SettingsPage as TimeSettingsPage } from '@/common/apps/time/pages/SettingsPage'
@@ -27,10 +28,24 @@ const THEME_OPTIONS: Array<{ value: 'light' | 'dark' | 'system'; label: string }
   { value: 'system', label: 'System' },
 ]
 
+// Cache Storage and service workers are absent in some browsers, so each step is feature-detected.
+async function refreshApp() {
+  if ('caches' in window) {
+    const keys = await caches.keys()
+    await Promise.all(keys.map((key) => caches.delete(key)))
+  }
+  if ('serviceWorker' in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(registrations.map((registration) => registration.unregister()))
+  }
+  window.location.reload()
+}
+
 const sectionTitle = 'text-sm font-semibold text-muted uppercase tracking-wide mb-4'
 
 function GeneralPanel() {
   const { theme, setTheme } = useTheme()
+  const [refreshing, setRefreshing] = useState(false)
 
   return (
     <>
@@ -56,6 +71,27 @@ function GeneralPanel() {
       </section>
 
       <section className="mb-8">
+        <h2 className={sectionTitle}>Refresh the app</h2>
+        <Card>
+          <p className="mb-3 text-sm text-muted">
+            Reloads the site with fresh files after an update, and clears anything cached on this device.
+          </p>
+          <button
+            type="button"
+            disabled={refreshing}
+            aria-busy={refreshing}
+            onClick={() => {
+              setRefreshing(true)
+              void refreshApp().catch(() => setRefreshing(false))
+            }}
+            className="chip"
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh the app'}
+          </button>
+        </Card>
+      </section>
+
+      <section className="mb-8">
         <h2 className={sectionTitle}>Privacy</h2>
         <ConsentChoice />
         <p className="mt-3 text-sm text-muted">
@@ -74,18 +110,17 @@ function GeneralPanel() {
 
 function FamilyPanel() {
   return (
-    <div className="space-y-4">
-      <h2 className={sectionTitle}>Mac bridge</h2>
-      <DataProvider>
-        <MacStatusCard testId="settings-mac-status" />
-      </DataProvider>
-      <p className="text-sm text-muted">
-        Shortcuts and uploads are under{' '}
-        <Link href="/apps/family/more" className="underline underline-offset-2">
-          Settings and more
-        </Link>{' '}
-        in the Family app.
-      </p>
+    <div className="space-y-8">
+      <section>
+        <h2 className={sectionTitle}>Shortcuts</h2>
+        <Shortcuts />
+      </section>
+      <section>
+        <h2 className={sectionTitle}>Mac bridge</h2>
+        <DataProvider>
+          <MacStatusCard testId="settings-mac-status" />
+        </DataProvider>
+      </section>
     </div>
   )
 }
