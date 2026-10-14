@@ -68,7 +68,7 @@ export function JobsPage() {
 
       <div className="mt-3 flex gap-6">
         <aside
-          className={`w-full md:sticky md:top-20 md:block md:max-h-[calc(100vh-11rem)] md:w-80 md:shrink-0 md:self-start md:overflow-y-auto ${
+          className={`w-full md:sticky md:top-20 md:block md:w-80 md:shrink-0 md:self-start ${
             explicit ? 'hidden' : ''
           }`}
         >
