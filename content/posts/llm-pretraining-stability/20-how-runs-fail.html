@@ -1,17 +1,124 @@
 <section id="how-runs-fail">
   <h2>How long runs fail</h2>
-  <aside class="callout callout--note">
-    <p>Outline: Spikes and slow divergence have a handful of mechanisms, and each has a signal that shows up before the loss does.</p>
-    <p>Must include: Recovering from a spike (rollback, skip batches) works but hides the cause; spikes come back at larger scale.</p>
-    <p>Diagram: Anatomy of a spike: timeline with grad norm rising first, then max attention logit, then loss; rollback point marked.</p>
-    <p>Budget: about 950 words.</p>
-  </aside>
+  <p>
+    Long runs fail in two shapes.
+    A <strong>spike</strong> is a jump in loss over a few steps that either recovers or ends in NaNs.
+    <strong>Slow divergence</strong> is a norm that creeps up for thousands of steps until something overflows or the softmax saturates.
+    Both get worse with scale: PaLM saw its spikes only in the 540B model, at irregular intervals and sometimes late in training [1].
+    Meta reproduced the pattern on GPUs with AdamW, with prominent spikes at 546B, moderate trouble at 65B and none at 30B or 7B [3].
+  </p>
+  <p>
+    The loss curve is usually among the last places a failure shows up.
+    Each mechanism below has a signal that moves first, so it pays to log those signals per layer and not just watch the loss.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 360" role="img"
+      aria-label="Three timelines where gradient norm and max attention logit rise before the loss spikes, with a rollback checkpoint marked before the rise.">
+      <defs>
+        <marker id="how-runs-fail-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Lanes == -->
+      <rect class="d-lane" x="130" y="30" width="570" height="70" rx="8"/>
+      <rect class="d-lane" x="130" y="115" width="570" height="70" rx="8"/>
+      <rect class="d-lane" x="130" y="200" width="570" height="70" rx="8"/>
+      <text class="d-text--small" x="20" y="69">grad norm</text>
+      <text class="d-text--small" x="20" y="146">max attention</text>
+      <text class="d-text--small" x="20" y="162">logit</text>
+      <text class="d-text--small" x="20" y="239">loss</text>
+
+      <!-- == Rollback checkpoint == -->
+      <path class="d-arrow d-arrow--dashed" d="M 380 26 L 380 276"/>
+      <text class="d-text--muted" x="380" y="18" text-anchor="middle">rollback checkpoint</text>
+
+      <!-- == Signals == -->
+      <path class="d-arrow" d="M 130 85 L 200 83 L 260 86 L 320 84 L 380 85 L 430 83
+        C 450 80, 465 40, 480 38 C 495 40, 510 75, 560 82 L 700 84"/>
+      <text class="d-text--muted" x="580" y="62">rises early</text>
+      <path class="d-arrow" d="M 130 172 L 300 168 L 420 163
+        C 440 160, 460 126, 480 124 C 500 126, 520 160, 560 166 L 700 167"/>
+      <text class="d-text--muted" x="590" y="147">rises early</text>
+      <path class="d-arrow" d="M 130 225 C 250 240, 400 247, 500 249
+        C 520 249, 535 212, 548 210 C 560 214, 575 245, 620 250 L 700 252"/>
+      <text class="d-text--muted" x="590" y="226">loss moves last</text>
+
+      <!-- == Recovery == -->
+      <path class="d-arrow d-arrow--dashed" d="M 548 282 C 500 306, 430 306, 386 284"
+        marker-end="url(#how-runs-fail-arrow)"/>
+      <text class="d-text--muted" x="466" y="318" text-anchor="middle">
+        roll back, skip the next batches
+      </text>
+
+      <!-- == Time axis == -->
+      <path class="d-arrow" d="M 130 340 L 700 340" marker-end="url(#how-runs-fail-arrow)"/>
+      <text class="d-text--small" x="130" y="356">training steps</text>
+    </svg>
+    <figcaption>
+      Anatomy of a spike (schematic, not one specific run).
+      Gradient norm and maximum attention logit both move before the loss, in no fixed order.
+      The classic recovery restarts from a checkpoint before the rise and skips the batches that triggered it.
+    </figcaption>
+  </figure>
   <h3 id="how-runs-fail-attention-logit-growth">Attention logit growth</h3>
-  <p>To be written.</p>
+  <p>
+    Attention logits \( q \cdot k / \sqrt{d} \) can grow without bound.
+    As they do, the softmax collapses to a near one-hot distribution with almost zero entropy, and training diverges.
+    ViT-22B hit this after a few thousand steps at around 8B parameters, and layer norm on the queries and keys fixed it [4].
+    The growth comes from the query and key norms rising, not from better alignment, and a logit depends quadratically on those norms [5].
+  </p>
+  <p>
+    The signal is the <strong>maximum attention logit per layer</strong>, with per-head attention entropy as a second view.
+    It is predictable enough to extrapolate: every point with a max logit above \( 10^4 \) diverged, and a 4.8B model predicted to diverge without QK-norm did [5].
+    QK-norm does not end the problem, though: sensitivity to the learning rate still rises with model size [5].
+    The mechanism also returns when the recipe changes; Kimi K2 saw max logits quickly pass 1000 in a mid-scale run with vanilla Muon [2].
+  </p>
   <h3 id="how-runs-fail-output-logit-drift">Output logit drift</h3>
-  <p>To be written.</p>
+  <p>
+    The softmax over the vocabulary only cares about differences between logits, so nothing stops all of them from drifting together.
+    Late in training the output logits wander away from log probabilities and become very negative, which a z-loss on \( \log Z \) prevents in small models [5].
+    Chameleon hit a multimodal version: modalities sharing weights competed by growing their norms until they left the bf16 range, as late as 20 to 30 percent into training [6].
+  </p>
+  <p>
+    The signal is the <strong>norm of the last layer's output</strong>, whose growth Chameleon found strongly predicted later divergence [6].
+    OPT-175B saw related warnings: final-layer activation norms spiking and the dynamic loss scale crashing to zero [7].
+    Marin's 8B run skipped z-loss, and its output head (<code>lm_head</code>) blew up only in the deep cooldown at the end [8].
+    The failure mode is timing: Chameleon's drift appeared as late as 20 to 30 percent in [6], and Marin's only in the cooldown [8], so a short ablation may never reach the point where it breaks.
+  </p>
   <h3 id="how-runs-fail-when-adam-s-statistics-go-stale">When Adam's statistics go stale</h3>
-  <p>To be written.</p>
+  <p>
+    AdamW scales each update by a running estimate of the squared gradient:
+  </p>
+  \[ u_t = \frac{m_t}{\sqrt{v_t} + \epsilon} \]
+  <p>
+    If the gradient grows faster than \( v_t \) can track, the denominator is too small and the update too large.
+    Loss spikes tend to follow such an underestimate by one to eight iterations, and they grow with model size, batch size and learning rate [9].
+    Lowering \( \beta_2 \) from the PyTorch default of 0.999 shortens that memory and mitigates them, though going too low slows training [9].
+  </p>
+  <p>
+    A subtler version starts with gradients that are too small.
+    Meta's analysis of its large runs proposes a chain: early-layer gradients fall below \( \epsilon \), their updates vanish, and the large batch makes consecutive gradients strongly correlated in time [3].
+    When a rare batch pushes those gradients back above \( \epsilon \), the ratio \( m_t / \sqrt{v_t} \) goes bimodal near \( \pm 1 \) for many entries at once, and the update stops pointing downhill [3].
+    In their runs the early-layer gradient norm exploded one step before perplexity did [3].
+    The same chain explains why most spikes heal on their own: once gradients lose their time correlation, the update shrinks back.
+    The signals are per-layer gradient norms and the shape of \( m_t / \sqrt{v_t} \); in my experience a single global norm tells you something moved, not where.
+  </p>
   <h3 id="how-runs-fail-data-and-model-state-together">Data and model state together</h3>
-  <p>To be written.</p>
+  <p>
+    The obvious suspect is bad data, and it is usually only half the story.
+    PaLM replayed the batches around each spike from an earlier checkpoint and saw no spike, and concluded that spikes come from specific batches meeting a specific parameter state [1].
+    OLMo found long repeated n-grams in many spike batches, but the same sequence could spike a large model and not a small one, and masking such sequences reduced gradient spikes without removing them [10].
+    On the model side, GLM-130B found embedding gradients orders of magnitude larger than other layers early on, with collapses trailing gradient-norm spikes by a few steps [11].
+  </p>
+  <p>
+    That interaction is why the classic recovery works and why it is a trap.
+    Rolling back and skipping batches puts the run in a different state with different data, so the spike usually does not recur there.
+    It also throws away the evidence: you never learn which mechanism fired, and the cause stays in the recipe.
+    Skipping helps mainly early in training, and spikes get more frequent later [3].
+    Scale brings them back too: Marin's 32B run spiked far more than its 8B run, and clipping and step skipping softened those spikes without removing them [12].
+    Only switching the architecture to QK-norm mid-run did.
+    My read is that rollback buys time rather than fixing anything: before restarting, pull the per-layer gradient norms, max logits and output norms around the spike and decide which mechanism fired.
+  </p>
 </section>

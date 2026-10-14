@@ -1,14 +1,108 @@
 <section id="muon-and-qk-clip">
   <h2>Muon and QK-Clip</h2>
-  <aside class="callout callout--note">
-    <p>Outline: Muon is the first optimizer change in years that frontier labs ship, and it brought its own instability, attention logit explosion, plus its own fix.</p>
-    <p>Must include: Gains shrink against a well-tuned AdamW as models grow; QK-Clip is a post-step weight edit, not a loss term.</p>
-    <p>Budget: about 800 words.</p>
-  </aside>
+  <p>
+    For years the optimizer was the one part of the recipe nobody touched.
+    Muon changed that: Kimi K2 and DeepSeek-V4 both pretrain most of their weights with it.
+    It brought its own instability, exploding attention logits, and its own fix.
+  </p>
+
+  <!-- == What Muon changes == -->
   <h3 id="muon-and-qk-clip-what-muon-changes">What Muon changes</h3>
-  <p>To be written.</p>
+  <p>
+    AdamW scales every coordinate on its own.
+    Muon treats each 2D hidden-layer weight as a matrix.
+    It keeps a momentum buffer of the gradients \( G_t \), then replaces that buffer by the nearest semi-orthogonal matrix before applying it:
+  </p>
+  \[
+    M_t = \mu M_{t-1} + G_t
+  \]
+  \[
+    O_t = \operatorname{NS}(M_t)
+  \]
+  <p>
+    With the singular value decomposition \( M_t = U \Sigma V^\top \), the result is \( O_t \approx U V^\top \): every singular value set to about one.
+    An SVD every step is too slow, so Muon runs a few Newton-Schulz iterations from \( X_0 = M_t / \lVert M_t \rVert_F \) [21].
+    Each is an odd polynomial with tuned constants \( a, b, c \) that pushes the singular values towards one and stays stable in bf16:
+  </p>
+  \[
+    X_{k+1} = a X_k + b \,(X_k X_k^\top)\, X_k + c \,(X_k X_k^\top)^2 X_k
+  \]
+  <p>
+    Moonshot's version then rescales the update to match AdamW's typical update RMS and adds decoupled weight decay, for an \( n \times m \) weight [2]:
+  </p>
+  \[
+    W_t = W_{t-1} - \eta \big( 0.2 \sqrt{\max(n, m)}\; O_t + \lambda W_{t-1} \big)
+  \]
+  <p>
+    Both additions were needed to make it scale.
+    Without weight decay, weights and layer outputs kept growing past the range where bf16 is precise; with the RMS match, Muon reuses AdamW's learning rate and decay [21].
+    Embeddings, the output head and the norm weights stay on AdamW.
+    The compute is cheap: one momentum buffer instead of two, and optimizer time of 1 to 3% of the forward-backward pass [21].
+    The cost is engineering, because orthogonalisation needs the whole matrix and a sharded optimizer has to gather each weight before it can step.
+  </p>
+
+  <!-- == Logit explosion and QK-Clip == -->
   <h3 id="muon-and-qk-clip-logit-explosion-and-qk-clip">Logit explosion and QK-Clip</h3>
-  <p>To be written.</p>
+  <p>
+    In a 9B-active, 53B-total MoE trained with plain Muon, Moonshot saw the maximum attention logit pass 1,000, a level that in their experience brings loss spikes and occasional divergence [2].
+    Their hypothesis is spectral.
+    An Adam update is dominated by a few large singular values, while a Muon update has all of them equal.
+    A full-rank update has more chances to line up with the existing singular directions of \( W_q \) or \( W_k \) and grow them.
+    The logit is bilinear in the two, so any growth compounds.
+  </p>
+  <p>
+    The usual fixes did not fit.
+    Soft-capping acts after the dot product has already grown, and QK-norm needs materialised keys, which MLA avoids at inference (see <a href="#architecture-qk-norm-and-the-end-of-soft-capping">Fixes in the architecture</a>).
+    <strong>QK-Clip</strong> instead edits the weights.
+    For head \( h \), let \( Q_i^h \) and \( K_j^h \) be the query and key of tokens \( i \) and \( j \) in a training sequence \( X \) from batch \( B \), with head dimension \( d \).
+    QK-Clip records the largest pre-softmax logit over the batch, and when it exceeds a threshold \( \tau \) it shrinks the head's query and key projections after the optimizer step:
+  </p>
+  \[
+    S_{\max}^h = \frac{1}{\sqrt{d}} \max_{X \in B} \max_{i, j} Q_i^h K_j^{h\top}
+  \]
+  \[
+    \gamma_h = \min\big(1, \tau / S_{\max}^h\big)
+  \]
+  \[
+    W_q^h \leftarrow \gamma_h^{\alpha} \, W_q^h
+  \]
+  \[
+    W_k^h \leftarrow \gamma_h^{1 - \alpha} \, W_k^h
+  \]
+  <p>
+    With \( \alpha = 0.5 \) the shrink splits evenly between queries and keys.
+    Under MLA the per-head non-rotary (content) query and key components each take \( \sqrt{\gamma_h} \) and the per-head rotary query takes \( \gamma_h \).
+    The shared rotary key is left alone, so one head's clip does not leak into the others.
+    Kimi K2 used \( \tau = 100 \).
+    Max logits rose to the cap, then decayed below it after about 30% of training with no change to \( \tau \) [2].
+    In the first 70,000 steps 12.7% of heads triggered the clip at least once, and none did afterwards [2].
+    By Moonshot's own report, K2 then trained on 15.5T tokens with zero loss spikes [2].
+  </p>
+  <p>
+    <strong>Tradeoff:</strong> QK-Clip is a post-step weight edit, not a loss term.
+    It leaves the current step's forward and backward pass untouched, so the gradient never learns that the logits are too large.
+    It also needs a per-head statistic out of the attention kernel every step.
+    In its favour, an aggressive \( \tau = 30 \) in a small MoE barely moved the loss [2].
+  </p>
+  <p>
+    DeepSeek-V4 shows the other route.
+    It uses Muon for most modules, with Nesterov momentum 0.95, weight decay 0.1 and update RMS rescaled to 0.18 [17].
+    It skips QK-Clip because its attention applies RMSNorm directly to queries and KV entries.
+    It still hit loss spikes, traced to outliers in its MoE layers rather than attention (see <a href="#precision-and-moe">Low precision and mixture-of-experts</a>).
+    Normalising queries and keys bounds the logits; it does not bound everything Muon can grow.
+  </p>
+
+  <!-- == How much Muon buys == -->
   <h3 id="muon-and-qk-clip-how-much-muon-actually-buys">How much Muon actually buys</h3>
-  <p>To be written.</p>
+  <p>
+    Moonshot's headline is about twice the compute efficiency of AdamW in compute-optimal training, matching it with roughly 52% of the FLOPs [21].
+    An independent comparison of ten optimizers from 0.1B to 1.2B parameters, at up to 8x the Chinchilla token ratio, tells a narrower story [22].
+    Many claimed speedups come from weak baselines: tuning only AdamW's learning rate in the GPT-3 recipe was worth nearly 2x on its own for a model of about 100M parameters [22].
+    Against a properly tuned AdamW, matrix-based optimizers like Muon still win, but the margin shrinks steadily as models grow and is small at the largest size tested.
+    Rankings also flip during the learning-rate decay, so a comparison read mid-run can point the wrong way.
+  </p>
+  <p>
+    My read is that labs adopt Muon for token efficiency at a fixed data budget, which is how the Kimi K2 report frames it [2], and accept a new failure mode with it.
+    If you switch, budget for the distributed implementation, watch per-head max logits from the first step, and tune the AdamW baseline before you believe the gain.
+  </p>
 </section>

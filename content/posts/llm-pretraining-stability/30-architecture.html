@@ -1,19 +1,234 @@
 <section id="architecture">
   <h2>Fixes in the architecture</h2>
-  <aside class="callout callout--note">
-    <p>Outline: Most of today's stability comes from a few cheap changes to the block: normalise queries and keys, keep output logits small, place norms where they bound each sub-layer, and treat embeddings carefully.</p>
-    <p>Must include: QK-norm does not fit MLA (why Kimi K2 needed QK-Clip); soft-capping fights fused attention kernels; reordered norms change residual-stream scale.</p>
-    <p>Diagram: Transformer block annotated with where QK-norm, post-sublayer norm, z-loss and the attention gate act.</p>
-    <p>Budget: about 1150 words.</p>
-  </aside>
+  <p>
+    Two mechanisms from <a href="#how-runs-fail">the previous section</a> cause most divergences: attention logits that grow until softmax goes one-hot, and output logits that drift until the final normaliser leaves a safe range.
+    The fixes labs ship today are small edits to the transformer block, each aimed at one of them.
+    Each has a cost in an unexpected place: kernels, inference caches or the residual stream.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 420" role="img"
+      aria-label="A transformer block in the OLMo 2 layout. The residual stream runs down the
+        left. In the attention sub-layer, QKV projection feeds QK-norm, then softmax attention,
+        then a per-head sigmoid output gate computed from the block input, then the output projection and an RMSNorm before
+        the residual add. The MLP sub-layer feeds an RMSNorm before its residual add. After the
+        last block, a final RMSNorm and the LM head produce logits for cross-entropy plus z-loss">
+      <defs>
+        <marker id="architecture-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Repeated block == -->
+      <rect class="d-group" x="120" y="24" width="592" height="290" rx="8"/>
+      <text class="d-text--muted" x="704" y="306" text-anchor="end">repeated for every layer</text>
+
+      <!-- == Residual stream == -->
+      <text class="d-text--small" x="60" y="12" text-anchor="middle">residual stream</text>
+      <path class="d-arrow" d="M 60 20 L 60 288"/>
+      <path class="d-arrow" d="M 60 312 L 60 362 L 138 362"
+        marker-end="url(#architecture-arrow)"/>
+
+      <!-- == Attention sub-layer == -->
+      <text class="d-text--muted" x="344" y="114" text-anchor="middle">RMSNorm on q and k</text>
+      <text class="d-text--muted" x="626" y="114" text-anchor="end">sigmoid of block input, per head</text>
+      <path class="d-arrow" d="M 60 34 L 676 34 L 676 48" marker-end="url(#architecture-arrow)"/>
+      <rect class="d-box d-box--muted" x="140" y="50" width="120" height="44" rx="8"/>
+      <text class="d-text" x="200" y="72" text-anchor="middle"
+        dominant-baseline="middle">QKV proj</text>
+      <rect class="d-box d-box--accent" x="284" y="50" width="120" height="44" rx="8"/>
+      <text class="d-text" x="344" y="72" text-anchor="middle"
+        dominant-baseline="middle">QK-norm</text>
+      <rect class="d-box d-box--muted" x="428" y="50" width="120" height="44" rx="8"/>
+      <text class="d-text" x="488" y="72" text-anchor="middle"
+        dominant-baseline="middle">attention</text>
+      <rect class="d-box" x="572" y="50" width="128" height="44" rx="8"/>
+      <text class="d-text" x="636" y="72" text-anchor="middle"
+        dominant-baseline="middle">output gate</text>
+
+      <rect class="d-box d-box--muted" x="572" y="130" width="128" height="44" rx="8"/>
+      <text class="d-text" x="636" y="152" text-anchor="middle"
+        dominant-baseline="middle">output proj</text>
+      <rect class="d-box" x="428" y="130" width="120" height="44" rx="8"/>
+      <text class="d-text" x="488" y="152" text-anchor="middle"
+        dominant-baseline="middle">RMSNorm</text>
+      <text class="d-text--muted" x="488" y="190" text-anchor="middle">post-sublayer norm</text>
+
+      <path class="d-arrow" d="M 60 72 L 138 72" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 260 72 L 282 72" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 404 72 L 426 72" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 548 72 L 570 72" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 636 94 L 636 128" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 572 152 L 550 152" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 428 152 L 74 152" marker-end="url(#architecture-arrow)"/>
+      <text class="d-text--muted" x="250" y="144" text-anchor="middle">update of bounded scale</text>
+
+      <!-- == MLP sub-layer == -->
+      <rect class="d-box d-box--muted" x="140" y="210" width="140" height="44" rx="8"/>
+      <text class="d-text" x="210" y="232" text-anchor="middle"
+        dominant-baseline="middle">MLP (SwiGLU)</text>
+      <rect class="d-box" x="304" y="210" width="120" height="44" rx="8"/>
+      <text class="d-text" x="364" y="232" text-anchor="middle"
+        dominant-baseline="middle">RMSNorm</text>
+      <path class="d-arrow" d="M 60 232 L 138 232" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 280 232 L 302 232" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 364 254 L 364 300 L 74 300"
+        marker-end="url(#architecture-arrow)"/>
+
+      <!-- == Residual adds == -->
+      <circle class="d-box" cx="60" cy="152" r="12"/>
+      <text class="d-text" x="60" y="152" text-anchor="middle"
+        dominant-baseline="middle">+</text>
+      <circle class="d-box" cx="60" cy="300" r="12"/>
+      <text class="d-text" x="60" y="300" text-anchor="middle"
+        dominant-baseline="middle">+</text>
+
+      <!-- == Output head == -->
+      <rect class="d-box d-box--muted" x="140" y="340" width="120" height="44" rx="8"/>
+      <text class="d-text" x="200" y="362" text-anchor="middle"
+        dominant-baseline="middle">final RMSNorm</text>
+      <rect class="d-box d-box--muted" x="284" y="340" width="120" height="44" rx="8"/>
+      <text class="d-text" x="344" y="362" text-anchor="middle"
+        dominant-baseline="middle">LM head</text>
+      <rect class="d-box" x="452" y="340" width="200" height="44" rx="8"/>
+      <text class="d-text" x="552" y="362" text-anchor="middle"
+        dominant-baseline="middle">cross-entropy + z-loss</text>
+      <path class="d-arrow" d="M 260 362 L 282 362" marker-end="url(#architecture-arrow)"/>
+      <path class="d-arrow" d="M 404 362 L 450 362" marker-end="url(#architecture-arrow)"/>
+      <text class="d-text--muted" x="428" y="354" text-anchor="middle">logits</text>
+      <text class="d-text--muted" x="552" y="404" text-anchor="middle">penalises log<tspan class="d-sup" dy="-5">2</tspan><tspan dy="5"> Z</tspan></text>
+    </svg>
+    <figcaption>
+      Figure: where the fixes act in one block, drawn in the OLMo 2 layout (norms on sub-layer outputs only).
+      Gemma 2 and 3 also keep a norm on each sub-layer input; the output gate is the newest addition and is not in OLMo 2.
+    </figcaption>
+  </figure>
+
+  <!-- == QK-norm == -->
   <h3 id="architecture-qk-norm-and-the-end-of-soft-capping">QK-norm and the end of soft-capping</h3>
-  <p>To be written.</p>
+  <p>
+    <strong>QK-norm</strong> applies an RMSNorm (or LayerNorm) to queries and keys before the dot product, so a logit can no longer grow just because the projection weights did.
+    It came from ViT-22B, where an 8B-parameter model diverged on near-one-hot attention.
+    Small-scale proxy runs made the case for language models: without it the largest stable learning rate shrinks as models grow, and with it a 1.2B model trained at a learning rate of 0.3 [5].
+  </p>
+  \[
+    s_{ij} = \frac{\operatorname{RMSNorm}(q_i)^\top \operatorname{RMSNorm}(k_j)}{\sqrt{d}}
+  \]
+  <p>
+    It is close to default now: OLMo 2, Qwen3 and Gemma 3 all ship it.
+    It narrows the problem rather than ending it.
+    Learning-rate sensitivity still rises with scale when QK-norm is in place, and in OLMo 2's ablations it gave poor results on its own, helping only together with the reordered norm below.
+  </p>
+  <p>
+    Gemma 2 took the other route, <strong>soft-capping</strong>: squash each logit \( s \) (an attention score or a final-layer logit) through a scaled tanh, with \( c = 50 \) for attention and \( c = 30 \) for the final layer [13].
+    Gemma 3 replaced it with QK-norm [14].
+  </p>
+  \[
+    s \leftarrow c \tanh(s / c)
+  \]
+  <p>
+    Moonshot's argument against capping is that it acts after the dot product, so query and key norms keep growing underneath a cap that hides them.
+    The practical objection is kernels.
+    A cap is a nonlinearity inside the attention scores, so every fused kernel in training and serving must implement it; FlashAttention added softcapping only in version 2.6, for Gemma 2 and Grok.
+    QK-norm runs before the kernel, so stock kernels work unchanged.
+    My read is that this weighed as much as the stability argument.
+  </p>
+  <p>
+    QK-norm has its own constraint.
+    Multi-head latent attention (MLA), the DeepSeek design that Kimi K2 also uses, caches a compressed latent and never materialises full keys at inference, so there is no key to normalise.
+    Moonshot built QK-Clip instead, a per-head rescale of the query and key weights after each optimizer step; <a href="#muon-and-qk-clip">Muon and QK-Clip</a> covers it.
+  </p>
+
+  <!-- == Z-loss == -->
   <h3 id="architecture-z-loss-on-the-output">Z-loss on the output</h3>
-  <p>To be written.</p>
+  <p>
+    Normalised queries and keys do nothing for the last softmax.
+    Softmax is unchanged when you add a constant to every logit, so the loss does not pin where the logits sit, and their normaliser can wander until it leaves the range low-precision formats handle well.
+    Chameleon needed a fix for this on top of QK-norm.
+    The fix, from PaLM, is an auxiliary <strong>z-loss</strong> that pulls \( \log Z \) toward zero, with \( \alpha = 10^{-4} \) [1]:
+  </p>
+  \[
+    \mathcal{L}_z = \alpha \log^2 Z
+  \]
+  \[
+    Z = \sum_{i=1}^{V} \exp(z_i)
+  \]
+  <p>
+    Here \( z_i \) are the output logits over a vocabulary of \( V \) tokens.
+    It is one extra term on logits you already compute; Chameleon used \( 10^{-5} \), and OLMo 2 adopted it too.
+    With QK-norm and z-loss both in place, the small-scale proxy runs [5] found that changing warmup, weight decay or μP mostly moved learning-rate sensitivity, not stability.
+  </p>
+  <p>
+    The trap is the implementation.
+    OLMo 2 found that FlashAttention's fused cross-entropy with z-loss matched a plain PyTorch version in the forward pass but not in the backward pass, which they suspected was a precision difference.
+    They abandoned the fused version and retrained from the point of divergence.
+    The lesson I take from it: pick one loss implementation before launch and do not swap it mid-run, because a kernel you checked only in the forward pass is not equivalent yet.
+  </p>
+
+  <!-- == Norm placement == -->
   <h3 id="architecture-where-the-norms-go">Where the norms go</h3>
-  <p>To be written.</p>
+  <p>
+    <strong>Pre-norm</strong>, normalising each sub-layer's input, became the GPT-style default because the original post-norm layout trains badly when stacked deep.
+    It leaves the sub-layer output unnormalised, and activations can grow with depth; Chameleon traced that growth to the feed-forward block, which SwiGLU's multiplicative gate makes worse.
+  </p>
+  <p>
+    Two answers are in use.
+    OLMo 2 moves the norm to each sub-layer's output, before the residual add, and drops the input norm (the <strong>reordered norm</strong>).
+    Gemma 2 and 3 keep the input norm and add the output one, a <strong>sandwich</strong>.
+    Qwen3 stays with plain pre-norm plus QK-norm.
+    In OLMo 2's ablation, reordered norm and QK-norm together cut the gradient spike score from 0.108 to 0.069 [10].
+  </p>
+  \[
+    h = x + \operatorname{RMSNorm}(\operatorname{Attn}(x))
+  \]
+  <p>
+    The cost is a different residual stream.
+    Under pre-norm each sub-layer adds whatever magnitude it produces; under a post-sublayer norm every add has a scale set by the norm's gain weights, so those gains now govern how the stream grows with depth.
+    My read is that this is why the layout does not drop into an existing recipe: Chameleon found reordering worked poorly with dropout and dropped dropout from its 34B, and OLMo 2 changed its initialisation in the same release.
+    Sandwich norm is no universal fix either; it did not stabilise GLM-130B's test runs, and in Qwen's gated-attention study it restored convergence at higher learning rates while barely improving the loss.
+  </p>
+
+  <!-- == Embeddings and init == -->
   <h3 id="architecture-embeddings-and-initialisation">Embeddings and initialisation</h3>
-  <p>To be written.</p>
+  <p>
+    A lot of early instability starts in the embedding layer.
+    GLM-130B saw embedding gradients several orders of magnitude above other layers early in training, with gradient-norm spikes a few steps before each collapse.
+    Its fix shrinks the gradient into the embedding \( e \) and leaves the forward pass alone, with \( \gamma = 0.1 \) and \( \operatorname{sg} \) a stop-gradient [11]:
+  </p>
+  \[
+    e \leftarrow \gamma\, e + (1 - \gamma) \operatorname{sg}(e)
+  \]
+  <p>
+    It removed most spikes, though the final run still had three late divergences, handled by shrinking further.
+  </p>
+  <p>
+    Stable pre-norm training needs embeddings with a standard deviation near 1 and small sub-layer weights; PaLM initialises embeddings from \( \mathcal{N}(0, 1) \) because no norm follows them.
+    OLMo 2 adds a quieter fix, no weight decay on embeddings.
+    Decay shrinks them, and small embeddings followed by a norm produce large gradients in the early layers.
+  </p>
+  <p>
+    OLMo 2 also replaced its depth-scaled initialisation with a single \( \mathcal{N}(0, 0.02) \) for every parameter.
+    Under a deliberately short warmup meant to provoke spikes, the gradient spike score fell from 0.40 to 0.03 [10].
+    The price was slightly slower convergence, and a short-warmup stress test says little about a normal warmup.
+  </p>
+
+  <!-- == Gated attention == -->
   <h3 id="architecture-gated-attention">Gated attention</h3>
-  <p>To be written.</p>
+  <p>
+    The newest change is a <strong>head-specific sigmoid gate</strong> after scaled dot-product attention, before the output projection.
+    Qwen's study compared 30 variants on 15B MoE and 1.7B dense models over 3.5T tokens; this placement worked best, and the authors say it "nearly eliminates loss spikes" and tolerates larger learning rates and batches.
+  </p>
+  \[
+    o = \operatorname{Attn}(q, k, v) \odot \sigma(x W_g)
+  \]
+  <p>
+    The mechanism runs through <strong>attention sinks</strong>.
+    A softmax head must put its weight somewhere, so heads with nothing to add park it on the first token: in the baseline, 46.7% of attention went there on average [15].
+    The gate lets a head output close to zero instead, and the gated models show no sink and fewer massive activations.
+  </p>
+  <p>
+    The cost is small: under 2% latency, with the FFN narrowed to keep the parameter count matched.
+    The evidence is thinner than the claim: the loss-spike comparison is one pair of 1.7B runs.
+    I would treat the gate as an addition to QK-norm and z-loss, not a replacement.
+  </p>
 </section>

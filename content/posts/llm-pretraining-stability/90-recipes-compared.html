@@ -1,9 +1,102 @@
 <section id="recipes-compared">
   <h2>Recipes compared</h2>
-  <aside class="callout callout--note">
-    <p>Outline: One qualitative table of about 12 runs: what each used for stability and what went wrong, showing which choices became defaults.</p>
-    <p>Must include: Defaults versus lab-specific choices, in a closing paragraph.</p>
-    <p>Budget: about 450 words.</p>
-  </aside>
-  <p>To be written.</p>
+  <p>
+    The table lines up the runs that shaped today's recipe, from PaLM's hand-managed spikes to recent runs.
+    Each row lists what the team says it did for stability and what went wrong or stood out.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Run</th>
+          <th>Ref</th>
+          <th>Stability choices</th>
+          <th>What went wrong or stood out</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>PaLM 540B</td>
+          <td>[1]</td>
+          <td>Z-loss on output logits, no biases, clipping at 1.0, step-indexed deterministic data</td>
+          <td>About 20 spikes despite clipping; restart and skip batches; replayed batches did not spike</td>
+        </tr>
+        <tr>
+          <td>OPT-175B</td>
+          <td>[7]</td>
+          <td>Dynamic loss scaling, clipping cut from 1.0 to 0.3, Pile subsets dropped for spiking</td>
+          <td>Divergences tracked a crashing loss scale; fixed by rewinding and lowering the learning rate</td>
+        </tr>
+        <tr>
+          <td>GLM-130B</td>
+          <td>[11]</td>
+          <td>DeepNorm post-LN, embedding gradient shrink, fp16 kept for hardware portability</td>
+          <td>Pre-LN and Sandwich-LN crashed in trials; embedding gradients far larger than other layers</td>
+        </tr>
+        <tr>
+          <td>Llama 3 405B</td>
+          <td>[18]</td>
+          <td>Low peak learning rate, long warmup, batch ramp, fp32 gradient accumulation</td>
+          <td>Few spikes, no divergence interventions; hardware dominated the interruptions</td>
+        </tr>
+        <tr>
+          <td>OLMo 2</td>
+          <td>[10]</td>
+          <td>QK-norm with reordered norm, z-loss, plain small init, epsilon 1e-8, no decay on embeddings, n-gram filter</td>
+          <td>QK-norm and reordered norm helped only together; two z-loss implementations agreed forward but differed backward, forcing a retrain</td>
+        </tr>
+        <tr>
+          <td>Gemma 2</td>
+          <td>[13]</td>
+          <td>Tanh soft-capping on attention and final logits, RMSNorm before and after each sub-layer</td>
+          <td>No spike story published; soft-capping was gone one generation later</td>
+        </tr>
+        <tr>
+          <td>Gemma 3</td>
+          <td>[14]</td>
+          <td>QK-norm replaces soft-capping; pre and post norm kept</td>
+          <td>Cites ViT-22B, small-scale proxies and Chameleon as motivation [4] [5] [6]</td>
+        </tr>
+        <tr>
+          <td>Qwen3</td>
+          <td>[28]</td>
+          <td>QK-norm added and QKV bias removed; global-batch balance loss for the MoE models</td>
+          <td>QK-norm added "to ensure stable training"; no spike story</td>
+        </tr>
+        <tr>
+          <td>DeepSeek-V3</td>
+          <td>[16]</td>
+          <td>FP8 with fine-grained scaling and high-precision islands, bias-based load balancing, AdamW beta2 0.95</td>
+          <td>No irrecoverable spikes and no rollbacks over 14.8T tokens</td>
+        </tr>
+        <tr>
+          <td>Kimi K2</td>
+          <td>[2]</td>
+          <td>Muon with per-head QK-Clip; MLA rules out QK-norm</td>
+          <td>Vanilla Muon logits passed 1,000 at mid scale; no loss spikes reported over 15.5T tokens</td>
+        </tr>
+        <tr>
+          <td>DeepSeek-V4</td>
+          <td>[17]</td>
+          <td>Muon for most weights, AdamW elsewhere, RMSNorm on queries and KV entries instead of QK-Clip</td>
+          <td>Spikes from MoE-layer outliers; rollbacks alone failed, fixed with anticipatory routing and SwiGLU clamping</td>
+        </tr>
+        <tr>
+          <td>Marin 32B</td>
+          <td>[12]</td>
+          <td>Tighter clipping, update-norm clipping, step skipping, then a warm start into a QK-norm architecture</td>
+          <td>Heuristics only softened persistent spikes; the architecture switch removed them</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A few choices are common in recent runs: pre-norm RMSNorm blocks, QK-norm wherever the attention design allows it, AdamW with a lowered beta2, small plain initialisation, and bf16 compute with fp32 islands for accumulation and master weights.
+    They are not universal, as the table shows: Llama 3 stayed stable without crediting any of the architectural fixes, GLM-130B went with post-LN, and DeepSeek-V3 trained in FP8.
+    My read is that they spread because each fixes a named failure at a small, predictable cost, but the cost is real: QK-norm does not fit MLA, and the fp32 islands spend memory and bandwidth.
+    The lab-specific choices each answer a constraint the others do not have.
+    QK-Clip exists because MLA cannot take QK-norm and Muon grows logits faster; fine-grained FP8 scaling and bias-based balancing come from DeepSeek's push on MoE efficiency; soft-capping lasted one Gemma generation.
+    Z-loss stays lab-specific, used by PaLM, Chameleon, OLMo 2 and Marin 8B, which added it after its output head blew up in cooldown [8]; removing weight decay from embeddings is mostly an OLMo 2 choice.
+    Llama 3 shows that a low learning rate, long warmup and batch ramp can carry a large dense run with few spikes; Marin 32B, with Llama-style settings, shows that they do not always.
+  </p>
 </section>

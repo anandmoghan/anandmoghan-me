@@ -1,9 +1,23 @@
 <section id="introduction">
   <h2>Introduction</h2>
-  <aside class="callout callout--note">
-    <p>Outline: Stability, not compute, is what limits how long and how hot a pretraining run can go. PaLM restarted around its loss spikes by hand; Kimi K2 reports none over 15.5T tokens. The post explains what changed between those two runs.</p>
-    <p>Must include: Every fix costs something (throughput, a hyperparameter, an inference constraint); say so up front.</p>
-    <p>Budget: about 200 words.</p>
-  </aside>
-  <p>To be written.</p>
+  <p>
+    PaLM 540B hit about 20 loss spikes even with gradient clipping on.
+    Each time, the team restarted from a checkpoint about 100 steps before the spike and skipped 200 to 500 batches of data [1].
+    Three years later Kimi K2 reports 15.5T tokens of pretraining without a single loss spike [2].
+    K2 differs from PaLM in architecture and optimizer as well as recipe, so this is not a like-for-like comparison.
+    Still, my read is that stability, more than compute, now sets how long a run can go and how high its learning rate can sit, because every spike costs rolled-back steps, lost tokens and someone watching the loss curve.
+  </p>
+  <p>
+    This post starts with how long runs fail and the signals that move before the loss does.
+    It then covers the fixes labs ship today, from the transformer block and the optimizer to schedules, low precision and routing, and ends with the operations side of a job on thousands of GPUs.
+    None of these fixes is free.
+    Each one costs throughput, adds a hyperparameter to tune, or constrains the inference architecture, and I name the cost next to each fix.
+  </p>
+  <div class="callout callout--note">
+    <strong>Disclaimer:</strong>
+    <p>
+      This post was written with the help of LLMs, with content carefully curated based on papers I've read and systems I've used.
+      If you notice any errors, please send a note to <a href="mailto:moghan.anand@gmail.com">moghan.anand@gmail.com</a>.
+    </p>
+  </div>
 </section>

@@ -1,14 +1,93 @@
 <section id="optimizer">
   <h2>Optimizer settings that keep AdamW steady</h2>
-  <aside class="callout callout--note">
-    <p>Outline: AdamW with beta2 0.95, clipping at 1.0, small epsilon and selective weight decay is the default, and each setting addresses a named failure.</p>
-    <p>Must include: Lower epsilon helps at scale but underflows in low precision; muP reduces tuning risk but few labs say they use it in the final run.</p>
-    <p>Budget: about 1000 words.</p>
-  </aside>
+  <p>
+    Most large dense and MoE runs still train with AdamW, and the settings have converged.
+    DeepSeek-V3 is a typical example: \( \beta_1 = 0.9 \), \( \beta_2 = 0.95 \), weight decay 0.1 and a global gradient-norm clip of 1.0 [16].
+    The \( \beta_2 \), weight decay and clip are not the PyTorch defaults.
+  </p>
+
+  <!-- == Beta2, epsilon and update clipping == -->
   <h3 id="optimizer-beta2-epsilon-and-update-clipping">Beta2, epsilon and update clipping</h3>
-  <p>To be written.</p>
+  <p>
+    The PyTorch default \( \beta_2 = 0.999 \) averages squared gradients over roughly the last thousand steps.
+    When the gradient scale changes faster than that, the second moment goes stale and underestimates \( g_t^2 \).
+    The next updates then come out too large (the mechanism is in <a href="#how-runs-fail-when-adam-s-statistics-go-stale">How long runs fail</a>).
+    Wortsman et al. saw loss spikes follow this underestimate within one to eight iterations, and the spikes grew with model size, batch size and learning rate [9].
+    Lowering \( \beta_2 \) shortens the memory and mitigates them.
+    The cost is on the other side of the sweep: push it much lower and training slows down.
+  </p>
+  <p>
+    <strong>Update clipping</strong> treats the same failure without touching \( \beta_2 \).
+    It tracks, per tensor, how far the squared gradient sits from its running estimate \( u_t \), and scales the learning rate down when the estimate is out of date:
+  </p>
+  \[
+    \mathrm{RMS}_t = \sqrt{\mathbb{E}\big[ g_t^2 / u_t \big]}
+  \]
+  \[
+    \eta_t' = \frac{\eta_t}{\max(1, \mathrm{RMS}_t)}
+  \]
+  <p>
+    This is Adafactor's trick, ported to AdamW as StableAdamW, and it beat gradient clipping on CLIP ViT-Huge [9].
+    It costs one extra reduction per tensor, but production recipes use a lower \( \beta_2 \) plus a global clip instead.
+  </p>
+  <p>
+    <strong>Epsilon</strong> fails in the opposite direction.
+    Gradient RMS shrinks as models and learning rates grow.
+    In the small-scale proxy study it fell close to the default \( \epsilon = 10^{-8} \) at the largest settings, so updates shrank and parameters stopped learning [5].
+    Dropping \( \epsilon \) to \( 10^{-15} \) on a 4.8B model fixed it, and raising it to \( 10^{-6} \) caused an instability [5].
+    OLMo 2 moved from \( 10^{-5} \) (a common LM-codebase default) to \( 10^{-8} \) and saw the gradient norm settle faster and stay lower [10].
+    DeepSeek-V4 goes all the way to \( 10^{-20} \) for its AdamW parameters [17].
+  </p>
+  <p>
+    <strong>Tradeoff:</strong> a small epsilon only means something if the optimizer state can represent numbers that small.
+    Molybog et al. list lower epsilon as a mitigation and flag in the same breath that it conflicts with low-precision arithmetic [3].
+    fp16 cannot hold \( 10^{-8} \) at all, and the squared gradient of a \( 10^{-5} \) gradient is far below its range.
+    That is why the moments live in fp32 or bf16, which keeps fp32's exponent range; DeepSeek-V3 stores them in bf16 [16].
+  </p>
+
+  <!-- == Warmup, clipping and weight decay == -->
   <h3 id="optimizer-warmup-clipping-and-weight-decay">Warmup, clipping and weight decay</h3>
-  <p>To be written.</p>
+  <p>
+    <strong>Warmup</strong> ramps the learning rate up to its peak instead of starting there.
+    Longer warmup lowers learning-rate sensitivity, and more so for larger models [5].
+    The lengths in recent reports look short in steps, from 8,000 steps for Llama 3 405B [18] to 2,000 for DeepSeek-V3 [16] and 500 for Kimi K2 [2].
+    With batches of tens of millions of tokens, a few thousand steps already span many billions of tokens.
+    Warmup does not fix a stale second moment, though; Wortsman et al. saw the high-\( \beta_2 \) spikes even with 5,000 warmup steps [9].
+  </p>
+  <p>
+    <strong>Gradient clipping</strong> at a global norm of 1.0 is the cheap safety net against a single outlier batch.
+    It is not a stability fix, and the record shows it.
+    PaLM spiked about 20 times with clipping at 1.0 [1].
+    OPT-175B lowered the threshold to 0.3 early in the run [7].
+    Marin 32B went to 0.2 and added update-norm clipping and step skipping, which in the team's words softened the spikes but never removed them [12].
+    The structural causes (stale moments, growing attention logits) sit inside a step that the clip only shortens.
+    My read is that a low threshold also fails quietly: once most steps are clipped, the clip acts as a learning-rate cut that no schedule plot shows.
+  </p>
+  <p>
+    <strong>Weight decay</strong> at 0.1, decoupled from the Adam preconditioner, is shared by DeepSeek-V3, Kimi K2 and DeepSeek-V4 [16, 2, 17].
+    It is a stability knob as much as a regulariser: in the proxy study, output-logit divergence appeared at every scale without it [5].
+    Its scope matters as much as its value.
+    OLMo 2 removed decay from the token embeddings because it shrank them, and small embeddings inflate early-layer gradients through the norm that follows [10].
+    <a href="#architecture-embeddings-and-initialisation">Fixes in the architecture</a> covers the embedding side.
+  </p>
+
+  <!-- == Hyperparameter transfer == -->
   <h3 id="optimizer-transferring-hyperparameters-across-scale">Transferring hyperparameters across scale</h3>
-  <p>To be written.</p>
+  <p>
+    Nobody sweeps the learning rate at 400B parameters.
+    The settings for the final run come from small runs, and the question is whether the optimum at 100M parameters is anywhere near the optimum at 100B.
+    Often it is not: the largest learning rate that trains stably shrinks as models grow, and adding depth raises sensitivity faster than adding width [5].
+    A value that was safe in the proxy can diverge at scale.
+  </p>
+  <p>
+    <strong>muP</strong> (maximal update parameterisation) rescales initialisation and per-layer learning rates with width so the optimum stays put.
+    Tensor Programs V tuned a 40M-parameter proxy, transferred the settings to a 6.7B model, and spent 7% of the pretraining cost on tuning [19].
+    MiniCPM's "wind tunnel" runs found the best base learning rate near 0.01 across 0.04B to 2.1B parameters [20].
+    muP also lowers learning-rate sensitivity in the small-scale proxy study [5].
+  </p>
+  <p>
+    <strong>Tradeoff:</strong> muP lowers the risk that the big run's learning rate is wrong, but few frontier labs say they use it in the final run.
+    One likely reason is scope: muP's guarantee covers width at a fixed recipe, while a frontier run changes things the proxy never saw (depth, batch-size ramps, MoE routing, long-horizon weight decay).
+    And a parameterisation bug is silent; the run trains, just not at the optimum you paid to find.
+  </p>
 </section>
