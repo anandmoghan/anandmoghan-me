@@ -81,6 +81,21 @@ npm run deploy       # build + wrangler pages deploy (confirm with the user firs
 
 Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy.yml`).
 
+## Restricted apps and materials
+
+Family, materials, ladder and admin are restricted (`restricted: true` in
+`common/apps/registry.ts`): only Anand (admin) and the emails in Firestore
+`family/household.members`, granted with `npm run seed-roles -- --grant-household`.
+Pages wrap their content in `RequireApp` (`common/apps/components/RequireApp.tsx`).
+
+Materials content (`content/materials/`) never goes into `out/`. The `/apps/materials` routes are
+client shells; `generateStaticParams` emits page and chapter slugs only, so the URLs are
+unchanged. After sign-in each route reads `materials/index.json` and
+`materials/<page>/<chapter>.html` (or `all.html`) from Cloud Storage, which `storage.rules` opens
+to admins and the `materials` app only. After changing materials content, run
+`npm run publish-materials` (Storage emulator by default; `-- --production` for the live bucket)
+and rebuild only if pages or chapters were added or renamed.
+
 # Blog post writing style guide
 
 Reference for writing technical ML/engineering posts. Based on analysis of Eugene Yan, Chip Huyen,

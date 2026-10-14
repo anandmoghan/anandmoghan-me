@@ -32,7 +32,8 @@ export const apps: AppDefinition[] = [
     description: 'Long-form study notes: speech-to-speech concepts, a literature review and a quick read.',
     domain: 'materials',
     path: '/apps/materials',
-    requiresAuth: false,
+    requiresAuth: true,
+    restricted: true,
   },
   {
     id: 'admin',
@@ -42,5 +43,6 @@ export const apps: AppDefinition[] = [
     path: '/apps/admin',
     requiresAuth: true,
     adminOnly: true,
+    restricted: true,
   },
 ]

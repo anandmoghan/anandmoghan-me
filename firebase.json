@@ -67,6 +67,15 @@
         ]
       },
       {
+        "source": "/apps/materials{,/**}",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow, noarchive, nosnippet"
+          }
+        ]
+      },
+      {
         "source": "/_next/static/**",
         "headers": [
           {

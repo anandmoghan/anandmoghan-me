@@ -11,6 +11,8 @@ export interface AppDefinition {
   requiresAuth: boolean
   /** Listed on the hub for admins only (the route and rules check the admin claim too). */
   adminOnly?: boolean
+  /** Only Anand and family (roles/{email} grants); the hub card shows a Restricted badge. */
+  restricted?: boolean
 }
 
 export interface UserProfile {

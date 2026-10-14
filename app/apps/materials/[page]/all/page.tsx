@@ -1,25 +1,15 @@
-import { notFound } from 'next/navigation';
-import type { Metadata } from 'next';
-import { allHref, getMaterialsPage, getMaterialsPages } from '@/common/utils/materials';
-import { AllView, materialsMetadata } from '../../_components/views';
+import { getMaterialsRoutes } from '@/common/utils/materials';
+import { AllView } from '../../_components/views';
 
 interface Props {
   params: Promise<{ page: string }>;
 }
 
+// Slugs only: the article renders from Storage on the client (see ../../layout.tsx).
 export function generateStaticParams() {
-  return getMaterialsPages().map((page) => ({ page: page.slug }));
+  return getMaterialsRoutes().map((route) => ({ page: route.page }));
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const page = getMaterialsPage((await params).page);
-  if (!page) return { title: 'Not found' };
-  return materialsMetadata(`All chapters | ${page.title} | Materials`, page.description, allHref(page));
-}
-
-// Every chapter on one page, for print and search.
 export default async function MaterialsAllRoute({ params }: Props) {
-  const page = getMaterialsPage((await params).page);
-  if (!page) notFound();
-  return <AllView page={page} />;
+  return <AllView pageSlug={(await params).page} />;
 }

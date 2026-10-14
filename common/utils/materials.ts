@@ -1,22 +1,26 @@
 // Loads the materials pages (content/materials/pages, synced from the materials repo with
 // `npm run sync-materials`) and renders chapters with the shared fragment renderer.
 // Content model and validation follow materials/scripts/build.mjs.
+//
+// Materials is restricted: the rendered HTML never goes into the static build. The site build
+// only reads page and chapter slugs (generateStaticParams); scripts/publish-materials.ts calls
+// buildMaterialsBundle() and uploads the result to Cloud Storage under materials/.
 import 'server-only';
 import fs from 'fs';
 import path from 'path';
 import { checkDuplicateIds, listSections, renderSections } from './html';
+import { MATERIALS_INDEX_OBJECT, allObject, chapterObject } from './materials-paths';
 import type {
   MaterialsChapter,
   MaterialsChapterJson,
   MaterialsChapterMeta,
+  MaterialsIndex,
   MaterialsPage,
   MaterialsPageJson,
 } from '../types/materials';
 
 const ROOT = process.cwd();
 const PAGES_DIR = path.join(ROOT, 'content/materials/pages');
-
-export const MATERIALS_PATH = '/apps/materials';
 
 function rel(file: string): string {
   return path.relative(ROOT, file);
@@ -102,12 +106,16 @@ export function getMaterialsPages(): MaterialsPage[] {
     .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
 }
 
-export function getMaterialsPage(slug: string): MaterialsPage | null {
-  return getMaterialsPages().find((page) => page.slug === slug) ?? null;
+// Page and chapter slugs for generateStaticParams. Names only: no titles, no content.
+export function getMaterialsRoutes(): { page: string; chapters: string[] }[] {
+  return getMaterialsPages().map((page) => ({
+    page: page.slug,
+    chapters: page.chapters.map((chapter) => chapter.slug),
+  }));
 }
 
 // Renders one chapter: includes, ids, maths, arXiv links. Duplicate ids warn, as in materials.
-export function renderChapter(page: MaterialsPage, chapterSlug: string): MaterialsChapter {
+function renderChapter(page: MaterialsPage, chapterSlug: string): MaterialsChapter {
   const meta = page.chapters.find((chapter) => chapter.slug === chapterSlug);
   if (!meta) throw new Error(`materials: no chapter ${chapterSlug} in ${page.slug}`);
   const owner = path.join(chapterDir(page.slug, chapterSlug), 'chapter.json');
@@ -119,26 +127,87 @@ export function renderChapter(page: MaterialsPage, chapterSlug: string): Materia
   return { ...meta, html, headings };
 }
 
-// Every chapter of a page, for /all. Ids repeated across chapters warn, as in materials.
-export function renderAllChapters(page: MaterialsPage): MaterialsChapter[] {
-  const chapters = page.chapters.map((chapter) => renderChapter(page, chapter.slug));
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Chapter route article: kicker (multi-chapter pages), title, then the sections.
+function chapterArticle(page: MaterialsPage, chapter: MaterialsChapter): string {
+  const head = [
+    '<header class="chapter-head">',
+    page.chapters.length > 1 ? `<p class="kicker">${escapeHtml(page.title)}</p>` : '',
+    `<h1>${escapeHtml(chapter.title)}</h1>`,
+    '</header>',
+  ].join('');
+  return `${head}\n${chapter.html}`;
+}
+
+// /all article: every chapter, each anchored as #chapter-<slug>. Ids repeated across chapters
+// warn, as in materials.
+function allArticle(page: MaterialsPage, chapters: MaterialsChapter[]): string {
   checkDuplicateIds(
     chapters.map((chapter) => chapter.html).join('\n'),
     path.join(PAGES_DIR, page.slug, 'page.json'),
     'warn'
   );
-  return chapters;
+  return chapters
+    .map((chapter, index) =>
+      [
+        `<div class="chapter" id="chapter-${chapter.slug}">`,
+        `<header class="chapter-head${index > 0 ? ' break-before' : ''}">`,
+        `<p class="kicker">Chapter ${chapter.number}</p>`,
+        `<h1>${escapeHtml(chapter.title)}</h1>`,
+        '</header>',
+        chapter.html,
+        '</div>',
+      ].join('\n')
+    )
+    .join('\n\n');
 }
 
-export function pageHref(page: MaterialsPage): string {
-  return `${MATERIALS_PATH}/${page.slug}`;
+export interface MaterialsObject {
+  /** Storage object path under materials/. */
+  path: string;
+  contentType: string;
+  body: string;
 }
 
-// A single-chapter page is its chapter; multi-chapter pages have /<page>/<chapter>.
-export function chapterHref(page: MaterialsPage, chapter: MaterialsChapterMeta): string {
-  return page.chapters.length === 1 ? pageHref(page) : `${pageHref(page)}/${chapter.slug}`;
-}
-
-export function allHref(page: MaterialsPage): string {
-  return `${pageHref(page)}/all`;
+// Everything the materials routes load from Storage: index.json plus one HTML article per
+// chapter and one /all article per page.
+export function buildMaterialsBundle(): MaterialsObject[] {
+  const html = 'text/html; charset=utf-8';
+  const objects: MaterialsObject[] = [];
+  const index: MaterialsIndex = { generatedAt: new Date().toISOString(), pages: [] };
+  for (const page of getMaterialsPages()) {
+    const chapters = page.chapters.map((chapter) => renderChapter(page, chapter.slug));
+    for (const chapter of chapters) {
+      objects.push({
+        path: chapterObject(page.slug, chapter.slug),
+        contentType: html,
+        body: chapterArticle(page, chapter),
+      });
+    }
+    objects.push({ path: allObject(page.slug), contentType: html, body: allArticle(page, chapters) });
+    index.pages.push({
+      ...page,
+      chapters: chapters.map((chapter) => ({
+        slug: chapter.slug,
+        number: chapter.number,
+        title: chapter.title,
+        summary: chapter.summary,
+        sectionCount: chapter.sectionCount,
+        sections: chapter.headings.filter((h) => h.level === 2).map((h) => ({ id: h.id, text: h.text })),
+      })),
+    });
+  }
+  objects.push({
+    path: MATERIALS_INDEX_OBJECT,
+    contentType: 'application/json; charset=utf-8',
+    body: JSON.stringify(index),
+  });
+  return objects;
 }

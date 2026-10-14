@@ -1,6 +1,6 @@
 // Doc layout from global shell.css (sticky left pane, centred column, chapter nav) under the
-// apps header. The article is either JSX or a rendered HTML string; with a string the
-// fragments' <section>s stay direct children of .content, which shell.css relies on.
+// apps header. The article is either JSX or an HTML string loaded from Storage; with a string
+// the fragments' <section>s stay direct children of .content, which shell.css relies on.
 import type { ReactNode } from 'react';
 import { MaterialsBehaviour } from './MaterialsBehaviour';
 
@@ -30,7 +30,7 @@ export function MaterialsShell({ sidebar, children, html, footer }: MaterialsShe
           {footer}
         </div>
       </div>
-      <MaterialsBehaviour />
+      <MaterialsBehaviour content={html ?? ''} />
     </div>
   );
 }

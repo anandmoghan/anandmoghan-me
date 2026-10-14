@@ -3,9 +3,8 @@
 // /all lists chapters as anchors.
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import type { MaterialsChapterMeta, MaterialsPage } from '@/common/types/materials';
-import type { PostHeading } from '@/common/types/post';
-import { MATERIALS_PATH, chapterHref, pageHref } from '@/common/utils/materials';
+import type { MaterialsChapterMeta, MaterialsPage, MaterialsSection } from '@/common/types/materials';
+import { MATERIALS_PATH, chapterHref, pageHref } from '@/common/utils/materials-paths';
 
 export const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -132,19 +131,18 @@ export function PaneLanding({ page }: { page: MaterialsPage }) {
   );
 }
 
-// Chapter pane: back button, heading, h2 sections only, prev/next at the bottom.
+// Chapter pane: back button, heading, h2 sections, prev/next at the bottom.
 export function PaneChapter({
   page,
   index,
-  headings,
+  sections,
 }: {
   page: MaterialsPage;
   index: number;
-  headings: PostHeading[];
+  sections: MaterialsSection[];
 }) {
   const chapter = page.chapters[index];
   const multi = page.chapters.length > 1;
-  const sections = headings.filter((h) => h.level === 2);
   return (
     <>
       {multi ? (

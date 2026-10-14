@@ -5,7 +5,14 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
-function useScrollspy(pathname: string) {
+// The article HTML arrives from Storage after the first render, so the spy is rebuilt (and a
+// #hash scrolled to) whenever the content changes.
+function useScrollspy(pathname: string, content: string) {
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (content && hash) document.getElementById(decodeURIComponent(hash))?.scrollIntoView();
+  }, [content]);
+
   useEffect(() => {
     const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.pane a[href^="#"]'));
     if (!links.length) return;
@@ -71,17 +78,17 @@ function useScrollspy(pathname: string) {
       window.removeEventListener('resize', schedule);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [pathname]);
+  }, [pathname, content]);
 }
 
 // Mobile (under 900px): the pane slides in as a drawer. shell.css keys it on body.drawer-open.
-export function MaterialsBehaviour() {
+export function MaterialsBehaviour({ content }: { content: string }) {
   const pathname = usePathname();
   // The drawer is open for the route it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === pathname;
   const setOpen = (value: boolean) => setOpenOn(value ? pathname : null);
-  useScrollspy(pathname);
+  useScrollspy(pathname, content);
 
   useEffect(() => {
     document.body.classList.toggle('drawer-open', open);

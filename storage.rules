@@ -2,18 +2,34 @@ rules_version = '2';
 
 // Storage rules for the default bucket of Firebase project anandmoghan-me.
 //
-// The default bucket of anandmoghan-me holds the site media (public/**, migrated from Cloudflare R2)
-// and the family app files (family/**). Everything else is denied. If another app ever needs
-// Storage, add its paths here.
+// The default bucket of anandmoghan-me holds the site media (public/**, migrated from Cloudflare R2),
+// the family app files (family/**) and the restricted materials (materials/**). Everything else
+// is denied. If another app ever needs Storage, add its paths here.
 //
 // public/**                   site media (images, docs): world-readable, never writable from clients
 //                             (uploads go through firebase-admin, which bypasses rules)
+// materials/**                index.json and chapter HTML from scripts/publish-materials.ts (admin
+//                             SDK): readable by admins and the materials app only
 // family/<person>/media/**    thumbnails and images written by the Mac bridge (admin SDK, bypasses rules)
 // family/<person>/uploads/**  photos uploaded from the app by members (create only, no overwrite), e.g. uploads/<date>/<file>
 //
 // Membership is family/household.members in Firestore (cross-service firestore.get).
+// Role claims (admin, apps) are mirrored from Firestore roles/{email} by the syncRoleClaims
+// function; the helpers match firebase/rules/core.rules.
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function isVerified() {
+      return request.auth != null && request.auth.token.get('email_verified', false) == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && request.auth.token.get('admin', false) == true;
+    }
+
+    function hasApp(name) {
+      return isVerified() && name in request.auth.token.get('apps', []);
+    }
 
     function isMember() {
       return request.auth != null
@@ -23,6 +39,10 @@ service firebase.storage {
 
     match /public/{allPaths=**} {
       allow read: if true;
+    }
+
+    match /materials/{allPaths=**} {
+      allow read: if isAdmin() || hasApp('materials');
     }
 
     match /family/{person}/{allPaths=**} {

@@ -29,7 +29,14 @@ export function AppsHub() {
                 title={app.name}
                 domain={app.domain}
                 icon={Icon && <Icon />}
-                badge={needsLogin && <Badge tone="muted">Login required</Badge>}
+                badge={
+                  (needsLogin || app.restricted) && (
+                    <>
+                      {app.restricted && <Badge tone="gold">Restricted</Badge>}
+                      {needsLogin && <Badge tone="muted">Login required</Badge>}
+                    </>
+                  )
+                }
                 lines={[app.description]}
               />
             </li>

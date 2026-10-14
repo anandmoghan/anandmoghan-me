@@ -34,3 +34,24 @@ export interface MaterialsChapter extends MaterialsChapterMeta {
   html: string;
   headings: PostHeading[];
 }
+
+// Storage materials/index.json, written by scripts/publish-materials.ts. Only admins and users
+// with the materials app can read it; the static build ships none of this.
+export interface MaterialsSection {
+  id: string;
+  text: string;
+}
+
+export interface MaterialsIndexChapter extends MaterialsChapterMeta {
+  /** The chapter's h2 sections, for the sidebar. */
+  sections: MaterialsSection[];
+}
+
+export interface MaterialsIndexPage extends Omit<MaterialsPage, 'chapters'> {
+  chapters: MaterialsIndexChapter[];
+}
+
+export interface MaterialsIndex {
+  generatedAt: string;
+  pages: MaterialsIndexPage[];
+}
