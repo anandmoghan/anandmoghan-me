@@ -61,12 +61,12 @@
   </div>
   <p>
     A 4-step student runs about 4.5 times faster than a 16-step teacher [10], and about 14 times faster than a 128-step teacher [11].
-    In another case a 4-step student matches its 32-step teacher's WER while running about 5 times faster [12].
+    In another case a 4-step student matches its 32-step teacher while running about 5 times faster [12].
   </p>
   <p>
     I would expect a student trained only to match the teacher's velocity to blur at low NFE, because regressing onto an average gives an averaged mel.
     The students that hold quality add a signal at the level of distributions, metrics or a discriminator, which is why distribution matching with a GAN loss is a common choice.
-    Treat a metric loss with care: a student trained with a CTC loss reached WER 1.94 against 2.19 for ground truth [11].
+    Treat a metric loss with care: a student trained with a CTC loss scored a lower WER than the ground-truth recordings [11].
     Ground truth is not a perfect floor, but beating it is a warning sign that the student is partly optimising the evaluator.
   </p>
 

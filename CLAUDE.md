@@ -149,6 +149,8 @@ One section file per problem (`<section id>` + `<h2>Problem title</h2>`):
 - Match the existing posts: about 6,000 to 7,000 words in total, a 150 to 250 word introduction,
   and 600 to 1,200 words for most sections (one or two long ones are fine). Say each idea once.
 - Keep only the numbers that make a point, with their setting (test set, hardware) in a few words.
+- Do not quote evaluation metrics from papers (WER, CER, SIM, MOS): test sets, ASR models and
+  normalisation differ, so cross-paper numbers mislead. State the finding in words instead.
 - No grounding tag pills (`span.tag`) in posts; those belong in research notes. When a claim is the
   author's own reading, say so in prose ("my read is", "I would expect").
 - No per-section "References: [1, 2]" lines under headings; cite inline as [n] where the claim is,

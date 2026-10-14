@@ -41,7 +41,7 @@
   \]
   <p>
     The model sees every frame but is graded only on the frames it had to invent.
-    It pays for itself: in a reduced Voicebox setup (1K hours, 12 layers), masking the loss raised speaker similarity from 0.528 to 0.597, while WER moved only from 2.0 to 2.1 [1].
+    It pays for itself: in a reduced Voicebox setup, masking the loss gave a clear gain in speaker similarity at almost no cost in intelligibility [1].
     My read is that scoring visible frames rewards copying, which is not the skill you need at inference.
   </p>
   <p>
@@ -174,8 +174,8 @@
   </p>
   <p>
     The character route pays in convergence.
-    In one comparison, the aligned model had good WER at 10% of training, while the character model needed significantly more training before it finished ahead [6].
-    A group reproducing a character model on small Mandarin models saw 7% of test samples fail (WER above 50%) throughout training, and re-ranking could not fix them [3].
+    In one comparison, the aligned model was already intelligible at 10% of training, while the character model needed significantly more training before it finished ahead [6].
+    A group reproducing a character model on small Mandarin models saw a stubborn share of test samples fail outright throughout training, and re-ranking could not fix them [3].
     They attribute it to entangled semantic and acoustic features.
   </p>
   <p>

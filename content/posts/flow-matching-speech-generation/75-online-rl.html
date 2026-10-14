@@ -133,7 +133,7 @@
   <p>
     The fourth <strong>leaves the flow model alone</strong> and runs RL where likelihoods already exist: the speech-token LM in two-stage systems, or a categorical <a href="#training-duration">duration predictor</a> in F5-TTS-style models.
     Industry has used this route most: Seed-TTS ran REINFORCE on SIM and WER rewards [15], and CosyVoice 3 backpropagated a differentiable reward into its tokens [18].
-    In those systems the LM sets intelligibility; when CosyVoice 3's flow stage was trained with GRPO, its ASR reward stalled near 0.99 while similarity kept climbing [23].
+    In those systems the LM sets intelligibility; when CosyVoice 3's flow stage was trained with GRPO, its ASR reward stalled close to its ceiling while similarity kept climbing [23].
     The reverse holds too: a flow decoder and vocoder trained on clean audio partly undo an LM-only MOS reward, and speaker attributes respond weakly because the speaker enters at the flow stage.
   </p>
   <div class="table-wrap">
@@ -202,7 +202,7 @@
   <p>
     I would use three defences.
     Sum several rewards and keep the KL anchor on; on images, KL and early stopping were not interchangeable.
-    Evaluate with judges the policy never saw, a different ASR model and speaker encoder than the rewards use; in FlowTTS-GRPO, WavLM similarity, not a reward, still rose from 0.777 to 0.804 on seed-tts-eval Mandarin [23].
+    Evaluate with judges the policy never saw, a different ASR model and speaker encoder than the rewards use; in FlowTTS-GRPO, WavLM similarity, which was not one of the rewards, still rose clearly [23].
     Stop on a held-out listening set that tracks speaking rate, not on training reward.
   </p>
 </section>

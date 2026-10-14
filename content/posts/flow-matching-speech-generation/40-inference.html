@@ -147,12 +147,12 @@
     </table>
   </div>
   <p>
-    In one widely used zero-shot model with a warped schedule, doubling Euler from 16 to 32 steps lowered WER from 2.53 to 2.42 and doubled real-time factor, while Heun-3 at 16 steps reached 2.39 at nearly three times Euler's cost [3].
+    In one widely used zero-shot model with a warped schedule, doubling Euler from 16 to 32 steps bought only a small gain in intelligibility and doubled real-time factor, while Heun-3 at 16 steps did slightly better again at nearly three times Euler's cost [3].
     The same step count hides very different compute across solvers.
   </p>
   <p>
     Quality degrades slowly as steps drop, which is why teams keep pushing the count down.
-    A small acoustic model loses little going from 10 steps to 2 (WER 2.09 to 2.34) [7].
+    A small acoustic model loses little going from 10 steps to 2 [7].
     The trap is that WER flatters low-step samples, which are easier for ASR to transcribe, and what they lose is diversity, which WER does not measure.
   </p>
 
@@ -196,13 +196,13 @@
   <p>
     With \( s = 0 \) the grid stays uniform, and negative \( s \) packs steps at small \( t \).
     The usual setting, \( s = -1 \), reduces to the cosine schedule \( t = 1 - \cos(\tfrac{\pi}{2}u) \) that CosyVoice 2 ships.
-    With the midpoint solver at 32 steps on LibriSpeech-PC, it lowered WER from 2.84 to 2.41 at zero extra cost [3].
+    With the midpoint solver at 32 steps, it gave a clear intelligibility gain at zero extra cost [3].
     Without the schedule, Euler degrades; the two ship together.
   </p>
   <p>
     Pruning goes one step further.
     <strong>Empirically Pruned Step Sampling (EPSS)</strong> keeps the dense early steps and drops late ones.
-    At 7 steps it reached WER 2.45, against 4.16 for an unscheduled 7-step run [8].
+    At 7 steps it was far more intelligible than an unscheduled 7-step run [8].
     The floor is hard: below about 6 steps quality falls sharply, and only a model trained to take big steps goes further.
   </p>
 
@@ -210,7 +210,7 @@
   <p>
     The ODE ends at a mel spectrogram, and a separately trained <strong>vocoder</strong> turns it into a waveform.
     It sits outside every NFE number above, yet it can move quality more than the solver does.
-    In the same model, swapping the default vocoder for BigVGAN lowered WER from 2.42 to 2.11 at 32 steps [3].
+    In the same model, swapping the default vocoder for BigVGAN improved intelligibility more than doubling the steps did [3].
   </p>
   <p>
     Streaming systems budget the vocoder as its own term in first-packet latency, alongside the language model and the flow decoder.

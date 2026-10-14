@@ -5,7 +5,7 @@
     but they decode token by token, and in Voicebox's comparison they lost on word error rate.
     Voicebox showed the alternative: generate a <strong>continuous</strong> mel spectrogram
     for the whole utterance in parallel, trained by <strong>masked infilling</strong>,
-    and cut word error rate on LibriSpeech test-clean from VALL-E's 5.9 to 1.9 [1].
+    and came out well ahead of VALL-E on word error rate [1].
     Since then flow matching has become the workhorse acoustic generator,
     either on its own, as in F5-TTS, or behind an autoregressive token model, as in CosyVoice 2.
     The catch is that every solver step is a full forward pass of a large network,

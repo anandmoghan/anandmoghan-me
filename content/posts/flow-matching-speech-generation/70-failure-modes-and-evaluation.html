@@ -15,13 +15,14 @@
   </p>
   <p>
     The harness saturates first.
-    On the seed-tts-eval English set, F5-TTS at 32 NFE scores 1.83 WER against 2.06 for the ground-truth recordings [3].
+    On the seed-tts-eval English set, F5-TTS scores better on WER than the ground-truth recordings [3].
     A model is not more intelligible than a person; my read is that it produces cleaner, more canonical speech that the ASR model finds easier to transcribe.
-    At that level WER measures fit to the evaluator more than quality, and a few tenths of a point between two systems tells you little about which one listeners prefer.
+    At that level WER measures fit to the evaluator more than quality, and a small WER gap between two systems tells you little about which one listeners prefer.
   </p>
   <p>
     The evaluator is also part of the result.
     If you rerank samples with one ASR model and score with another, the winner changes with the ASR family, and a same-family pair flatters itself.
+    The same goes across papers: each lab picks its own test subset, ASR model and text normalisation, so WER numbers from two papers rarely measure the same thing.
     SIM scores from different speaker encoders do not compare, so a SIM number only means something next to a baseline scored with the same encoder.
     Predicted MOS models such as UTMOS and DNSMOS catch audible defects but stop agreeing with listeners once both clips are clean, which is exactly where a mature system lives.
     In practice that means holding the ASR model and speaker encoder fixed across every comparison, and keeping human listening tests for the decisions that matter.
@@ -79,7 +80,7 @@
   </div>
   <p>
     <strong>Skipping and repetition</strong> shows up in training before it shows up in production, so watch per-sample WER, not just the mean.
-    In F5-TTS's reproduction of E2 TTS, about 7% of Mandarin test samples failed with WER above 50% during training, and re-ranking could not rescue them [3].
+    In F5-TTS's reproduction of E2 TTS, about 7% of Mandarin test samples came out badly garbled during training, and re-ranking could not rescue them [3].
     The F5-TTS authors also found that an MMDiT variant collapsed into repeated utterances [3].
   </p>
 
@@ -90,7 +91,7 @@
     The catch is that a deterministic ODE sampler gives no likelihood for a policy gradient.
     One route turns the ODE into an SDE so GRPO has a likelihood to work with.
     The other leaves the flow decoder alone and puts the reward where likelihoods are natural: a differentiable reward on the speech-token language model, or RL on the duration predictor alone.
-    The token-level route pays off: CosyVoice 3's 0.5B model drops Mandarin CER on seed-tts-eval from 1.16 to 0.75 [18].
+    The token-level route pays off: CosyVoice 3's reward post-training clearly cuts its Mandarin character error rate [18].
   </p>
   <h4>Reward hacking</h4>
   <p>
