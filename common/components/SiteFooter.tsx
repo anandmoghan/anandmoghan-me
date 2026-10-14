@@ -3,8 +3,8 @@ import Link from 'next/link';
 // Footer on every page of the site.
 export function SiteFooter() {
   return (
-    <footer className="site-footer py-12 px-6 sm:px-8 lg:px-12">
-      <div className="max-w-6xl mx-auto">
+    <footer className="site-footer py-12">
+      <div className="site-container">
         <div className="flex flex-col items-center gap-6">
           <div className="flex gap-6">
             <a 

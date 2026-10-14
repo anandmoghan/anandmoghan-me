@@ -64,7 +64,7 @@ export function AccountView() {
   const providers = (user?.providerData ?? []).map(p => PROVIDER_NAMES[p.providerId] ?? p.providerId)
 
   return (
-    <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-10">
+    <div className="site-container py-10">
       <h1 className="text-2xl font-bold mb-8">Account</h1>
 
       <section className="mb-8">

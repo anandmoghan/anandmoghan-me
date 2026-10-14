@@ -25,8 +25,8 @@ export default function AboutPage() {
   return (
     <main className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative py-12 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative py-12">
+        <div className="site-container text-center">
           <h1 className="page-title mb-4">
             Anand Mohan
           </h1>
@@ -52,8 +52,8 @@ export default function AboutPage() {
       </section>
 
       {/* Timeline Section */}
-      <section className="py-16 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-5xl mx-auto">
+      <section className="py-16">
+        <div className="site-container">
           <div className="relative">
             {/* Timeline Line */}
             <div className="absolute left-4 md:left-1/2 md:transform md:-translate-x-0.5 top-0 bottom-0 w-0.5" 
@@ -173,8 +173,8 @@ export default function AboutPage() {
       </section>
 
       {/* Publications Section */}
-      <section className="py-12 px-6 sm:px-8 lg:px-12 border-y border-border bg-subtle">
-        <div className="max-w-4xl mx-auto">
+      <section className="py-12 border-y border-border bg-subtle">
+        <div className="site-container">
           <h2 className="text-2xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Publications</h2>
           
           <div className="card">
@@ -298,8 +298,8 @@ export default function AboutPage() {
       </section>
 
       {/* Patents Section */}
-      <section className="py-12 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-4xl mx-auto">
+      <section className="py-12">
+        <div className="site-container">
           <h2 className="text-2xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Patents</h2>
           
           <a 
@@ -326,8 +326,8 @@ export default function AboutPage() {
       </section>
 
       {/* Skills & Highlights */}
-      <section className="py-12 px-6 sm:px-8 lg:px-12 border-y border-border bg-subtle">
-        <div className="max-w-4xl mx-auto">
+      <section className="py-12 border-y border-border bg-subtle">
+        <div className="site-container">
           <div className="grid gap-8 md:grid-cols-2">
             {/* Skills */}
             <div>
@@ -375,8 +375,8 @@ export default function AboutPage() {
       </section>
 
       {/* Contact Section */}
-      <section className="py-12 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="py-12">
+        <div className="site-container text-center">
           <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--foreground)' }}>Let's Connect</h2>
           <p className="text-lg mb-8" style={{ color: 'var(--muted)' }}>
             Interested in discussing latest advances in AI?

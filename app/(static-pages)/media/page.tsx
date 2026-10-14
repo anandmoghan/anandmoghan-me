@@ -38,8 +38,8 @@ export default async function MediaPage() {
   }
 
   return (
-    <div className="px-6 sm:px-8 lg:px-12 py-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="py-8">
+      <div className="site-container">
         <h1 className="page-title mb-8">
           Media Gallery
         </h1>

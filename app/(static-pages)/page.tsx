@@ -28,8 +28,8 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative py-8 px-6 sm:px-8 lg:px-12" itemScope itemType="https://schema.org/Person">
-        <div className="max-w-7xl mx-auto">
+      <section className="relative py-8" itemScope itemType="https://schema.org/Person">
+        <div className="site-container">
           <h1 className="page-title mb-4" itemProp="name">
             Anand Mohan
           </h1>
@@ -48,8 +48,8 @@ export default function Home() {
       </section>
 
       {/* Terminal Section */}
-      <section className="pb-8 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <section className="pb-8">
+        <div className="site-container">
           <TerminalAnimation className="w-full" />
           <noscript>
             <div className="p-6 rounded-lg" style={{ backgroundColor: '#1a1a1a', color: '#e2e8f0' }}>
@@ -62,15 +62,15 @@ export default function Home() {
       </section>
 
       {/* Continue reading: renders only for visitors with consent and unfinished reads */}
-      <div className="px-6 sm:px-8 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <div className="">
+        <div className="site-container">
           <ContinueReading />
         </div>
       </div>
 
       {/* Recent Posts Section */}
-      <section className="py-8 px-6 sm:px-8 lg:px-12 border-t border-border bg-subtle">
-        <div className="max-w-7xl mx-auto">
+      <section className="py-8 border-t border-border bg-subtle">
+        <div className="site-container">
           <div className="flex items-center justify-between mb-6">
             <h2 className="section-title">
               Recent Posts

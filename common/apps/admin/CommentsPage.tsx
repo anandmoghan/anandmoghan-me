@@ -80,7 +80,7 @@ export function CommentsPage() {
   const hiddenCount = rows.filter((r) => r.status === 'hidden').length
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
+    <div className="site-container space-y-4 py-6">
       <h1 className="text-[1.4rem] font-extrabold">Comments</h1>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter">
         {(['all', 'visible', 'hidden'] as const).map((f) => (

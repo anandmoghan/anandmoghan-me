@@ -99,17 +99,8 @@ export default async function PostPage({ params }: PostPageProps) {
   return (
     <main className="min-h-screen">
       {/* Header Section */}
-      <section className="post-header py-8 px-4 sm:px-8 lg:px-12">
-        <div className="max-w-7xl mx-auto">
-          <Link
-            href={post.published ? "/posts" : "/posts?unpublished=true"}
-            className="back-link tap mb-4"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Posts
-          </Link>
+      <section className="post-header py-8">
+        <div className="site-container">
 
           {!post.published && (
             <div className="mb-3">
@@ -151,15 +142,24 @@ export default async function PostPage({ params }: PostPageProps) {
             </div>
           )}
 
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <Link
+              href={post.published ? "/posts" : "/posts?unpublished=true"}
+              className="btn btn--outline btn--sm"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              All posts
+            </Link>
             <PrintButton />
           </div>
         </div>
       </section>
 
       {/* Content Section with TOC */}
-      <section className="py-8 px-4 sm:px-6 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <section className="py-8">
+        <div className="site-container">
           <div className="flex gap-8 items-start">
             {/* Main Content */}
             <div className="flex-1 min-w-0">

@@ -11,7 +11,7 @@ export function AppsHub() {
   const listed = apps.filter((app) => !app.adminOnly || isAdmin)
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <div className="site-container py-8 sm:py-12">
       <h1 className="text-[1.65rem] font-extrabold leading-tight">Apps</h1>
       <p className="mt-1 text-[0.95rem] text-muted">Tools and dashboards by Anand.</p>
 

@@ -52,8 +52,8 @@ export default function PostsClient({ posts }: PostsClientProps) {
   return (
     <main className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative py-8 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <section className="relative py-8">
+        <div className="site-container">
           <h1 className="page-title mb-4">
             Posts
           </h1>
@@ -75,16 +75,16 @@ export default function PostsClient({ posts }: PostsClientProps) {
       </section>
 
       {/* Continue reading: renders only for visitors with consent and unfinished reads */}
-      <div className="px-6 sm:px-8 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <div className="">
+        <div className="site-container">
           <ContinueReading />
         </div>
       </div>
 
       {/* Tag Filter Section */}
       {visiblePosts.length > 0 && (
-        <section className="pb-6 px-6 sm:px-8 lg:px-12">
-          <div className="max-w-7xl mx-auto">
+        <section className="pb-6">
+          <div className="site-container">
             <TagFilter 
               posts={visiblePosts}
               onFilteredPostsChange={handleFilteredPostsChange}
@@ -94,8 +94,8 @@ export default function PostsClient({ posts }: PostsClientProps) {
       )}
 
       {/* Posts Section */}
-      <section className="pb-8 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <section className="pb-8">
+        <div className="site-container">
           {filteredPosts.length === 0 && visiblePosts.length > 0 ? (
             <div className="card p-10 text-center">
               <div className="w-14 h-14 mx-auto mb-5 rounded-full flex items-center justify-center bg-subtle text-accent">

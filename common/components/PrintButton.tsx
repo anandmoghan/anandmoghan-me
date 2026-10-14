@@ -23,8 +23,8 @@ export default function PrintButton() {
       title="Print or save as PDF"
     >
       <svg 
-        width="20" 
-        height="20" 
+        width="16" 
+        height="16" 
         viewBox="0 0 24 24" 
         fill="none" 
         stroke="currentColor"

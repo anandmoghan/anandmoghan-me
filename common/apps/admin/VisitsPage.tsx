@@ -188,7 +188,7 @@ export function VisitsPage() {
   if (!stats || !visits) return <ListSkeleton />
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-6">
+    <div className="site-container space-y-4 py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-[1.4rem] font-extrabold">Visits</h1>
         <button type="button" className="btn btn--sm" onClick={load}>

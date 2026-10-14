@@ -136,7 +136,7 @@ export function RolesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
+    <div className="site-container space-y-4 py-6">
       <h1 className="text-[1.4rem] font-extrabold">Roles</h1>
 
       <Card>
