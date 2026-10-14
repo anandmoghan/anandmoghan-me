@@ -6,6 +6,8 @@ import {
   type UserCredential,
   EmailAuthProvider,
   GoogleAuthProvider,
+  OAuthProvider,
+  type AuthProvider as FirebaseAuthProvider,
   createUserWithEmailAndPassword,
   linkWithCredential,
   linkWithPopup,
@@ -22,9 +24,10 @@ import { FirebaseError } from 'firebase/app';
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDb, getFirebaseAuth } from './client';
 import { mergeAnonymous, refreshClaims } from './account';
+import type { SocialProviderId } from './providers';
 import { NICKNAME_RULE, guestNickname, isGuestNickname, isValidNickname, toNickname } from './nickname';
 
-// Every visitor has a session: anonymous until they upgrade to Google or email. Upgrading links
+// Every visitor has a session: anonymous until they upgrade to Google, Apple or email. Upgrading links
 // the credential to the same uid; if that account already exists we sign in to it and the api
 // function merges the anonymous session's data into it (POST /api/account/merge).
 
@@ -47,7 +50,10 @@ interface AuthContextType {
   displayName: string | null;
   /** Renames the profile; throws when the name breaks the nickname rule. */
   setDisplayName: (name: string) => Promise<void>;
-  upgradeWithGoogle: () => Promise<void>;
+  /** Sign in with Google or Apple; on a guest session the credential is linked to the same uid. */
+  upgradeWithProvider: (id: SocialProviderId) => Promise<void>;
+  /** Adds Google or Apple to the signed-in account. Throws the Firebase error (see providerErrorMessage). */
+  linkProvider: (id: SocialProviderId) => Promise<void>;
   /** 'linked': new account on this uid, verification email sent. 'existing': signed in and merged. */
   upgradeWithEmail: (email: string, password: string, displayName?: string) => Promise<'linked' | 'existing'>;
   signInExisting: (email: string, password: string) => Promise<void>;
@@ -94,6 +100,19 @@ async function syncUserDoc(user: User): Promise<void> {
     { merge: true },
   );
   localStorage.removeItem(LEGACY_NICKNAME_KEY);
+}
+
+function socialProvider(id: SocialProviderId): FirebaseAuthProvider {
+  if (id === 'google.com') return new GoogleAuthProvider();
+  const apple = new OAuthProvider('apple.com');
+  apple.addScope('email');
+  apple.addScope('name');
+  return apple;
+}
+
+function credentialFromError(id: SocialProviderId, err: unknown) {
+  if (!(err instanceof FirebaseError)) return null;
+  return id === 'google.com' ? GoogleAuthProvider.credentialFromError(err) : OAuthProvider.credentialFromError(err);
 }
 
 function errorCode(err: unknown): string | null {
@@ -193,10 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return current?.isAnonymous ? current.getIdToken() : null;
   };
 
-  const upgradeWithGoogle = async () => {
+  const upgradeWithProvider = async (id: SocialProviderId) => {
     const auth = getFirebaseAuth();
     const current = auth.currentUser;
-    const provider = new GoogleAuthProvider();
+    const provider = socialProvider(id);
     if (!current?.isAnonymous) {
       await signInWithPopup(auth, provider);
       return;
@@ -206,10 +225,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await linkWithPopup(current, provider);
       await finishLink(result.user);
     } catch (err) {
-      const credential = err instanceof FirebaseError ? GoogleAuthProvider.credentialFromError(err) : null;
+      const credential = credentialFromError(id, err);
       if (errorCode(err) !== 'auth/credential-already-in-use' || !credential) throw err;
       await finishSwitch(await signInWithCredential(auth, credential), token);
     }
+  };
+
+  const linkProvider = async (id: SocialProviderId) => {
+    const current = getFirebaseAuth().currentUser;
+    if (!current || current.isAnonymous) throw new Error('Sign in before linking an account');
+    const result = await linkWithPopup(current, socialProvider(id));
+    await finishLink(result.user);
   };
 
   const upgradeWithEmail = async (email: string, password: string, name?: string): Promise<'linked' | 'existing'> => {
@@ -275,7 +301,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         apps: session?.apps ?? [],
         displayName,
         setDisplayName,
-        upgradeWithGoogle,
+        upgradeWithProvider,
+        linkProvider,
         upgradeWithEmail,
         signInExisting,
         refresh,

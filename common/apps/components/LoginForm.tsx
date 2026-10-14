@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { RESET_NEUTRAL_NOTICE, requestPasswordReset } from '@/common/firebase/passwordReset'
-import { GoogleLoginButton } from './GoogleLoginButton'
+import { SocialLoginButtons } from './SocialLoginButtons'
 import { Card } from '../shell/Card'
 import { Field } from '../shell/Field'
 import { ButtonSpinner } from '../shell/Skeleton'
@@ -132,7 +132,7 @@ export function LoginForm() {
             </div>
           ) : (
           <div className="space-y-4">
-            <GoogleLoginButton onSuccess={() => router.replace(returnTo)} />
+            <SocialLoginButtons onSuccess={() => router.replace(returnTo)} />
 
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-border" />

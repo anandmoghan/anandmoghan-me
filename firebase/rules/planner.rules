@@ -28,6 +28,21 @@ function plannerValidHabit(d) {
     && d.updatedAt == request.time;
 }
 
+function plannerValidTask(d) {
+  return d.keys().hasOnly(['title', 'notes', 'due', 'dueHasTime', 'done', 'doneAt', 'shared',
+      'createdAt', 'updatedAt'])
+    && d.keys().hasAll(['title', 'dueHasTime', 'done', 'shared', 'createdAt', 'updatedAt'])
+    && d.title is string && d.title.size() >= 1 && d.title.size() <= 200
+    && (!('notes' in d) || (d.notes is string && d.notes.size() <= 2000))
+    && (!('due' in d) || d.due is timestamp)
+    && d.dueHasTime is bool
+    && d.done is bool
+    && (!('doneAt' in d) || d.doneAt == null || d.doneAt is timestamp)
+    && d.shared is bool
+    && d.createdAt is timestamp
+    && d.updatedAt is timestamp;
+}
+
 match /planner/{uid} {
   allow read: if plannerAccess();
   allow create, update: if isOwner(uid) && plannerAccess() && plannerValidProfile(request.resource.data);
@@ -37,6 +52,20 @@ match /planner/{uid} {
   match /events/{eventId} {
     allow read: if plannerAccess();
     allow write: if false;
+  }
+
+  // Tasks: the owner has full access. Household members with the planner app read the tasks marked
+  // shared and may only tick them (done, doneAt, updatedAt).
+  match /tasks/{taskId} {
+    allow read: if (isOwner(uid) && plannerAccess())
+      || (plannerAccess() && resource.data.shared == true);
+    allow create, update: if isOwner(uid) && plannerAccess() && plannerValidTask(request.resource.data);
+    allow update: if plannerAccess() && !isOwner(uid) && resource.data.shared == true
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneAt', 'updatedAt'])
+      && request.resource.data.done is bool
+      && (request.resource.data.doneAt == null || request.resource.data.doneAt is timestamp)
+      && request.resource.data.updatedAt is timestamp;
+    allow delete: if isOwner(uid) && plannerAccess();
   }
 
   match /habits/{habitId} {

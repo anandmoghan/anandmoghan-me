@@ -33,6 +33,12 @@ export const GridIcon = icon(
   </>,
 )
 export const WealthIcon = icon(<path d="M4 20h16M4 16l5-5 4 3 7-8M15 6h5v5" />)
+export const CheckIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M8.5 12.2l2.4 2.4 4.6-4.9" />
+  </>,
+)
 export const ClockIcon = icon(
   <>
     <circle cx="12" cy="12" r="8.5" />
