@@ -12,6 +12,9 @@ rules_version = '2';
 //                             SDK): readable by admins and the materials app only
 // family/<person>/media/**    thumbnails and images written by the Mac bridge (admin SDK, bypasses rules)
 // family/<person>/uploads/**  photos uploaded from the app by members (create only, no overwrite), e.g. uploads/<date>/<file>
+// ladder/<tracker>/generated/<slug>/**  tailored resume and cover letter PDFs (and .tex), written by
+//                             the Mac worker and scripts/ladder-migrate.ts (admin SDK); read by users
+//                             with access to the tracker (same check as firebase/rules/ladder.rules)
 //
 // Membership is family/household.members in Firestore (cross-service firestore.get).
 // Role claims (admin, apps) are mirrored from Firestore roles/{email} by the syncRoleClaims
@@ -60,6 +63,20 @@ service firebase.storage {
         && request.resource.size <= 25 * 1024 * 1024
         && (request.resource.contentType.matches('image/.*')
             || request.resource.contentType == 'application/pdf');
+    }
+
+    // Admin, or app 'ladder' with the tracker in the ladderTrackers claim; verified email either way.
+    function canReadLadder(tracker) {
+      return request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && tracker in ['anand', 'kavya']
+        && (request.auth.token.get('admin', false) == true
+            || ('ladder' in request.auth.token.get('apps', [])
+                && tracker in request.auth.token.get('ladderTrackers', [])));
+    }
+
+    match /ladder/{tracker}/generated/{slug}/{file} {
+      allow read: if canReadLadder(tracker);
     }
 
     // Everything else is denied.

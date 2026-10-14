@@ -54,4 +54,12 @@ export const apps: AppDefinition[] = [
     adminOnly: true,
     restricted: true,
   },
+  {
+    id: 'ladder',
+    name: 'Ladder',
+    description: 'Job-application tracker: scraped roles, fit and pay, status, notes, apply prep and tailored materials.',
+    domain: 'ladder',
+    path: '/apps/ladder',
+    requiresAuth: true,
+  },
 ]

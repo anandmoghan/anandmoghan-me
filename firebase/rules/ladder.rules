@@ -1,3 +1,94 @@
-// ── ladder (placeholder) ──────────────────────────────────────────────────
-// Owned by the Ladder agent (phase 1): ladder/{tracker}/jobs, companies, requests.
-// No match blocks yet, so every ladder path is denied (Firestore denies by default).
+// ── ladder ────────────────────────────────────────────────────────────────
+// Job trackers under ladder/{tracker} (anand, kavya): jobs, companies and the request queue.
+// Access: a verified admin, or a verified user with app 'ladder' and the tracker listed in the
+// ladderTrackers claim (both mirrored from roles/{email} by syncRoleClaims).
+// Clients change only the user-editable job fields and queue requests. Everything else (new
+// jobs, companies, body_html, PDFs, request progress) is written by scripts/ladder-migrate.ts and
+// the Mac worker (anandmoghan-me-apis/ladder) with the admin SDK, which bypasses rules.
+// Field shapes match anandmoghan-me-apis/ladder/schema.mjs.
+
+match /ladder/{tracker} {
+
+  function ladderCanAccess() {
+    return tracker in ['anand', 'kavya']
+      && (isAdmin() || (hasApp('ladder') && tracker in request.auth.token.get('ladderTrackers', [])));
+  }
+
+  function ladderIsDate(v) {
+    return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+  }
+
+  // Each changed field (k in the changed set ch) must have a valid value in the new doc d; a
+  // removed optional field (absent from d) is fine. Unchanged fields are not re-checked, so an
+  // odd value the worker wrote does not block the user's edits.
+  function ladderOkEnum(d, ch, k, values) {
+    return !(k in ch) || !(k in d) || d[k] in values;
+  }
+
+  function ladderOkBool(d, ch, k) {
+    return !(k in ch) || !(k in d) || d[k] is bool;
+  }
+
+  function ladderOkDate(d, ch, k) {
+    return !(k in ch) || !(k in d) || ladderIsDate(d[k]);
+  }
+
+  function ladderOkList(d, ch, k, max) {
+    return !(k in ch) || !(k in d) || (d[k] is list && d[k].size() <= max);
+  }
+
+  // The user-editable fields; updated_at is the client's request time.
+  function ladderUserFields() {
+    return ['status', 'rating', 'viewed', 'notes', 'apply_prep', 'applied_date', 'decision_date',
+            'progress_stage', 'refresh_requested', 'updated_at'];
+  }
+
+  function ladderValidUpdate(d, ch) {
+    return ch.hasOnly(ladderUserFields())
+      && (!('status' in ch) || d.status in ['new', 'saved', 'applied', 'interviewing', 'declined', 'archived'])
+      && ladderOkEnum(d, ch, 'rating', ['up', 'down'])
+      && ladderOkBool(d, ch, 'viewed')
+      && ladderOkBool(d, ch, 'refresh_requested')
+      && ladderOkDate(d, ch, 'applied_date')
+      && ladderOkDate(d, ch, 'decision_date')
+      && ladderOkEnum(d, ch, 'progress_stage',
+           ['applied', 'online_assessment', 'phone_screen', 'onsite', 'offer', 'declined'])
+      && ladderOkList(d, ch, 'notes', 500)
+      && ladderOkList(d, ch, 'apply_prep', 100)
+      && (!('updated_at' in ch) || d.updated_at == request.time);
+  }
+
+  allow read: if ladderCanAccess();
+  allow write: if false;
+
+  match /jobs/{slug} {
+    allow read: if ladderCanAccess();
+    allow update: if ladderCanAccess()
+      && ladderValidUpdate(request.resource.data, request.resource.data.diff(resource.data).affectedKeys());
+    allow create, delete: if false;
+  }
+
+  match /companies/{slug} {
+    allow read: if ladderCanAccess();
+    allow write: if false;
+  }
+
+  // Requests the Mac worker picks up. A client queues one; the worker owns every later change.
+  match /requests/{id} {
+    allow read: if ladderCanAccess();
+    allow create: if ladderCanAccess()
+      && request.resource.data.keys().hasOnly(['type', 'status', 'slug', 'input', 'createdBy', 'createdAt'])
+      && request.resource.data.keys().hasAll(['type', 'status', 'createdBy', 'createdAt'])
+      && request.resource.data.status == 'queued'
+      && request.resource.data.createdBy == request.auth.uid
+      && request.resource.data.createdAt == request.time
+      && (request.resource.data.type == 'scrape'
+          ? !('slug' in request.resource.data)
+          : request.resource.data.type in ['refresh-job', 'prepare-materials']
+            && request.resource.data.slug is string
+            && exists(/databases/$(database)/documents/ladder/$(tracker)/jobs/$(request.resource.data.slug)))
+      && (!('input' in request.resource.data)
+          || (request.resource.data.input is map && request.resource.data.input.size() <= 10));
+    allow update, delete: if false;
+  }
+}

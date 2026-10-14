@@ -152,11 +152,6 @@ describe("private app data", () => {
     await assertSucceeds(getDoc(doc(db, "wealth/alice")));
     await assertSucceeds(getDoc(doc(db, "t212Creds/alice")));
   });
-
-  test("ladder is denied by default", async () => {
-    const db = real("boss", { admin: true, apps: ["ladder"] });
-    await assertFails(getDoc(doc(db, "ladder/anand")));
-  });
 });
 
 describe("share deck comments", () => {
