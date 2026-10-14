@@ -41,6 +41,7 @@ next-env.d.ts
 /scripts/*
 !/scripts/merge-rules.mjs
 !/scripts/seed-roles.ts
+!/scripts/sync-global.mjs
 
 # Firebase CLI cache
 .firebase/
