@@ -91,7 +91,7 @@
     The catch is that a deterministic ODE sampler gives no likelihood for a policy gradient.
     One route turns the ODE into an SDE so GRPO has a likelihood to work with.
     The other leaves the flow decoder alone and puts the reward where likelihoods are natural: a differentiable reward on the speech-token language model, or RL on the duration predictor alone.
-    The token-level route pays off: CosyVoice 3's reward post-training clearly cuts its Mandarin character error rate [18].
+    The token-level route pays off: CosyVoice 3's reward post-training clearly cuts its Mandarin character error rate [22].
   </p>
   <h4>Reward hacking</h4>
   <p>
@@ -111,7 +111,7 @@
   <p>
     A model that clones a voice from a few seconds of audio is a spoofing tool by construction, and shipped systems use two defences.
     The first is an audio watermark trained jointly with a detector, which can localise the mark down to individual samples.
-    It is accurate: Audiobox reports a false positive rate of 0.001 and a worst-case false negative rate of 0.003 across its augmentations [17].
+    It is accurate: Audiobox reports a false positive rate of 0.001 and a worst-case false negative rate of 0.003 across its augmentations [21].
   </p>
   <p>
     A watermark only protects outputs of a model that applies it, and anyone running released weights can skip that step.

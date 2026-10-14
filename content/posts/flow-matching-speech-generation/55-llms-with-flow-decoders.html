@@ -1,0 +1,174 @@
+<section id="llm-flow">
+  <h2>Pairing Flow Matching with an LLM</h2>
+  <p>
+    A language model is good at deciding what to say, in what order and with what emphasis.
+    It is poor at writing 50 mel frames a second of spectral detail, and a flow decoder is the reverse.
+    A common design splits the job: the LLM plans content, timing and prosody, and a flow or diffusion decoder renders voice and acoustics from noise.
+    The real decision is what crosses the boundary: it sets the token rate, what the decoder must invent, and whether the halves train apart.
+  </p>
+
+  <!-- == Interface == -->
+  <h3 id="llm-flow-what-crosses-the-interface">What crosses the interface</h3>
+  <p>
+    The most common answer is <strong>discrete semantic tokens</strong>.
+    CosyVoice 2 puts a quantizer inside a speech recognition encoder and trains it on the recognition objective, so its 25 Hz tokens carry mostly what is said and when, and little of who says it [13].
+    The LLM predicts them like text, so sampling, KV caching and token-level RL carry over unchanged.
+  </p>
+  <p>
+    The second answer passes <strong>hidden states</strong> between two models before any audio token exists.
+    In a Thinker-Talker design such as Qwen2.5-Omni, the Talker reads the Thinker's hidden representations, emits audio tokens, and a sliding-window DiT renders them.
+  </p>
+  <p>
+    The third drops quantization.
+    The LLM's last hidden state conditions a small diffusion or flow head that turns one frame of noise into the next <strong>continuous latent</strong>, which is fed back as the next input.
+    VibeVoice runs this at 7.5 latent frames a second, so a 10-second clip costs 75 LLM steps [15].
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img"
+      aria-label="Two interfaces. Top: the LLM emits 25 Hz token ids, which are embedded and
+        upsampled to 50 Hz; a flow decoder conditioned on a prompt mel and speaker vector renders
+        mel, and a vocoder makes audio. Bottom: the LLM emits a hidden state h; a per-frame head
+        turns noise into the next latent, which is fed back to the LLM and decoded by a frozen
+        VAE decoder">
+      <defs>
+        <marker id="llm-flow-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Token interface == -->
+      <text class="d-text--small" x="10" y="20">Tokens: a flow decoder renders mel</text>
+      <rect class="d-box" x="10" y="36" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="58" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <rect class="d-box" x="180" y="36" width="130" height="44" rx="8"/>
+      <text class="d-text" x="245" y="58" text-anchor="middle"
+        dominant-baseline="middle">embed, upsample</text>
+      <rect class="d-box d-box--accent" x="360" y="36" width="150" height="44" rx="8"/>
+      <text class="d-text" x="435" y="58" text-anchor="middle"
+        dominant-baseline="middle">flow decoder</text>
+      <rect class="d-box" x="560" y="36" width="130" height="44" rx="8"/>
+      <text class="d-text" x="625" y="58" text-anchor="middle"
+        dominant-baseline="middle">vocoder</text>
+      <path class="d-arrow" d="M 130 58 L 178 58" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 310 58 L 358 58" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 510 58 L 558 58" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 690 58 L 716 58" marker-end="url(#llm-flow-arrow)"/>
+      <text class="d-text--muted" x="155" y="50" text-anchor="middle">25 Hz</text>
+      <text class="d-text--muted" x="335" y="50" text-anchor="middle">50 Hz</text>
+      <text class="d-text--muted" x="535" y="50" text-anchor="middle">mel</text>
+      <rect class="d-box d-box--muted" x="360" y="116" width="150" height="44" rx="8"/>
+      <text class="d-text--small" x="435" y="138" text-anchor="middle"
+        dominant-baseline="middle">prompt mel, speaker</text>
+      <path class="d-arrow" d="M 435 116 L 435 82" marker-end="url(#llm-flow-arrow)"/>
+
+      <!-- == Continuous interface == -->
+      <text class="d-text--small" x="10" y="190">Continuous: a head makes one latent per step</text>
+      <rect class="d-box" x="10" y="206" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="228" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <rect class="d-box" x="180" y="206" width="150" height="44" rx="8"/>
+      <text class="d-text" x="255" y="228" text-anchor="middle"
+        dominant-baseline="middle">per-frame head</text>
+      <rect class="d-box" x="380" y="206" width="130" height="44" rx="8"/>
+      <text class="d-text" x="445" y="228" text-anchor="middle"
+        dominant-baseline="middle">next latent</text>
+      <rect class="d-box d-box--muted" x="560" y="206" width="130" height="44" rx="8"/>
+      <text class="d-text" x="625" y="228" text-anchor="middle"
+        dominant-baseline="middle">VAE decoder</text>
+      <path class="d-arrow" d="M 130 228 L 178 228" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 330 228 L 378 228" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 510 228 L 558 228" marker-end="url(#llm-flow-arrow)"/>
+      <text class="d-text--muted" x="155" y="220" text-anchor="middle">h</text>
+      <path class="d-arrow d-arrow--dashed" d="M 445 250 L 445 274 L 70 274 L 70 252"
+        marker-end="url(#llm-flow-arrow)"/>
+      <text class="d-text--muted" x="258" y="268" text-anchor="middle">fed back as input</text>
+    </svg>
+    <figcaption>
+      Figure: the two common interfaces between an LLM and a flow or diffusion stage.
+      Top, the LLM picks discrete ids and the flow decoder renders mel from noise, with the voice coming from the prompt and speaker vector.
+      Bottom, the LLM's hidden state drives a small head that generates each continuous latent, which loops back into the LLM.
+    </figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Interface</th>
+          <th>What it carries</th>
+          <th>Training</th>
+          <th>Main catch</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Semantic tokens, flow decoder</td>
+          <td>Content and timing; voice comes from the prompt</td>
+          <td>Decoupled: LM cross-entropy, decoder flow matching on real pairs</td>
+          <td>Decoder meets LM-sampled tokens it never trained on</td>
+        </tr>
+        <tr>
+          <td>Hidden states into a talker, then flow</td>
+          <td>Whatever the thinker's representations hold</td>
+          <td>Talker trained on the thinker's states</td>
+          <td>A second model before the decoder</td>
+        </tr>
+        <tr>
+          <td>Continuous latents, per-frame head</td>
+          <td>Everything the audio tokenizer keeps</td>
+          <td>End to end through the hidden state; tokenizer frozen</td>
+          <td>Errors compound frame to frame</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Tradeoff: a lower token rate is cheaper for the LLM, and the flow stage pays for it.
+    Kimi-Audio runs 12.5 Hz tokens into a 50 Hz mel, a 4x upsample against CosyVoice 2's 2x, so its decoder fills in more timing detail per token [16].
+    Keeping voice out of the tokens is the same logic as dropping the speaker embedding from the LM in <a href="#training-text-conditioning-and-alignment">Training</a>.
+    The flip side is that a weak prompt or decoder shows up as voice drift, not as wrong words.
+  </p>
+
+  <!-- == Conditioning and training == -->
+  <h3 id="llm-flow-conditioning-and-training">Conditioning and training the decoder</h3>
+  <p>
+    In the token route, the decoder takes three conditions.
+    Token embeddings, upsampled to the mel frame rate, give content and timing.
+    A speaker embedding from a separate speaker model gives identity, and the prompt's mel, laid down as unmasked context, gives the exact voice.
+    This is the <a href="#training-masked-infilling-and-prompting">masked infilling recipe</a> with tokens in place of padded characters, and the token count fixes the mel length, so there is no <a href="#training-duration">duration model</a>.
+  </p>
+  <p>
+    The two halves train apart.
+    The LLM learns cross-entropy on tokens from the frozen tokenizer; the decoder learns flow matching on real token and mel pairs.
+    That decoupling is the main operational win: you can swap the LLM, retrain the decoder for a new domain, or run <a href="#online-rl-four-ways-around-it">RL on the token stage</a> without touching the other half.
+  </p>
+  <p>
+    The cost is a distribution gap.
+    The decoder only ever saw tokens that the tokenizer produced from real speech, and at inference it reads tokens the LLM sampled, so errors in the token stream become audible.
+    The decoder renders whatever sequence it gets and cannot repair one that no real utterance would produce.
+  </p>
+  <p>
+    The continuous route trains end to end.
+    The head's diffusion loss flows back through the hidden state into the LLM, so the LLM learns to pack in what the head needs for the next frame, and only the audio tokenizer stays frozen.
+    The price is exposure drift: training reads true latents, generation reads its own samples, and noise scale and guidance are the main controls.
+  </p>
+
+  <!-- == Speech LLMs == -->
+  <h3 id="llm-flow-speech-llms">Speech LLMs and the flow decoder</h3>
+  <p>
+    Several dialogue and omni models took the token route first, with a flow matching module and a vocoder rendering chunk by chunk.
+    The look-ahead is the knob: Kimi-Audio peeks at next-chunk tokens, which delays only the first chunk [16], and Qwen2.5-Omni's DiT sees one block ahead and two behind [17].
+    The masks are in <a href="#fast-and-streaming-streaming-flow-matching">Streaming flow matching</a>.
+  </p>
+  <p>
+    Full duplex is where the flow stage starts to hurt.
+    First audio waits for the LM's first chunk, the look-ahead, the solver passes and the vocoder, and a duplex model also has a per-frame deadline.
+    Qwen3-Omni dropped block-wise diffusion: its Talker predicts multi-codebook codec frames and a lightweight causal ConvNet decodes each frame as soon as it exists.
+    For the whole pipeline it reports a theoretical cold-start first packet of 234 ms [18].
+  </p>
+  <p>
+    Tradeoff: the LM now has to predict every codebook of every frame, through a multi-token prediction module, so acoustic detail moves back into the LM.
+    My read is that flow decoders stay the default where voice quality and cloning matter, and duplex assistants with a per-frame deadline keep moving to causal codec decoders.
+  </p>
+</section>

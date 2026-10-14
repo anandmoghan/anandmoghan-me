@@ -2,7 +2,7 @@
   <h2>Papers and Trade-offs at a Glance</h2>
   <p>
     A common shipped design is an autoregressive model that writes speech tokens and a flow matching or diffusion decoder that renders them for a vocoder.
-    In Seed-TTS, deployed latency fell to 0.028 times the offline system's, with WER and similarity unchanged [15].
+    In Seed-TTS, deployed latency fell to 0.028 times the offline system's, with WER and similarity unchanged [19].
     Flow matching became the common choice with Voicebox, and the table below groups the systems by family.
   </p>
   <p>
@@ -25,7 +25,7 @@
       <tbody>
         <tr>
           <td>Grad-TTS</td>
-          <td>[16]</td>
+          <td>[20]</td>
           <td>2021</td>
           <td>Non-autoregressive diffusion</td>
           <td>Mel, then HiFi-GAN</td>
@@ -45,7 +45,7 @@
         </tr>
         <tr>
           <td>Audiobox</td>
-          <td>[17]</td>
+          <td>[21]</td>
           <td>2023</td>
           <td>Non-autoregressive flow matching</td>
           <td>Encodec latent</td>
@@ -85,7 +85,7 @@
         </tr>
         <tr>
           <td>Seed-TTS</td>
-          <td>[15]</td>
+          <td>[19]</td>
           <td>2024</td>
           <td>AR tokens, then diffusion</td>
           <td>Speech tokens, then vocoder latent</td>
@@ -105,7 +105,7 @@
         </tr>
         <tr>
           <td>CosyVoice 3</td>
-          <td>[18]</td>
+          <td>[22]</td>
           <td>2025</td>
           <td>AR tokens, then flow-matching DiT</td>
           <td>25 Hz tokens, then mel</td>
@@ -115,7 +115,7 @@
         </tr>
         <tr>
           <td>Qwen2.5-Omni</td>
-          <td>[19]</td>
+          <td>[17]</td>
           <td>2025</td>
           <td>LLM tokens, then flow-matching DiT</td>
           <td>Codec tokens, then mel and modified BigVGAN</td>
@@ -125,7 +125,7 @@
         </tr>
         <tr>
           <td>MaskGCT</td>
-          <td>[20]</td>
+          <td>[23]</td>
           <td>2024</td>
           <td>Masked token prediction, no ODE</td>
           <td>Semantic tokens, then codec tokens</td>
@@ -135,7 +135,7 @@
         </tr>
         <tr>
           <td>Qwen3-Omni</td>
-          <td>[21]</td>
+          <td>[18]</td>
           <td>2025</td>
           <td>LLM tokens, then causal ConvNet, no flow decoder</td>
           <td>Multi-codebook codec frames</td>
