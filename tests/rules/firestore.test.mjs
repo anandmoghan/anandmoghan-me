@@ -8,7 +8,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FAMILY_EMAIL = "member@example.com";
@@ -278,5 +278,94 @@ describe("family read copies", () => {
         await assertFails(getDocs(collection(db, views)));
       }
     }
+  });
+});
+
+describe("planner", () => {
+  const planner = (uid, claims = {}) => real(uid, { apps: ["planner"], ...claims });
+  const hash = "a".repeat(64);
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "planner/anand"), { displayName: "Anand", colour: "a" });
+      await setDoc(doc(db, "planner/anand/events/e1"), { title: "Standup", allDay: false });
+      await setDoc(doc(db, "planner/anand/habits/h1"), { name: "Run", perWeek: 3, archived: false, createdAt: new Date(), updatedAt: new Date() });
+      await setDoc(doc(db, "planner/anand/habits/h1/days/2026-01-05"), { done: true });
+      await setDoc(doc(db, `plannerKeys/${hash}`), { uid: "anand", label: "iPhone" });
+      await setDoc(doc(db, `plannerKeys/${"b".repeat(64)}`), { uid: "kavya", label: "iPhone" });
+    });
+  });
+
+  const habit = () => ({ name: "Read", perWeek: 5, archived: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+
+  test("the owner writes their profile and habits and ticks days", async () => {
+    const db = planner("anand");
+    await assertSucceeds(setDoc(doc(db, "planner/anand"), { displayName: "Anand", colour: "b", updatedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(db, "planner/anand/habits/h2"), habit()));
+    await assertSucceeds(updateDoc(doc(db, "planner/anand/habits/h1"), { name: "Run more", updatedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(db, "planner/anand/habits/h1/days/2026-01-06"), { done: true, at: serverTimestamp() }));
+    await assertSucceeds(deleteDoc(doc(db, "planner/anand/habits/h1/days/2026-01-05")));
+    await assertSucceeds(getDocs(collection(db, "planner/anand/habits")));
+  });
+
+  test("invalid profiles and habits are rejected", async () => {
+    const db = planner("anand");
+    await assertFails(setDoc(doc(db, "planner/anand"), { displayName: "Anand", colour: "z", updatedAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(db, "planner/anand/habits/h2"), { ...habit(), perWeek: 8 }));
+    await assertFails(setDoc(doc(db, "planner/anand/habits/h2"), { ...habit(), name: "" }));
+    await assertFails(setDoc(doc(db, "planner/anand/habits/h1/days/not-a-date"), { done: true, at: serverTimestamp() }));
+  });
+
+  test("others cannot read or write habits and days", async () => {
+    for (const db of [planner("kavya"), real("boss", { admin: true })]) {
+      await assertFails(getDoc(doc(db, "planner/anand/habits/h1")));
+      await assertFails(getDocs(collection(db, "planner/anand/habits")));
+      await assertFails(getDoc(doc(db, "planner/anand/habits/h1/days/2026-01-05")));
+      await assertFails(setDoc(doc(db, "planner/anand/habits/h3"), habit()));
+    }
+  });
+
+  test("household members and admins read profiles and events but not write them", async () => {
+    for (const db of [planner("kavya"), real("boss", { admin: true })]) {
+      await assertSucceeds(getDoc(doc(db, "planner/anand")));
+      await assertSucceeds(getDocs(collection(db, "planner")));
+      await assertSucceeds(getDocs(collection(db, "planner/anand/events")));
+      await assertFails(setDoc(doc(db, "planner/anand"), { displayName: "X", colour: "a", updatedAt: serverTimestamp() }));
+    }
+  });
+
+  test("nobody writes events from a client, owner included", async () => {
+    for (const db of [planner("anand"), real("boss", { admin: true })]) {
+      await assertFails(setDoc(doc(db, "planner/anand/events/e2"), { title: "x" }));
+      await assertFails(updateDoc(doc(db, "planner/anand/events/e1"), { title: "x" }));
+      await assertFails(deleteDoc(doc(db, "planner/anand/events/e1")));
+    }
+  });
+
+  test("users without the planner app, anonymous and signed-out users read nothing", async () => {
+    for (const db of [real("alice"), real("bob", { apps: ["family"] }), anon("anon1"), env.unauthenticatedContext().firestore()]) {
+      await assertFails(getDoc(doc(db, "planner/anand")));
+      await assertFails(getDocs(collection(db, "planner/anand/events")));
+    }
+  });
+
+  test("keys: create only for yourself, read, list and delete only your own", async () => {
+    const db = planner("anand");
+    const fresh = "c".repeat(64);
+    await assertSucceeds(setDoc(doc(db, `plannerKeys/${fresh}`), { uid: "anand", label: "Phone", createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(db, `plannerKeys/${"d".repeat(64)}`), { uid: "kavya", label: "Phone", createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(db, `plannerKeys/${"e".repeat(64)}`), { uid: "anand", label: "x".repeat(41), createdAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(db, `plannerKeys/${hash}`)));
+    await assertFails(getDoc(doc(db, `plannerKeys/${"b".repeat(64)}`)));
+    await assertSucceeds(getDocs(query(collection(db, "plannerKeys"), where("uid", "==", "anand"))));
+    await assertFails(getDocs(collection(db, "plannerKeys")));
+    await assertFails(deleteDoc(doc(db, `plannerKeys/${"b".repeat(64)}`)));
+    await assertFails(updateDoc(doc(db, `plannerKeys/${hash}`), { label: "new" }));
+    await assertSucceeds(deleteDoc(doc(db, `plannerKeys/${hash}`)));
+  });
+
+  test("keys cannot be created without the planner app", async () => {
+    await assertFails(setDoc(doc(real("alice"), `plannerKeys/${"c".repeat(64)}`), { uid: "alice", label: "Phone", createdAt: serverTimestamp() }));
   });
 });

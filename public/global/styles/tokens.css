@@ -91,6 +91,7 @@
   --ladder: #596a1a;
   --materials: #84563a;
   --admin: #4b505a;
+  --planner: #0f7f8f;
 
   /* The current area. .domain-<name> (app.css) repoints --domain and --accent. */
   --domain: var(--home);
@@ -132,6 +133,7 @@
     --ladder: #c5d47c;
     --materials: #dcb38f;
     --admin: #bcc1cb;
+    --planner: #7fd3de;
     --on-domain: #1b1815;
   }
 }
@@ -169,6 +171,7 @@
   --ladder: #c5d47c;
   --materials: #dcb38f;
   --admin: #bcc1cb;
+  --planner: #7fd3de;
   --on-domain: #1b1815;
 }
 

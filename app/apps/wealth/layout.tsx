@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   manifest: "/apps/manifest-wealth.json",
   icons: {
     icon: { url: "/apps/icon-wealth.svg", type: "image/svg+xml" },
-    apple: "/apps/icon-wealth-192.png",
+    apple: "/apps/icon-wealth-180.png",
   },
   appleWebApp: { capable: true, title: "Wealth", statusBarStyle: "default" },
   other: { "mobile-web-app-capable": "yes" },

@@ -37,6 +37,7 @@
 .domain-ladder { --domain: var(--ladder); --accent: var(--ladder); }
 .domain-materials { --domain: var(--materials); --accent: var(--materials); }
 .domain-admin { --domain: var(--admin); --accent: var(--admin); }
+.domain-planner { --domain: var(--planner); --accent: var(--planner); }
 
 /* == Buttons and chips in apps == */
 

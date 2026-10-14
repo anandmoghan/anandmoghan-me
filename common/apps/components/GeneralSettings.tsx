@@ -9,6 +9,7 @@ import { useTheme } from '@/common/components/ThemeProvider'
 import { AnalyticsSwitch } from '@/common/visitors/AnalyticsSwitch'
 import { useDeleteMyData } from '@/common/visitors/DeleteMyData'
 import { NicknameEditor } from '@/common/visitors/NicknameEditor'
+import { apps as appRegistry } from '../registry'
 import { Spinner } from './Spinner'
 import { SettingsCard, SettingsRow as Row } from './SettingsRows'
 
@@ -64,6 +65,9 @@ export function GeneralSettings() {
     )
     return () => { live = false }
   }, [user])
+
+  // Same visibility rule as the hub: admin-only apps appear for admins.
+  const installable = appRegistry.filter((app) => !app.adminOnly || isAdmin)
 
   if (loading) return <Spinner text="Loading" />
 
@@ -189,6 +193,19 @@ export function GeneralSettings() {
 
       <SettingsCard title="Privacy">
         <AnalyticsSwitch linkToPrivacy />
+      </SettingsCard>
+
+      <SettingsCard title="Add to Home Screen">
+        <p className="settings-row text-sm text-muted">
+          Open it in Safari, tap Share, then Add to Home Screen. Each app installs on its own.
+        </p>
+        {installable.map((app) => (
+          <Row key={app.id} label={app.name}>
+            <Link href={app.path} className="btn btn--sm">
+              Open
+            </Link>
+          </Row>
+        ))}
       </SettingsCard>
 
       <SettingsCard title="App">
