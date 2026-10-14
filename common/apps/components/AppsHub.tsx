@@ -15,7 +15,7 @@ export function AppsHub() {
       <h1 className="text-[1.65rem] font-extrabold leading-tight">Apps</h1>
       <p className="mt-1 text-[0.95rem] text-muted">Tools and dashboards by Anand.</p>
 
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+      <ul className="mt-6 grid auto-rows-fr gap-3 sm:grid-cols-2">
         {listed.map((app) => {
           const needsLogin = app.requiresAuth && (!user || isAnonymous)
           const href = needsLogin
@@ -23,7 +23,7 @@ export function AppsHub() {
             : app.path
           const Icon = DOMAIN_ICON[app.domain]
           return (
-            <li key={app.id}>
+            <li key={app.id} className="flex">
               <HubCard
                 href={href}
                 title={app.name}
