@@ -28,6 +28,8 @@ export default function Fitness() {
   const tab = raw === "connect" ? (["connect", "Connect Apple Health"] as const) : FITNESS_TABS.find(([t]) => t === raw);
   if (!tab) return <Navigate to={`/fitness/today${search}`} replace />;
   const [key, label] = tab;
+  // Device and key management is a working detail that lives on the Mac; the rest shows from the Firestore copy.
+  const needsMac = f.live === false && key === "connect";
 
   function setPerson(p: Person) {
     const q = new URLSearchParams(params);
@@ -43,7 +45,8 @@ export default function Fitness() {
       </div>
       {f.status === "loading" && <ListSkeleton rows={4} />}
       {(f.status === "offline" || f.status === "error") && <OfflineCard offline={f.status === "offline"} onRetry={() => f.refresh()} />}
-      {f.status === "ready" && f.data && (
+      {f.status === "ready" && f.data && needsMac && <OfflineCard offline onRetry={() => f.refresh()} />}
+      {f.status === "ready" && f.data && !needsMac && (
         <div role="tabpanel" aria-label={label}>
           {key === "today" && <BrokenNote broken={f.data.broken} />}
           {key === "today" && <Today key={person} person={person} f={f} data={f.data} />}

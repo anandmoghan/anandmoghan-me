@@ -33,6 +33,8 @@ export default function Health() {
   const tab: Tab = TABS.find(([t]) => t === params.get("tab"))?.[0] ?? "overview";
   const label = TABS.find(([t]) => t === tab)?.[1] ?? "Overview";
   const h = useHealth(person);
+  // Questions and uploads are working details that live on the Mac; the rest shows from the Firestore copy.
+  const needsMac = h.live === false && (tab === "questions" || tab === "upload");
 
   function setPerson(p: Person) {
     const q = new URLSearchParams(params);
@@ -54,7 +56,8 @@ export default function Health() {
 
       {h.status === "loading" && <ListSkeleton rows={4} />}
       {(h.status === "offline" || h.status === "error") && <OfflineCard offline={h.status === "offline"} onRetry={() => h.refresh()} />}
-      {h.status === "ready" && h.data && (
+      {h.status === "ready" && h.data && needsMac && <OfflineCard offline onRetry={() => h.refresh()} />}
+      {h.status === "ready" && h.data && !needsMac && (
         <div role="tabpanel" aria-label={label}>
           {tab === "overview" && <BrokenNote broken={h.data.broken} />}
           {tab === "overview" && <Overview key={person} person={person} h={h} data={h.data} />}

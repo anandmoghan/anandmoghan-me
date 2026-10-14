@@ -37,6 +37,8 @@ export default function Parenting() {
   if (raw === "ask" && id === undefined) return <Navigate to="/nila/help#ask" replace />;
   if (!tab) return <Navigate to="/nila/today" replace />;
   const [key, label] = tab;
+  // Logs and questions are working details that live on the Mac; the rest shows from the Firestore copy.
+  const needsMac = p.live === false && (key === "sleep" || key === "food" || key === "questions");
   const todayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const age = p.data ? ageLabel(p.data.dob, undefined, true) ?? p.data.summary?.age : null;
 
@@ -52,7 +54,8 @@ export default function Parenting() {
       <PageTitle title={label} sub={key === "today" ? <span data-testid="nila-age">{[todayLabel, age && `${age} old`].filter(Boolean).join(" · ")}</span> : undefined} />
       {p.status === "loading" && <ListSkeleton rows={4} />}
       {(p.status === "offline" || p.status === "error") && <ParentingOffline offline={p.status === "offline"} onRetry={() => p.refresh()} />}
-      {p.status === "ready" && p.data && (
+      {p.status === "ready" && p.data && needsMac && <ParentingOffline offline onRetry={() => p.refresh()} />}
+      {p.status === "ready" && p.data && !needsMac && (
         <div role="tabpanel" aria-label={label}>
           {key === "today" && <BrokenNote broken={p.data.broken} />}
           {key === "today" && <Today p={p} data={p.data} />}
