@@ -9,6 +9,8 @@ import {
   renderAllChapters,
   renderChapter,
 } from '@/common/utils/materials';
+import { ReadingTracker } from '@/common/visitors/reads/ReadingTracker';
+import { materialsSlug } from '@/common/visitors/reads/reads';
 import { MaterialsShell } from './MaterialsShell';
 import { PaneAll, PaneChapter, PaneLanding, pad2 } from './Pane';
 
@@ -107,7 +109,16 @@ export function ChapterView({ page, index }: { page: MaterialsPage; index: numbe
     <MaterialsShell
       sidebar={<PaneChapter page={page} index={index} headings={chapter.headings} />}
       html={`${head}\n${chapter.html}`}
-      footer={<ChapterNav page={page} index={index} />}
+      footer={
+        <>
+          <ChapterNav page={page} index={index} />
+          <ReadingTracker
+            slug={materialsSlug(page.slug, multi ? chapter.slug : null)}
+            title={multi ? `${page.title}: ${chapter.title}` : page.title}
+            container=".materials .content"
+          />
+        </>
+      }
     />
   );
 }

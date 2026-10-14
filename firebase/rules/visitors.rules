@@ -60,3 +60,36 @@ match /posts/{slug}/comments/{commentId} {
 match /{path=**}/comments/{commentId} {
   allow read: if isAdmin();
 }
+
+// users/{uid}/reads/{readId}: { slug, title, lastReadAt, progress, lastHeadingId }.
+// Reading history, written only while the visitor has accepted the "remember what you read"
+// consent. Owner read and write only, anonymous included. readId is the slug with '/' replaced
+// by '__' (a document id cannot hold a slash), so materials:<page>/<chapter> is one flat doc.
+
+function readFields(d) {
+  return d.keys().hasOnly(['slug', 'title', 'lastReadAt', 'progress', 'lastHeadingId'])
+    && d.keys().hasAll(['slug', 'title', 'lastReadAt', 'progress', 'lastHeadingId']);
+}
+
+function readValid(d, readId) {
+  return d.slug is string
+    && d.slug.size() <= 200
+    && d.slug.matches('^[a-z0-9][a-z0-9:/_-]*$')
+    && d.slug.replace('/', '__') == readId
+    && d.title is string
+    && d.title.size() >= 1
+    && d.title.size() <= 300
+    && (d.progress is int || d.progress is float)
+    && d.progress >= 0
+    && d.progress <= 1
+    && d.lastHeadingId is string
+    && d.lastHeadingId.size() <= 200
+    && d.lastReadAt == request.time;
+}
+
+match /users/{uid}/reads/{readId} {
+  allow read, delete: if isOwner(uid);
+  allow create, update: if isOwner(uid)
+    && readFields(request.resource.data)
+    && readValid(request.resource.data, readId);
+}

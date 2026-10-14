@@ -17,14 +17,14 @@ export function DeleteMyData() {
   const handleDelete = async () => {
     if (!user) return;
     const what = isAnonymous ? 'this guest session' : 'your account';
-    if (!window.confirm(`Delete your page visits, blog comments and ${what}? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete your page visits, blog comments, reading history and ${what}? This cannot be undone.`)) return;
     setBusy(true);
     setMessage(null);
     try {
-      const { visits, comments } = await deleteMyData(user);
+      const { visits, comments, reads } = await deleteMyData(user);
       reset();
       await signOut();
-      setMessage(`Deleted ${visits} visits and ${comments} comments.`);
+      setMessage(`Deleted ${visits} visits, ${comments} comments and ${reads} reading history entries.`);
     } catch (err) {
       console.error('Deleting data failed', err);
       setMessage('Your data could not be deleted. Please try again.');
@@ -38,7 +38,7 @@ export function DeleteMyData() {
       <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Your data</h2>
       <div className="card space-y-3">
         <p className="text-sm text-muted">
-          Deletes the pages you visited, your blog comments, your profile and this account.
+          Deletes the pages you visited, your blog comments, your reading history, your profile and this account.
           {' '}
           <Link href="/privacy" className="underline">
             What is stored

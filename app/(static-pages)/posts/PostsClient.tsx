@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import PostCard from '@/common/components/PostCard';
 import TagFilter from '@/common/components/TagFilter';
 import Pagination from '@/common/components/Pagination';
+import { ContinueReading } from '@/common/visitors/reads/ContinueReading';
 import type { Post } from '@/common/types/post';
 
 interface PostsClientProps {
@@ -72,6 +73,13 @@ export default function PostsClient({ posts }: PostsClientProps) {
           )}
         </div>
       </section>
+
+      {/* Continue reading: renders only for visitors with consent and unfinished reads */}
+      <div className="px-6 sm:px-8 lg:px-12">
+        <div className="max-w-7xl mx-auto">
+          <ContinueReading />
+        </div>
+      </div>
 
       {/* Tag Filter Section */}
       {visiblePosts.length > 0 && (

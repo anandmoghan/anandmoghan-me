@@ -7,6 +7,8 @@ import CodeCopyButtons from '@/common/components/CodeCopyButtons';
 import TableOfContents from '@/common/components/TableOfContents';
 import PrintButton from '@/common/components/PrintButton';
 import { PostComments } from '@/common/visitors/comments/PostComments';
+import { ReadingTracker } from '@/common/visitors/reads/ReadingTracker';
+import { ReadNext, type ReadNextPost } from '@/common/visitors/reads/ReadNext';
 import type { Metadata } from 'next';
 
 interface PostPageProps {
@@ -83,6 +85,17 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
+  // Small static list for Read next; the client ranks it against the visitor's history.
+  const readNextPosts: ReadNextPost[] = getAllPosts()
+    .filter(other => other.slug !== post.slug)
+    .map(other => ({
+      slug: other.slug,
+      title: other.title,
+      excerpt: other.excerpt,
+      publishedAt: other.publishedAt.toISOString(),
+      tags: other.tags.map(tag => ({ id: tag.id, name: tag.name })),
+    }));
+
   return (
     <main className="min-h-screen">
       {/* Header Section */}
@@ -156,7 +169,13 @@ export default async function PostPage({ params }: PostPageProps) {
                 dangerouslySetInnerHTML={{ __html: post.html }}
               />
               <CodeCopyButtons containerId="post-body" />
-              {post.published && <PostComments slug={post.slug} />}
+              {post.published && (
+                <>
+                  <ReadingTracker slug={post.slug} title={post.title} container="#post-body" />
+                  <ReadNext currentTagIds={post.tags.map(tag => tag.id)} posts={readNextPosts} />
+                  <PostComments slug={post.slug} />
+                </>
+              )}
             </div>
 
             {/* Table of Contents */}
