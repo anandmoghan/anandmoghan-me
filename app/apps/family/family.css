@@ -3,6 +3,24 @@
    so every rule is under .family-app (set by FamilyApp) or uses a family-only class name.
    Base rules sit inside :where() so Tailwind utilities on the same element still win. */
 
+/* Family pages carry their own 1rem gutters (px-4); with .site-container on the app root these
+   top them up to the site's 1 / 1.5 / 2rem so wide pages line up with the site header. */
+.site-container.family-content {
+  padding-inline: 0;
+}
+
+@media (min-width: 640px) {
+  .site-container.family-content {
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .site-container.family-content {
+    padding-inline: 1rem;
+  }
+}
+
 /* 44px tap targets for inputs too (globals.css covers buttons, selects and summaries). */
 :where(.family-app input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
   min-height: var(--tap);
