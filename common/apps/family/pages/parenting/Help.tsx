@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "@/common/apps/family/router";
+import { useViewTab } from "@/common/apps/family/hooks/useViewTab";
 import { Badge, HubCard, SectionTitle, Segmented, outlineBtn, primaryBtn, type Tone } from "@/common/apps/family/components/ui";
 import { ChevronRightIcon } from "@/common/apps/family/components/Icons";
 import { ChoiceChips, STATUS_TONE } from "@/common/apps/family/components/parenting/parts";
@@ -91,8 +92,7 @@ const SECTIONS: [SectionKey, string, string, string][] = [
   ["habits", "Good habits", "Habits", "No good habits yet. Pick \"Prevention\" when you add one."],
   ["problems", "Problems we're working on", "Problems", "Nothing open. Use Add a problem above to get a playbook for it."],
 ];
-// The open tab, kept for the session so coming back from a problem lands on the same tab.
-const TAB_KEY = "nila-help-tab";
+const VIEWS = SECTIONS.map(([key, , short]) => [key, short] as const);
 
 /** A one-tap card that opens a form in place, so a question or a new problem is one tap away without a long page. */
 function ExpandCard({ title, hint, startOpen = false, testId, children }: { title: string; hint: string; startOpen?: boolean; testId: string; children: ReactNode }) {
@@ -147,23 +147,7 @@ export default function Help({ p, data }: { p: UseParenting; data: ParentingData
     habits: data.problems.filter(isGuide),
     problems: data.problems.filter((x) => !isStepPlan(x) && !isGuide(x)).sort((a, b) => order[a.status] - order[b.status]),
   };
-  const [tab, setTab] = useState<SectionKey>(() => {
-    try {
-      const stored = sessionStorage.getItem(TAB_KEY);
-      if (SECTIONS.some(([key]) => key === stored)) return stored as SectionKey;
-    } catch {
-      // storage blocked
-    }
-    return SECTIONS.find(([key]) => byKind[key].length)?.[0] ?? "plans";
-  });
-  function choose(next: SectionKey) {
-    setTab(next);
-    try {
-      sessionStorage.setItem(TAB_KEY, next);
-    } catch {
-      // storage blocked
-    }
-  }
+  const [tab, choose] = useViewTab(VIEWS, SECTIONS.find(([key]) => byKind[key].length)?.[0] ?? "plans");
   const latest = [...data.asks].sort((a, b) => (toMillis(b.asked_at) ?? 0) - (toMillis(a.asked_at) ?? 0))[0];
   return (
     <div className="space-y-6">

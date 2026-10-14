@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocation } from "@/common/apps/family/router";
+import { useViewTab } from "@/common/apps/family/hooks/useViewTab";
 import { SectionTitle, Segmented, outlineBtn, primaryBtn } from "@/common/apps/family/components/ui";
 import { ChoiceChips, PointList, ResearchComing } from "@/common/apps/family/components/parenting/parts";
 import { Collapsible, NowCard, PlanSteps, TriedBefore } from "@/common/apps/family/components/parenting/plan";
@@ -206,17 +207,6 @@ function PlanView({ plan, week }: { plan: SleepPlan; week: number | null }) {
 type View = "today" | "plan" | "trends" | "reminders";
 const VIEWS = [["today", "Dashboard"], ["plan", "Plan"], ["trends", "Trends"], ["reminders", "Reminders"]] as const;
 
-/** The view a link asks for: ?log=1 is Today, #settle (and the old ?view=settle) is Plan, #reminders is
- * Reminders, else ?view=. */
-function linkedView(search: string, hash: string): View | null {
-  const q = new URLSearchParams(search);
-  if (q.get("log") === "1") return "today";
-  if (hash === "#settle" || q.get("view") === "settle") return "plan";
-  if (hash === "#reminders") return "reminders";
-  const v = q.get("view");
-  return VIEWS.some(([k]) => k === v) ? (v as View) : null;
-}
-
 export default function Sleep({ p, data }: { p: UseParenting; data: ParentingData }) {
   const { people } = useData();
   const parents = people.filter((x) => x.id !== "nila" && x.name).map((x) => String(x.name).split(" ")[0]);
@@ -234,20 +224,16 @@ export default function Sleep({ p, data }: { p: UseParenting; data: ParentingDat
   const noonOf = new Date(`${nightDate}T12:00:00`).getTime();
   const nightSession = data.sleep_sessions.find((s) => s.kind === "night" && Date.parse(s.start) >= noonOf && Date.parse(s.start) < noonOf + 24 * 3_600_000);
   const nightTitle = nightDate === dayKey() ? "Tonight" : nightDate === addDays(dayKey(), -1) ? "Last night" : `Night of ${fmtYmd(nightDate)}`;
-  const [view, setView] = useState<View>(linkedView(search, hash) ?? "today");
-  useEffect(() => {
-    const v = linkedView(search, hash);
-    if (v) setView(v);
-  }, [search, hash]);
-  // A reminder opens /nila/sleep?log=1: bring the night log into view and put the cursor in it. #reminders
-  // (from Today) opens the Reminders view; #settle opens Plan at the settle guide.
+  const [view, setView] = useViewTab(VIEWS, "today");
+  // A reminder opens /nila/sleep?log=1: bring the night log into view and put the cursor in it. ?view=plan#settle
+  // opens Plan at the settle guide.
   useEffect(() => {
     if (wantsLog) {
       if (view !== "today") return;
       const form = document.getElementById("log");
       form?.scrollIntoView?.({ block: "start" });
       form?.querySelector<HTMLInputElement>("input")?.focus();
-    } else if (hash === "#reminders" || hash === "#settle") {
+    } else if (hash === "#settle") {
       document.getElementById(hash.slice(1))?.scrollIntoView?.({ block: "start" });
     }
   }, [wantsLog, hash, editing, view]);

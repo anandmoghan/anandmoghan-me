@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from "react";
-import { useLocation } from "@/common/apps/family/router";
+import { useState } from "react";
+import { useViewTab } from "@/common/apps/family/hooks/useViewTab";
 import { Badge, HubCard, SectionTitle, Segmented, outlineBtn } from "@/common/apps/family/components/ui";
 import { SectionedMarkdown } from "@/common/apps/family/components/Points";
 import { PointList, ResearchComing } from "@/common/apps/family/components/parenting/parts";
@@ -343,13 +343,7 @@ function RulesView({ plan }: { plan: FoodPlan }) {
 
 /** /nila/food: Today (the menu next to what was logged, a quick log), Plan and Rules. */
 export default function Food({ p, data }: { p: UseParenting; data: ParentingData }) {
-  const { hash } = useLocation();
-  const [view, setView] = useState<View>(hash === "#plan" ? "plan" : hash === "#rules" ? "rules" : "today");
-  // The hash can arrive after the first render (client navigation), so follow it.
-  useEffect(() => {
-    if (hash === "#plan") setView("plan");
-    else if (hash === "#rules") setView("rules");
-  }, [hash]);
+  const [view, setView] = useViewTab(VIEWS, "today");
   const plan = data.food_plan;
   if (!plan || !plan.groups) {
     return (

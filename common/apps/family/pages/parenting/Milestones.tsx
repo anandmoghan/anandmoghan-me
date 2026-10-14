@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from "react";
+import { useViewTab } from "@/common/apps/family/hooks/useViewTab";
 import { Badge, SectionTitle, Segmented, outlineBtn, primaryBtn, softBtn } from "@/common/apps/family/components/ui";
 import { Sheet } from "@/common/apps/family/components/fitness/parts";
 import { SourceList } from "@/common/apps/family/components/health/parts";
@@ -132,9 +133,8 @@ export default function Milestones({ p, data }: { p: UseParenting; data: Parenti
   const months = ageParts(data.dob)?.months ?? null;
   const windows = comingWindows(data.catalog?.windows ?? [], months);
 
-  const [view, setView] = useState<View>("coming");
   const views = VIEWS.filter(([v]) => v !== "working" || working.length > 0);
-  const shown = views.some(([v]) => v === view) ? view : "coming";
+  const [shown, setView] = useViewTab(views, "coming");
 
   function choose(next: Pick | null) {
     setPick(next);

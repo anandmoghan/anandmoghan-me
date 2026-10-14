@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "@/common/apps/family/router";
 import { PinIcon } from "@/common/apps/family/components/Icons";
 import { usePins } from "@/common/apps/family/hooks/usePins";
+import { useSubLabel } from "@/common/apps/family/hooks/useViewTab";
 import { DOMAIN_LABEL, domainOf } from "@/common/apps/family/lib/domain";
 
 /** Pin toggle for the page on screen, shown next to its title. Stores the path and an "Area · Title" label. */
@@ -12,8 +13,10 @@ export function PinButton({ title }: { title: string }) {
   const { pins, ready, toggle } = usePins();
   const path = pathname + search;
   const pinned = pins.some((p) => p.path === path);
+  const sub = useSubLabel();
   const domain = domainOf(pathname);
-  const label = domain === "home" ? title : `${DOMAIN_LABEL[domain]} · ${title}`;
+  const named = sub && new URLSearchParams(search).has("view") ? `${title} · ${sub}` : title;
+  const label = domain === "home" ? named : `${DOMAIN_LABEL[domain]} · ${named}`;
   return (
     <button
       type="button"

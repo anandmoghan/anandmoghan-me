@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from "react";
+import { slugify, useViewTab } from "@/common/apps/family/hooks/useViewTab";
 import { SectionTitle, Segmented, outlineBtn, primaryBtn, softBtn } from "@/common/apps/family/components/ui";
 import { ListSkeleton } from "@/common/apps/family/components/Skeleton";
 import Spinner from "@/common/apps/family/components/Spinner";
@@ -43,8 +44,8 @@ export default function About({ p, editing, setEditing }: { p: UseParenting; edi
   const parsed = parseContext(body ?? "");
   const extra = parsed.sections.map((s) => s.heading).filter((h) => !CONTEXT_SECTIONS.some((c) => c.toLowerCase() === h.toLowerCase()));
   const options = [...CONTEXT_SECTIONS, ...extra];
-  const [tab, setTab] = useState("");
-  const shownTab = parsed.sections.some((s) => s.heading === tab) ? tab : (parsed.sections[0]?.heading ?? "");
+  const tabs = parsed.sections.map((s) => [slugify(s.heading), s.heading] as const);
+  const [shownTab, setTab] = useViewTab(tabs, tabs[0]?.[0] ?? "");
 
   async function addNote() {
     setSaving(true);
@@ -136,9 +137,9 @@ export default function About({ p, editing, setEditing }: { p: UseParenting; edi
             label="Notes about Nila"
             value={shownTab}
             onChange={setTab}
-            options={parsed.sections.map((s) => [s.heading, s.lines.length ? `${s.heading} · ${s.lines.length}` : s.heading] as const)}
+            options={parsed.sections.map((s) => [slugify(s.heading), s.lines.length ? `${s.heading} · ${s.lines.length}` : s.heading] as const)}
           />
-          {parsed.sections.filter((s) => s.heading === shownTab).map((s) => (
+          {parsed.sections.filter((s) => slugify(s.heading) === shownTab).map((s) => (
             <div key={s.heading} data-testid="context-section">
               {s.lines.length === 0 ? (
                 <p className="card !px-4 !py-3.5 text-sm text-muted">Nothing here yet.</p>
