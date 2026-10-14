@@ -19,11 +19,12 @@ export function ConsentBanner() {
     >
       <div className="card card--compact flex flex-col gap-3 shadow-lg">
         <p id="consent-title" className="text-sm font-bold">
-          Analytics
+          Personalise your visit
         </p>
         <p id="consent-body" className="text-sm text-muted">
-          Can I count your visit? I use Google Analytics and a simple log of pages and country to
-          see what people read. No ads, nothing sold.{' '}
+          Let the site remember what you read and roughly where you are visiting from, so it
+          can pick up where you left off and suggest what to read next. Google Analytics helps
+          me see what is useful. No ads, nothing sold.{' '}
           <Link href="/privacy#analytics" className="underline underline-offset-2">
             Details
           </Link>
@@ -33,7 +34,7 @@ export function ConsentBanner() {
             No thanks
           </button>
           <button type="button" className="btn btn--outline btn--sm" onClick={() => choose('granted')}>
-            Allow
+            Personalise
           </button>
         </div>
       </div>
