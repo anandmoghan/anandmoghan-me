@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase-admin/auth'
-import { FieldValue, getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore'
 
 // Visit logging (POST /api/visit) and the visitor's own data deletion (POST /api/account/delete).
 // visits/{autoId}: { uid, isAnonymous, path, referrer, country, sessionId, createdAt }.
@@ -41,9 +41,12 @@ export function countryFromHeaders(get: (name: string) => string | undefined): s
   return null
 }
 
+/** One visit per user per hour at most, so browsing around the site costs no extra writes. */
+export const VISIT_INTERVAL_MS = 60 * 60_000
+
 /**
  * Writes one visit and updates the user's counters. Returns false (and writes nothing) when the
- * user has not accepted analytics.
+ * user has not accepted analytics, or when their last visit was logged under VISIT_INTERVAL_MS ago.
  */
 export async function recordVisit(
   uid: string,
@@ -56,6 +59,8 @@ export async function recordVisit(
   return db.runTransaction(async (tx) => {
     const user = await tx.get(userRef)
     if (user.get('consent') !== 'granted') return false
+    const last = user.get('lastSeenAt')
+    if (last instanceof Timestamp && Date.now() - last.toMillis() < VISIT_INTERVAL_MS) return false
     const now = FieldValue.serverTimestamp()
     tx.create(db.collection('visits').doc(), {
       uid,

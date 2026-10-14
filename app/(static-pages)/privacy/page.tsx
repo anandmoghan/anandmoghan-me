@@ -18,7 +18,7 @@ const ALWAYS = [
 ];
 
 const WITH_ANALYTICS = [
-  'The pages you visit, the page you came from and a per-tab session id.',
+  'A page you visit and the page you came from, at most once an hour, with a per-tab session id.',
   'Your country, worked out from your IP address. The IP address itself is not stored.',
   'When you first and last visited, and how many pages you have viewed.',
   'Google Analytics page views, which set Google Analytics cookies.',

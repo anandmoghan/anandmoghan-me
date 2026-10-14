@@ -209,7 +209,7 @@ export function VisitsPage() {
       </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Stat label="Page views" value={stats.views} />
+        <Stat label="Visits" value={stats.views} />
         <Stat label="Visitors" value={stats.visitors} />
         <Stat label="Sessions" value={stats.sessions} />
         <Stat label="Returning" value={stats.returning} />
