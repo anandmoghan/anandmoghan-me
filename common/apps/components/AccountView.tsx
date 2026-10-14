@@ -85,7 +85,7 @@ export function AccountView() {
           ) : (
             <>
               <p className="font-semibold">{user?.displayName || user?.email}</p>
-              {user?.email && <p className="text-sm text-muted">{user.email}</p>}
+              {user?.displayName && user.email && <p className="text-sm text-muted">{user.email}</p>}
               <p className="text-sm text-muted">Signed in with {providers.join(', ')}</p>
               <NicknameEditor label="Commenting as" />
               {user && !user.emailVerified && (

@@ -8,14 +8,15 @@ import { ToastProvider } from '@/common/apps/family/hooks/useToast'
 import AreaBar from '@/common/apps/family/components/AreaBar'
 import TabBar from '@/common/apps/family/components/TabBar'
 import { ListSkeleton } from '@/common/apps/family/components/Skeleton'
-import { NotAllowed, SignIn } from '@/common/apps/family/pages/Gate'
+import { RequireAuth } from '@/common/apps/components/RequireAuth'
+import { RestrictedNotice } from '@/common/apps/components/RequireApp'
 import { domainOf } from '@/common/apps/family/lib/domain'
 import { useLocation } from '@/common/apps/family/router'
 
 function Members({ children }: { children: ReactNode }) {
   const { access } = useData()
   if (access === 'loading') return <ListSkeleton rows={3} />
-  if (access === 'denied') return <NotAllowed />
+  if (access === 'denied') return <RestrictedNotice />
   return (
     <>
       <div className="with-tab-bar">
@@ -28,8 +29,8 @@ function Members({ children }: { children: ReactNode }) {
 }
 
 // The family app (ported from personal-manager/web) under the site header: the area on screen
-// sets the accent (.domain-<name>), anonymous visitors get the sign-in gate, signed-in
-// non-members get "not allowed", members (and admins with the family app) get the pages.
+// sets the accent (.domain-<name>), anonymous visitors go to /login like every app, signed-in
+// non-members get the shared Restricted notice, members (and admins with the family app) get the pages.
 // The pages keep their own 1rem gutters; .family-content tops them up to the site-container
 // gutters (family.css) so wide pages line up with the header.
 export function FamilyApp({ children }: { children: ReactNode }) {
@@ -45,12 +46,12 @@ export function FamilyApp({ children }: { children: ReactNode }) {
       <ToastProvider>
         {loading ? (
           <ListSkeleton rows={3} />
-        ) : !signedIn ? (
-          <SignIn />
         ) : (
-          <DataProvider>
-            <Members>{children}</Members>
-          </DataProvider>
+          <RequireAuth>
+            <DataProvider>
+              <Members>{children}</Members>
+            </DataProvider>
+          </RequireAuth>
         )}
       </ToastProvider>
     </DomainScope>
