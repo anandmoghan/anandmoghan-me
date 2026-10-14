@@ -1,91 +1,37 @@
 'use client'
 
 import type { ComponentType } from 'react'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
-import { useTheme } from '@/common/components/ThemeProvider'
-import { ConsentChoice } from '@/common/visitors/ConsentChoice'
-import { DeleteMyData } from '@/common/visitors/DeleteMyData'
 import { DataProvider } from '@/common/apps/family/hooks/useData'
+import Shortcuts from '@/common/apps/family/components/Shortcuts'
 import MacStatusCard from '@/common/apps/family/components/MacStatusCard'
 import { ExpenseSettingsPage } from '@/common/apps/expense/pages/SettingsPage'
 import { SettingsPage as TimeSettingsPage } from '@/common/apps/time/pages/SettingsPage'
 import { DashboardSettingsPage } from '@/common/apps/wealth/pages/DashboardSettingsPage'
 import { apps } from '../registry'
 import type { AppDefinition } from '../types'
-import { Card } from '../shell/Card'
 import { DomainScope, type Domain } from '../shell/DomainScope'
-import { AccountPanel } from './AccountView'
+import { GeneralSettings } from './GeneralSettings'
 
 const GENERAL_ID = 'general'
 const GENERAL_DOMAIN: Domain = 'home'
 
-const THEME_OPTIONS: Array<{ value: 'light' | 'dark' | 'system'; label: string }> = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
-]
-
 const sectionTitle = 'text-sm font-semibold text-muted uppercase tracking-wide mb-4'
-
-function GeneralPanel() {
-  const { theme, setTheme } = useTheme()
-
-  return (
-    <>
-      <AccountPanel />
-
-      <section className="mb-8">
-        <h2 className={sectionTitle}>Appearance</h2>
-        <Card>
-          <div role="group" aria-label="Theme" className="flex flex-wrap gap-2">
-            {THEME_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={theme === opt.value}
-                onClick={() => setTheme(opt.value)}
-                className="chip"
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </Card>
-      </section>
-
-      <section className="mb-8">
-        <h2 className={sectionTitle}>Privacy</h2>
-        <ConsentChoice />
-        <p className="mt-3 text-sm text-muted">
-          What the site records and why is on the{' '}
-          <Link href="/privacy#analytics" className="underline underline-offset-2">
-            privacy page
-          </Link>
-          .
-        </p>
-      </section>
-
-      <DeleteMyData />
-    </>
-  )
-}
 
 function FamilyPanel() {
   return (
-    <div className="space-y-4">
-      <h2 className={sectionTitle}>Mac bridge</h2>
-      <DataProvider>
-        <MacStatusCard testId="settings-mac-status" />
-      </DataProvider>
-      <p className="text-sm text-muted">
-        Shortcuts and uploads are under{' '}
-        <Link href="/apps/family/more" className="underline underline-offset-2">
-          Settings and more
-        </Link>{' '}
-        in the Family app.
-      </p>
+    <div className="space-y-8">
+      <section>
+        <h2 className={sectionTitle}>Shortcuts</h2>
+        <Shortcuts />
+      </section>
+      <section>
+        <h2 className={sectionTitle}>Mac bridge</h2>
+        <DataProvider>
+          <MacStatusCard testId="settings-mac-status" />
+        </DataProvider>
+      </section>
     </div>
   )
 }
@@ -114,7 +60,7 @@ const GENERAL_TAB: SettingsTab = {
   id: GENERAL_ID,
   label: 'General',
   domain: GENERAL_DOMAIN,
-  Panel: GeneralPanel,
+  Panel: GeneralSettings,
   embedded: false,
 }
 
