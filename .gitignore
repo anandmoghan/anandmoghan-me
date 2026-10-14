@@ -44,6 +44,8 @@ next-env.d.ts
 !/scripts/seed-emulator.ts
 !/scripts/sync-global.mjs
 !/scripts/sync-materials.mjs
+!/scripts/publish-materials.ts
+!/scripts/verify-emulator.mjs
 
 # Firebase CLI cache
 .firebase/
