@@ -9,8 +9,8 @@ import { RequireAuth } from './RequireAuth'
 // Firestore or Storage requests.
 export function RestrictedNotice() {
   return (
-    <div className="mx-auto w-full max-w-md px-4 py-16">
-      <Card className="space-y-2 text-center">
+    <div className="site-container py-16">
+      <Card className="mx-auto max-w-md space-y-2 text-center">
         <h1 className="text-lg font-extrabold">Restricted</h1>
         <p className="text-sm text-muted">This area is restricted to Anand and family.</p>
         <p className="text-sm text-muted">
