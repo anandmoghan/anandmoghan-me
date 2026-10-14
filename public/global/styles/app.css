@@ -389,6 +389,8 @@ input[type="date"].field {
 
 /* Bottom tabs: a full-width bar on phones (tabs share the width, no sideways scroll)
    and a floating pill on wide screens. The active link has aria-current="page".
+   A tab can be a button (button.tab-bar__link, e.g. a popup menu trigger) and opens
+   a .popover__panel--up above the bar.
    Give the page body .with-tab-bar so the last row clears the bar. */
 .tab-bar {
   position: fixed;
@@ -432,6 +434,13 @@ input[type="date"].field {
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.15s ease, transform 0.08s ease-out;
+}
+
+button.tab-bar__link {
+  width: 100%;
+  border: 0;
+  background: none;
+  cursor: pointer;
 }
 
 .tab-bar__link:hover {
@@ -770,7 +779,8 @@ button.switch:focus-visible {
 
 /* Compact controls for dense toolbars: .chip--sm is a 2rem pill, .chip--removable ends in a
    close button (a button.chip__remove inside the chip), .popover is a pill that opens a
-   panel (button.chip[aria-expanded] plus .popover__panel, closed by the script that owns it),
+   panel (button.chip[aria-expanded] plus .popover__panel, closed by the script that owns it;
+   .popover__panel--end right-aligns it, .popover__panel--up opens it above, e.g. from a tab bar),
    and .tabs-line is an underline tab row that scrolls sideways on phones. */
 .chip--sm {
   min-height: 2rem;
@@ -830,6 +840,11 @@ button.switch:focus-visible {
 .popover__panel--end {
   left: auto;
   right: 0;
+}
+
+.popover__panel--up {
+  top: auto;
+  bottom: calc(100% + 0.35rem);
 }
 
 .popover__item {

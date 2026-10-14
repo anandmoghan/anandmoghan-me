@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@/common/apps/family/router";
 import { BackIcon, ChevronRightIcon } from "@/common/apps/family/components/Icons";
+import { PinButton } from "@/common/apps/family/components/Pinned";
 
 export type Tone = "success" | "destructive" | "accent" | "gold" | "muted";
 
@@ -83,7 +84,7 @@ export function SectionTitle({ title, count }: { title: string; count?: string }
   );
 }
 
-/** Page heading with an optional one-line subtitle and an action on the right. */
+/** Page heading with an optional one-line subtitle, an action and the pin toggle on the right. */
 export function PageTitle({ title, sub, action }: { title: string; sub?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
@@ -91,7 +92,10 @@ export function PageTitle({ title, sub, action }: { title: string; sub?: ReactNo
         <h1 className="text-[1.65rem] font-extrabold leading-tight">{title}</h1>
         {sub && <div className="mt-1 text-[0.95rem] text-muted">{sub}</div>}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      <div className="flex shrink-0 items-center gap-1">
+        {action}
+        <PinButton title={title} />
+      </div>
     </div>
   );
 }

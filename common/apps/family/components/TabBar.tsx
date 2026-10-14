@@ -6,6 +6,7 @@ import { TabBar as ShellTabBar } from "@/common/apps/shell/TabBar";
 import {
   BagIcon, BellIcon, BookIcon, BowlIcon, BoxIcon, CameraIcon, ChartIcon, ChatIcon, CheckListIcon, ChildIcon, DocIcon, FlagIcon, FlaskIcon, HelpIcon, MoonIcon, StepsIcon, TargetIcon, TrendIcon, GridIcon, HeartPulseIcon, ImageIcon, LayersIcon, ListIcon, DotIcon, SparkleIcon,
 } from "@/common/apps/family/components/Icons";
+import { PinnedTab } from "@/common/apps/family/components/Pinned";
 import { useData } from "@/common/apps/family/hooks/useData";
 import { domainOf, type Domain } from "@/common/apps/family/lib/domain";
 import { FITNESS_TABS, PARENTING_TABS } from "@/common/apps/family/lib/tabs";
@@ -99,6 +100,7 @@ export default function TabBar() {
   return (
     <ShellTabBar
       label="Main"
+      extra={<PinnedTab />}
       tabs={tabs.map((t) => ({ href: familyHref(t.to), label: t.label, icon: t.icon, active: t.active, dot: t.dot, domain: t.colour }))}
     />
   );
