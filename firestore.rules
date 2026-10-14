@@ -233,9 +233,68 @@ service cloud.firestore {
     // Owned by the Ladder agent (phase 1): ladder/{tracker}/jobs, companies, requests.
     // No match blocks yet, so every ladder path is denied (Firestore denies by default).
 
-    // ── visitors (placeholder) ────────────────────────────────────────────────
-    // Owned by the Visitors agent (phase 1): visits/{id}, posts/{slug}/comments/{id}.
-    // No match blocks yet, so every visitors path is denied (Firestore denies by default).
+    // ── visitors ──────────────────────────────────────────────────────────────
+    // Visit log and blog comments. Owned by the Visitors agent.
+
+    // visits/{autoId}: { uid, isAnonymous, path, referrer, country, sessionId, createdAt }.
+    // Written only by the api function (POST /api/visit, admin SDK); admins read.
+
+    match /visits/{visitId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // posts/{slug}/comments/{id}: { uid, displayName, body, createdAt, updatedAt, status }.
+    // Any session, anonymous included, comments as itself; the author edits the body or deletes;
+    // admins hide, unhide and delete. Visible comments are public.
+
+    function commentSlug(slug) {
+      return slug.size() <= 200 && slug.matches('^[a-z0-9][a-z0-9-]*$');
+    }
+
+    function commentBody(d) {
+      return d.body is string && d.body.size() >= 1 && d.body.size() <= 2000;
+    }
+
+    match /posts/{slug}/comments/{commentId} {
+      allow read: if resource.data.status == 'visible'
+        || (isAuth() && resource.data.uid == request.auth.uid)
+        || isAdmin();
+
+      allow create: if isAuth()
+        && commentSlug(slug)
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'body', 'createdAt', 'updatedAt', 'status'])
+        && request.resource.data.keys().hasAll(['uid', 'displayName', 'body', 'createdAt', 'updatedAt', 'status'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 40
+        && commentBody(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.status == 'visible';
+
+      allow update: if (
+          isAuth()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'updatedAt'])
+          && commentBody(request.resource.data)
+          && request.resource.data.updatedAt == request.time
+        ) || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status in ['visible', 'hidden']
+        );
+
+      allow delete: if (isAuth() && resource.data.uid == request.auth.uid) || isAdmin();
+    }
+
+    // Comment moderation lists every post's comments with one collection-group query. This also
+    // matches shareDecks/{slug}/comments; admins may read those too.
+
+    match /{path=**}/comments/{commentId} {
+      allow read: if isAdmin();
+    }
 
     // BEGIN family (managed by personal-manager)
     // ── family app (personal-manager) ───────────────────────────────────────────

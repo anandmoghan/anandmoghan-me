@@ -26,4 +26,13 @@ export const apps: AppDefinition[] = [
     path: '/apps/expense',
     requiresAuth: true,
   },
+  {
+    id: 'admin',
+    name: 'Admin',
+    description: 'Users, roles, visits and comment moderation.',
+    domain: 'admin',
+    path: '/apps/admin',
+    requiresAuth: true,
+    adminOnly: true,
+  },
 ]

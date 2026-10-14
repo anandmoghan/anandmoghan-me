@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Navigation } from "@/common/components/Navigation";
 
 export default function StaticPagesLayout({
@@ -41,6 +42,11 @@ export default function StaticPagesLayout({
             <div className="text-center">
               <p className="text-sm">
                 © {new Date().getFullYear()} Anand Mohan. All rights reserved.
+              </p>
+              <p className="text-xs mt-2">
+                <Link href="/privacy" className="underline underline-offset-2">
+                  Privacy
+                </Link>
               </p>
               <p className="text-xs mt-2">
                 Made with{' '}

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
+import { DeleteMyData } from '@/common/visitors/DeleteMyData'
 import { GoogleLoginButton } from './GoogleLoginButton'
 import { Spinner } from './Spinner'
 
@@ -174,6 +175,10 @@ export function AccountView() {
           Sign out
         </button>
       )}
+
+      <div className="mt-10">
+        <DeleteMyData />
+      </div>
     </div>
   )
 }

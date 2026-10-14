@@ -5,6 +5,9 @@ import GoogleAnalytics from "./components/GoogleAnalytics";
 import RedirectTracker from "./components/RedirectTracker";
 import { ThemeProvider } from "@/common/components/ThemeProvider";
 import { AuthProvider } from "@/common/firebase/AuthProvider";
+import { ConsentBanner } from "@/common/visitors/ConsentBanner";
+import { ConsentProvider } from "@/common/visitors/ConsentProvider";
+import { VisitLogger } from "@/common/visitors/VisitLogger";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://anandmoghan.me';
 const gaId = process.env.NEXT_PUBLIC_GA_ID || 'G-4BFLN7Y3SY';
@@ -218,12 +221,19 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
-        {gaId && <GoogleAnalytics gaId={gaId} />}
-        <Suspense fallback={null}>
-          <RedirectTracker />
-        </Suspense>
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {/* Analytics (GA and visit logging) runs only after Accept in the consent banner. */}
+            <ConsentProvider>
+              {gaId && <GoogleAnalytics gaId={gaId} />}
+              <Suspense fallback={null}>
+                <RedirectTracker />
+              </Suspense>
+              <VisitLogger />
+              {children}
+              <ConsentBanner />
+            </ConsentProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -7,7 +7,8 @@ import { HubCard } from '../shell/Card'
 import { DOMAIN_ICON } from '../shell/icons'
 
 export function AppsHub() {
-  const { user, isAnonymous } = useAuth()
+  const { user, isAnonymous, isAdmin } = useAuth()
+  const listed = apps.filter((app) => !app.adminOnly || isAdmin)
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
@@ -15,7 +16,7 @@ export function AppsHub() {
       <p className="mt-1 text-[0.95rem] text-muted">Tools and dashboards by Anand.</p>
 
       <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-        {apps.map((app) => {
+        {listed.map((app) => {
           const needsLogin = app.requiresAuth && (!user || isAnonymous)
           const href = needsLogin
             ? `/apps/login?return=${encodeURIComponent(app.path)}`
@@ -36,7 +37,7 @@ export function AppsHub() {
         })}
       </ul>
 
-      {apps.length === 0 && (
+      {listed.length === 0 && (
         <p className="py-20 text-center text-sm text-muted">No apps available yet.</p>
       )}
     </div>

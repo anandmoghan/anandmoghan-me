@@ -6,12 +6,13 @@ import { onRequest, type Request } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import type { Response } from 'express'
 import { mergeAnonymousInto } from './account.js'
-import { ENCRYPTION_SECRET, REGION, SYNC_RATE_LIMIT_PER_MINUTE } from './config.js'
+import { ENCRYPTION_SECRET, REGION, SYNC_RATE_LIMIT_PER_MINUTE, VISIT_RATE_LIMIT_PER_MINUTE } from './config.js'
 import { decryptCredentials, encryptCredentials } from './crypto.js'
 import { checkRateLimit } from './rateLimit.js'
 import { fetchFrankfurterRates, writeRatesToFirestore } from './rates.js'
 import { applyRoleClaims, readRole, roleFromDoc } from './roles.js'
 import { fetchAndWriteSnapshot } from './trading212.js'
+import { countryFromHeaders, deleteVisitorData, parseVisit, recordVisit, type VisitInput } from './visits.js'
 
 initializeApp()
 
@@ -122,6 +123,42 @@ export const api = onRequest(
         json(res, 200, await mergeAnonymousInto(anon.uid, uid))
       } catch (err) {
         text(res, 500, `Merge failed: ${err}`)
+      }
+      return
+    }
+
+    // POST /api/visit { path, referrer, sessionId }: logs a page view for a visitor who accepted
+    // analytics (users/{uid}.consent == 'granted'); 204 either way, nothing is logged otherwise.
+    if (req.path === '/api/visit' && req.method === 'POST') {
+      let visit: VisitInput | null
+      try {
+        visit = parseVisit(parseJsonBody(req))
+      } catch {
+        visit = null
+      }
+      if (!visit) {
+        text(res, 400, 'path and sessionId are required')
+        return
+      }
+      try {
+        if (!(await checkRateLimit(`visit-${uid}`, VISIT_RATE_LIMIT_PER_MINUTE))) {
+          text(res, 429, 'Rate limit exceeded', { 'Retry-After': '60' })
+          return
+        }
+        await recordVisit(uid, isAnonymous, countryFromHeaders((name) => req.get(name)), visit)
+        res.status(204).set(CORS_HEADERS).send()
+      } catch (err) {
+        text(res, 500, `Failed to record visit: ${err}`)
+      }
+      return
+    }
+
+    // POST /api/account/delete: deletes the caller's visits, blog comments, users doc and account.
+    if (req.path === '/api/account/delete' && req.method === 'POST') {
+      try {
+        json(res, 200, await deleteVisitorData(uid))
+      } catch (err) {
+        text(res, 500, `Delete failed: ${err}`)
       }
       return
     }
