@@ -133,6 +133,18 @@
   border-radius: var(--radius-panel);
 }
 
+/* Compact field for toolbars; keeps 1rem text on phones so iOS does not zoom. */
+.field--sm {
+  min-height: 2rem;
+  padding: 0.2rem 0.65rem;
+}
+
+@media (min-width: 640px) {
+  .field--sm {
+    font-size: var(--text-sm);
+  }
+}
+
 .field::placeholder {
   color: color-mix(in srgb, var(--muted) 80%, transparent);
 }
@@ -711,4 +723,137 @@ button.switch[aria-checked="true"]::after {
 button.switch:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* == Filter toolbar == */
+
+/* Compact controls for dense toolbars: .chip--sm is a 2rem pill, .chip--removable ends in a
+   close button (a button.chip__remove inside the chip), .popover is a pill that opens a
+   panel (button.chip[aria-expanded] plus .popover__panel, closed by the script that owns it),
+   and .tabs-line is an underline tab row that scrolls sideways on phones. */
+.chip--sm {
+  min-height: 2rem;
+  padding: 0.15em 0.75em;
+  font-size: var(--text-xs);
+}
+
+.chip--removable {
+  padding-right: 0.35em;
+}
+
+.chip__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  font: inherit;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.chip__remove:hover {
+  background: var(--subtle);
+  opacity: 1;
+}
+
+.chip__remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.popover {
+  position: relative;
+  display: inline-block;
+}
+
+.popover__panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 30;
+  min-width: 12rem;
+  max-width: min(20rem, calc(100vw - 2rem));
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+
+.popover__panel--end {
+  left: auto;
+  right: 0;
+}
+
+.popover__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.popover__item:hover {
+  background: var(--subtle);
+}
+
+.popover__item[aria-checked="true"] {
+  color: var(--accent);
+}
+
+.popover__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.tabs-line {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs-line > button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: -1px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tabs-line > button:hover {
+  color: var(--fg);
+}
+
+.tabs-line > button[aria-pressed="true"] {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.tabs-line > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }

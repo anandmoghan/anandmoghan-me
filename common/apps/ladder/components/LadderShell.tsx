@@ -99,8 +99,15 @@ export function LadderShell({ children }: { children: ReactNode }) {
     )
   }
 
+  // The jobs split fits the viewport on desktop and scrolls its two panes; other pages scroll as a page.
+  const fitsViewport = pathname === '/apps/ladder' || pathname === '/apps/ladder/'
+
   return (
-    <div className="with-tab-bar relative flex-1">
+    <div
+      className={`with-tab-bar relative flex-1 ${
+        fitsViewport ? 'md:flex md:h-[calc(100dvh-var(--topbar-height))] md:flex-none md:flex-col' : ''
+      }`}
+    >
       {body}
       {trackers.length > 0 && <TabBar tabs={tabs} label="Ladder" />}
     </div>

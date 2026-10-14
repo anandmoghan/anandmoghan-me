@@ -37,7 +37,7 @@ export function JobList({ jobs, status, selected, hrefFor }: JobListProps) {
   const item = (job: JobDoc) => <JobListItem key={job.slug} job={job} href={hrefFor(job.slug)} active={job.slug === selected} />
 
   return (
-    <div className="card card--flush divide-y divide-border md:max-h-[calc(100vh-11rem)] md:overflow-y-auto">
+    <div className="card card--flush divide-y divide-border md:max-h-full md:overflow-y-auto">
       {status
         ? jobs.map(item)
         : STATUS_SECTIONS.map(({ status: s, label }) => {
