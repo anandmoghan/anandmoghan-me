@@ -1,0 +1,122 @@
+<section id="rl-beyond-tts">
+  <h2>RL beyond speech generation</h2>
+  <p>
+    The GRPO loop from the last section does not care what the model produces.
+    Sample several attempts, score them, and move toward the better ones.
+    Only the scorer changes: for recognition it is the transcript, for a voice agent it is whether the task got done.
+  </p>
+  <p>
+    Each task has a blind spot the reward has to cover.
+    A recogniser rewarded only on text learns to guess fluent words.
+    An agent rewarded only on the final outcome rarely sees a reward at all.
+  </p>
+
+  <h3 id="rl-beyond-tts-how">How it works</h3>
+  <p>
+    <strong>Recognition with an acoustic judge.</strong>
+    A text-only reward compares the output with the reference transcript and never checks the audio.
+    The model can then lean on its language habits and, on poor audio, insert fluent words nobody said (an insertion error).
+    One fix adds a second reward from a frozen frame-by-frame recogniser, trained separately and used only during training, that scores whether the audio supports what the model wrote.
+    On meeting speech, insertion errors fell 28.3% on close microphones and 22.3% on far-field ones, and far-field WER (defined in
+    <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">The speech encoder</a>)
+    fell from 35.89% to 34.71%.
+    At test time only the one trained model runs, with greedy decoding.
+    This is a mechanism shown on one speech model with one judge; do not generalise it.
+  </p>
+  <p>
+    <strong>Streaming recognition with a delay reward.</strong>
+    A streaming recogniser must be right and prompt, so one reward scores both: accuracy, plus how late each word is emitted relative to where the word ends in the audio.
+    The study behind it (results in
+    <a href="/apps/materials/speech-to-speech/02-listening#streaming-latency">Streaming and latency</a>)
+    measures per-word delay because the structural delay setting is a weak proxy for what a user feels; the delay knobs and how to measure them are in the same section.
+  </p>
+  <p>
+    <strong>Voice agents with per-tool rewards.</strong>
+    A voice agent listens, calls tools (see <a href="/apps/materials/speech-to-speech/07-conversation#tools-while-talking">Tools while talking</a>) and speaks.
+    In one audio-only environment, two speech models talk to each other, and the tasks, tools and success checks come unchanged from a text agent benchmark.
+    The characteristic failure is perceptual: the agent picks the right tool but mishears an argument, so the call fails.
+    An outcome-only reward gives little signal, because nearly every group fails the same way, every score is equal and the advantage is zero.
+    A per-turn reward that credits each successful tool call restores the signal, and the trained agent more than doubled task success on an independently built voice benchmark, according to its authors.
+  </p>
+  <p>
+    <strong>A full recipe.</strong>
+    A first-party realtime model report combines supervised tuning, a distillation stage and GRPO in executable environments, so the model learns to call tools, read the result and finish the task.
+    It reports task success on a half-duplex adaptation of a voice-agent benchmark rising from 78.4% to 82.0%.
+  </p>
+
+  <h3 id="rl-beyond-tts-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Frozen acoustic judge as a second reward</td>
+          <td>Penalises words the audio does not support</td>
+          <td>Cuts insertions; the judge is another model to train and trust</td>
+        </tr>
+        <tr>
+          <td>Accuracy-delay weighting on a per-word delay metric</td>
+          <td>Where the recogniser sits between exact and fast</td>
+          <td>Lower delay can cost accuracy, so report WER and delay together at each lookahead budget; per-word delay needs word timings from alignment</td>
+        </tr>
+        <tr>
+          <td>Per-tool-call (process) reward</td>
+          <td>Gives partial credit inside a task</td>
+          <td>Restores signal; it may reward easy calls over finishing the task <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Audio-native environment</td>
+          <td>Whether mishearing can show up as a failure</td>
+          <td>Realistic; slower than text-only simulation <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Executable environments with checks</td>
+          <td>Reward is a database or tool outcome, not an opinion</td>
+          <td>Hard to hack; each environment takes work to build <span class="tag tag--inference">Inference</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="rl-beyond-tts-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Fluent guesses.</strong>
+      A text-only recognition reward cannot tell a guess from a hearing; watch the insertion count, not only WER.
+    </li>
+    <li>
+      <strong>Silent groups.</strong>
+      When every rollout in a group scores the same, the advantage is zero and the update is empty; track the fraction of such groups.
+    </li>
+    <li>
+      <strong>Unsafe actions under pressure.</strong>
+      The agent environment reports agents making an unauthorised write and then wrongly believing it helped; include safety checks in the success definition.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The GRPO loop carries over to recognition and agents; only the reward changes.
+      For recognition I add a frozen acoustic judge so the model cannot invent words, and a delay term for streaming.
+      For voice agents I use a per-tool-call reward, because outcome-only reward gives almost no signal."
+    </p>
+  </div>
+
+  <h3 id="rl-beyond-tts-sources">Sources</h3>
+  <ul>
+    <li>Grounded in Sound: Reinforcement Learning with a Frozen Acoustic Judge to Curb ASR Insertion Hallucinations (arXiv 2609.14455)</li>
+    <li>Look Less, Hear Better: Jointly Rewarded GRPO for Streaming ASR (arXiv 2609.18333)</li>
+    <li>SpeechGym: An Audio-Native Gym for Training Voice Agents via Reinforcement Learning (arXiv 2608.26432)</li>
+    <li>Qwen-Audio-3.1-Realtime: Towards Reliable Agentic Voice Interaction (arXiv 2609.25176)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#bridge-asr-grpo">Bridge from GRPO on streaming ASR</a>
+    </li>
+  </ul>
+</section>

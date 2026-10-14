@@ -1,0 +1,170 @@
+<section id="judging-a-tokenizer">
+  <h2>Judging a tokenizer</h2>
+  <p>
+    "Which tokenizer is better?" has no single answer, because a tokenizer has three customers.
+    The decoder wants to rebuild the sound faithfully.
+    The language model wants tokens it can predict.
+    The final product wants whatever the tokens make possible, such as accurate speech recognition or natural-sounding TTS.
+  </p>
+  <p>
+    Think of shorthand notes from a lecture.
+    Good notes let you rewrite the lecture word for word, follow a clear pattern so the next line is easy to guess, and help you pass the exam.
+    Notes can win on one count and lose on another, so a fair comparison checks all three.
+  </p>
+
+  <h3 id="judging-a-tokenizer-how">How it works</h3>
+  <p>
+    Each question has its own family of measures, and this section is where the chapter defines them.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Typical measures</th>
+          <th>What it misses</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Does it rebuild the audio? (reconstruction)</td>
+          <td>PESQ and ViSQOL (automatic scores that compare decoded audio with the original), UTMOS (a network that predicts the mean opinion score, MOS: the 1 to 5
+            score a listener would give), MUSHRA (a 0 to 100 listening test where people rate clips),
+            <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">WER</a> of a recogniser run on the decoded audio</td>
+          <td>Whether an LM can predict the tokens or use them for anything.</td>
+        </tr>
+        <tr>
+          <td>Can an LM predict it? (predictability)</td>
+          <td>Perplexity of a small LM trained on the tokens; how stable the code index is for the same sound;
+            coherence tests such as SALMon</td>
+          <td>Whether the tokens are also high quality when decoded.</td>
+        </tr>
+        <tr>
+          <td>Is it useful? (downstream)</td>
+          <td>Probe tasks (a small classifier trained on frozen tokens), ABX (does the representation keep different phonemes apart; lower
+            error is better), full tasks such as recognition and TTS, as in benchmarks like DASB</td>
+          <td>Cost: each result needs training something on top.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    One benchmark packages these as four axes: reconstruction quality, codebook index stability, the perplexity of a decoder-only transformer trained on the
+      tokens, and probe tasks.
+    Its authors report that the measures correlate, so a cheap proxy can sometimes stand in for an expensive one.
+    A separate analysis compares the statistics of the tokens of 13 codecs across architectures, corpora and noise conditions, a reminder that
+      "predictable" depends on the data as well as the codec.
+  </p>
+
+  <h4 id="judging-a-tokenizer-bitrate">Nominal against entropy-coded bitrate</h4>
+  <p>
+    The bitrate so far is the nominal one (<a href="/apps/materials/speech-to-speech/03-tokenizers#why-tokenize-how">frame rate times codebooks times bits per code</a>).
+    It assumes every code is equally likely.
+    Real codes are not.
+    A skewed code is cheaper to send, because frequent values can be given short names, the way Morse code gives the common letter E a single dot.
+    The entropy-coded rate uses the real probabilities:
+  </p>
+  \[
+  \text{nominal} = f \, Q \log_2 K,
+  \qquad
+  \text{entropy-coded} = f \sum_{i=1}^{Q} H_i,
+  \qquad
+  H_i = -\sum_k p_i(k) \log_2 p_i(k)
+  \]
+  <p>
+    Here \( p_i(k) \) is how often entry \( k \) of codebook \( i \) occurs, and \( H_i \) is that codebook's entropy in bits.
+    Example: a 4-entry codebook (2 bits nominal) whose entries have probabilities 0.7, 0.1, 0.1, 0.1 has
+      \( H = 0.7 \times 0.51 + 3 \times 0.1 \times 3.32 \approx 1.36 \) bits.
+    The same quality costs about two thirds of the nominal rate.
+  </p>
+  <p>
+    A codec that entropy-codes its output and one that sends fixed-size codes are not on equal footing at the same nominal bitrate.
+    A recent speech codec pairs scalar quantization with a learned entropy model and skips residual symbols that are highly predictable.
+    Its authors report average bitrate savings at equal quality (the BD-rate) of 39.9% on ViSQOL and 76.3% on PESQ over two test sets.
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#codec-mechanics-wrong">Codebook collapse</a> is the same effect by accident: unused codes make the real rate lower than the nominal one.
+  </p>
+
+  <h3 id="judging-a-tokenizer-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Which measure to optimise</td>
+          <td>Reconstruction only, or also LM-facing losses (future-token prediction, audio-text alignment)</td>
+          <td>LM-facing losses report both better coherence and better reconstruction in one codec, but add training cost.</td>
+        </tr>
+        <tr>
+          <td>Listening tests against automatic scores</td>
+          <td>Mimi scores lower on automatic measures but higher on MUSHRA (figures in
+            <a href="/apps/materials/speech-to-speech/03-tokenizers#codec-mechanics">Codec mechanics</a>)</td>
+          <td>Listening tests are slow and costly; automatic scores can mislead.</td>
+        </tr>
+        <tr>
+          <td>Predictability probe</td>
+          <td>Train a small LM on the tokens and read off perplexity</td>
+          <td>Cheap and fast; reflects the training corpus as much as the codec.</td>
+        </tr>
+        <tr>
+          <td>Downstream probe</td>
+          <td>Use the tokens for recognition or TTS</td>
+          <td>Closest to the product; costly and task-specific.</td>
+        </tr>
+        <tr>
+          <td>Rate accounting</td>
+          <td>Compare at equal nominal rate, or at equal entropy-coded rate</td>
+          <td>Equal entropy-coded rate is fairer; entropy coding adds a model and some latency.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="judging-a-tokenizer-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>One metric decides everything.</strong>
+      Reconstruction-best tokens are not LM-best: acoustic detail adds uncertainty the LM must absorb.
+      Mimi's objective scores fall while its listening score rises.
+    </li>
+    <li>
+      <strong>Nominal rates compared across codecs.</strong>
+      A fixed-rate codec and an entropy-coded one need the same accounting before the numbers mean anything.
+    </li>
+    <li>
+      <strong>Results that do not travel.</strong>
+      Token statistics shift with corpus and noise, so a codec ranked on clean read speech may rank differently on phone calls.
+      <span class="tag tag--inference">Inference</span>
+      Test on audio like your product's.
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#codec-evaluation">Evaluating tokenizers</a>.
+    The training side of predictability:
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#semantic-acoustic-tokens">Semantic against acoustic tokens</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      I judge a tokenizer on three counts: reconstruction, how predictable the tokens are for the LM, and how well they work downstream.
+      I compare bitrates after entropy coding, not just nominal, and I trust a listening test over a single automatic score.
+    </p>
+  </div>
+
+  <h3 id="judging-a-tokenizer-sources">Sources</h3>
+  <ul>
+    <li>AudioCodecBench: A Comprehensive Benchmark for Audio Codec Evaluation (arXiv 2509.02349)</li>
+    <li>Language-Statistical Analysis of Neural Audio Codec Tokens Across Architectures, Corpora, and Noise Conditions (arXiv 2608.31037)</li>
+    <li>LLM-Codec: Neural Audio Codec Meets Language Model Objectives (arXiv 2604.17852)</li>
+    <li>Benchmarking Neural Speech Compression from a Rate-Distortion Perspective (arXiv 2606.11631)</li>
+    <li>DASB - Discrete Audio and Speech Benchmark (arXiv 2406.14294)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+  </ul>
+</section>

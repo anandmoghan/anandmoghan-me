@@ -1,0 +1,353 @@
+<section id="text-and-speech-together">
+  <h2>Producing text and speech at the same time</h2>
+  <p>
+    A person who speaks well usually knows the next few words before the current ones are finished.
+    A voice model can copy that habit.
+    It writes the words as text and voices them a moment later, so the text carries the reasoning and the audio carries the delivery.
+  </p>
+  <p>
+    The difficulty is rate.
+    Text is slow and audio is fast, so the two streams need a rule for how they line up.
+    Three rules cover most systems: parallel streams with a delay, interleaving in a fixed ratio, and a thinker model that hands off to a talker.
+    A fourth, a small fast talker beside a large slow thinker, gets its own section:
+    <a href="/apps/materials/speech-to-speech/07-conversation#thinking-while-talking">Thinking while talking</a>.
+  </p>
+
+  <h3 id="text-and-speech-together-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 340" role="img"
+      aria-label="Three ways text and speech are coupled: parallel streams with a
+        delay, one interleaved sequence with a fixed ratio, and a thinker model
+        handing hidden states to a talker model">
+      <defs>
+        <marker id="tsw-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="10" y="12" text-anchor="start"
+        dominant-baseline="middle">A. Parallel streams: speech trails text by a
+        delay</text>
+      <rect class="d-lane" x="100" y="24" width="610" height="40" rx="6"/>
+      <rect class="d-lane" x="100" y="72" width="610" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="44" text-anchor="start"
+        dominant-baseline="middle">text</text>
+      <text class="d-text--small" x="8" y="92" text-anchor="start"
+        dominant-baseline="middle">speech</text>
+      <rect class="d-box d-box--muted" x="106" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="128.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="156" y="28" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="178.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-box d-box--muted" x="206" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="228.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="256" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="278.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="306" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="328.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="356" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="378.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="406" y="28" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="428.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-box d-box--muted" x="456" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="478.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="506" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="528.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="556" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="578.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="606" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="628.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="656" y="28" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="678.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="106" y="76" width="44" height="32"
+        rx="8"/>
+      <rect class="d-box d-box--muted" x="156" y="76" width="44" height="32"
+        rx="8"/>
+      <rect class="d-box d-box--muted" x="206" y="76" width="44" height="32"
+        rx="8"/>
+      <rect class="d-box" x="256" y="76" width="144" height="32" rx="8"/>
+      <text class="d-text--small" x="328.0" y="92.0" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <rect class="d-box d-box--muted" x="406" y="76" width="44" height="32"
+        rx="8"/>
+      <rect class="d-box d-box--muted" x="456" y="76" width="44" height="32"
+        rx="8"/>
+      <rect class="d-box" x="506" y="76" width="144" height="32" rx="8"/>
+      <text class="d-text--small" x="578.0" y="92.0" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <rect class="d-box d-box--muted" x="656" y="76" width="44" height="32"
+        rx="8"/>
+      <path class="d-arrow" d="M 156 124 L 256 124" marker-end="url(#tsw-arrow)"
+        marker-start="url(#tsw-arrow)"/>
+      <text class="d-text--muted" x="206" y="138" text-anchor="middle"
+        dominant-baseline="middle">delay</text>
+      <text class="d-text--muted" x="10" y="166" text-anchor="start"
+        dominant-baseline="middle">B. Interleaved: one sequence, a fixed
+        ratio</text>
+      <rect class="d-lane" x="100" y="178" width="610" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="198" text-anchor="start"
+        dominant-baseline="middle">sequence</text>
+      <rect class="d-box" x="106" y="182" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="128.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">T</text>
+      <rect class="d-box" x="156" y="182" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="178.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">T</text>
+      <rect class="d-box d-box--muted" x="206" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="228.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <rect class="d-box d-box--muted" x="256" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="278.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <rect class="d-box d-box--muted" x="306" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="328.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <rect class="d-box d-box--muted" x="356" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="378.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <rect class="d-box" x="406" y="182" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="428.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">T</text>
+      <rect class="d-box" x="456" y="182" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="478.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">T</text>
+      <rect class="d-box d-box--muted" x="506" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="528.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <rect class="d-box d-box--muted" x="556" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="578.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <rect class="d-box d-box--muted" x="606" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="628.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <rect class="d-box d-box--muted" x="656" y="182" width="44" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="678.0" y="198.0" text-anchor="middle"
+        dominant-baseline="middle">S</text>
+      <text class="d-text--muted" x="405" y="234" text-anchor="middle"
+        dominant-baseline="middle">T = text token, S = speech token: N text, then
+        M speech, repeat</text>
+      <text class="d-text--muted" x="10" y="262" text-anchor="start"
+        dominant-baseline="middle">C. Thinker and talker: two models, one
+        hand-off</text>
+      <rect class="d-box" x="100" y="280" width="150" height="44" rx="8"/>
+      <text class="d-text" x="175.0" y="294.0" text-anchor="middle"
+        dominant-baseline="middle">Thinker</text>
+      <text class="d-text--small" x="175.0" y="311.0" text-anchor="middle"
+        dominant-baseline="middle">text LLM</text>
+      <rect class="d-box" x="310" y="280" width="150" height="44" rx="8"/>
+      <text class="d-text" x="385.0" y="294.0" text-anchor="middle"
+        dominant-baseline="middle">Talker</text>
+      <text class="d-text--small" x="385.0" y="311.0" text-anchor="middle"
+        dominant-baseline="middle">speech model</text>
+      <rect class="d-box" x="520" y="280" width="150" height="44" rx="8"/>
+      <text class="d-text" x="595.0" y="294.0" text-anchor="middle"
+        dominant-baseline="middle">Codec decoder</text>
+      <text class="d-text--small" x="595.0" y="311.0" text-anchor="middle"
+        dominant-baseline="middle">to waveform</text>
+      <path class="d-arrow" d="M 250 302 L 308 302" marker-end="url(#tsw-arrow)"/>
+      <path class="d-arrow" d="M 460 302 L 518 302" marker-end="url(#tsw-arrow)"/>
+      <text class="d-text--muted" x="279" y="292" text-anchor="middle"
+        dominant-baseline="middle">states</text>
+      <text class="d-text--muted" x="489" y="292" text-anchor="middle"
+        dominant-baseline="middle">tokens</text>
+    </svg>
+    <figcaption>Figure: three couplings. A: separate streams on one clock, with
+      speech trailing text by a chosen delay. B: one sequence that alternates N
+      text tokens and M speech tokens. C: a thinker model writes the reply and a
+      talker model voices it.</figcaption>
+  </figure>
+  <p>
+    <strong>Time-aligned text with padding (the inner-monologue style).</strong>
+    The text stream sits on the same frame grid as the audio.
+    A word is one text token but takes several 80 ms frames to say, so most text slots would otherwise be empty.
+    Frames with no new word therefore carry a padding token, and a special token marks the end of the padding before the next word.
+    This keeps the text lane exactly as long as the audio lane, with the same frame index.
+    An illustrative six-frame stretch of the text lane:
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Frame</th>
+          <th>1</th>
+          <th>2</th>
+          <th>3</th>
+          <th>4</th>
+          <th>5</th>
+          <th>6</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Text lane</td>
+          <td>PAD</td>
+          <td>PAD</td>
+          <td>EPAD</td>
+          <td>"Hello"</td>
+          <td>PAD</td>
+          <td>PAD</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The agent is silent in frames 1 and 2, EPAD signals that the next word is about to start, and "Hello" lands on frame 4, after which the model pads while the word is voiced.
+    Most text slots are padding (<a href="/apps/materials/speech-to-speech/07-conversation#conversation-clock">Conversation clock</a>), so roughly one frame in three carries a real token.
+    The agent's text is predicted first in each frame, then its audio.
+  </p>
+  <p>
+    <strong>Delay as a knob.</strong>
+    The offset between the streams is a setting, not an architecture.
+    Delayed streams modelling makes the point cleanly: it uses the same two-stream layout for both recognition and synthesis and only changes which stream is delayed.
+    For recognition the text trails the audio by a couple of seconds, because the model needs to hear ahead before it commits a word.
+    For synthesis the audio trails the text, because the model needs to read ahead before it commits the intonation.
+    A "text and voice at once" model sits between the two: text a little ahead, speech following.
+    The delay always runs from the stream that must wait for more context to the stream that supplies it.
+  </p>
+  <p>
+    <strong>Interleaving ratios.</strong>
+    Drop the shared grid and fix an order instead.
+    One example alternates 13 text tokens with 26 speech tokens, a 1:2 ratio.
+    A ratio is not a duration.
+    At 12.5 speech tokens per second, 26 tokens last 2.08 s, so the text runs at 6.25 tokens per second.
+    The speech token rate is what turns the ratio into time.
+  </p>
+  <p>
+    <strong>Thinker and talker.</strong>
+    Split the jobs.
+    The thinker is a text LLM that finishes a thought, and the talker is a speech model that reads the thinker's hidden states and produces audio tokens.
+    Because the two are separate models, the thinker can run ahead of the talker.
+    <span class="tag tag--inference">Inference</span>
+    The cost is a hand-off interface, and a lossy one if only text crosses it.
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#text-and-speech-together">Producing text and speech together</a>
+    and <a href="/apps/materials/speech-lit-review/05-streaming-conversation#delay-and-interleaving">Delay as a knob</a>.
+  </p>
+
+  <h3 id="text-and-speech-together-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Text-audio delay</td>
+          <td>How far the words run ahead of their voice</td>
+          <td>A longer lead gives planning room and costs latency; the base model randomised it in pretraining and set it to zero in fine-tuning</td>
+        </tr>
+        <tr>
+          <td>Padding scheme</td>
+          <td>How text slots map to frames</td>
+          <td>Padding keeps a free time axis; the stream is mostly empty and the model must learn when to place a word</td>
+        </tr>
+        <tr>
+          <td>Interleave ratio</td>
+          <td>Share of text against speech tokens</td>
+          <td>More text per speech token front-loads reasoning; fewer text tokens leave the voice less guidance</td>
+        </tr>
+        <tr>
+          <td>Chunk read and write sizes</td>
+          <td>How many text states are read before speech tokens are written</td>
+          <td>Larger chunks give smoother prosody; smaller chunks start sooner</td>
+        </tr>
+        <tr>
+          <td>Several audio tokens per pass</td>
+          <td>Speech tokens emitted per forward pass</td>
+          <td>A multi-token prediction head speeds decoding; it adds a module to train</td>
+        </tr>
+        <tr>
+          <td>Thinker and talker split</td>
+          <td>Who owns content and who owns delivery</td>
+          <td>Thinker can finish early and be swapped; the interface may lose paralinguistic detail</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Trade-offs here are engineering reasoning from the sources, not ablations.
+    The one hard constraint: whatever the coupling, the text must be ready before the audio it conditions.
+  </p>
+
+  <h3 id="text-and-speech-together-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Text and speech drift apart.</strong>
+      If the voice runs past its text, the model says something the transcript does not contain.
+      Teams check that the words recovered by an ASR from the audio match the text stream.
+    </li>
+    <li>
+      <strong>Ratio mistaken for duration.</strong>
+      "13:26" says nothing about seconds until the speech token rate is stated.
+    </li>
+    <li>
+      <strong>First-chunk latency read as steady state.</strong>
+      The first packet and the chunk that follows are different numbers.
+    </li>
+    <li>
+      <strong>Reasoning that waits for the turn to end.</strong>
+      A model that reasons in text before speaking adds that reasoning time to every reply.
+      The next section moves the reasoning into the listening window or alongside the speech.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I treat the text-audio offset as a setting. Text a little ahead of the voice gives the model room to think while it speaks.
+      Padding keeps a time axis, interleaving fixes an order, and thinker-talker separates content from delivery.
+      A ratio only becomes a duration through the speech token rate."
+    </p>
+  </div>
+
+  <h3 id="text-and-speech-together-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>KAME: Tandem Architecture for Enhancing Knowledge in Real-Time Speech-to-Speech Conversational AI (arXiv 2510.02327)</li>
+    <li>Streaming Sequence-to-Sequence Learning with Delayed Streams Modeling (arXiv 2509.08753)</li>
+    <li>High-Fidelity Simultaneous Speech-To-Speech Translation (arXiv 2502.03382)</li>
+    <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot (arXiv 2412.02612)</li>
+    <li>Step-Audio 2 Technical Report (arXiv 2507.16632)</li>
+    <li>Qwen2.5-Omni Technical Report (arXiv 2503.20215)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>LLaMA-Omni2: LLM-based Real-time Spoken Chatbot with Autoregressive Streaming Speech Synthesis (arXiv 2505.02625)</li>
+    <li>VITA-Audio: Fast Interleaved Cross-Modal Token Generation for Efficient Large Speech-Language Model (arXiv 2505.03739)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#text-audio-duplex-clocks">Text rate, audio rate and duplex clocks</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#delay-and-interleaving">Delay as a knob and interleaved decoders</a>
+    </li>
+  </ul>
+</section>

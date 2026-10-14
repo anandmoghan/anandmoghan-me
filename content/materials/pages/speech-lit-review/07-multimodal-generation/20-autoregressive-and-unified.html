@@ -1,0 +1,198 @@
+<section id="autoregressive-and-unified">
+  <h2>Autoregressive and unified models</h2>
+  <p>
+    The field has moved from a discrete-versus-continuous fight to hybrids.
+    Next-token AR dominates unified stacks, but the per-token head is increasingly diffusion or flow over continuous latents.
+    Video is moving to chunked, causal AR with diffusion for streaming.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 300" role="img"
+      aria-label="Autoregressive transformer with either a discrete-token softmax head or a continuous-token diffusion head, each feeding its output back as the next input">
+      <defs>
+        <marker id="arrow-ar-heads" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-group" x="5" y="5" width="710" height="135" rx="10"/>
+      <text class="d-text--small" x="20" y="27">Discrete-token head (VAR, Emu3 style)</text>
+      <rect class="d-group" x="5" y="155" width="710" height="135" rx="10"/>
+      <text class="d-text--small" x="20" y="177">Continuous-token head with a small diffusion head (MAR, Fluid style)</text>
+      <rect class="d-box" x="20" y="48" width="150" height="44" rx="8"/>
+      <text class="d-text" x="95" y="70" text-anchor="middle" dominant-baseline="middle">AR transformer</text>
+      <rect class="d-box" x="270" y="48" width="150" height="44" rx="8"/>
+      <text class="d-text" x="345" y="62" text-anchor="middle" dominant-baseline="middle">Token head</text>
+      <text class="d-text--muted" x="345" y="79" text-anchor="middle" dominant-baseline="middle">softmax over codes</text>
+      <rect class="d-box" x="520" y="48" width="160" height="44" rx="8"/>
+      <text class="d-text" x="600" y="70" text-anchor="middle" dominant-baseline="middle">Discrete token</text>
+      <path class="d-arrow" d="M 170 70 L 268 70" marker-end="url(#arrow-ar-heads)"/>
+      <text class="d-text--muted" x="219" y="62" text-anchor="middle">state</text>
+      <path class="d-arrow" d="M 420 70 L 518 70" marker-end="url(#arrow-ar-heads)"/>
+      <text class="d-text--muted" x="469" y="62" text-anchor="middle">sample</text>
+      <path class="d-arrow d-arrow--dashed" d="M 600 92 L 600 122 L 95 122 L 95 94" marker-end="url(#arrow-ar-heads)"/>
+      <text class="d-text--muted" x="350" y="116" text-anchor="middle">token embedding is the next input</text>
+      <rect class="d-box" x="20" y="198" width="150" height="44" rx="8"/>
+      <text class="d-text" x="95" y="220" text-anchor="middle" dominant-baseline="middle">AR transformer</text>
+      <rect class="d-box d-box--accent" x="270" y="198" width="150" height="44" rx="8"/>
+      <text class="d-text" x="345" y="212" text-anchor="middle" dominant-baseline="middle">Diffusion head</text>
+      <text class="d-text--muted" x="345" y="229" text-anchor="middle" dominant-baseline="middle">denoises one token</text>
+      <rect class="d-box" x="520" y="198" width="160" height="44" rx="8"/>
+      <text class="d-text" x="600" y="220" text-anchor="middle" dominant-baseline="middle">Continuous latent</text>
+      <path class="d-arrow" d="M 170 220 L 268 220" marker-end="url(#arrow-ar-heads)"/>
+      <text class="d-text--muted" x="219" y="212" text-anchor="middle">state</text>
+      <path class="d-arrow" d="M 420 220 L 518 220" marker-end="url(#arrow-ar-heads)"/>
+      <text class="d-text--muted" x="469" y="212" text-anchor="middle">denoise</text>
+      <path class="d-arrow d-arrow--dashed" d="M 600 242 L 600 272 L 95 272 L 95 244" marker-end="url(#arrow-ar-heads)"/>
+      <text class="d-text--muted" x="350" y="266" text-anchor="middle">latent is the next input</text>
+    </svg>
+    <figcaption>Figure: the two per-step heads on an AR transformer. The discrete head samples a code; the continuous head runs a small diffusion or flow process per token.</figcaption>
+  </figure>
+
+  <!-- == Discrete AR == -->
+  <h3 id="ar-discrete">Discrete-token AR</h3>
+  <ul>
+    <li>
+      <strong>VAR</strong> (arXiv 2404.02905): next-scale prediction.
+      The authors report ImageNet 256 FID improving from 18.65 to 1.73 against an AR baseline, with around 20x faster inference.
+    </li>
+    <li>
+      <strong>Infinity</strong> (arXiv 2412.04431): bitwise token prediction with an infinite-vocabulary tokenizer and bitwise self-correction.
+      The authors report GenEval 0.62 to 0.73 over SD3-Medium, and a 1024 px image in 0.8 s, 2.6x faster than SD3-Medium.
+    </li>
+    <li>
+      <strong>Emu3</strong> (arXiv 2409.18869): one transformer trained from scratch with next-token prediction over discrete image, text and video tokens.
+      The authors claim it surpasses SDXL and LLaVA-1.6.
+    </li>
+    <li>
+      <strong>Emu3.5</strong> (arXiv 2510.26583): world-model framing on interleaved vision-language data, over 10T tokens, RL post-training.
+      Discrete Diffusion Adaptation (DiDA) turns token-by-token decoding into bidirectional parallel prediction, accelerating per-image inference by about 20x (authors).
+    </li>
+  </ul>
+
+  <!-- == Continuous AR == -->
+  <h3 id="ar-continuous">Continuous-token AR with diffusion heads</h3>
+  <ul>
+    <li>
+      <strong>MAR</strong> (arXiv 2406.11838, NeurIPS 2024): no vector quantisation; each token's distribution is modelled with a diffusion procedure (Diffusion Loss), including masked autoregressive variants.
+    </li>
+    <li>
+      <strong>Fluid</strong> (arXiv 2410.13863): continuous tokens give clearly better visual quality than discrete; random order beats raster on GenEval.
+      At 10.5B: zero-shot FID 6.16 on MS-COCO 30K, GenEval 0.69.
+    </li>
+    <li>
+      <strong>NOVA</strong> (arXiv 2412.14169, ICLR 2025): non-quantised AR video, frame by frame in time and set by set within a frame; 0.6B parameters.
+    </li>
+  </ul>
+  <div class="callout callout--note">
+    <strong>Bridge to speech</strong>
+    <p>
+      MELLE, DiTAR and VibeVoice are the audio analogue of MAR and Fluid:
+      an AR model over continuous latents with a small diffusion or flow head per step.
+      <span class="tag tag--inference">Inference</span>
+      The same trade-offs likely apply (no quantisation loss, but per-step sampling cost and harder RL).
+      See <a href="/apps/materials/speech-lit-review/03-speech-generation">Speech generation</a>.
+    </p>
+  </div>
+
+  <!-- == Chunked AR video == -->
+  <h3 id="ar-chunked">Chunked AR video diffusion</h3>
+  <ul>
+    <li>
+      <strong>MAGI-1</strong> (Sand AI, arXiv 2505.13211): autoregressively predicts fixed-length video chunks, trained to denoise per-chunk noise that increases monotonically over time, which supports streaming generation.
+      The largest variant has 24B parameters and supports context lengths up to 4 million tokens (authors).
+    </li>
+    <li>
+      <strong>Self Forcing</strong> (arXiv 2506.08009, NeurIPS 2025): trains on its own rollouts with a rolling KV cache.
+      The authors report 17 FPS with sub-second latency on one H100.
+      <span class="tag tag--inference">Inference</span>
+      It is the most relevant entry for interactive avatars.
+    </li>
+    <li>
+      <strong>Joint audio-video students</strong> (Hallo-Live, arXiv 2604.23632; Omni-LiveAvatar, arXiv 2608.13602):
+      the same chunked causal recipe applied to a joint teacher (Ovi, LTX-2), so sound and picture stream together.
+      Figures and mechanisms are in <a href="/apps/materials/speech-lit-review/07-multimodal-generation#avd-streaming">streaming and real-time</a>.
+    </li>
+  </ul>
+
+  <!-- == Hybrid unified == -->
+  <h3 id="ar-hybrid">Hybrid unified models</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Text side</th>
+          <th>Image side</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Transfusion (arXiv 2408.11039)</td>
+          <td>LM loss</td>
+          <td>Diffusion loss on image patches</td>
+          <td>One transformer; scales significantly better than quantising images; scaled to 7B parameters and 2T multimodal tokens</td>
+        </tr>
+        <tr>
+          <td>Show-o2 (arXiv 2506.15564)</td>
+          <td>AR head</td>
+          <td>Flow-matching head on 3D causal VAE latents</td>
+          <td>Dual-path of semantic layers and spatial (-temporal) fusion</td>
+        </tr>
+        <tr>
+          <td>BAGEL (arXiv 2505.14683)</td>
+          <td>Unified decoder-only model</td>
+          <td>Native image and video generation</td>
+          <td>Pretrained on trillions of interleaved text, image, video and web tokens</td>
+        </tr>
+        <tr>
+          <td>UniAR (arXiv 2606.18249, ICML 2026)</td>
+          <td>AR model</td>
+          <td>One discrete visual tokenizer (lookup-free bitwise quantisation) for both tasks, plus a diffusion decoder on the discrete tokens</td>
+          <td>Authors claim state of the art on image generation and editing</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    One related observation from the Kelix report: most VLMs pair discrete text tokens with continuous ViT features, which biases them toward understanding (arXiv 2602.09843).
+  </p>
+
+  <!-- == Discrete diffusion == -->
+  <h3 id="ar-discrete-diffusion">Discrete diffusion language models</h3>
+  <ul>
+    <li>
+      <strong>LLaDA</strong> (arXiv 2502.09992): 8B masked-diffusion LM trained from scratch; the authors report it is competitive with LLaMA3 8B in in-context learning.
+    </li>
+    <li>
+      <strong>MMaDA</strong> (arXiv 2505.15809): a multimodal diffusion language model with UniGRPO, a unified policy-gradient RL algorithm for post-training across reasoning and generation.
+    </li>
+  </ul>
+
+  <!-- == Convergence == -->
+  <h3 id="ar-convergence">The convergence debate</h3>
+  <ul>
+    <li>
+      Continuous tokens with a diffusion or flow head give better per-token quality (Fluid, MAR).
+      Discrete tokens give a simpler LM interface and a single cross-entropy (Emu3, LLaDA)
+      <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      Random-order or bidirectional-within-block generation is winning for images.
+      Raster order is kept where causal streaming matters <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      Chunked, causal AR suits streaming video (MAGI-1, Self Forcing).
+      Full-clip diffusion remains the offline quality leader <span class="tag tag--inference">Inference</span>.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "For images the question is no longer discrete or continuous.
+      It is where the diffusion sits: as a per-token head, as a chunk-level denoiser, or as a separate decoder.
+      For a streaming avatar I would take chunked causal generation, and for speech the same logic gives an AR model with a flow head."
+    </p>
+  </div>
+</section>

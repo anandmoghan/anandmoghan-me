@@ -1,0 +1,162 @@
+<section id="measuring-speech-generation">
+  <h2>Measuring speech generation</h2>
+  <p>
+    You cannot unit-test a voice.
+    There is no exact answer to compare against, so every automatic score is a proxy: a second model listens to the output and reports one number.
+    A recogniser checks that the words are right, a speaker model checks that it sounds like the target, and a rating predictor guesses how natural it sounds.
+  </p>
+  <p>
+    Think of a restaurant critic who tastes the dish through three machines: one for ingredients, one for resemblance to a reference dish, one for overall appeal.
+    Each machine is cheap and repeatable, and each has a blind spot.
+    The skill is knowing which blind spot each one has, and keeping a human taster for the final call.
+  </p>
+
+  <h3 id="msg-how">How it works</h3>
+  <p>
+    Each metric pipes the generated audio through a fixed evaluator and scores the result.
+    The table lists the usual five, what each one listens for, and where it fails.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>How it is computed</th>
+          <th>What it misses</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Intelligibility (WER)</td>
+          <td>A fixed ASR model transcribes the output; word error rate (<a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">Listening</a>) against the input text</td>
+          <td>Prosody, voice and naturalness. A flat robotic read can score a perfect zero</td>
+        </tr>
+        <tr>
+          <td>Speaker similarity (SIM)</td>
+          <td>Cosine similarity between speaker-verification embeddings (vectors that summarise who is speaking) of the reference and the output</td>
+          <td>Style and emotion. The number depends on which embedding model you used</td>
+        </tr>
+        <tr>
+          <td>Predicted MOS</td>
+          <td>A network trained on human ratings predicts a mean opinion score (MOS, as in <a href="/apps/materials/speech-to-speech/03-tokenizers#judging-a-tokenizer">Judging a tokenizer</a>)</td>
+          <td>Fidelity to a reference. Scores saturate near or above real recordings</td>
+        </tr>
+        <tr>
+          <td>Emotion similarity</td>
+          <td>An emotion embedding model compares reference or target emotion with the output</td>
+          <td>Whether the emotion fits the words</td>
+        </tr>
+        <tr>
+          <td>Human listening tests</td>
+          <td>Panels rate naturalness (MOS), compare two systems side by side (CMOS) or rate resemblance to the reference (SMOS)</td>
+          <td>Nothing structural, but slow, costly and noisy</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The evaluator is part of the measurement, so each metric is only comparable when the evaluator is the same.
+    A public benchmark such as Seed-TTS-eval fixes one recogniser per language (Whisper-large-v3 for English, Paraformer-zh for Mandarin) and one speaker model (a WavLM-large fine-tuned for verification).
+    <span class="tag tag--inference">Inference</span>
+    A recogniser has its own language model, so it can guess a plausible word from a mumbled one and forgive errors a listener would hear.
+    It also errs more on some accents and languages, so a rise in WER can mean the ASR is weak on that slice, not that the TTS got worse.
+    Likewise, a SIM of 0.70 from one speaker model does not compare with 0.70 from another.
+    A non-standard model is fine for tracking your own progress, not for a claim against a published number.
+  </p>
+  <p>
+    Predicted MOS has a ceiling.
+    UTMOS, the common predictor, scores naturalness, not closeness to a reference.
+    A flow-matching TTS can score above ground truth on one test set and below it on another (figures in
+    <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#high-fidelity">High fidelity</a>), and a codec scores 4.13 against 4.09 ground truth.
+    When the system already matches real recordings, the predictor stops discriminating, and a human panel is the only way to see further gains.
+    Synthesia, for example, reports a blind test with 100 native English-speaking evaluators across 17 accents, though it publishes no scores or comparison systems.
+    CMOS and SMOS (the human comparison and resemblance ratings above) are the new pieces here; the codec-level metrics are in the tokenizer chapter.
+  </p>
+
+  <h3 id="msg-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Pin the evaluator versions (ASR, speaker model, MOS predictor)</td>
+          <td>Makes scores comparable across runs and with published tables</td>
+          <td>Locks you into that model's blind spots</td>
+        </tr>
+        <tr>
+          <td>Score with a second ASR and speaker model that training never saw</td>
+          <td>Exposes reward hacking and evaluator over-fit</td>
+          <td>Extra compute and a second set of versions to track</td>
+        </tr>
+        <tr>
+          <td>Report per slice (accent, language, entity type, utterance length)</td>
+          <td>Shows where an average hides a failing group</td>
+          <td>Needs labelled slices and larger test sets</td>
+        </tr>
+        <tr>
+          <td>Quote predicted MOS next to the ground-truth score</td>
+          <td>Tells you whether the number can still discriminate</td>
+          <td>Needs matched reference recordings</td>
+        </tr>
+        <tr>
+          <td>Resynthesis WER on every change, human panels as periodic gates</td>
+          <td>Cheap regression catch with an occasional ground-truth check</td>
+          <td>Panels are slow, so regressions can ship between gates</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Reporting several metrics together (WER, SIM, emotion, predicted MOS) closes the loopholes any one score leaves open, and the same bundle works as a training reward.
+    The caution is that anything you optimise stops being a trustworthy test, so keep a held-out judge for evaluation.
+    A learned judge is itself a model to validate: a benchmark that turns MOS datasets into pairwise tests found models weaker on synthetic speech than on human speech and on clips with near-equal ratings, so check a judge on close pairs before trusting it.
+    Model-by-model detail: <a href="/apps/materials/speech-lit-review/06-control-and-quality#post-training-eval">the literature review</a>.
+    The training side is in <a href="/apps/materials/speech-to-speech/08-training">Training</a>.
+  </p>
+
+  <h3 id="msg-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Scores rise, listeners disagree.</strong>
+      Optimising WER and SIM can produce monotone speech; one study found that RL on transcription rewards lowered error rates while prosody collapsed.
+    </li>
+    <li>
+      <strong>Single-predictor hacking.</strong>
+      Optimising one naturalness predictor can exploit its quirks, so use an ensemble or a calibrated composite, and hold out judges and listeners.
+    </li>
+    <li>
+      <strong>Incomparable or unreported evaluators.</strong>
+      Different ASR and speaker models make the same nominal metric incomparable across papers, and a score without the model name and version cannot be reproduced.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "WER, speaker similarity and predicted MOS are proxies, and each is only comparable with the same evaluator version.
+      I would pin them, report them per accent and language, use a second held-out evaluator for gating, and keep human listening panels as the release gate."
+    </p>
+  </div>
+
+  <h3 id="measuring-speech-generation-sources">Sources</h3>
+  <ul>
+    <li><a href="https://github.com/BytedanceSpeech/seed-tts-eval">Seed-TTS-eval</a> (WER and SIM evaluators)</li>
+    <li>UTMOS: UTokyo-SaruLab System for VoiceMOS Challenge 2022 (arXiv 2204.02152)</li>
+    <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching (arXiv 2410.06885)</li>
+    <li>Llasa: Scaling Train-Time and Inference-Time Compute for Llama-based Speech Synthesis (arXiv 2502.04128)</li>
+    <li>emotion2vec: Self-Supervised Pre-Training for Speech Emotion Representation (arXiv 2312.15185)</li>
+    <li>No Verifiable Reward for Prosody: Toward Preference-Guided Prosody Learning in TTS (arXiv 2509.18531)</li>
+    <li>From Scores to Preferences: Redefining MOS Benchmarking for Speech Quality Reward Modeling (arXiv 2510.00743)</li>
+    <li>The Limits of Reference-Free Speech Quality Metrics as Evaluators and Rewards on Modern Text-to-Speech (arXiv 2609.13150)</li>
+    <li>
+      <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Synthesia Express-2 post</a>
+      (evaluation setup)
+    </li>
+  </ul>
+</section>

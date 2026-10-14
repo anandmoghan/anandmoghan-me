@@ -1,0 +1,4 @@
+{
+  "title": "From tokens to waveform",
+  "summary": "Codec decoders, vocoders and phase: how predicted tokens or spectrograms become high-fidelity audio."
+}

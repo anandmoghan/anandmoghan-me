@@ -1,0 +1,17 @@
+{
+  "title": "Speech-to-speech: literature review",
+  "description": "Model-by-model literature review of speech-to-speech systems: speech input and ASR, codecs and generation, streaming and full-duplex models, control, multimodal generation, common problems and system design, with inline citations.",
+  "order": 2,
+  "chapters": [
+    "01-foundations",
+    "02-speech-understanding",
+    "03-speech-generation",
+    "04-speech-to-speech-systems",
+    "05-streaming-conversation",
+    "06-control-and-quality",
+    "07-multimodal-generation",
+    "08-common-problems",
+    "09-system-design",
+    "10-reference"
+  ]
+}

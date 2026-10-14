@@ -1,0 +1,245 @@
+<section id="four-routes">
+  <h2>Four routes from model output to audio</h2>
+  <p>
+    A speech language model does not write samples.
+    It writes something compact: codec tokens, semantic tokens, continuous latents or mel frames (see <a href="/apps/materials/speech-to-speech/01-sound-as-numbers#mel-spectrograms">Mel spectrograms</a>).
+    A second component then renders that into a waveform.
+  </p>
+  <p>
+    Think of an architect's drawing and the finished building.
+    The model produces the drawing; the decoder or vocoder is the construction crew that fills in every brick.
+    The four routes differ in what the drawing contains, and so in how much work the crew has to do.
+  </p>
+
+  <h3 id="routes-how">How it works</h3>
+  <p>
+    The diagram shows the four endings.
+    The numbered notes below it say what each one means in practice.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 392" role="img"
+      aria-label="Four routes from model output to waveform: codec tokens through a causal codec decoder; semantic tokens through flow matching, mel and a vocoder; continuous latents through a VAE decoder; mel frames through a vocoder. The codec route is highlighted as streaming-friendly">
+      <defs>
+        <marker id="routes-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Route 1: codec == -->
+      <rect class="d-group" x="4" y="12" width="712" height="88" rx="8"/>
+      <text class="d-text--muted" x="14" y="90" text-anchor="start"
+        dominant-baseline="middle">route 1: the streaming-friendly path</text>
+      <rect class="d-box" x="10" y="32" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="46" text-anchor="middle"
+        dominant-baseline="middle">Codec tokens</text>
+      <text class="d-text--small" x="70" y="63" text-anchor="middle"
+        dominant-baseline="middle">all codebooks</text>
+      <path class="d-arrow" d="M 130 54 L 296 54" marker-end="url(#routes-arrow)"/>
+      <text class="d-text--muted" x="213" y="42" text-anchor="middle"
+        dominant-baseline="middle">one frame at a time</text>
+      <rect class="d-box d-box--accent" x="298" y="32" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="46" text-anchor="middle"
+        dominant-baseline="middle">Codec decoder</text>
+      <text class="d-text--small" x="358" y="63" text-anchor="middle"
+        dominant-baseline="middle">causal</text>
+      <path class="d-arrow" d="M 418 54 L 584 54" marker-end="url(#routes-arrow)"/>
+      <text class="d-text--muted" x="501" y="42" text-anchor="middle"
+        dominant-baseline="middle">waveform samples</text>
+      <rect class="d-box" x="586" y="32" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="54" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+
+      <!-- == Route 2: semantic + flow + vocoder == -->
+      <rect class="d-box" x="10" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="146" text-anchor="middle"
+        dominant-baseline="middle">Semantic tokens</text>
+      <text class="d-text--small" x="70" y="163" text-anchor="middle"
+        dominant-baseline="middle">coarse, cheap</text>
+      <path class="d-arrow" d="M 130 154 L 152 154" marker-end="url(#routes-arrow)"/>
+      <rect class="d-box" x="154" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="214" y="146" text-anchor="middle"
+        dominant-baseline="middle">Flow matching</text>
+      <text class="d-text--small" x="214" y="163" text-anchor="middle"
+        dominant-baseline="middle">speaker prompt</text>
+      <path class="d-arrow" d="M 274 154 L 296 154" marker-end="url(#routes-arrow)"/>
+      <rect class="d-box" x="298" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="146" text-anchor="middle"
+        dominant-baseline="middle">Mel</text>
+      <text class="d-text--small" x="358" y="163" text-anchor="middle"
+        dominant-baseline="middle">50 Hz frames</text>
+      <path class="d-arrow" d="M 418 154 L 440 154" marker-end="url(#routes-arrow)"/>
+      <rect class="d-box" x="442" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="502" y="154" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+      <path class="d-arrow" d="M 562 154 L 584 154" marker-end="url(#routes-arrow)"/>
+      <rect class="d-box" x="586" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="154" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+
+      <!-- == Route 3: latents + VAE decoder == -->
+      <rect class="d-box" x="10" y="232" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="246" text-anchor="middle"
+        dominant-baseline="middle">Latents</text>
+      <text class="d-text--small" x="70" y="263" text-anchor="middle"
+        dominant-baseline="middle">continuous</text>
+      <path class="d-arrow" d="M 130 254 L 296 254" marker-end="url(#routes-arrow)"/>
+      <text class="d-text--muted" x="213" y="242" text-anchor="middle"
+        dominant-baseline="middle">diffusion head output</text>
+      <rect class="d-box" x="298" y="232" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="254" text-anchor="middle"
+        dominant-baseline="middle">VAE decoder</text>
+      <path class="d-arrow" d="M 418 254 L 584 254" marker-end="url(#routes-arrow)"/>
+      <text class="d-text--muted" x="501" y="242" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="586" y="232" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="254" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+
+      <!-- == Route 4: mel + vocoder == -->
+      <rect class="d-box" x="10" y="332" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="346" text-anchor="middle"
+        dominant-baseline="middle">Mel frames</text>
+      <text class="d-text--small" x="70" y="363" text-anchor="middle"
+        dominant-baseline="middle">continuous</text>
+      <path class="d-arrow" d="M 130 354 L 296 354" marker-end="url(#routes-arrow)"/>
+      <text class="d-text--muted" x="213" y="342" text-anchor="middle"
+        dominant-baseline="middle">regressed by the LM</text>
+      <rect class="d-box" x="298" y="332" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="354" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+      <path class="d-arrow" d="M 418 354 L 584 354" marker-end="url(#routes-arrow)"/>
+      <text class="d-text--muted" x="501" y="342" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="586" y="332" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="354" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+    </svg>
+    <figcaption>Four routes from the language model's output to a waveform. Route 1 is the one streaming duplex systems favour.</figcaption>
+  </figure>
+  <ol>
+    <li>
+      <strong>Codec tokens, codec decoder.</strong>
+      The LM predicts every codebook of each frame, and a decoder trained together with the codec turns frames into samples.
+      Only one stage follows the LM, and it can be causal (see <a href="/apps/materials/speech-to-speech/02-listening#streaming-encoders">Streaming encoders</a>).
+      Moshi's Mimi decoder works this way with an 80 ms frame.
+    </li>
+    <li>
+      <strong>Semantic tokens, flow matching, mel, vocoder.</strong>
+      The LM predicts cheap, coarse tokens that carry content but little voice detail.
+      A flow-matching model restores the voice from a speaker prompt and outputs a mel spectrogram, and a vocoder turns that into a waveform.
+      CosyVoice 2 does this with a 50 Hz mel.
+      The flow stage is covered in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow">Diffusion and flow</a>.
+    </li>
+    <li>
+      <strong>Continuous latents, VAE decoder.</strong>
+      A diffusion head predicts a continuous latent per frame (VibeVoice uses 7.5 frames per second), and the tokenizer's own decoder returns audio.
+      Some "diffusion TTS" systems, such as DiTTo-TTS, diffuse in a mel-VAE space and still finish with a vocoder, so they end like route 2.
+    </li>
+    <li>
+      <strong>Mel frames, vocoder.</strong>
+      The LM regresses continuous mel frames directly, and a vocoder renders them.
+      MELLE does this with HiFi-GAN.
+    </li>
+  </ol>
+
+  <h3 id="routes-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Route 1: codec tokens</td>
+          <td>One causal stage after the LM; audio can leave right after each frame</td>
+          <td>The LM must predict every codebook of every frame (depth transformer in Moshi, multi-token prediction in Qwen3-Omni) <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Route 2: semantic tokens plus flow</td>
+          <td>Cheap tokens for the LM; the flow stage restores voice detail from a speaker prompt <span class="tag tag--inference">Inference</span></td>
+          <td>Extra stages and look-ahead; Kimi-Audio's look-ahead delays only the first chunk</td>
+        </tr>
+        <tr>
+          <td>Route 3: continuous latents</td>
+          <td>Fewer decoding steps at a low frame rate; no quantisation loss</td>
+          <td>Needs a diffusion head; the decoder still has to stream</td>
+        </tr>
+        <tr>
+          <td>Route 4: mel regression</td>
+          <td>Simple target; reuse a standard vocoder</td>
+          <td>Continuous regression is harder to sample from than discrete tokens <span class="tag tag--inference">Inference</span>; phase is left to the vocoder</td>
+        </tr>
+        <tr>
+          <td>Predicting samples directly</td>
+          <td>Nothing to decode</td>
+          <td>
+            A token-by-token LM at 24 kHz would face 1,920 samples per 12.5 Hz frame, a sequence 1,920 times longer (the arithmetic is in <a href="/apps/materials/speech-to-speech/01-sound-as-numbers#waveform-sample-rate">Waveform and sample rate</a>).
+            Only flow-matching models such as BareWave work on the waveform itself, and they are the exception
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Recent work also shrinks the last stage instead of choosing a different route.
+    A one-step decoder applies MeanFlow to collapse route 2's flow, mel and vocoder chain into one stage, and BareWave needs no pretrained component at test time.
+    Both are new, so treat them as a direction rather than the default.
+    <span class="tag tag--inference">Inference</span>
+    The decoder-side details are in <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#decoders-vocoders">Codec decoders and vocoders</a>.
+  </p>
+  <p>
+    Model-by-model examples of each route are in
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#tokens-to-waveform">From tokens to waveform</a>
+    in the literature review.
+    The tokenizers behind route 1 are in <a href="/apps/materials/speech-to-speech/03-tokenizers">Tokenizers</a>.
+  </p>
+
+  <h3 id="routes-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Choosing by name instead of by ending.</strong>
+      "Diffusion TTS" can end in a mel and a vocoder or in a VAE decoder. Ask what the last box is.
+    </li>
+    <li>
+      <strong>Streaming surprises.</strong>
+      Routes 2 and 4 add a vocoder, and route 2 adds a flow stage with look-ahead, so first-audio latency adds up across stages.
+    </li>
+    <li>
+      <strong>Voice detail lost at the token stage.</strong>
+      Semantic tokens drop voice detail by design. If the flow stage or speaker prompt is weak, the voice drifts.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "There are four endings: codec tokens through a codec decoder, semantic tokens through flow to mel to a vocoder, continuous latents through a VAE decoder, or mel frames through a vocoder.
+      Streaming duplex systems like Moshi and Qwen3-Omni use the codec route, because it has one causal stage after the LM.
+      The flow route buys voice quality at the cost of more stages and look-ahead, and newer work is collapsing that last stage into one step."
+    </p>
+  </div>
+
+  <h3 id="four-routes-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li>VibeVoice Technical Report (arXiv 2508.19205)</li>
+    <li>DiTTo-TTS: Diffusion Transformers for Scalable Text-to-Speech without Domain-Specific Factors (arXiv 2406.11427)</li>
+    <li>Autoregressive Speech Synthesis without Vector Quantization (arXiv 2407.08551)</li>
+    <li>One-Step Token-to-Waveform Generation with MeanFlow in Latent Space (arXiv 2606.18072)</li>
+    <li>BareWave: Waveform-Native Flow-Matching Text-to-Speech (arXiv 2606.09048)</li>
+    <li>HiFi-GAN: Generative Adversarial Networks for Efficient and High Fidelity Speech Synthesis (arXiv 2010.05646)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#tokens-to-waveform">From tokens to waveform</a>
+      in the literature review.
+    </li>
+  </ul>
+</section>

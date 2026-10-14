@@ -1,0 +1,230 @@
+<section id="control-channels-concept">
+  <h2>Control channels</h2>
+  <p>
+    A speech model has to settle four things at once: what to say, who says it, how they say it, and how long it takes.
+    Each one enters the model through its own channel.
+    The words arrive as text, the speaker as a reference clip, the delivery as an instruction or tags, and the timing as a duration target.
+  </p>
+  <p>
+    Think of directing an actor.
+    You hand over the script, cast the person, whisper a note ("softer, a little sad"), mark a pause in the margin, and say the scene must fit thirty seconds.
+    A model takes the same kinds of direction, and reads each one in a different place.
+  </p>
+
+  <h3 id="control-channels-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 226" role="img"
+      aria-label="Control channels: the text to speak, a reference clip, an instruction or inline tags, and a duration or numeric target each feed a token language model, whose speech tokens go to a decoder that outputs audio">
+      <defs>
+        <marker id="control-channels-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="10" width="170" height="44" rx="8"/>
+      <text class="d-text" x="95" y="26" text-anchor="middle"
+        dominant-baseline="middle">Text to speak</text>
+      <text class="d-text--small" x="95" y="43" text-anchor="middle"
+        dominant-baseline="middle">what</text>
+      <rect class="d-box" x="10" y="64" width="170" height="44" rx="8"/>
+      <text class="d-text" x="95" y="80" text-anchor="middle"
+        dominant-baseline="middle">Reference clip</text>
+      <text class="d-text--small" x="95" y="97" text-anchor="middle"
+        dominant-baseline="middle">who</text>
+      <rect class="d-box" x="10" y="118" width="170" height="44" rx="8"/>
+      <text class="d-text" x="95" y="134" text-anchor="middle"
+        dominant-baseline="middle">Instruction or tags</text>
+      <text class="d-text--small" x="95" y="151" text-anchor="middle"
+        dominant-baseline="middle">how</text>
+      <rect class="d-box" x="10" y="172" width="170" height="44" rx="8"/>
+      <text class="d-text" x="95" y="188" text-anchor="middle"
+        dominant-baseline="middle">Duration or speed</text>
+      <text class="d-text--small" x="95" y="205" text-anchor="middle"
+        dominant-baseline="middle">how long</text>
+
+      <rect class="d-box d-box--accent" x="290" y="91" width="150" height="44" rx="8"/>
+      <text class="d-text" x="365" y="113" text-anchor="middle"
+        dominant-baseline="middle">Token LM</text>
+      <rect class="d-box" x="510" y="91" width="120" height="44" rx="8"/>
+      <text class="d-text" x="570" y="113" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+
+      <path class="d-arrow" d="M 180 32 L 288 104"
+        marker-end="url(#control-channels-arrow)"/>
+      <path class="d-arrow" d="M 180 86 L 288 108"
+        marker-end="url(#control-channels-arrow)"/>
+      <path class="d-arrow" d="M 180 140 L 288 118"
+        marker-end="url(#control-channels-arrow)"/>
+      <path class="d-arrow" d="M 180 194 L 288 124"
+        marker-end="url(#control-channels-arrow)"/>
+      <path class="d-arrow" d="M 440 113 L 508 113"
+        marker-end="url(#control-channels-arrow)"/>
+      <path class="d-arrow" d="M 630 113 L 700 113"
+        marker-end="url(#control-channels-arrow)"/>
+      <text class="d-text--muted" x="474" y="104" text-anchor="middle">codes</text>
+      <text class="d-text--muted" x="668" y="104" text-anchor="middle">audio</text>
+    </svg>
+    <figcaption>
+      Each control channel enters the token LM as a separate condition; the decoder turns the resulting tokens into audio.
+    </figcaption>
+  </figure>
+  <p>
+    The voice reference works by continuation.
+    The codes of a short clip sit in the context, and the model carries on in that voice, with no fixed speaker embedding.
+    A natural-language instruction ("whisper, slow, British accent") is text placed next to the content, often followed by an end-of-prompt token, or fed as a separate stream.
+    Inline tags, such as a bracketed laugh or a pause element, are part of the spoken text and control one event at one point.
+    Duration control gives the model an explicit token count for exact timing, or a free mode that keeps the prompt's natural prosody.
+    Numeric fields, such as a speed multiplier, sit outside the model's wording entirely.
+  </p>
+  <p>
+    The classifier-free guidance from
+    <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#car-noise-randomness">continuous autoregression</a>
+    (formula in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Levers</a>)
+    can also be applied to the style or text condition, which makes it a strength knob for style.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    A reference clip carries timbre and delivery together, so cloning a voice also clones its emotion.
+    Teams separate the two so that timbre can come from one clip and emotion from another, possibly a different speaker.
+    One method adds a speaker classifier that tries to guess the speaker from the style representation.
+    A gradient reversal layer flips its gradient, so the encoder learns to remove whatever the classifier uses and the style vector carries no timbre.
+    Another method skips representation tricks and trains on synthetic pairs: the same sentence in clearly different emotions, so the contrast is obvious and the model can learn an edit from it.
+  </p>
+  <p>
+    Two refinements work after the base model is trained.
+    A style planner is a text model that reads the dialogue so far and the reply, and writes the instruction for the synthesiser.
+    Candidate instructions are scored by how likely the target speech tokens are under a frozen synthesiser, and GRPO (the sample-and-compare update from <a href="/apps/materials/speech-to-speech/02-listening#streaming-latency">streaming ASR latency</a>) trains the planner on that score.
+    The authors found that matching a caption to the audio only weakly predicts what a given synthesiser will produce, which is why the planner is tuned against the synthesiser itself.
+    For non-verbal tags such as laughter or a breath, one post-training method uses a frozen recogniser that can transcribe such sounds as the reward.
+    It passes the reward gradient back through the flow sampler into the language model and acoustic head, and follows tags better than supervised fine-tuning, with penalties that keep speaker similarity and quality.
+  </p>
+  <p>
+    One trap: a speed setting that changes playback rate does not change how the model composes speech.
+    A convincingly faster delivery needs an instruction as well.
+  </p>
+
+  <h3 id="control-channels-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Reference quality and length</td>
+          <td>How faithfully the voice is captured</td>
+          <td>Clean, neutral clips transfer identity; clips with strong emotion or noise leak both</td>
+        </tr>
+        <tr>
+          <td>Prompt quality gate</td>
+          <td>Rejects or cleans bad references at upload</td>
+          <td>Fewer artefacts; some users must re-record</td>
+        </tr>
+        <tr>
+          <td>Instruction-following data</td>
+          <td>How well descriptions are obeyed</td>
+          <td>More data helps (one model grew its instruction data from 1,500 to 5,000 hours) but costs labelling</td>
+        </tr>
+        <tr>
+          <td>Instruction length</td>
+          <td>How much one description asks for</td>
+          <td>Short, focused descriptions are followed more reliably (one vendor advises under about 100 characters)</td>
+        </tr>
+        <tr>
+          <td>Style planner trained through the TTS</td>
+          <td>Which instruction is written for each reply</td>
+          <td>Instructions the synthesiser can obey; tied to one TTS model</td>
+        </tr>
+        <tr>
+          <td>Reward on tag-following</td>
+          <td>How reliably non-verbal tags are produced</td>
+          <td>Better tag accuracy; needs a recogniser that hears non-verbal sounds</td>
+        </tr>
+        <tr>
+          <td>Disentanglement losses</td>
+          <td>Separates timbre from emotion and style</td>
+          <td>Better style transfer across speakers; more training complexity</td>
+        </tr>
+        <tr>
+          <td>Guidance strength</td>
+          <td>How strongly the style condition is exaggerated</td>
+          <td>Higher is more expressive and less natural
+            <span class="tag tag--inference">Inference</span>
+          </td>
+        </tr>
+        <tr>
+          <td>Duration mode (explicit or free)</td>
+          <td>Exact timing against natural prosody</td>
+          <td>Exact timing can sound rushed or stretched; suits dubbing and lip-sync to a fixed video length</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="control-channels-wrong">What goes wrong</h3>
+  <p>
+    The biggest risk is leakage.
+    The mechanism that copies timbre also copies emotion, background noise and microphone channel, so a noisy prompt makes the output inherit the room.
+    Detect it with emotion-embedding similarity between prompt and output plus a noise-floor check.
+    Gate prompts at upload (reject clipped, noisy or reverberant audio, or clean it first) and prefer neutral, clean references when the script sets the style.
+  </p>
+  <p>
+    Tags and instructions fail in quieter ways.
+    A tag for a delivery the voice was never trained on lands unreliably, and a prompt can steer pacing and accent but cannot fully replace voice design.
+    Delivery guides left in the text may be read aloud, so put them in the style field and keep the text field to spoken content.
+    Pause tools give fixed durations, so a flat read often needs a script edit rather than a control change.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    Cloning someone without consent is the central misuse risk.
+    Gate cloning on a consent step, such as reading a randomly generated passcode or recording a consent statement.
+    Marking outputs and tracing clips is covered in <a href="/apps/materials/speech-to-speech/09-control-and-prompting#safety-and-provenance">Safety and provenance</a>.
+  </p>
+  <p>
+    Evaluate control with emotion similarity from one fixed emotion encoder and speaker similarity from one fixed speaker encoder.
+    Scores from different encoders do not compare.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I treat control as separate channels: a reference clip for identity, an instruction or tags for emotion, and a duration mode for sync.
+      I keep emotion disentangled from timbre so style transfers across speakers, and I gate references for noise and consent."
+    </p>
+  </div>
+
+  <h3 id="control-channels-concept-sources">Sources</h3>
+  <ul>
+    <li>
+      <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Synthesia Express-2 post</a>
+      (in-context cloning, evaluation encoders)
+    </li>
+    <li>
+      <a href="https://docs.synthesia.io/docs/script">Synthesia script docs</a>
+      (pause tool, pronunciation and style options)
+    </li>
+    <li>
+      <a href="https://help.synthesia.io/en/articles/8612891-how-do-i-clone-my-voice-in-synthesia">Synthesia help: clone my voice</a>
+      (passcode consent)
+    </li>
+    <li>CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training (arXiv 2505.17589)</li>
+    <li>IndexTTS2: A Breakthrough in Emotionally Expressive and Duration-Controlled Auto-Regressive Zero-Shot Text-to-Speech (arXiv 2506.21619)</li>
+    <li>Step-Audio-EditX Technical Report (arXiv 2511.03601)</li>
+    <li>Beyond Speech Captions: Speech-Rewarded Style Planning for Conversational Text-to-Speech (arXiv 2610.11461)</li>
+    <li>NVAlign: Direct-Gradient Optimization for Non-Verbal Control in Continuous Autoregressive Flow Matching Text-to-Speech (arXiv 2609.31892)</li>
+    <li>emotion2vec: Self-Supervised Pre-Training for Speech Emotion Representation (arXiv 2312.15185)</li>
+    <li><a href="https://github.com/huggingface/parler-tts">Parler-TTS README</a></li>
+    <li><a href="https://dev.hume.ai/docs/text-to-speech-tts/acting-instructions">Hume Octave acting instructions</a></li>
+    <li><a href="https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices">ElevenLabs text-to-speech best practices</a></li>
+    <li><a href="https://developers.openai.com/api/docs/guides/text-to-speech">OpenAI text-to-speech guide</a></li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/06-control-and-quality#steering-voice-tone">Steering voice, tone and emotion</a>,
+      <a href="/apps/materials/speech-lit-review/08-common-problems#speech-generation-problems">Speech generation problems</a>
+    </li>
+  </ul>
+</section>

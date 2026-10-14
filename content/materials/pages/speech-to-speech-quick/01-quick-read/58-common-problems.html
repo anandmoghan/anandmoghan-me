@@ -1,0 +1,86 @@
+<section id="q-common-problems">
+  <h2>Common problems: speech and audio-visual</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Problem</th>
+          <th>Fix</th>
+          <th>Metric</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1 Mispronounced names</td>
+          <td>Respelling, dictionary, glossary</td>
+          <td>Per-entity accuracy</td>
+        </tr>
+        <tr>
+          <td>2 Skipped or repeated words</td>
+          <td>CTC loss, attention priors</td>
+          <td>WER, alignment score</td>
+        </tr>
+        <tr>
+          <td>3 Lip-sync on p/b/m</td>
+          <td>AV sync expert</td>
+          <td>Human sync rating, not raw Sync-C</td>
+        </tr>
+        <tr>
+          <td>4 Identity and voice drift</td>
+          <td>Windowed re-anchoring</td>
+          <td>Similarity per window</td>
+        </tr>
+        <tr>
+          <td>5 Reference leakage</td>
+          <td>Quality gate, denoise</td>
+          <td>emotion2vec, noise floor</td>
+        </tr>
+        <tr>
+          <td>6 Voice-face mismatch</td>
+          <td>Emotion-conditioned motion</td>
+          <td>Cross-modal emotion agreement</td>
+        </tr>
+        <tr>
+          <td>7 Hand artefacts</td>
+          <td>Candidate reranking</td>
+          <td>Human plausibility</td>
+        </tr>
+        <tr>
+          <td>8 Dubbing duration</td>
+          <td>Duration-aware translation</td>
+          <td>Fraction outside budget</td>
+        </tr>
+        <tr>
+          <td>9 Streaming latency, A/V drift</td>
+          <td>Faster renderer, smoothing</td>
+          <td>Time-to-first-frame, offset</td>
+        </tr>
+        <tr>
+          <td>10 Duplex barge-in errors</td>
+          <td>Echo cancellation, action channel</td>
+          <td>Full-Duplex-Bench v1/v2</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Ranking, fixes and metrics are my judgement
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+  <ul>
+    <li>LLM-based TTS can repeat or drop words; certain cross-attention heads learn the alignment and nothing forces it to stay monotonic, and CTC loss plus attention priors encourage monotonic attention (arXiv 2406.17957) <span class="tag tag--reported">Reported</span>.</li>
+    <li>Sync-C and Sync-D are based on SyncNet (arXiv 2403.06421); THEval's authors report limited correlation with human evaluation and unreasonable values (arXiv 2511.04520) <span class="tag tag--reported">Reported</span>.</li>
+    <li>Synthesia's documented name fix is a per-word pronunciation entry, respelling or IPA (<a href="https://docs.synthesia.io/docs/script">script docs</a>) <span class="tag tag--confirmed">Confirmed</span>.</li>
+    <li>A 2026 survey calls a backchannel misread as a barge-in the most-cited duplex failure in user feedback (arXiv 2606.19453) <span class="tag tag--reported">Reported</span>.</li>
+    <li>The Express-2 post gives no quantitative results, failure cases or latency figures (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">post</a>) <span class="tag tag--confirmed">Confirmed</span>.</li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The Express-2 post publishes no failure metrics, so I would ask which ones you track.
+      I would start with per-entity pronunciation, alignment-based hallucination rate,
+      and phoneme-stratified lip-sync, because papers report that Sync-C correlates weakly with human judgement."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/08-common-problems#priorities-and-metrics">Full section</a></p>
+</section>

@@ -1,0 +1,392 @@
+<section id="realtime-avatar">
+  <h2>ML system design: a real-time avatar that talks back</h2>
+  <div class="callout callout--inference">
+    <strong>Inference</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      Everything in this section is design opinion, not sourced fact.
+      Component facts cite arXiv papers or Synthesia's own pages; latency figures marked as targets are mine.
+      The target voice model is in <em>a unified speech LLM with a downstream reasoning LLM</em>;
+      the cascade mechanics (turn detection, chunking, barge-in, latency budget) are in the
+      previous section, <em>Baseline: a streaming ASR → LLM → TTS voice agent</em>.
+      This section adds the renderer and how each voice path drives it.
+    </p>
+  </div>
+
+  <h3 id="avatar-requirements">Requirements</h3>
+  <p>
+    The user speaks, the avatar listens with visible motion, replies in a cloned voice with matched
+    lip-sync, and can be interrupted.
+    Synthesia's Video Agents "talk, listen, and act in real time"
+    (<a href="https://www.synthesia.io/post/synthesia-3-0-the-next-era-of-video">Synthesia 3.0 post</a>),
+    while the <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>
+    makes no real-time claim and gives no latency figures.
+    <span class="tag tag--confirmed">Confirmed</span>
+  </p>
+
+  <h3 id="avatar-levels">Talk, listen, see</h3>
+  <p>
+    Synthesia's post "Talk, listen, see: the three levels of interactive video agents" (2 July 2026) is the cleanest requirements frame
+    (<a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">post</a>).
+    <span class="tag tag--confirmed">Confirmed</span>
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Level</th>
+          <th>Capability and inputs</th>
+          <th>Evidence and systems</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1 Talk</td>
+          <td>Driven by its own audio only; no awareness of the person it talks to. The post says all current interactive-avatar systems on the market are at this level</td>
+          <td>The streaming students in <a href="/apps/materials/speech-lit-review/07-multimodal-generation#avd-streaming">audio-visual diffusion</a></td>
+        </tr>
+        <tr>
+          <td>2 Listen</td>
+          <td>Also driven by the user's audio: visual reactions (nods, shifting expression) and vocal ones (acknowledgements, prosodic cues). The post says this "requires us to treat audio and video as a single problem" and argues for predicting audio and video jointly</td>
+          <td>
+            Avatar Forcing (arXiv 2601.00664): user audio and motion in, about 500 ms.
+            FacePlex (arXiv 2606.30145): predicted speech continuation and a semantic reaction router, 122 ms end-to-end.
+            Joint audio-video models (Hallo-Live, Omni-LiveAvatar) are the nearest backbones
+          </td>
+        </tr>
+        <tr>
+          <td>3 See</td>
+          <td>Adds the user's camera feed: posture, gesture and facial signals. Falls back to Level 2 when the camera is off</td>
+          <td>
+            Evaluation: VideoFDB (arXiv 2605.30256), 237 clips, 11 nonverbal dynamics.
+            Model side: DuplexOmni (arXiv 2606.09186), listening, seeing, thinking and speaking in a full-duplex setup; Wan-Streamer (arXiv 2606.25041), one Transformer over text, speech and video
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The rest of this section is mostly Level 1 plumbing.
+    The jump to Level 2 changes the interface of the renderer more than its size: it must receive the user's audio stream, or an embedding of it, and must be trained on data where reactions depend on that stream.
+    Avatar Forcing's trick of building "losing" samples by removing the user condition is one label-free way to teach that dependence.
+  </p>
+
+  <h3 id="avatar-latency">Latency budget</h3>
+  <p>
+    The cascade budget is the stage table in the previous section, with a render stage added.
+    Indicative sources: the Moshi authors report 200 ms latency in practice (arXiv 2410.00037),
+    Tavus claims less than one second between utterances
+    (<a href="https://www.tavus.io/blog/introducing-the-worlds-fastest-conversational-video-interface-for-developers">Tavus blog</a>),
+    and Synthesia says real dialogue is "typically under one second"
+    (<a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">Synthesia post</a>).
+    <span class="tag tag--reported">Reported</span>
+    Two end-to-end reports itemise differently.
+    Wan-Streamer (arXiv 2606.25041) reports about 200 ms model-side response latency and about 550 ms total, which includes 350 ms of bidirectional network latency, so network is a budget line of its own.
+    Meta's research avatar reports about 870 ms from the end of the user's turn to the first byte of synchronised voice and video, at 448x768 and 25 fps
+    (<a href="https://research.meta.ai/blog/bringing-your-muse-to-life">Meta, 23 Sep 2026</a>).
+    <span class="tag tag--reported">Reported</span>
+    The two clocks are not the same; do not rank them.
+    The targets in the table are mine, not measurements, and have no source.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Speech LLM path <span class="tag tag--inference">Inference</span></th>
+          <th>Cascade fallback <span class="tag tag--inference">Inference</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Transport up and end-of-turn</td>
+          <td>Under 100 ms (an 80 ms frame plus network)</td>
+          <td>Under 150 ms</td>
+        </tr>
+        <tr>
+          <td>Reply start</td>
+          <td>200-300 ms to the filler or first audio; the LLM first token (200-300 ms) hides behind it</td>
+          <td>LLM first token 200-300 ms, then TTS first chunk 100-200 ms</td>
+        </tr>
+        <tr>
+          <td>Render first video block</td>
+          <td>150-250 ms</td>
+          <td>150-250 ms</td>
+        </tr>
+        <tr>
+          <td><strong>Total mouth-to-ear</strong></td>
+          <td>Under 1 s; about 430-650 ms by summing the column</td>
+          <td>Under 1 s, ideally 500-700 ms</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="avatar-architectures">Two ways to drive the renderer</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 320" role="img"
+      aria-label="Two ways to drive the avatar renderer. A, primary: mic and encoder, unified speech LLM with a downstream text LLM behind a tool call, codec decoder, audio-to-face renderer, client. B, dashed launch fallback: mic, VAD and turn detection, streaming ASR, LLM, streaming TTS, audio-to-face renderer, WebRTC, client, with a dashed barge-in cancel">
+      <defs>
+        <marker id="arrow-avatar-arch" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-group" x="0" y="5" width="720" height="110" rx="10"/>
+      <text class="d-text--small" x="14" y="24">A. Unified speech LLM + downstream LLM (primary)</text>
+      <rect class="d-group" x="0" y="125" width="720" height="190" rx="10"/>
+      <text class="d-text--small" x="14" y="144">B. Cascaded-streaming (dashed: launch fallback and baseline)</text>
+      <rect class="d-box" x="10" y="36" width="116" height="44" rx="8"/>
+      <text class="d-text" x="68" y="50" text-anchor="middle" dominant-baseline="middle">Mic</text>
+      <text class="d-text--muted" x="68" y="67" text-anchor="middle" dominant-baseline="middle">WebRTC, encoder</text>
+      <rect class="d-box d-box--accent" x="156" y="36" width="116" height="44" rx="8"/>
+      <text class="d-text" x="214" y="50" text-anchor="middle" dominant-baseline="middle">Speech LLM</text>
+      <text class="d-text--muted" x="214" y="67" text-anchor="middle" dominant-baseline="middle">listen + speak</text>
+      <rect class="d-box" x="302" y="36" width="116" height="44" rx="8"/>
+      <text class="d-text" x="360" y="50" text-anchor="middle" dominant-baseline="middle">Text LLM</text>
+      <text class="d-text--muted" x="360" y="67" text-anchor="middle" dominant-baseline="middle">via tool call</text>
+      <rect class="d-box" x="448" y="36" width="116" height="44" rx="8"/>
+      <text class="d-text" x="506" y="50" text-anchor="middle" dominant-baseline="middle">Decoder</text>
+      <text class="d-text--muted" x="506" y="67" text-anchor="middle" dominant-baseline="middle">codec, causal</text>
+      <rect class="d-box" x="594" y="36" width="116" height="44" rx="8"/>
+      <text class="d-text" x="652" y="50" text-anchor="middle" dominant-baseline="middle">Audio-to-face</text>
+      <text class="d-text--muted" x="652" y="67" text-anchor="middle" dominant-baseline="middle">causal, few-step</text>
+      <path class="d-arrow" d="M 126 58 L 154 58" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow" d="M 272 52 L 300 52" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow" d="M 300 66 L 274 66" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow" d="M 418 58 L 446 58" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow" d="M 564 58 L 592 58" marker-end="url(#arrow-avatar-arch)"/>
+      <text class="d-text--muted" x="360" y="104" text-anchor="middle">the speech LLM handles overlap, backchannel and yield; the renderer reads audio and state</text>
+      <rect class="d-box d-box--muted" x="10" y="156" width="116" height="44" rx="8"/>
+      <text class="d-text" x="68" y="170" text-anchor="middle" dominant-baseline="middle">Mic</text>
+      <text class="d-text--muted" x="68" y="187" text-anchor="middle" dominant-baseline="middle">WebRTC</text>
+      <rect class="d-box d-box--muted" x="156" y="156" width="116" height="44" rx="8"/>
+      <text class="d-text" x="214" y="178" text-anchor="middle" dominant-baseline="middle">VAD / turn</text>
+      <rect class="d-box d-box--muted" x="302" y="156" width="116" height="44" rx="8"/>
+      <text class="d-text" x="360" y="178" text-anchor="middle" dominant-baseline="middle">Streaming ASR</text>
+      <rect class="d-box d-box--muted" x="448" y="156" width="116" height="44" rx="8"/>
+      <text class="d-text" x="506" y="178" text-anchor="middle" dominant-baseline="middle">LLM</text>
+      <rect class="d-box d-box--muted" x="594" y="156" width="116" height="44" rx="8"/>
+      <text class="d-text" x="652" y="178" text-anchor="middle" dominant-baseline="middle">Streaming TTS</text>
+      <path class="d-arrow d-arrow--dashed" d="M 126 178 L 154 178" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 272 178 L 300 178" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 418 178 L 446 178" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 564 178 L 592 178" marker-end="url(#arrow-avatar-arch)"/>
+      <rect class="d-box d-box--muted" x="594" y="246" width="116" height="44" rx="8"/>
+      <text class="d-text" x="652" y="260" text-anchor="middle" dominant-baseline="middle">Audio-to-face</text>
+      <text class="d-text--muted" x="652" y="277" text-anchor="middle" dominant-baseline="middle">same renderer</text>
+      <rect class="d-box d-box--muted" x="448" y="246" width="116" height="44" rx="8"/>
+      <text class="d-text" x="506" y="268" text-anchor="middle" dominant-baseline="middle">WebRTC</text>
+      <rect class="d-box d-box--muted" x="302" y="246" width="116" height="44" rx="8"/>
+      <text class="d-text" x="360" y="268" text-anchor="middle" dominant-baseline="middle">Client</text>
+      <path class="d-arrow d-arrow--dashed" d="M 652 200 L 652 244" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 594 268 L 566 268" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 448 268 L 420 268" marker-end="url(#arrow-avatar-arch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 214 200 L 214 226 L 612 226 L 612 244" marker-end="url(#arrow-avatar-arch)"/>
+      <text class="d-text--muted" x="410" y="219" text-anchor="middle">barge-in cancels LLM, TTS and render queues</text>
+    </svg>
+    <figcaption>Two ways to drive the same renderer. A is the target; B is the launch fallback and baseline.
+      <span class="tag tag--inference">Inference</span></figcaption>
+  </figure>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The comparison below is my judgement.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Axis</th>
+          <th>A. Unified speech LLM + text LLM (primary)</th>
+          <th>B. Cascaded-streaming (fallback)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Backchannel and overlap</td>
+          <td>Handled by the speech LLM's action channel</td>
+          <td>Weak without extra turn logic</td>
+        </tr>
+        <tr>
+          <td>Swap the reasoning LLM</td>
+          <td>Easy: the text LLM is behind a tool call</td>
+          <td>Easy</td>
+        </tr>
+        <tr>
+          <td>Voice control</td>
+          <td>Depends on the speak head and voice prompt</td>
+          <td>Full TTS stack (Express-Voice style)</td>
+        </tr>
+        <tr>
+          <td>Data need</td>
+          <td>Medium to high; action-channel data is the bottleneck</td>
+          <td>Low</td>
+        </tr>
+        <tr>
+          <td>Risk</td>
+          <td>Tags the LLM cannot use; one extra LLM hop</td>
+          <td>Latency adds across stages</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Meta's research avatar is a variant of A with a different interface: its voice model produces a stream of speech tokens (carrying content and delivery) that feeds both the audio decoder and the avatar model,
+    which is an audio-driven diffusion transformer conditioned on that token stream, reference media and a rolling window of recent video latents, generating video in short causal chunks
+    (<a href="https://research.meta.ai/blog/bringing-your-muse-to-life">Meta, 23 Sep 2026</a>).
+    <span class="tag tag--reported">Reported</span>
+    <span class="tag tag--inference">Inference</span>
+    In the design here, the equivalent is to let the speak head's codec tokens and state (speaking, yielding, listening) drive the renderer in addition to the decoded waveform, so intent that never reaches the waveform can still reach the face.
+    Google's Gemini 3.8 Live models take the other end-to-end route: an optional Live Avatar variant outputs audio, video and text with a 24K token output limit, and the model card says it supports "a few minutes of continuous interaction"
+    (<a href="https://deepmind.google/models/model-cards/gemini-3-8-audio/">model card</a>, 15 Sep 2026).
+    The card gives no latency and no avatar-specific evaluation.
+    <span class="tag tag--confirmed">Confirmed</span>
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Make A the interactive path: the speech LLM drives the streaming renderer, with fillers covering the LLM wait.
+    Keep B as the launch fallback and the baseline on the same benchmark; route a session to B if A is down or misses its gates.
+    Native full-duplex is the research track beyond A.
+  </p>
+
+  <h3 id="avatar-training-b">Data and training stages for A</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The full recipe is in the unified speech LLM section; the staging below follows OmniFlatten
+    (modality alignment, half-duplex dialogue learning, full-duplex dialogue learning, arXiv 2410.17799):
+  </p>
+  <ol>
+    <li>
+      Pretrain on large unlabelled audio plus transcripts
+      (scale references: Kimi-Audio over 13M h, arXiv 2504.18425; MinMo 1.4M h, arXiv 2501.06282).
+    </li>
+    <li>
+      Modality alignment, then half-duplex dialogue, then full-duplex alignment on dual-channel data
+      (Fisher, about 2,000 h, arXiv 2410.00037, plus synthetic TTS dialogue).
+    </li>
+    <li>
+      Post-train with WER, speaker-similarity and emotion rewards, plus preference data for expressiveness.
+      Gate on Full-Duplex-Bench v1 and v1.5 plus human tests.
+    </li>
+  </ol>
+
+  <h3 id="avatar-renderer">Renderer and A/V sync</h3>
+  <p>
+    A sketch; the figures below are the papers' own reports on their own hardware and protocols.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 276" role="img"
+      aria-label="Renderer and A/V sync: agent audio chunks go to the client audio buffer and to a causal audio-to-face renderer; the audio buffer is the clock, and video frames are dropped before audio stalls">
+      <defs>
+        <marker id="arrow-avatar-sync" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="100" width="116" height="44" rx="8"/>
+      <text class="d-text" x="68" y="114" text-anchor="middle" dominant-baseline="middle">Speak head</text>
+      <text class="d-text--muted" x="68" y="131" text-anchor="middle" dominant-baseline="middle">or fallback TTS</text>
+      <rect class="d-box d-box--accent" x="200" y="170" width="150" height="44" rx="8"/>
+      <text class="d-text" x="275" y="184" text-anchor="middle" dominant-baseline="middle">Audio-to-face</text>
+      <text class="d-text--muted" x="275" y="201" text-anchor="middle" dominant-baseline="middle">causal, few-step</text>
+      <rect class="d-box d-box--muted" x="200" y="238" width="150" height="34" rx="8"/>
+      <text class="d-text" x="275" y="255" text-anchor="middle" dominant-baseline="middle">Idle motion</text>
+      <path class="d-arrow d-arrow--dashed" d="M 275 238 L 275 216" marker-end="url(#arrow-avatar-sync)"/>
+      <text class="d-text--muted" x="285" y="230">while user speaks</text>
+      <rect class="d-box" x="410" y="170" width="130" height="44" rx="8"/>
+      <text class="d-text" x="475" y="184" text-anchor="middle" dominant-baseline="middle">Video blocks</text>
+      <text class="d-text--muted" x="475" y="201" text-anchor="middle" dominant-baseline="middle">timestamped</text>
+      <rect class="d-group" x="580" y="16" width="140" height="214" rx="10"/>
+      <text class="d-text--muted" x="650" y="246" text-anchor="middle">Client playout</text>
+      <rect class="d-box" x="590" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="54" text-anchor="middle" dominant-baseline="middle">Audio buffer</text>
+      <text class="d-text--muted" x="650" y="71" text-anchor="middle" dominant-baseline="middle">jitter buffer</text>
+      <rect class="d-box" x="590" y="170" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="192" text-anchor="middle" dominant-baseline="middle">Video buffer</text>
+      <path class="d-arrow" d="M 68 100 L 68 62 L 588 62" marker-end="url(#arrow-avatar-sync)"/>
+      <text class="d-text--muted" x="330" y="54" text-anchor="middle">audio chunks, timestamped</text>
+      <path class="d-arrow" d="M 68 144 L 68 192 L 198 192" marker-end="url(#arrow-avatar-sync)"/>
+      <text class="d-text--muted" x="133" y="184" text-anchor="middle">audio</text>
+      <path class="d-arrow" d="M 350 192 L 408 192" marker-end="url(#arrow-avatar-sync)"/>
+      <path class="d-arrow" d="M 540 192 L 588 192" marker-end="url(#arrow-avatar-sync)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 650 86 L 650 168" marker-end="url(#arrow-avatar-sync)"/>
+      <text class="d-text--muted" x="570" y="124" text-anchor="end">audio is the clock:</text>
+      <text class="d-text--muted" x="570" y="140" text-anchor="end">drop video frames before stalling audio</text>
+    </svg>
+    <figcaption>Figure: voice plus renderer. Audio and video chunks carry timestamps; the client plays audio on its own clock and sheds video frames first. In the fallback cascade, TTS duration mode matches video block length.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      Streaming avatar generators distil a bidirectional teacher into a causal few-step student.
+      CausVid: 1.3 s initial latency, about 9.4 FPS (arXiv 2412.07772).
+      Self Forcing: 17 FPS, sub-second latency, one H100 (arXiv 2506.08009).
+      AvatarForcing: 34 ms per frame, 1.3B student (arXiv 2603.14331).
+      SoulX-FlashTalk reports that converting the student to a strictly unidirectional architecture disrupts
+      spatiotemporal correlations and yields rigid full-body dynamics (arXiv 2512.23379).
+    </li>
+    <li>
+      Joint audio-video students are the 2026 alternative to a separate voice stage:
+      Hallo-Live reports 20.38 FPS at 0.94 s latency on two H200 GPUs and 99.3x lower latency than its teacher Ovi (arXiv 2604.23632);
+      Omni-LiveAvatar reports about 33x speed-up over its teacher LTX-2 on one H200 (arXiv 2608.13602);
+      Wan-Streamer uses one Transformer for text, speech and video with 160 ms units at 25 fps (arXiv 2606.25041).
+      <span class="tag tag--reported">Reported</span>
+      <span class="tag tag--inference">Inference</span>
+      They give sync by construction but weaker control of a cloned voice, so I keep them as a research track.
+    </li>
+    <li>
+      Express-Render outputs 1080p at 30 fps and is distilled to two diffusion steps
+      <span class="tag tag--confirmed">Confirmed</span>
+      (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>).
+      A streaming student is the natural extension
+      <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      Audio is the clock.
+      Timestamp audio and video chunks, use a client jitter buffer,
+      and drop video frames before stalling audio.
+      In the speech LLM path, audio frames are already on the 80 ms clock, so video blocks align to whole frames;
+      in the fallback cascade, use TTS duration mode to match video block length.
+    </li>
+    <li>Play idle listening motion while the user speaks.</li>
+  </ul>
+
+  <h3 id="avatar-barge-in-serving">Barge-in and serving</h3>
+  <p>
+    Serving cost is set by model evaluations per chunk and sessions per GPU.
+    Meta's teacher needs 120 evaluations per chunk (40 diffusion steps, three-way classifier-free guidance, three passes per step); the unguided two-step student needs 2, a 60x reduction.
+    On one GB200, one step produces 8 frames (320 ms of playback) in 20 ms, about 2.5 ms of model time per frame.
+    Four-bit quantisation-aware training raised capacity 8x over the two-step BF16 baseline, to 12 concurrent real-time sessions per GB200
+    (<a href="https://research.meta.ai/blog/bringing-your-muse-to-life">Meta</a>).
+    <span class="tag tag--reported">Reported</span>
+    Live raters on two-to-three-minute calls preferred the avatar over Runway Characters 78 to 22 and over HeyGen LiveAvatar 88 to 12; these are Meta's own results, and the post says mannerism against Runway was not distinguishable from parity.
+    Generated video carries Meta's Video Seal invisible watermark.
+    Synthesia's Interactive Avatar API (15 July 2026) layers the avatar on a LiveKit agent with bring-your-own LLM, speech-to-text and optional text-to-speech, and gives no latency figure; a managed stack was announced for 1 October 2026
+    (<a href="https://www.synthesia.io/post/interactive-avatar-api-real-time-avatars">post</a>).
+    <span class="tag tag--confirmed">Confirmed</span>
+  </p>
+  <p>
+    In A, the speech LLM decides to yield, stops its audio, and the same decision flushes the render queue and
+    sends the played and heard text to the text LLM.
+    In B, barge-in follows the steps in the previous section, with the render queue added to the cancel list.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    For serving, use WebRTC transport (LiveKit or Pipecat) with a control data channel.
+    Run a speech LLM pool sized for its per-frame deadline, a text LLM pool with prefix caching, and a render pool.
+    Keep cascade pools only as failover capacity.
+    Batch render across sessions only if the per-session budget allows.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would drive the avatar from a unified speech LLM that owns listening, turn-taking and speaking,
+      with a swappable text LLM behind a tool call and a causal few-step renderer on the same clock.
+      The cascade is the launch fallback and the baseline, and native duplex is the research track,
+      because the data and the evals for duplex are the long pole."
+    </p>
+  </div>
+</section>

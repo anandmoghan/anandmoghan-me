@@ -1,0 +1,285 @@
+<section id="turn-taking">
+  <h2>Turn-taking, backchannels and barge-in</h2>
+  <p>
+    People do not wait for silence before they answer.
+    They predict where the other turn will end, and they start a fraction early.
+    They also murmur "mm-hm" while listening, and they stop talking when someone cuts in.
+    A voice agent that only reacts to silence will always sound a beat late.
+  </p>
+  <p>
+    Three behaviours need to be told apart.
+    A floor transfer hands the floor over smoothly.
+    A backchannel signals attention and leaves the floor with the speaker.
+    A barge-in takes the floor, and the agent must yield.
+    Getting them right takes four pieces that build on each other: predicting when the user's turn ends, telling a backchannel from a barge-in, cleaning the microphone signal so those decisions can be trusted, and stopping gracefully when the user does take the floor.
+  </p>
+
+  <h3 id="turn-taking-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 350" role="img"
+      aria-label="Three timelines with user and agent lanes: a floor transfer
+        where the agent starts slightly before the user finishes, a backchannel
+        inside a user turn, and a barge-in where the agent stops after a stop
+        latency">
+      <defs>
+        <marker id="turn-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="10" y="10" text-anchor="start"
+        dominant-baseline="middle">1. Floor transfer: the agent starts a little
+        early</text>
+      <text class="d-text--small" x="8" y="37" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <text class="d-text--small" x="8" y="69" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-lane" x="100" y="24" width="610" height="26" rx="6"/>
+      <rect class="d-lane" x="100" y="56" width="610" height="26" rx="6"/>
+      <rect class="d-box d-box--muted" x="106" y="26" width="294" height="22"
+        rx="6"/>
+      <text class="d-text--small" x="253.0" y="37.0" text-anchor="middle"
+        dominant-baseline="middle">user speaks</text>
+      <rect class="d-box" x="370" y="58" width="280" height="22" rx="6"/>
+      <text class="d-text--small" x="510.0" y="69.0" text-anchor="middle"
+        dominant-baseline="middle">agent replies</text>
+      <path class="d-arrow" d="M 372 96 L 398 96" marker-end="url(#turn-arrow)"
+        marker-start="url(#turn-arrow)"/>
+      <text class="d-text--muted" x="412" y="96" text-anchor="start"
+        dominant-baseline="middle">starts before the user ends</text>
+      <text class="d-text--muted" x="10" y="126" text-anchor="start"
+        dominant-baseline="middle">2. Backchannel: the user keeps the
+        floor</text>
+      <text class="d-text--small" x="8" y="153" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <text class="d-text--small" x="8" y="185" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-lane" x="100" y="140" width="610" height="26" rx="6"/>
+      <rect class="d-lane" x="100" y="172" width="610" height="26" rx="6"/>
+      <rect class="d-box d-box--muted" x="106" y="142" width="480" height="22"
+        rx="6"/>
+      <text class="d-text--small" x="346.0" y="153.0" text-anchor="middle"
+        dominant-baseline="middle">user speaks</text>
+      <rect class="d-box" x="300" y="174" width="60" height="22" rx="6"/>
+      <text class="d-text--small" x="330.0" y="185.0" text-anchor="middle"
+        dominant-baseline="middle">mm-hm</text>
+      <text class="d-text--muted" x="380" y="211" text-anchor="start"
+        dominant-baseline="middle">short, and the user carries on</text>
+      <text class="d-text--muted" x="10" y="242" text-anchor="start"
+        dominant-baseline="middle">3. Barge-in: the agent yields</text>
+      <text class="d-text--small" x="8" y="269" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <text class="d-text--small" x="8" y="301" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-lane" x="100" y="256" width="610" height="26" rx="6"/>
+      <rect class="d-lane" x="100" y="288" width="610" height="26" rx="6"/>
+      <rect class="d-box" x="106" y="290" width="294" height="22" rx="6"/>
+      <text class="d-text--small" x="253.0" y="301.0" text-anchor="middle"
+        dominant-baseline="middle">agent speaks</text>
+      <rect class="d-box d-box--muted" x="330" y="258" width="330" height="22"
+        rx="6"/>
+      <text class="d-text--small" x="495.0" y="269.0" text-anchor="middle"
+        dominant-baseline="middle">user interrupts</text>
+      <path class="d-arrow" d="M 332 328 L 398 328" marker-end="url(#turn-arrow)"
+        marker-start="url(#turn-arrow)"/>
+      <text class="d-text--muted" x="412" y="328" text-anchor="start"
+        dominant-baseline="middle">stop latency</text>
+    </svg>
+    <figcaption>Figure: three timing cases, not to scale. 1: people start
+      speaking slightly before the other turn ends. 2: a backchannel leaves the
+      floor with the user. 3: stop latency runs from the user's onset to the last
+      audible agent sample.</figcaption>
+  </figure>
+  <p>
+    <strong>Predicting the end of a turn.</strong>
+    Define the floor-transfer offset as the agent's onset minus the user's end:
+  </p>
+  \[
+  \Delta = t_{\text{agent onset}} - t_{\text{user end}}
+  \]
+  <p>
+    On smooth transfers people have a median \( \Delta \) of about \( -151 \) ms, so they begin before the other turn ends.
+    A system that waits for silence can only produce \( \Delta > 0 \), so a negative offset needs prediction.
+    <span class="tag tag--inference">Inference</span>
+    <a href="/apps/materials/speech-to-speech/02-listening#streaming-latency">Streaming latency</a>
+    showed the simplest answer, an end-of-turn head inside the recogniser; this section covers the stand-alone detectors.
+  </p>
+  <p>
+    The self-supervised version is voice-activity projection.
+    Voice activity means who is speaking and who is silent at each moment, read per speaker.
+    The model predicts both speakers' future voice activity from the audio so far, and the labels come free from the recording itself, so nobody annotates turns.
+    It learns where turns tend to end and where a pause is only a breath.
+    Some predictors read the words so far and others the audio.
+    In a duplex model the prediction is folded into generation.
+    A cascade uses a separate detector.
+  </p>
+  <p>
+    <strong>Semantic detectors.</strong>
+    Silence length alone cannot tell a hesitation ("I want to book a... hmm") from a finished request, so the newer detectors decide from the partial speech itself, usually without waiting for a transcript.
+    One reads the compact tokens of a neural audio codec and uses a label-delay training scheme that the authors report reduces cut-off errors.
+    Another predicts the time until the user's next speech onset, which can be computed from timestamps and so needs no extra annotation.
+    A confidence gate on a "continue" or "stop" decision makes the agent commit only when it is sure.
+    Each is tested on its own benchmark, so there is no single ranking; newer benchmarks frame turn-taking as a structured decision with controlled context.
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#semantic-eot">Semantic end-of-turn detectors</a>.
+  </p>
+  <p>
+    <strong>Backchannel against barge-in.</strong>
+    Once the agent is talking, any user sound is one of these two.
+    The difference is intent: one wants the agent to continue, the other wants the floor.
+    Short, quiet and context-fitting sounds ("right", "uh-huh") look like backchannels.
+    <span class="tag tag--inference">Inference</span>
+    A model that cannot tell them apart stops at every "mm-hm".
+  </p>
+  <p>
+    <strong>Keeping the signal clean.</strong>
+    That decision is only as good as the microphone signal.
+    The microphone hears the agent's own voice from the speaker, so without a fix the agent can mistake itself for the user and interrupt itself.
+    The usual fix is acoustic echo cancellation (AEC), which takes the playback signal as a reference and subtracts it from the microphone input; a neural AEC can be small enough to run on a phone.
+    Other voices are a second problem, since a TV or a bystander can trigger a false barge-in.
+    One approach folds voice-activity detection, turn-taking, speaker recognition and recognition into a single front-end model, anchored to the user by a short reference clip of their voice (target-speaker conditioning).
+    A third job is a running transcript of the user, which duplex models do not normally produce; a lightweight transcription head beside the agent's text output adds one with few extra parameters.
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#audio-front-end">Target speaker and the audio front-end</a>.
+  </p>
+  <p>
+    <strong>Stopping, and fixing memory.</strong>
+    Stop latency is the time from the user's onset to the last audible agent sample:
+  </p>
+  \[
+  L_{\text{stop}} = t_{\text{last audible agent sample}} - t_{\text{user onset}}
+  \]
+  <p>
+    On a barge-in the agent must also repair its own memory.
+    Speech is generated faster than it plays: the model produces audio in bursts ahead of the speaker, and the unplayed part waits in a playback buffer.
+    When the user cuts in, the model has "said" far more than the user heard.
+    The client reports the playback position back, and the context keeps only the words actually played.
+    Otherwise the agent believes it said a sentence the user never heard.
+    See <a href="/apps/materials/speech-to-speech/11-system-design">System design</a> for the full barge-in sequence.
+  </p>
+
+  <h3 id="turn-taking-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>End-of-turn threshold</td>
+          <td>How confident the detector must be before the agent starts</td>
+          <td>Low threshold gives quick replies and cuts users off; high threshold is safe and adds dead air</td>
+        </tr>
+        <tr>
+          <td>Semantic detector</td>
+          <td>Whether the end-of-turn decision reads meaning, not only silence</td>
+          <td>Fewer cut-offs on mid-thought pauses; extra compute per window and a confidence threshold to tune</td>
+        </tr>
+        <tr>
+          <td>Barge-in threshold, and a stricter one while the agent speaks</td>
+          <td>How much user speech is needed to yield</td>
+          <td>Low yields fast and stops at coughs or echo; high ignores real interruptions</td>
+        </tr>
+        <tr>
+          <td>Resume window</td>
+          <td>Whether the agent resumes if no transcript follows an interruption</td>
+          <td>Recovers from false yields; repeats or stalls if set badly</td>
+        </tr>
+        <tr>
+          <td>Action channel</td>
+          <td>One token per step: listen, respond, interrupt, backchannel</td>
+          <td>Makes the decision learnable and measurable; needs labelled interaction data</td>
+        </tr>
+        <tr>
+          <td>Target-speaker prompt</td>
+          <td>A short reference clip of the user to lock onto their voice</td>
+          <td>Ignores background talkers; needs a clean clip at the start and fails if the user changes</td>
+        </tr>
+        <tr>
+          <td>Echo reference path</td>
+          <td>Playback signal as an extra input</td>
+          <td>Removes self-triggering; adds a synchronisation requirement</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The two thresholds are the same curve seen from two sides: a learned detector moves the curve and does not remove it.
+    Report false-cutoff rate at a fixed latency budget, or latency at a fixed false-cutoff rate, rather than one threshold.
+  </p>
+
+  <h3 id="turn-taking-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Backchannel read as barge-in.</strong>
+      The agent stops mid-sentence at "mm-hm".
+      A recent survey calls it the most-cited failure in user feedback.
+      Track the false-yield rate per minute.
+    </li>
+    <li>
+      <strong>Premature takeover.</strong>
+      The agent answers during a mid-thought pause.
+      Track the false-cutoff rate at a latency budget.
+    </li>
+    <li>
+      <strong>Passing for the wrong reason.</strong>
+      A barge-in test run on audio with echo can pass because the agent heard itself.
+      Measure stop latency on echo-cancelled output.
+    </li>
+    <li>
+      <strong>One metric optimised.</strong>
+      An agent that stops at every cough has excellent stop latency and a terrible false-yield rate.
+      Always report both.
+    </li>
+    <li>
+      <strong>Memory of unplayed speech.</strong>
+      Skipping truncation leaves words in context that were never heard.
+    </li>
+    <li>
+      <strong>Models that rarely backchannel.</strong>
+      User studies find audio foundation models miss when to speak, interrupt too aggressively and rarely backchannel.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Humans start a median of about 150 ms before the other turn ends, so the target offset is negative and needs prediction.
+      The key failure is a backchannel treated as a barge-in.
+      I would report stop latency on echo-cancelled output together with false-yield rate at one operating point."
+    </p>
+  </div>
+
+  <h3 id="turn-taking-sources">Sources</h3>
+  <ul>
+    <li>TurnGPT: a Transformer-based Language Model for Predicting Turn-taking in Spoken Dialog (arXiv 2010.10874)</li>
+    <li>Voice Activity Projection: Self-supervised Learning of Turn-taking Events (arXiv 2205.09812)</li>
+    <li>Multilingual Turn-taking Prediction Using Voice Activity Projection (arXiv 2403.06487)</li>
+    <li>FD-VAD: Semantic Endpoint Detection for Streaming Full-Duplex Speech (arXiv 2609.35791)</li>
+    <li>Next-Turn: Duration-Aware Streaming Endpoint Detection via Time-to-Next-Speech-Onset Prediction (arXiv 2606.18094)</li>
+    <li>Streaming Endpointer for Spoken Dialogue using Neural Audio Codecs and Label-Delayed Training (arXiv 2506.07081)</li>
+    <li>CoDeTT: A Context-Aware Decision Benchmark for Turn-Taking Evaluation (arXiv 2603.25434)</li>
+    <li>A Small-footprint Acoustic Echo Cancellation Solution for Mobile Full-Duplex Speech Interactions (arXiv 2508.07561)</li>
+    <li>UAF: A Unified Audio Front-end LLM for Full-Duplex Speech Interaction (arXiv 2604.19221)</li>
+    <li>Enabling Streaming User Transcription in Full-Duplex Speech-to-Speech Models (arXiv 2609.15759)</li>
+    <li>TurnBench: A Multi-Domain Benchmark for Turn-Taking Dynamics in Spoken Dialogue (arXiv 2608.25218)</li>
+    <li>Talking Turns: Benchmarking Audio Foundation Models on Turn-Taking Dynamics (arXiv 2503.01174)</li>
+    <li>Full-Duplex-Bench (arXiv 2503.04721) and Full-Duplex-Bench v1.5 (arXiv 2507.23159)</li>
+    <li>DuplexSLA: A Full-Duplex Spoken Language Model with Synchronized Speech, Language, and Action (arXiv 2605.20755)</li>
+    <li>A Survey of Full-Duplex Spoken Dialogue Systems: Architectural Hierarchy, Interaction Ontology, and Decision State Machine (arXiv 2606.19453)</li>
+    <li>MinMo: A Multimodal Large Language Model for Seamless Voice Interaction (arXiv 2501.06282)</li>
+    <li><a href="https://livekit.com/blog/solving-end-of-turn-detection">LiveKit, solving end-of-turn detection</a></li>
+    <li><a href="https://github.com/pipecat-ai/smart-turn">Pipecat Smart Turn</a></li>
+    <li><a href="https://developers.openai.com/api/docs/guides/realtime-conversations">OpenAI Realtime guide, conversations</a></li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#turn-taking-backchannels">Turn-taking prediction and the human baseline</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#backchannels-barge-in">Backchannels, barge-in and self-voice</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#semantic-eot">Semantic end-of-turn detectors</a>,
+      <a href="/apps/materials/speech-lit-review/09-system-design">System design</a>
+    </li>
+  </ul>
+</section>

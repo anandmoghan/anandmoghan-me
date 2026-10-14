@@ -26,4 +26,12 @@ export const apps: AppDefinition[] = [
     path: '/apps/expense',
     requiresAuth: true,
   },
+  {
+    id: 'materials',
+    name: 'Materials',
+    description: 'Long-form study notes: speech-to-speech concepts, a literature review and a quick read.',
+    domain: 'materials',
+    path: '/apps/materials',
+    requiresAuth: false,
+  },
 ]

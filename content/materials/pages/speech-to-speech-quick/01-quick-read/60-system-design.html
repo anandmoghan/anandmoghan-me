@@ -1,0 +1,94 @@
+<section id="q-system-design">
+  <h2>System design: voice agent and talking avatar</h2>
+  <ul>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Target: a unified speech LLM with a downstream text LLM (previous page).
+      The cascade below is the baseline, launch fallback and comparison point.
+    </li>
+    <li>A cascaded voice agent is three models plus turn logic, run as overlapping streams; latency comes from overlap, not any single model.</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Use WebRTC to the client (LiveKit and Pipecat package this) with a control data channel; persistent bidirectional streams between servers, with data and control planes separate.
+    </li>
+    <li>
+      Replace a bare VAD timeout with a semantic end-of-turn model, such as Pipecat's Smart Turn (<a href="https://docs.pipecat.ai/server/utilities/turn-detection/smart-turn-overview">docs</a>)
+      <span class="tag tag--reported">Reported</span>.
+      <span class="tag tag--inference">Inference</span>
+      It shifts the dead-air versus cut-off curve but does not remove it.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Never feed raw partials to the LLM; start it at the end-of-turn candidate and cancel on change.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Chunk LLM text for TTS with a small first chunk at a clause boundary, then full sentences.
+    </li>
+    <li>
+      Barge-in: cancel LLM and TTS, flush buffers, truncate context to what was actually played, return to listening.
+      OpenAI's Realtime API exposes truncation as <code>conversation.item.truncate</code> (<a href="https://developers.openai.com/api/docs/guides/realtime-conversations">guide</a>) <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>Echo cancellation is the precondition; the W3C <code>echoCancellation</code> property removes speaker sound from the microphone (<a href="https://www.w3.org/TR/mediacapture-streams/">W3C spec</a>) <span class="tag tag--confirmed">Confirmed</span>.</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Avatar: the speech LLM drives a causal few-step renderer, audio is the clock, the cascade is the fallback and native duplex is the research track.
+    </li>
+    <li>Streaming renderers: CausVid 9.4 FPS at 1.3 s initial latency (arXiv 2412.07772); Self Forcing 17 FPS on one H100 (arXiv 2506.08009); author-reported, not comparable.</li>
+  </ul>
+  <p>Cascade fallback budget (my illustrative targets, no source):</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Illustrative target <span class="tag tag--inference">Inference</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Uplink, VAD, end-of-turn</td>
+          <td>50-150 ms</td>
+        </tr>
+        <tr>
+          <td>LLM first token</td>
+          <td>200-300 ms</td>
+        </tr>
+        <tr>
+          <td>Chunker to first clause</td>
+          <td>50-100 ms</td>
+        </tr>
+        <tr>
+          <td>TTS first packet</td>
+          <td>100-200 ms</td>
+        </tr>
+        <tr>
+          <td>Avatar: render first video block</td>
+          <td>150-250 ms</td>
+        </tr>
+        <tr>
+          <td><strong>Total</strong></td>
+          <td>Aim for 500-700 ms median; under 1 s</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The target is a unified speech LLM with a text LLM behind a tool call; it owns turn-taking, backchannels and barge-in.
+      The cascade is the baseline: overlapping streams, speculative LLM start at end-of-turn, a small first TTS chunk,
+      and barge-in that truncates context to what was played.
+      Native duplex is the research track, because its data and evals are the long pole."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap: the headline number</strong>
+    <p>
+      Quoted figures differ (Tavus claims less than one second between utterances; Synthesia says dialogue is "typically under one second";
+      <span class="tag tag--reported">Reported</span>) because definitions differ.
+      State where the clock starts and stops, and report p95/p99 under real concurrency.
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/09-system-design">Full chapter</a></p>
+</section>

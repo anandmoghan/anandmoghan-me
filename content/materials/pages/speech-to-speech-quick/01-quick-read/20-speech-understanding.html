@@ -1,0 +1,61 @@
+<section id="q-speech-understanding">
+  <h2>Speech understanding: input and ASR</h2>
+  <ul>
+    <li>
+      Most models feed the LLM continuous embeddings from an ASR-pretrained encoder plus a small projector:
+      Voxtral (arXiv 2507.13264), Qwen3-Omni (arXiv 2509.17765), Granite-speech (arXiv 2505.08699),
+      Step-Audio 2 (arXiv 2507.16632),
+      <a href="https://huggingface.co/nvidia/canary-qwen-2.5b">Canary-Qwen</a>.
+    </li>
+    <li>Discrete tokens: GLM-4-Voice uses a single-codebook VQ at 12.5 Hz, 175 bps (arXiv 2412.02612).</li>
+    <li>Codec tokens: Moshi's Mimi runs at 12.5 Hz with 8 codebooks (arXiv 2410.00037); <span class="tag tag--inference">Inference</span> this suits duplex.</li>
+    <li>12.5 Hz converges: Whisper emits 50 Hz frames, and 30 minutes at 50 Hz is a 90k-token sequence, so Voxtral adds a 4x downsampling adapter (arXiv 2507.13264).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Downsampling to 10-12.5 Hz is the main sequence-length lever and costs fine acoustic detail, which motivates hybrids like Kimi-Audio (arXiv 2504.18425).
+    </li>
+    <li>Canary-Qwen freezes the LLM and trains encoder, projection and LoRA; the card reports 5.63 mean WER and RTFx 418 on the Open ASR Leaderboard (<a href="https://huggingface.co/nvidia/canary-qwen-2.5b">NVIDIA model card</a>).</li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Streaming ASR approach</th>
+          <th>Mechanism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chunked or causal encoder</td>
+          <td>Qwen3-ASR AuT, 1-8 s dynamic window, one model for streaming and offline; authors report TTFT as low as 92 ms for 0.6B (arXiv 2601.21337)</td>
+        </tr>
+        <tr>
+          <td>Delayed streams</td>
+          <td>Kyutai DSM: ASR is the text stream delayed relative to audio (arXiv 2509.08753)</td>
+        </tr>
+        <tr>
+          <td>Chunked decoder</td>
+          <td>SpeechLLM-XL, 1.28 s chunks; authors report 2.7 / 6.7 WER on LibriSpeech test clean / other (arXiv 2410.03752)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Chunk size and lookahead trade latency against WER.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "From my streaming ASR work: chunk size and lookahead set the latency/WER trade-off.
+      The new twist is delayed text streams, so ASR becomes a special case of a multistream LM."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      Canary-Qwen's LLM mode takes a text transcript only, not raw audio (NVIDIA model card).
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/02-speech-understanding">Full chapter</a></p>
+</section>

@@ -1,0 +1,283 @@
+<section id="flow-rewards">
+  <h2>Aligning a flow model with rewards</h2>
+  <p>
+    Flow matching trains a model to imitate recordings.
+    Imitation is not the same as what you want, which is fewer misread words, a voice closer to the reference, and speech that sounds natural.
+  </p>
+  <p>
+    Reinforcement learning goes after those goals directly.
+    The model generates a group of samples, each sample is scored, and the model is nudged toward the high scorers.
+    For a flow model the awkward part is the sampling: a flow solver is deterministic, and RL needs randomness to explore.
+    (The general RL machinery for speech is in <a href="/apps/materials/speech-to-speech/08-training">training</a>; this section covers what is specific to flow.)
+  </p>
+
+  <h3 id="flow-rewards-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 200" role="img"
+      aria-label="Reward training loop for a flow model: a prompt produces a group of rollouts through stochastic sampling, the rollouts are decoded to audio and scored by ASR, speaker and quality rewards, then the model is updated with a KL penalty; held-out judges watch for reward hacking">
+      <defs>
+        <marker id="flow-rewards-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Forward path == -->
+      <rect class="d-box" x="10" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="62" text-anchor="middle"
+        dominant-baseline="middle">Prompt</text>
+      <rect class="d-box d-box--accent" x="154" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="214" y="54" text-anchor="middle"
+        dominant-baseline="middle">Group of G</text>
+      <text class="d-text--small" x="214" y="71" text-anchor="middle"
+        dominant-baseline="middle">stochastic rollouts</text>
+      <rect class="d-box" x="298" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="62" text-anchor="middle"
+        dominant-baseline="middle">Decode to audio</text>
+      <rect class="d-box" x="442" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="502" y="54" text-anchor="middle"
+        dominant-baseline="middle">Rewards</text>
+      <text class="d-text--small" x="502" y="71" text-anchor="middle"
+        dominant-baseline="middle">ASR, speaker, quality</text>
+      <rect class="d-box" x="586" y="40" width="124" height="44" rx="8"/>
+      <text class="d-text" x="648" y="54" text-anchor="middle"
+        dominant-baseline="middle">Update model</text>
+      <text class="d-text--small" x="648" y="71" text-anchor="middle"
+        dominant-baseline="middle">with KL penalty</text>
+      <path class="d-arrow" d="M 130 62 L 152 62" marker-end="url(#flow-rewards-arrow)"/>
+      <path class="d-arrow" d="M 274 62 L 296 62" marker-end="url(#flow-rewards-arrow)"/>
+      <path class="d-arrow" d="M 418 62 L 440 62" marker-end="url(#flow-rewards-arrow)"/>
+      <path class="d-arrow" d="M 562 62 L 584 62" marker-end="url(#flow-rewards-arrow)"/>
+
+      <!-- == Feedback and audit == -->
+      <path class="d-arrow d-arrow--dashed" d="M 648 84 L 648 130 L 214 130 L 214 86"
+        marker-end="url(#flow-rewards-arrow)"/>
+      <text class="d-text--muted" x="430" y="118" text-anchor="middle"
+        dominant-baseline="middle">better model samples the next group</text>
+      <rect class="d-box d-box--muted" x="298" y="150" width="264" height="36" rx="8"/>
+      <text class="d-text" x="430" y="168" text-anchor="middle"
+        dominant-baseline="middle">Held-out judges (never in the reward)</text>
+      <path class="d-arrow d-arrow--dashed" d="M 358 86 L 358 148"
+        marker-end="url(#flow-rewards-arrow)"/>
+    </svg>
+    <figcaption>
+      Reward training for a flow model. Samples must be random to explore; held-out judges check the audio but never feed the reward.
+    </figcaption>
+  </figure>
+
+  <p>
+    <strong>The loop.</strong>
+    For each prompt, draw a group of \( G \) samples, decode each to audio, and score it: an ASR model for word errors, a speaker-verification model for similarity to the reference, a quality predictor for naturalness.
+    Each sample is then compared with the others in its group, so it is rewarded for beating its siblings, and a penalty keeps the model from drifting far from where it started.
+  </p>
+  \[
+    \hat{A}_i = \frac{r_i - \operatorname{mean}(r_1,\dots,r_G)}{\operatorname{std}(r_1,\dots,r_G)}
+  \]
+  <p>
+    The advantage \( \hat A_i \) is the sample's score relative to its group; positive means the model is pushed toward that sample.
+  </p>
+
+  <h4 id="flow-rewards-ode">ODE and SDE, in plain terms</h4>
+  <p>
+    An ODE (ordinary differential equation) is a rule for how something changes: "at this point and time, move in this direction".
+    A flow model's network is exactly such a rule, \( dx/dt = v_\theta(x, t) \), and the sampling loop is a solver for it
+    (<a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-idea-velocity-shapes">Velocity, shapes and stopping</a>).
+    The rule is deterministic: the same starting noise always traces the same path to the same audio.
+  </p>
+  <p>
+    An SDE (stochastic differential equation) adds a small random kick at every step: "move in this direction, plus a little Gaussian noise".
+    The conversion used for RL builds an SDE that matches the original model's distribution at every timestep, so the spread of final outputs is the same; only individual paths change.
+  </p>
+  \[
+    \text{ODE: } x_{k+1} = x_k + \Delta t \, v_\theta(x_k, t_k)
+    \qquad
+    \text{SDE: } x_{k+1} = x_k + \Delta t \, \mu_\theta(x_k, t_k) + \sigma_k \sqrt{\Delta t}\, \epsilon_k,
+    \;\; \epsilon_k \sim \mathcal{N}(0, I)
+  \]
+  <p>
+    Here \( \mu_\theta \) is the velocity with a correction term so the distribution is preserved, and \( \sigma_k \) sets how much randomness each step adds (standard notation; the exact correction differs by paper).
+  </p>
+
+  <h4 id="flow-rewards-why-sde">Why RL needs the SDE</h4>
+  <p>
+    A <em>policy</em> is the model's rule for choosing what to produce; here, the process that turns noise into one particular utterance.
+    Policy-gradient methods such as GRPO and PPO need two things: different samples to compare, and the probability the policy gave to each sample, so they can raise the probability of good ones.
+    An ODE gives neither: from a fixed start there is one path, and a deterministic path has no probability to differentiate.
+  </p>
+  <p>
+    <strong>A toy example.</strong>
+    Suppose that, asked to say "cat", the model produces a clear reading with probability 0.3 (reward 1) and a garbled one with probability 0.7 (reward 0).
+    Training nudges the clear reading to, say, 0.4.
+    The <em>likelihood ratio</em> is the new probability over the old: \( 0.4 / 0.3 \approx 1.33 \).
+    PPO clipping caps the ratio, for example at 1.2 (\( 1+\varepsilon \) with \( \varepsilon = 0.2 \)), so once the clear reading reaches 0.36 the update stops pushing and one lucky batch cannot drag the model far.
+    The numbers are made up to show the mechanics.
+  </p>
+  <p>
+    With the SDE, each step is a Gaussian draw: the next state is
+    \( \mathcal{N}\big(x_k + \Delta t\,\mu_\theta,\ \sigma_k^2 \Delta t\, I\big) \).
+    That is a policy whose log-probability can be computed, so each denoising step becomes an "action" and a generation a chain of actions (derived from the update above).
+    One Flow-GRPO iteration then runs as follows.
+  </p>
+  <ol>
+    <li>Sample a group of utterances for one prompt with the SDE sampler, recording every step.</li>
+    <li>Decode each to audio and score it (word error rate, speaker similarity, quality).</li>
+    <li>Turn scores into group-relative advantages.</li>
+    <li>
+      For every step of every sample, compute the likelihood ratio (the updated model's probability of the step taken, over the old model's), multiply by that sample's advantage, clip as in the toy example, and update.
+    </li>
+  </ol>
+  <p>
+    The cost is that every step's state must be stored and its likelihood recomputed.
+    One image method trains on fewer denoising steps than it uses at inference to cut that cost, and reports very little reward hacking.
+    Another speech method reformulates the flow model's outputs as Gaussians from the start, so GRPO applies directly.
+  </p>
+
+  <h4 id="flow-rewards-weighted">The alternative: advantage-weighted flow matching</h4>
+  <p>
+    One recent speech method (GROW) avoids the SDE and per-step likelihoods altogether.
+    It samples a group of utterances on-policy, standardises intelligibility and speaker-similarity rewards within the group, and uses the combined score to reweight the ordinary flow-matching loss on those samples.
+    A group-mean baseline turns reward weights into signed advantages, so better-than-average samples are pulled toward and worse ones pushed away, and a velocity penalty anchors the model to a frozen reference.
+    Its authors report that for strong pretrained models purely positive weights collapse into reward-agnostic self-imitation, while zero-mean signed advantages keep real credit assignment, and that it trains about 2.9 times faster than an SDE-style baseline at similar quality.
+  </p>
+  <p>
+    The rollouts need no SDE for variety: a different starting noise for each rollout already gives different utterances.
+    The SDE was needed to make each rollout's probability tractable, because exactly computing an ODE's output probability means tracking how the whole path stretches and squeezes space, which is expensive.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    One weighted update, step by step: generate the group from different noises with the normal solver; score each utterance and compute a signed advantage; then, for each utterance, run an ordinary flow-matching step that treats it as the target (fresh noise, a random time, regress toward the velocity from that noise to the utterance) and multiply its loss by the advantage.
+    Positive advantage means "produce this more", negative means "move away from this".
+    <span class="tag tag--inference">Inference</span>
+    The flow-matching loss on a sample works as a cheap stand-in for how likely the model is to produce it, so reweighting it plays the role of likelihood ratios without computing them.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>SDE route</th>
+          <th>Weighted route</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Rollout variety</td>
+          <td>Different starting noise plus random kicks at every step</td>
+          <td>Different starting noise only</td>
+        </tr>
+        <tr>
+          <td>What gets credited</td>
+          <td>Each denoising step, as a Gaussian action</td>
+          <td>Each whole utterance</td>
+        </tr>
+        <tr>
+          <td>Training signal</td>
+          <td>Clipped likelihood ratios, as in PPO</td>
+          <td>Advantage-weighted flow-matching loss on the generated samples</td>
+        </tr>
+        <tr>
+          <td>Cost</td>
+          <td>Store every step and recompute its likelihood</td>
+          <td>Ordinary flow-matching steps; about 2.9 times faster training</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Reported effects, all by the authors and on different setups: one flow TTS reward study reports a 29.5% relative drop in word error rate and a 4.6% relative gain in speaker similarity on zero-shot cloning.
+    The weighted-regression method reports word error rate falling from 2.016 to 1.558 and speaker similarity rising from 0.676 to 0.715 on its base model.
+  </p>
+
+  <h3 id="flow-rewards-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Reward mix</td>
+          <td>Which qualities get optimised: ASR error, speaker similarity, naturalness</td>
+          <td>A single score is gamed; an equal-weighted or calibrated composite resists better</td>
+        </tr>
+        <tr>
+          <td>Group size \( G \)</td>
+          <td>How reliable the group-relative signal is</td>
+          <td><span class="tag tag--inference">Inference</span> Every rollout needs a full decode plus ASR and speaker scoring, so cost grows with \( G \)</td>
+        </tr>
+        <tr>
+          <td>KL penalty to the start model</td>
+          <td>How far the policy may move</td>
+          <td>Works against hacking in the image setting, but is not a replacement for early stopping</td>
+        </tr>
+        <tr>
+          <td>SDE conversion or weighted regression</td>
+          <td>How exploration and likelihoods are obtained</td>
+          <td>SDE needs per-step likelihood ratios, which adds overhead; the regression variant avoids them</td>
+        </tr>
+        <tr>
+          <td>Reward model choice</td>
+          <td>What counts as natural</td>
+          <td>Cheap single-score predictors are the easiest to exploit</td>
+        </tr>
+        <tr>
+          <td>Held-out evaluation</td>
+          <td>Whether gains are real</td>
+          <td>A second ASR, a second speaker model and a listening panel cost time, and are the only reliable guard</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="flow-rewards-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Reward hacking.</strong>
+      Optimising one quality predictor raised that score while held-out judges and listeners got worse.
+      A single enhancement metric gave fast metric gains but degraded fidelity; a multi-metric reward balanced them.
+      The same applies when the training ASR is also the evaluation ASR: evaluate with a second ASR and a second speaker model.
+    </li>
+    <li>
+      <strong>Flat prosody.</strong>
+      Rewarding only character error and likelihood has been reported to lower error rates while collapsing prosody into monotone speech, the failure described in
+      <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#autoregressive-generation">Autoregressive generation</a>.
+      A fix that worked was iterative preference training on a few hundred human pairs per round.
+    </li>
+    <li>
+      <strong>Speaker drift or leakage.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Optimising word error alone can let similarity slip; keep the speaker term in the mix and track it separately.
+    </li>
+  </ul>
+  <p>
+    Monitor per-reward means, held-out scores, speaking rate, pitch spread and silence ratio.
+    Stop when held-out metrics degrade even if the training reward rises, and spot-check the audio.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "For a flow TTS I would run group-based RL with a composite of ASR error, speaker similarity and a quality model.
+      The flow solver is deterministic, so I would either convert the sampler to an SDE for exploration or use the weighted flow-matching variant, and I would validate everything on held-out judges and a listening panel."
+    </p>
+  </div>
+
+  <h3 id="flow-rewards-sources">Sources</h3>
+  <ul>
+    <li>Flow-GRPO: Training Flow Matching Models via Online RL (arXiv 2505.05470)</li>
+    <li>F5R-TTS: Improving Flow-Matching based Text-to-Speech with Group Relative Policy Optimization (arXiv 2504.02407)</li>
+    <li>GROW: Group-Relative Advantage-Weighted On-Policy Reinforcement Learning of Autoregressive-Diffusion Text-to-Speech model (arXiv 2608.03215)</li>
+    <li>FlowTTS-GRPO: Online Reinforcement Learning with Multi-Objective Reward Optimization for Flow-Matching Based Text-to-Speech (arXiv 2606.23190)</li>
+    <li>FlowSE-GRPO: Training Flow Matching Speech Enhancement via Online Reinforcement Learning (arXiv 2601.16483)</li>
+    <li>The Limits of Reference-Free Speech Quality Metrics as Evaluators and Rewards on Modern Text-to-Speech (arXiv 2609.13150)</li>
+    <li>No Verifiable Reward for Prosody: Toward Preference-Guided Prosody Learning in TTS (arXiv 2509.18531)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#online-rl-rewards">Online RL and rewards for speech generation</a>
+    </li>
+  </ul>
+</section>

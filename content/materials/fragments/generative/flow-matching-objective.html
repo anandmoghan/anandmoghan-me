@@ -1,0 +1,23 @@
+<h3 id="flow-matching-objective">Conditional flow matching objective</h3>
+<p>
+  Flow matching regresses a network onto a velocity field.
+  With a linear (optimal-transport) path, \( x_0 \) is noise and \( x_1 \) is data.
+</p>
+\[
+  x_t = (1-t)\,x_0 + t\,x_1,
+  \qquad
+  \mathcal{L} = \mathbb{E}\,\big\|v_\theta(x_t, t) - (x_1 - x_0)\big\|^2
+\]
+<p>
+  The target velocity \( x_1 - x_0 \) is constant along the path, so training is plain regression.
+  There is no noise schedule and no SNR weighting.
+</p>
+<p>
+  Sampling integrates the learned ODE from noise to data:
+</p>
+\[
+  \frac{\mathrm{d}x}{\mathrm{d}t} = v_\theta(x, t)
+\]
+<p>
+  The linear path and velocity regression follow Flow Matching with optimal-transport paths (arXiv 2210.02747).
+</p>

@@ -1,0 +1,188 @@
+<section id="waveform-sample-rate">
+  <h2>Waveform and sample rate</h2>
+  <p>
+    Sound is air pressure changing over time.
+    A microphone measures that pressure many times per second and stores the readings as a list of numbers.
+    That list is the waveform, and the number of readings per second is the sample rate.
+  </p>
+  <p>
+    Think of a flip-book: more pages per second capture faster motion.
+    A higher sample rate captures higher frequencies (higher pitches and the hiss of consonants), at the price of more numbers to store, move and generate.
+    The rest of this chapter is about shrinking those numbers into something a model can read, one short slice of audio (a frame) at a time.
+  </p>
+
+  <h3 id="waveform-how">How it works</h3>
+  <p>
+    Each sample is one pressure reading, so a 16 kHz recording holds 16,000 numbers per second.
+    The time between samples is the inverse of the rate:
+  </p>
+  \[
+  T_s = \frac{1}{f_s}, \qquad f_s = 16000\ \text{Hz} \;\Rightarrow\; T_s = 62.5\ \mu\text{s}
+  \]
+  <p>
+    A sampled signal cannot represent frequencies above half the sample rate (the Nyquist limit).
+    Anything above it is either removed before sampling or folds back as false lower frequencies, which is called aliasing.
+    So the sample rate sets the bandwidth of the audio, and speech systems use a handful of standard rates:
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Sample rate</th>
+          <th>Where it appears</th>
+          <th>Band limit (half the rate)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>8 kHz</td>
+          <td>Telephone audio, such as the Fisher corpus</td>
+          <td>4 kHz</td>
+        </tr>
+        <tr>
+          <td>16 kHz</td>
+          <td>Typical ASR input, including Whisper</td>
+          <td>8 kHz</td>
+        </tr>
+        <tr>
+          <td>24 kHz</td>
+          <td>Common for generation, such as the Mimi codec</td>
+          <td>12 kHz</td>
+        </tr>
+        <tr>
+          <td>44.1 kHz</td>
+          <td>Full-band codecs such as DAC</td>
+          <td>22.05 kHz</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The cost of bandwidth is length.
+    At 24 kHz, a model that predicted samples directly would take 24,000 steps per second.
+    A codec running at 12.5 frames per second covers 1,920 samples in each frame, so a model that works on frames sees a sequence 1,920 times shorter.
+    That is why speech models predict tokens or latents and leave sample-level detail to a decoder
+    (<a href="/apps/materials/speech-to-speech/06-tokens-to-waveform">tokens to waveform</a>).
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 150" role="img"
+      aria-label="Sample rate trade-off: a low sample rate keeps a narrow band and few numbers per second; a high sample rate keeps a wide band and many numbers per second; the model reads frames, not samples">
+      <defs>
+        <marker id="waveform-sr-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Boxes == -->
+      <rect class="d-box" x="10" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="54" text-anchor="middle"
+        dominant-baseline="middle">Air pressure</text>
+      <text class="d-text--small" x="75" y="71" text-anchor="middle"
+        dominant-baseline="middle">continuous</text>
+      <rect class="d-box d-box--accent" x="200" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="265" y="54" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <text class="d-text--small" x="265" y="71" text-anchor="middle"
+        dominant-baseline="middle">one number per tick</text>
+      <rect class="d-box" x="390" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="455" y="54" text-anchor="middle"
+        dominant-baseline="middle">Frames</text>
+      <text class="d-text--small" x="455" y="71" text-anchor="middle"
+        dominant-baseline="middle">features or tokens</text>
+      <rect class="d-box" x="580" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="645" y="62" text-anchor="middle"
+        dominant-baseline="middle">Model</text>
+
+      <!-- == Arrows == -->
+      <path class="d-arrow" d="M 140 62 L 198 62" marker-end="url(#waveform-sr-arrow)"/>
+      <path class="d-arrow" d="M 330 62 L 388 62" marker-end="url(#waveform-sr-arrow)"/>
+      <path class="d-arrow" d="M 520 62 L 578 62" marker-end="url(#waveform-sr-arrow)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="169" y="32" text-anchor="middle">sample</text>
+      <text class="d-text--muted" x="359" y="32" text-anchor="middle">window, hop</text>
+      <text class="d-text--muted" x="549" y="32" text-anchor="middle">far fewer steps</text>
+      <text class="d-text--muted" x="360" y="118" text-anchor="middle">sample rate sets bandwidth; frame rate sets model sequence length</text>
+    </svg>
+    <figcaption>Sample rate decides how much of the sound survives; the model reads frames far slower than samples.</figcaption>
+  </figure>
+
+  <h3 id="waveform-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Sample rate (16 vs 24 vs 44.1 kHz)</td>
+          <td>Bandwidth: how much high-frequency detail (sibilants, breath, air) survives</td>
+          <td>More samples to decode and store; needs training data that really has that bandwidth</td>
+        </tr>
+        <tr>
+          <td>Match input rate to the front end</td>
+          <td>ASR front ends expect 16 kHz; generation stacks often run at 24 kHz</td>
+          <td>Resampling between stages is cheap, but each stage fixes its own bandwidth limit</td>
+        </tr>
+        <tr>
+          <td>Upsample low-rate data (8 to 24 kHz)</td>
+          <td>Lets telephone data train a 24 kHz model; Moshi upsamples Fisher with a diffusion super-resolution model</td>
+          <td>The generator invents plausible high frequencies; it does not recover them</td>
+        </tr>
+        <tr>
+          <td>Predict frames, not samples</td>
+          <td>Sequence length for the language model</td>
+          <td>Needs a decoder to turn frames back into samples</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="waveform-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Nominal rate, real bandwidth.</strong>
+      A file labelled 16 kHz can hold audio that was recorded at 8 kHz and upsampled.
+      The DAC authors warn that source rates vary (Common Voice is commonly 8 to 16 kHz), and that models trained on such data often fail above the data's true rate.
+      Check the spectrogram, not the header.
+    </li>
+    <li>
+      <strong>High rate is not high quality.</strong>
+      Stable Audio Open generates 44.1 kHz stereo, yet its authors state it cannot produce intelligible speech or singing.
+    </li>
+    <li>
+      <strong>Aliasing from naive resampling.</strong>
+      Dropping samples without low-pass filtering folds high frequencies into the audible band as buzz.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The sample rate sets the bandwidth: 16 kHz for ASR, 24 kHz for most speech generation, 44.1 kHz for full-band codecs.
+      Models never predict samples directly; at 24 kHz that is 24,000 steps a second.
+      They predict frames or tokens and let a decoder fill in the samples."
+    </p>
+  </div>
+
+  <h3 id="waveform-sample-rate-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>High-Fidelity Audio Compression with Improved RVQGAN (arXiv 2306.06546)</li>
+    <li>Robust Speech Recognition via Large-Scale Weak Supervision (arXiv 2212.04356)</li>
+    <li>AudioSR: Versatile Audio Super-resolution at Scale (arXiv 2309.07314)</li>
+    <li>Stable Audio Open (arXiv 2407.14358)</li>
+    <li>Nyquist limit and aliasing: standard signal-processing background, no single source.</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#rates-frames-clocks">Rates, frames and clocks</a>
+      and
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#tokens-to-waveform">From tokens to waveform</a>
+      in the literature review.
+    </li>
+  </ul>
+</section>

@@ -1,0 +1,228 @@
+<section id="staged-recipe">
+  <h2>The staged training recipe</h2>
+  <p>
+    Teaching a text model to talk is like teaching a well-read person a second language.
+    You do not start from zero.
+    You keep what they know, introduce the new sounds slowly, and test their old knowledge after every lesson so it does not slip.
+  </p>
+  <p>
+    Nearly every open speech-to-speech model follows that shape.
+    Start from a strong text LLM, line audio up with it, pretrain on mixed speech and text, tune on spoken dialogue, then add the conversational behaviour.
+    The real choice is whether the text backbone stays frozen or trains on a mixed corpus.
+  </p>
+
+  <h3 id="staged-recipe-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 300" role="img"
+      aria-label="Six training stages in two rows: align the encoder, mixed
+        speech-text pretraining, spoken instruction tuning, preference
+        optimisation, a duplex head and duplex reinforcement learning, with a
+        quality gate after every stage">
+      <defs>
+        <marker id="stages-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="30" width="160" height="56" rx="8"/>
+      <text class="d-text" x="90.0" y="50.0" text-anchor="middle"
+        dominant-baseline="middle">1. Align audio</text>
+      <text class="d-text--small" x="90.0" y="67.0" text-anchor="middle"
+        dominant-baseline="middle">LLM frozen</text>
+      <rect class="d-box d-box--accent" x="280" y="30" width="160" height="56"
+        rx="8"/>
+      <text class="d-text" x="360.0" y="50.0" text-anchor="middle"
+        dominant-baseline="middle">2. Mixed pretraining</text>
+      <text class="d-text--small" x="360.0" y="67.0" text-anchor="middle"
+        dominant-baseline="middle">text share kept high</text>
+      <rect class="d-box" x="550" y="30" width="160" height="56" rx="8"/>
+      <text class="d-text" x="630.0" y="50.0" text-anchor="middle"
+        dominant-baseline="middle">3. Spoken SFT</text>
+      <text class="d-text--small" x="630.0" y="67.0" text-anchor="middle"
+        dominant-baseline="middle">synthetic and real dialogue</text>
+      <rect class="d-box" x="10" y="150" width="160" height="56" rx="8"/>
+      <text class="d-text" x="90.0" y="170.0" text-anchor="middle"
+        dominant-baseline="middle">4. Preference</text>
+      <text class="d-text--small" x="90.0" y="187.0" text-anchor="middle"
+        dominant-baseline="middle">DPO on text tokens</text>
+      <rect class="d-box" x="280" y="150" width="160" height="56" rx="8"/>
+      <text class="d-text" x="360.0" y="170.0" text-anchor="middle"
+        dominant-baseline="middle">5. Duplex head</text>
+      <text class="d-text--small" x="360.0" y="187.0" text-anchor="middle"
+        dominant-baseline="middle">small head, LLM frozen</text>
+      <rect class="d-box" x="550" y="150" width="160" height="56" rx="8"/>
+      <text class="d-text" x="630.0" y="170.0" text-anchor="middle"
+        dominant-baseline="middle">6. Duplex RL</text>
+      <text class="d-text--small" x="630.0" y="187.0" text-anchor="middle"
+        dominant-baseline="middle">timing rewards on events</text>
+      <path class="d-arrow" d="M 170 58 L 278 58"
+        marker-end="url(#stages-arrow)"/>
+      <path class="d-arrow" d="M 440 58 L 548 58"
+        marker-end="url(#stages-arrow)"/>
+      <path class="d-arrow" d="M 630 86 L 630 118 L 90 118 L 90 148"
+        marker-end="url(#stages-arrow)"/>
+      <path class="d-arrow" d="M 170 178 L 278 178"
+        marker-end="url(#stages-arrow)"/>
+      <path class="d-arrow" d="M 440 178 L 548 178"
+        marker-end="url(#stages-arrow)"/>
+      <text class="d-text--muted" x="360" y="108" text-anchor="middle"
+        dominant-baseline="middle">checkpoint handed on</text>
+      <rect class="d-group" x="10" y="232" width="700" height="50" rx="8"/>
+      <text class="d-text" x="360" y="251" text-anchor="middle"
+        dominant-baseline="middle">Gate after every stage</text>
+      <text class="d-text--small" x="360" y="269" text-anchor="middle"
+        dominant-baseline="middle">speech recognition error, strict text QA,
+        timing</text>
+    </svg>
+    <figcaption>Figure: the staged recipe. The mixed pretraining stage
+      (highlighted) is where forgetting is decided. A gate on speech recognition
+      error, strict text question answering and timing follows every
+      stage.</figcaption>
+  </figure>
+  <ol>
+    <li>
+      <strong>Tokenizer and codec first.</strong>
+      Speech must become tokens before anything else (see
+      <a href="/apps/materials/speech-to-speech/03-tokenizers">Tokenizers</a>).
+      Freeze it after a reconstruction check.
+    </li>
+    <li>
+      <strong>Align audio to a text LLM.</strong>
+      The audio encoder and adaptor from
+      <a href="/apps/materials/speech-to-speech/02-listening#audio-meets-text">Audio meets text</a>
+      map the waveform into the space the LLM reads.
+      Train both on recognition data while the LLM stays frozen.
+      Every clip comes with its exact transcript, so the model learns that this sound means these words without disturbing the text weights.
+    </li>
+    <li>
+      <strong>Mixed speech-text pretraining.</strong>
+      Unfreeze the LLM and train on text only, audio only and interleaved sequences, where text and speech alternate inside one sequence (see <a href="/apps/materials/speech-to-speech/07-conversation#text-and-speech-together">Text and speech together</a>).
+      Interleaved data is usually synthesised: render chosen spans of a text corpus into speech tokens with TTS and a tokenizer.
+      The model learns that the two forms mean the same thing.
+      One report lifted spoken question answering from 13% to 31% this way.
+    </li>
+    <li>
+      <strong>Spoken instruction tuning.</strong>
+      Train on dialogue where the user speaks and the model answers in speech.
+      An LLM writes the dialogue and TTS renders both sides.
+      Real recorded turns and many TTS voices keep the model from copying one synthetic style.
+    </li>
+    <li>
+      <strong>Duplex alignment.</strong>
+      Add turn-taking from real two-channel conversation, a small head on frozen states, or both.
+      One base duplex model fine-tuned on about 2,000 hours of phone conversation.
+      Another trained only a small predictor on 4,000 hours of human conversation.
+    </li>
+    <li>
+      <strong>Agentic tuning.</strong>
+      A first-party realtime report adds supervised tuning, a distillation stage, then GRPO in executable environments where the model calls tools and is scored on finishing the task.
+      It reports the response rate to background speech falling from 73.0% to 13.0% on one duplex benchmark.
+      The RL half is in <a href="/apps/materials/speech-to-speech/08-training#rl-beyond-tts">RL beyond speech generation</a>.
+    </li>
+  </ol>
+  <p>
+    <strong>Frozen against mixed.</strong>
+    Two recipes protect the text ability.
+    Freezing the LLM keeps text ability by construction; it suits models that wrap a fixed LLM with a decoder and a state classifier, and it caps how deeply speech can reshape the representations.
+    Training on a mixed corpus lets speech reach deeper, and the mix ratio becomes a tuned hyperparameter.
+    One base model keeps half of its pretraining batches text-only; another pairs 585B text tokens with 585B audio tokens.
+    An unbalanced mix is the main risk.
+  </p>
+  <p>
+    Model-by-model recipes:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#stage-recipes">Stage-by-stage recipes</a>.
+  </p>
+
+  <h3 id="staged-recipe-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Text share in the mix</td>
+          <td>How much text ability is rehearsed during speech training</td>
+          <td>High share protects knowledge; it spends compute on text and slows speech learning</td>
+        </tr>
+        <tr>
+          <td>Freezing schedule</td>
+          <td>Which parts train at each stage</td>
+          <td>Freezing early avoids forgetting; freezing throughout caps speech quality</td>
+        </tr>
+        <tr>
+          <td>Interleaved synthetic data volume</td>
+          <td>Speech-text alignment inside the LLM</td>
+          <td>Scales cheaply and brings TTS artefacts</td>
+        </tr>
+        <tr>
+          <td>TTS voices and real turns</td>
+          <td>Diversity of the spoken instruction data</td>
+          <td>More of both reduces voice overfit; real data is scarce</td>
+        </tr>
+        <tr>
+          <td>Stage gates</td>
+          <td>When a checkpoint may advance</td>
+          <td>Catches forgetting early; slows iteration</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Trade-offs are engineering reasoning from the cited recipes, not controlled comparisons.
+    <span class="tag tag--inference">Inference</span>
+    Gate each stage on recognition error, a strict text question-answering score and, for duplex, timing.
+  </p>
+
+  <h3 id="staged-recipe-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Forgetting.</strong>
+      Adding speech can degrade knowledge and reasoning even for text inputs, and more for spoken queries.
+      Measure the speech-versus-text accuracy gap on the same questions.
+    </li>
+    <li>
+      <strong>TTS-voice overfit and flat delivery.</strong>
+      The model absorbs the voice and prosody of the synthetic data, and text-written dialogue carries no emotion or hesitation.
+      Mix real turns and many voices.
+    </li>
+    <li>
+      <strong>Unbalanced mix.</strong>
+      Too little text and the model forgets; too much and speech lags.
+    </li>
+    <li>
+      <strong>Timing from synthetic dialogue.</strong>
+      Backchannels inserted at regular intervals teach a regular rhythm.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would keep the text LLM frozen while aligning audio, then unfreeze it with a high text share and interleaved synthetic data.
+      Spoken tuning uses many TTS voices plus real turns.
+      Every stage is gated on recognition error and strict text QA, because speech training erodes text ability."
+    </p>
+  </div>
+
+  <h3 id="staged-recipe-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li>Freeze-Omni: A Smart and Low Latency Speech-to-speech Dialogue Model with Frozen LLM (arXiv 2411.00774)</li>
+    <li>MinMo: A Multimodal Large Language Model for Seamless Voice Interaction (arXiv 2501.06282)</li>
+    <li>Step-Audio 2 Technical Report (arXiv 2507.16632)</li>
+    <li>Qwen-Audio-3.1-Realtime: Towards Reliable Agentic Voice Interaction (arXiv 2609.25176)</li>
+    <li>Scaling Speech-Text Pre-training with Synthetic Interleaved Data (arXiv 2411.17607)</li>
+    <li>Cross-Modal Knowledge Distillation for Speech Large Language Models (arXiv 2509.14930)</li>
+    <li>Closing the Gap Between Text and Speech Understanding in LLMs (arXiv 2510.13632)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#pretraining-posttraining">Pre-training and post-training speech-to-speech models</a>,
+      <a href="/apps/materials/speech-lit-review/08-common-problems#s2s-intelligence">Intelligence drop and forgetting</a>
+    </li>
+  </ul>
+</section>

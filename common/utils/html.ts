@@ -1,5 +1,6 @@
-// Render hand-written HTML post fragments: includes, KaTeX, code highlighting, heading ids.
-// Ported from materials/scripts/build.mjs so both sites accept the same source.
+// Render hand-written HTML fragments (blog posts and materials chapters): includes, KaTeX,
+// code highlighting, heading ids, arXiv links. Ported from materials/scripts/build.mjs so
+// both accept the same source.
 import 'server-only';
 import fs from 'fs';
 import path from 'path';
@@ -97,6 +98,49 @@ function renderMath(html: string, file: string): string {
   return result + renderMathInText(html.slice(last), file);
 }
 
+// ------------------------------------------------------------- arXiv links
+
+// Turns "arXiv 2410.00037" in running text into a link to the paper. Skips tags and
+// attributes, existing links, SVG, code and KaTeX output.
+const ARXIV_RE = /\barXiv[ :]?(\d{4}\.\d{4,5})(v\d+)?\b/g;
+const ARXIV_SKIP_TAGS = new Set(['a', 'svg', 'code', 'pre', 'script', 'style']);
+
+function linkArxiv(html: string): string {
+  const stack: string[] = [];
+  let katexDepth = 0;
+  return html
+    .split(/(<[^>]+>)/)
+    .map((part) => {
+      if (part.startsWith('<')) {
+        const m = part.match(/^<(\/?)([a-zA-Z0-9]+)/);
+        if (m) {
+          const name = m[2].toLowerCase();
+          const closing = m[1] === '/';
+          const selfClosing = part.endsWith('/>');
+          if (ARXIV_SKIP_TAGS.has(name) && !selfClosing) {
+            if (closing) stack.pop();
+            else stack.push(name);
+          }
+          // Inside KaTeX output, count every span so the depth returns to 0 at its end.
+          if (name === 'span') {
+            if (closing) {
+              if (katexDepth) katexDepth -= 1;
+            } else if (!selfClosing && (katexDepth || /class="katex/.test(part))) {
+              katexDepth += 1;
+            }
+          }
+        }
+        return part;
+      }
+      if (stack.length || katexDepth) return part;
+      return part.replace(
+        ARXIV_RE,
+        (match, id: string) => `<a href="https://arxiv.org/abs/${id}" rel="noopener">${match}</a>`
+      );
+    })
+    .join('');
+}
+
 // -------------------------------------------------------------------- code
 
 const CODE_BLOCK_RE = /<pre>\s*<code class="language-([\w+-]+)">([\s\S]*?)<\/code>\s*<\/pre>/g;
@@ -133,10 +177,17 @@ function ensureIds(html: string): string {
   });
 }
 
-function checkDuplicateIds(html: string, file: string): void {
+// Posts fail the build on a duplicate id; materials only warns, as its own build did.
+export function checkDuplicateIds(html: string, file: string, mode: 'error' | 'warn'): void {
   const seen = new Set<string>();
+  const reported = new Set<string>();
   for (const m of html.matchAll(/\sid="([^"]+)"/g)) {
-    if (seen.has(m[1])) throw new Error(`${rel(file)}: duplicate id "${m[1]}"`);
+    if (seen.has(m[1]) && !reported.has(m[1])) {
+      const message = `${rel(file)}: duplicate id "${m[1]}"`;
+      if (mode === 'error') throw new Error(message);
+      console.warn(message);
+      reported.add(m[1]);
+    }
     seen.add(m[1]);
   }
 }
@@ -186,16 +237,27 @@ export interface RenderedSections {
   text: string;
 }
 
-export function renderSections(files: string[]): RenderedSections {
+export interface RenderOptions {
+  /** Link "arXiv NNNN.NNNNN" citations to the paper (materials). Default false. */
+  arxivLinks?: boolean;
+  /** Duplicate ids fail the build ('error', posts, the default) or print a warning ('warn'). */
+  duplicateIds?: 'error' | 'warn';
+  /** File named in warnings and errors; defaults to the first section file. */
+  owner?: string;
+}
+
+export function renderSections(files: string[], options: RenderOptions = {}): RenderedSections {
+  const { arxivLinks = false, duplicateIds = 'error' } = options;
   const parts = files.map((file) => {
     const source = resolveIncludes(fs.readFileSync(file, 'utf8'), file);
     validateSection(source, file);
     return { file, html: source.trim() };
   });
   const joined = ensureIds(parts.map((p) => p.html).join('\n\n'));
-  const owner = files[0] ?? CONTENT_DIR;
-  checkDuplicateIds(joined, owner);
-  const rendered = highlightCode(renderMath(joined, owner), owner);
+  const owner = options.owner ?? files[0] ?? CONTENT_DIR;
+  checkDuplicateIds(joined, owner, duplicateIds);
+  const withMath = renderMath(joined, owner);
+  const rendered = highlightCode(arxivLinks ? linkArxiv(withMath) : withMath, owner);
   return {
     html: rendered,
     headings: extractHeadings(joined),

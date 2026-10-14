@@ -1,0 +1,174 @@
+<section id="latency-video-vocabulary">
+  <h2>Latency in frames, video alignment and vocabulary</h2>
+  <p>
+    Latency is easiest to reason about in frames.
+    The same clock arithmetic also aligns audio with video, and fixes the vocabulary for the interview.
+  </p>
+  <h3 id="latency-arithmetic">Seconds to frames, and Moshi's latency</h3>
+  <p>
+    Divide any delay by 0.08 s to count frames.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Delay</th>
+          <th>Seconds</th>
+          <th>Frames at 12.5 Hz (derived)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi acoustic delay 1 (arXiv 2410.00037)</td>
+          <td>0.08</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td>Moshi theoretical latency (acoustic delay 1)</td>
+          <td>0.16</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td>Moshi theoretical latency (acoustic delay 2)</td>
+          <td>0.64</td>
+          <td>8</td>
+        </tr>
+        <tr>
+          <td>Moshi pretraining text-audio delay, randomised</td>
+          <td>-0.6 to +0.6</td>
+          <td>-7.5 to +7.5</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice streaming decoder block (arXiv 2412.02612)</td>
+          <td>0.8</td>
+          <td>10</td>
+        </tr>
+        <tr>
+          <td>DSM TTS audio delay (arXiv 2509.08753)</td>
+          <td>1.28</td>
+          <td>16</td>
+        </tr>
+        <tr>
+          <td>DSM ASR text delay, default (arXiv 2509.08753)</td>
+          <td>2.5</td>
+          <td>31.25 (source: about 31)</td>
+        </tr>
+        <tr>
+          <td>Hibiki minimum target lag (arXiv 2502.03382)</td>
+          <td>at least 2</td>
+          <td>at least 25</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Moshi's 160 ms is one 80 ms frame plus one 80 ms acoustic-delay step:
+    \( 2 \times 80 = 160 \) ms (derived decomposition).
+    The paper reports about 200 ms in practice.
+    With acoustic delay 2 the paper states a theoretical latency of 8 timesteps, 640 ms (arXiv 2410.00037).
+    <span class="tag tag--confirmed">Confirmed</span>
+  </p>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      Do not generalise the 160 ms into a formula such as "(1 + delay) frames".
+      Delay 2 would give 240 ms, not the 640 ms the paper quotes, and this chapter does not derive how the 8 timesteps decompose.
+      Quote the two numbers as stated and say which acoustic delay each belongs to.
+    </p>
+  </div>
+
+  <h3 id="video-alignment">Video alignment</h3>
+  <p>
+    Video frames run at 25 or 30 fps, against 12.5 Hz for audio tokens.
+    At 25 fps there are exactly 2 video frames per audio frame.
+    At 30 fps there are \( 30 / 12.5 = 2.4 \), which is not an integer, so the two streams cannot share a frame grid (derived).
+  </p>
+  <p>
+    Video latents are coarser than pixel frames.
+    Wan 2.1's causal VAE has a latent length of about \( 1 + T/4 \) for \( T \) frames (arXiv 2503.20314),
+    so 25 fps becomes 6.25 latent frames per second and 30 fps becomes 7.5 (derived).
+  </p>
+  <p>
+    <a href="/apps/materials/speech-lit-review/07-multimodal-generation#audio-visual-diffusion">Ovi</a> aligns the two token rates without resampling.
+    It runs RoPE on both streams and scales the audio RoPE frequencies by \( 31/157 \approx 0.197 \), so
+    31 video latent frames line up with 157 audio tokens (arXiv 2510.01284).
+    That is about \( 157 / 31 \approx 5.06 \) audio tokens per video latent frame (derived).
+  </p>
+
+  <h3 id="rates-glossary">Say it right in the interview</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Term</th>
+          <th>What it counts</th>
+          <th>Example</th>
+          <th>Common slip</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Sample rate</td>
+          <td>Waveform samples per second (Hz, kHz)</td>
+          <td>24 kHz audio into Mimi</td>
+          <td>Calling it the frame rate</td>
+        </tr>
+        <tr>
+          <td>Hop</td>
+          <td>Spacing between STFT windows (ms)</td>
+          <td>10 ms hop gives 100 Hz mel frames</td>
+          <td>Confusing it with the LLM's step</td>
+        </tr>
+        <tr>
+          <td>Frame rate</td>
+          <td>Latent vectors per second after an encoder or codec</td>
+          <td>Mimi 12.5 Hz, 80 ms per frame</td>
+          <td>Treating a frame as one token</td>
+        </tr>
+        <tr>
+          <td>Token rate</td>
+          <td>Discrete ids per second, summed over codebooks</td>
+          <td>Mimi 100 tokens/s</td>
+          <td>Saying "12.5 Hz" for it</td>
+        </tr>
+        <tr>
+          <td>Bitrate</td>
+          <td>Bits per second of the code</td>
+          <td>Mimi 1.1 kbps</td>
+          <td>Quoting it without codebook size</td>
+        </tr>
+        <tr>
+          <td>Chunk size</td>
+          <td>Audio processed or emitted per step; a multiple of frames</td>
+          <td>LLaMA-Omni 2: 400 ms; DuplexSLA: 160 ms</td>
+          <td>Using "chunk" and "frame" interchangeably</td>
+        </tr>
+        <tr>
+          <td>Stride</td>
+          <td>How far the input advances per step</td>
+          <td>DuplexSLA user stream: 80 ms</td>
+          <td>Equating it with the chunk</td>
+        </tr>
+        <tr>
+          <td>Delay (lookahead)</td>
+          <td>Offset between streams, or future context a model waits for</td>
+          <td>Moshi acoustic delay 1; DSM ASR text delay 2.5 s</td>
+          <td>Equating it with end-to-end latency</td>
+        </tr>
+        <tr>
+          <td>Latency</td>
+          <td>Time from an event to the response</td>
+          <td>Moshi 160 ms theory, about 200 ms practice</td>
+          <td>Comparing theory with measured numbers</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I keep four numbers apart: sample rate, frame rate, token rate and chunk size.
+      Mimi is 24 kHz in, 12.5 Hz frames, 100 tokens a second, and chunks are whatever the system batches on top."
+    </p>
+  </div>
+</section>

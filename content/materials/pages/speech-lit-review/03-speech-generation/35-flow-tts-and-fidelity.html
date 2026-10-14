@@ -1,0 +1,418 @@
+<section id="flow-tts-fidelity">
+  <h2>How flow-matching TTS works, and getting high-fidelity audio out</h2>
+  <p>
+    A flow-matching TTS model learns to fill a masked span of a mel spectrogram, given text and the audio around the gap.
+    At inference the gap is the whole utterance after a reference clip, and an ODE solver fills it from noise.
+    The objective and CFG are derived in
+    <a href="#diffusion-and-flow">Diffusion and flow matching</a>;
+    this section walks the pipeline step by step, then lists the levers that decide how good the final audio sounds.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 306" role="img"
+      aria-label="Flow-matching TTS. Training: text with filler tokens and the context mel plus noisy mel go into a network that predicts velocity, with loss on the masked span. Inference: noise, text and prompt mel go through N ODE steps to a mel, then a vocoder makes the waveform">
+      <defs>
+        <marker id="flow-tts-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Training == -->
+      <rect class="d-group" x="4" y="4" width="712" height="146" rx="8"/>
+      <text class="d-text--muted" x="14" y="20" text-anchor="start"
+        dominant-baseline="middle">Training: masked infilling</text>
+      <rect class="d-box" x="10" y="34" width="150" height="44" rx="8"/>
+      <text class="d-text" x="85" y="56" text-anchor="middle"
+        dominant-baseline="middle">Text + fillers</text>
+      <rect class="d-box" x="10" y="92" width="150" height="44" rx="8"/>
+      <text class="d-text" x="85" y="106" text-anchor="middle"
+        dominant-baseline="middle">Context mel</text>
+      <text class="d-text--small" x="85" y="123" text-anchor="middle"
+        dominant-baseline="middle">+ noisy masked span <tspan font-style="italic">x</tspan><tspan font-style="italic" font-size="9" dy="4">t</tspan><tspan dy="-4"></tspan></text>
+      <path class="d-arrow" d="M 160 56 L 228 74" marker-end="url(#flow-tts-arrow)"/>
+      <path class="d-arrow" d="M 160 114 L 228 96" marker-end="url(#flow-tts-arrow)"/>
+      <rect class="d-box d-box--accent" x="230" y="63" width="150" height="44" rx="8"/>
+      <text class="d-text" x="305" y="78" text-anchor="middle"
+        dominant-baseline="middle">Network <tspan font-style="italic">v</tspan><tspan font-style="italic" font-size="9" dy="4">θ</tspan><tspan dy="-4"></tspan></text>
+      <text class="d-text--small" x="305" y="95" text-anchor="middle"
+        dominant-baseline="middle">also sees flow time t</text>
+      <path class="d-arrow" d="M 380 85 L 468 85" marker-end="url(#flow-tts-arrow)"/>
+      <text class="d-text--muted" x="424" y="72" text-anchor="middle"
+        dominant-baseline="middle">predicted v</text>
+      <rect class="d-box" x="470" y="63" width="150" height="44" rx="8"/>
+      <text class="d-text" x="545" y="78" text-anchor="middle"
+        dominant-baseline="middle">Regression loss</text>
+      <text class="d-text--small" x="545" y="95" text-anchor="middle"
+        dominant-baseline="middle">target <tspan font-style="italic">x</tspan><tspan font-style="italic" font-size="9" dy="4">1</tspan><tspan dy="-4"></tspan> − <tspan font-style="italic">x</tspan><tspan font-style="italic" font-size="9" dy="4">0</tspan><tspan dy="-4"></tspan></text>
+      <text class="d-text--muted" x="440" y="134" text-anchor="middle"
+        dominant-baseline="middle">mask 70 to 100% of frames; loss on masked frames</text>
+
+      <!-- == Inference == -->
+      <rect class="d-group" x="4" y="160" width="712" height="140" rx="8"/>
+      <text class="d-text--muted" x="14" y="176" text-anchor="start"
+        dominant-baseline="middle">Inference: fill everything after the prompt</text>
+      <rect class="d-box" x="10" y="226" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="240" text-anchor="middle"
+        dominant-baseline="middle">Noise x0</text>
+      <text class="d-text--small" x="75" y="257" text-anchor="middle"
+        dominant-baseline="middle">+ text + prompt mel</text>
+      <path class="d-arrow" d="M 140 248 L 198 248" marker-end="url(#flow-tts-arrow)"/>
+      <rect class="d-box d-box--accent" x="200" y="226" width="150" height="44" rx="8"/>
+      <text class="d-text" x="275" y="240" text-anchor="middle"
+        dominant-baseline="middle">N ODE steps</text>
+      <text class="d-text--small" x="275" y="257" text-anchor="middle"
+        dominant-baseline="middle">Euler or midpoint, CFG</text>
+      <path class="d-arrow d-arrow--dashed" d="M 320 226 L 320 205 L 230 205 L 230 224"
+        marker-end="url(#flow-tts-arrow)"/>
+      <text class="d-text--muted" x="275" y="194" text-anchor="middle"
+        dominant-baseline="middle"><tspan font-style="italic">x</tspan><tspan font-style="italic" font-size="9" dy="4">t</tspan><tspan dy="-4"></tspan> to <tspan font-style="italic">x</tspan><tspan font-style="italic" font-size="9" dy="4">t+dt</tspan><tspan dy="-4"></tspan>, repeat</text>
+      <path class="d-arrow" d="M 350 248 L 408 248" marker-end="url(#flow-tts-arrow)"/>
+      <text class="d-text--muted" x="379" y="236" text-anchor="middle"
+        dominant-baseline="middle">mel</text>
+      <rect class="d-box" x="410" y="226" width="120" height="44" rx="8"/>
+      <text class="d-text" x="470" y="248" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+      <path class="d-arrow" d="M 530 248 L 588 248" marker-end="url(#flow-tts-arrow)"/>
+      <rect class="d-box" x="590" y="226" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="248" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <text class="d-text--muted" x="275" y="288" text-anchor="middle"
+        dominant-baseline="middle">CFG: two passes per step</text>
+    </svg>
+    <figcaption>
+      Flow-matching TTS. Top: training regresses the velocity on a masked span, given text and the unmasked audio.
+      Bottom: inference integrates the learned ODE from noise, then a vocoder renders the mel.
+    </figcaption>
+  </figure>
+
+  <h3 id="flow-tts-training">Training: text-guided infilling</h3>
+  <p>
+    Voicebox is a non-autoregressive flow-matching model trained to infill speech, given audio context and text (arXiv 2306.15687).
+    Its loss covers only the masked frames; the unmasked frames are fed in and the masked ones are set to zero.
+    Voicebox expands phones to frame level using forced-alignment durations.
+    E2 TTS drops that: it pads the character sequence with a filler token up to the mel length, so no alignment or grapheme-to-phoneme step is needed (arXiv 2406.18009).
+    F5-TTS keeps the filler padding but refines the text with four ConvNeXt V2 blocks before concatenating it with the speech input, and uses a DiT backbone with adaLN-zero (arXiv 2410.06885).
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Text input</th>
+          <th>Backbone</th>
+          <th>Mel and vocoder</th>
+          <th>Sampling as reported</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Voicebox (arXiv 2306.15687)</td>
+          <td>Frame-level phones, forced alignment</td>
+          <td>Flow model plus a separate duration model</td>
+          <td>80-dim log mel at 100 Hz; HiFi-GAN</td>
+          <td>Midpoint, NFE 32 by default; CFG \( \alpha = 0.7 \) for monolingual TTS</td>
+        </tr>
+        <tr>
+          <td>E2 TTS (arXiv 2406.18009)</td>
+          <td>Characters plus fillers</td>
+          <td>Transformer with U-Net skips, 335M parameters</td>
+          <td>100-dim log mel from 24 kHz audio; BigVGAN-based</td>
+          <td>Midpoint, 32 NFE, CFG strength 1.0</td>
+        </tr>
+        <tr>
+          <td>F5-TTS (arXiv 2410.06885)</td>
+          <td>Characters plus fillers, ConvNeXt V2</td>
+          <td>DiT, adaLN-zero, about 336M parameters</td>
+          <td>100-dim log mel, 24 kHz, hop 256; Vocos by default</td>
+          <td>Euler, 16 or 32 NFE, CFG \( \alpha = 2 \)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="flow-tts-duration">Duration: fix the length first</h3>
+  <p>
+    A non-autoregressive model must know the output length before it starts.
+    Voicebox predicts phone durations with a separate regression model (arXiv 2306.15687).
+    In E2 TTS the total length is the prompt length plus the generated length, and that length can be chosen freely.
+    Its main experiments still used a separately trained regression duration model, for a fair comparison with Voicebox (arXiv 2406.18009).
+    F5-TTS skips the model and estimates duration from the ratio of the prompt transcript length to the text length (arXiv 2410.06885).
+    DMOSpeech has no duration predictor at all: it multiplies the target phoneme count by the prompt's speaking rate (arXiv 2410.11097).
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The F5 paper does not spell out which quantity the ratio scales.
+    The natural reading is the prompt's audio duration.
+    Either way, the estimate also acts as a speech-rate control: a shorter total gives faster speech.
+    E2 TTS tested rates from 0.7 to 1.3 (arXiv 2406.18009).
+  </p>
+  <p>
+    Two 2025 and 2026 papers treat duration as something to optimise.
+    DMOSpeech 2 adds a duration predictor (4 encoder and 4 decoder layers, hidden size 512) that reads the text and the prompt mel and outputs a categorical distribution over 300 bins of 100 ms for the remaining length (arXiv 2507.14988).
+    It is trained with GRPO: a group of 16 sampled lengths per prompt, rewards from a CTC-based ASR log-likelihood plus a weighted speaker-similarity term, clip 0.2 and a KL weight of 0.04 to a frozen reference.
+    The rewards come from the 4-step student, and the paper's ablation without the RL step gives 3.750 English WER against 1.752 with it.
+    Flow-map distillation attacks timing from the other side: its 1-NFE refinement is an alignment-aware temporal self-distillation using soft-DTW (arXiv 2609.36324).
+    Soft-DTW is the differentiable form of dynamic time warping, which scores two sequences while allowing local shifts in time.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Duration source</th>
+          <th>Systems</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Separate regression model</td>
+          <td>Voicebox (arXiv 2306.15687); E2 TTS main experiments (arXiv 2406.18009)</td>
+        </tr>
+        <tr>
+          <td>Ratio or rate heuristic</td>
+          <td>F5-TTS (arXiv 2410.06885); DMOSpeech (arXiv 2410.11097)</td>
+        </tr>
+        <tr>
+          <td>Fixed by AR tokens</td>
+          <td>CosyVoice 2 (arXiv 2412.10117; see the hybrid below)</td>
+        </tr>
+        <tr>
+          <td>RL-tuned predictor</td>
+          <td>DMOSpeech 2 (arXiv 2507.14988)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="flow-tts-cloning">Zero-shot voice cloning is infilling</h3>
+  <p>
+    At inference the reference clip becomes the unmasked context at the start.
+    E2 TTS builds the input from the prompt's mel features, a zero-filled block for the part to generate, and the character sequence (prompt transcript, then target text, then fillers) (arXiv 2406.18009).
+    The model continues the clip in the same voice, so no separate speaker encoder is part of that description.
+    The same infilling objective gives Voicebox its other tasks, such as noise removal and content editing (arXiv 2306.15687).
+  </p>
+
+  <h3 id="flow-tts-sampling">Sampling: ODE steps, CFG and Sway Sampling</h3>
+  <p>
+    Sampling integrates \( \mathrm{d}x/\mathrm{d}t = v_\theta(x,t) \) from noise with a fixed-step solver.
+    Voicebox reports high quality in under 10 NFEs, and its default midpoint step of 0.0625 gives NFE 32 (arXiv 2306.15687).
+    CFG on the conditions (see the shared definition above) roughly doubles the cost, since the model runs once with and once without them.
+    F5-TTS drops the masked speech with probability 0.3 and then speech and text together with probability 0.2 during training, and reports RTF 0.15 at 16 NFE and 0.31 at 32 NFE for 10 s of speech on an RTX 3090 (arXiv 2410.06885).
+  </p>
+  <p>
+    F5-TTS adds Sway Sampling, an inference-only warp of the time grid that needs no retraining.
+    It draws \( u \sim U[0,1] \) and maps it to
+  </p>
+  \[
+    t = u + s\Big(\cos\big(\tfrac{\pi}{2}u\big) - 1 + u\Big),
+    \qquad s = -1 \text{ by default,}
+  \]
+  <p>
+    which places more solver steps at small \( t \).
+    With \( s=-1 \) the grid \( u = 0.25, 0.5, 0.75 \) maps to \( t \approx 0.076, 0.293, 0.617 \), the times DMOSpeech 2 lists for its 4-step student (arXiv 2507.14988).
+    The authors argue that the early steps sketch the contour of the speech.
+    In their ablation (Table 5, 32 NFE, LibriSpeech-PC) WER falls from 2.84 to 2.41 and speaker similarity rises from 0.62 to 0.66.
+    They report that it also helps E2 TTS (arXiv 2410.06885).
+  </p>
+
+  <h3 id="flow-tts-distillation">Few-step distillation beyond MeanFlow</h3>
+  <p>
+    Distillation trains a fast student to reproduce a slow teacher.
+    NFE is the number of network evaluations per utterance.
+    Quality drops at low NFE because the learned velocity field is an average over many possible pairings, so one large step lands on a blur.
+    Recent speech work attacks this from five directions, and the figures below are each paper's own.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Mechanism</th>
+          <th>Reported result</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>DMOSpeech (arXiv 2410.11097)</td>
+          <td>
+            Improved distribution matching distillation (DMD2): a student initialised from the teacher, plus a second score model initialised from it and a conformer discriminator.
+            Differentiable CTC and speaker-verification losses are trained through the student
+          </td>
+          <td>4 steps against 128 for the teacher; RTF 0.96 to 0.07; the abstract claims better performance than the teacher</td>
+        </tr>
+        <tr>
+          <td>DMOSpeech 2 (arXiv 2507.14988)</td>
+          <td>RL on the duration predictor, plus teacher-guided sampling: the F5-TTS teacher runs the early steps, the student the rest</td>
+          <td>14 teacher plus 2 student steps (16 total) against 32; English WER 1.738 and RTF 0.0941, against 1.947 and 0.1671 for the 32-step teacher; the 4-step student reaches RTF 0.0316</td>
+        </tr>
+        <tr>
+          <td>Flow maps, LFMD (arXiv 2609.36324)</td>
+          <td>Local flow-map distillation adapts Eulerian map distillation to conditional TTS and builds targets without integrating teacher trajectories; a TD-DP sampling schedule serves several NFE budgets; soft-DTW refinement targets 1 NFE</td>
+          <td>Seed-TTS: 1.80% WER at 1 NFE against 1.76% for the 32-NFE teacher; improves on a matched integral-distillation baseline</td>
+        </tr>
+        <tr>
+          <td>DriftTTS (arXiv 2610.03390)</td>
+          <td>No generative teacher, distillation or adversarial discriminator; a distribution-matching drift objective in a mel feature space, trained on the decoder's own rollout states</td>
+          <td>LJSpeech at NFE 4: 3.87 dB MCD, 3.7% WER, MOS 4.18; Matcha-TTS gets 3.85 dB, 3.4% and 3.96, ground truth 4.22</td>
+        </tr>
+        <tr>
+          <td>CuteTTS guidance-step distillation (arXiv 2608.08638)</td>
+          <td>Folds CFG and several solver steps into one interval-conditioned student, for a patch-level AR model with a flow head</td>
+          <td>First-audio latency down 23.3% and RTF down 40.8% against the base model, with comparable quality</td>
+        </tr>
+        <tr>
+          <td>Unified guidance (arXiv 2607.00363)</td>
+          <td>Heterogeneous data augmentation to separate content from acoustic residue (timbre leakage), plus trajectory rectification and an intrinsic guidance objective that removes CFG's extra cost</td>
+          <td>Inference nearly 3 times faster, with better speaker similarity than baselines</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The abstracts do not give matched test sets, so the rows are not a ranking.
+    <span class="tag tag--inference">Inference</span>
+    The common thread is that the 2026 papers no longer rely on a pure velocity-matching student: they add a distribution-level or alignment-level signal so that a single step commits to one sample.
+  </p>
+
+  <h3 id="flow-tts-hybrid">The AR plus flow hybrid: CosyVoice 2</h3>
+  <p>
+    Here an AR language model writes speech tokens and the flow model only renders acoustics (arXiv 2412.10117).
+    The flow model is conditioned on semantic tokens, a speaker embedding from an external 3D-Speaker model, and a masked speech feature, which at inference is the reference mel.
+    Tokens run at 25 Hz and are up-sampled by two to match the 50 Hz mel at 24 kHz.
+    A look-ahead layer (a right-padded 1-D convolution) precedes the up-sampling.
+    Training masks 70 to 100% of the final mel frames, as in the NAR models.
+  </p>
+  <p>
+    The network is a causal convolutional Transformer UNet.
+    For streaming, it samples one of four attention masks per training example, uniformly: non-causal, full-causal, chunk-M (past plus M future frames) and chunk-2M.
+    Inference uses a cosine time schedule \( t := 1 - \cos(\tfrac{1}{2}t\pi) \), which gives more steps to the initial stage, CFG strength 0.7 and 10 NFE.
+    A pre-trained vocoder, not named in the paper, then makes the waveform.
+    <span class="tag tag--inference">Inference</span>
+    Because the tokens fix the content and its length, this variant needs no duration estimate.
+    Chunked use of this decoder is covered in
+    <a href="#streaming-low-latency">Streaming and low latency</a>.
+  </p>
+
+  <h3 id="flow-tts-output">Output: mel plus vocoder, or latent plus decoder</h3>
+  <p>
+    The flow model's output is a mel (or a latent) that still has to become samples.
+    The routes and their trade-offs are compared in
+    <a href="#tokens-to-waveform">From tokens to waveform</a>.
+    Everything below concerns the last two boxes of the inference row.
+  </p>
+
+  <h3 id="fidelity-levers">Getting high fidelity out</h3>
+  <p>
+    <strong>Sample rate and bandwidth.</strong>
+    The systems above use 24 kHz mels (E2, F5, CosyVoice 2) and Mimi uses 24 kHz audio (arXiv 2410.00037).
+    DAC targets 44.1 kHz and trains on speech, music and environmental sound (arXiv 2306.06546).
+    Its authors warn that the true sampling rate of source data varies (Common Voice is commonly 8 to 16 kHz), and that models trained on such data often fail to reconstruct content above the data's average true rate.
+    Stable Audio Open generates 44.1 kHz stereo, yet its authors state it cannot produce intelligible speech or singing, so a high rate does not make a model a TTS system (arXiv 2407.14358).
+  </p>
+  <p>
+    <strong>Vocoder.</strong>
+    HiFi-GAN pairs a multi-period discriminator with the multi-scale discriminator from MelGAN, plus feature-matching and mel L1 losses (arXiv 2010.05646).
+    It reports MOS 4.36 for its V1 model against 4.45 for ground truth on a single-speaker set.
+    BigVGAN adds the periodic Snake activation, an anti-aliased up-sample, activate, down-sample step with low-pass filters, and a multi-resolution spectrogram discriminator in place of the multi-scale one (arXiv 2206.04658).
+    It is trained on LibriTTS at 24 kHz with a 100-band log mel and hop 256, scales to 112M parameters, and the authors claim it generalises to unseen speakers, languages and recording conditions.
+    In F5-TTS, swapping Vocos for BigVGAN lowered WER from 1.83 to 1.62 at 32 NFE on Seed-TTS test-en (arXiv 2410.06885).
+    That is an intelligibility measure, not a direct audio-quality score.
+  </p>
+  <p>
+    <strong>Codec bitrate and losses.</strong>
+    DAC reaches about 90x compression of 44.1 kHz audio at 8 kbps, using nine 10-bit codebooks at an 86 Hz frame rate (arXiv 2306.06546).
+    Its ViSQOL score rises from 3.76 at 1.78 kbps to 4.18 at 8 kbps, against 3.13 for EnCodec at 12 kbps.
+    Its listening test finds it well above EnCodec at every bitrate, yet still below the reference.
+    Naive quantizer dropout hurt full-bandwidth quality, so DAC applies it with probability 0.5.
+    The loss mix is adversarial (1.0), feature matching (2.0) and multi-scale mel L1 (15.0).
+    Mimi shows how much the losses matter: training with only adversarial and feature losses lifted MUSHRA from 58.8 to 81.0 at 1.1 kbps, while objective metrics degraded (arXiv 2410.00037).
+    Its split RVQ raised MUSHRA from 57.8 to 64.0 and worsened ABX from 6.5% to 8.1%.
+  </p>
+  <p>
+    <strong>Super-resolution as a post step.</strong>
+    AudioSR is a diffusion-based model that upsamples input of 2 to 16 kHz bandwidth to 48 kHz sampling (arXiv 2309.07314).
+    Moshi's fine-tuning data, Fisher, is 8 kHz telephone audio, which the authors upsample to 24 kHz with AudioSR (arXiv 2410.00037).
+    <span class="tag tag--inference">Inference</span>
+    A generative upsampler invents plausible high frequencies; it does not recover them.
+  </p>
+  <p>
+    <strong>Measuring it.</strong>
+    MUSHRA (DAC, Mimi) and ViSQOL (DAC) are used for codecs.
+    UTMOS comes from a MOS-prediction system for the VoiceMOS Challenge 2022 (arXiv 2204.02152), and F5-TTS reports it as an objective naturalness metric next to CMOS and SMOS.
+    UTMOS is not fidelity to a reference: F5-TTS scores 3.72 against ground truth 3.53 on Seed-TTS test-en, but 3.89 against 4.09 on LibriSpeech-PC (arXiv 2410.06885).
+  </p>
+
+  <h3 id="fidelity-checklist">Fidelity checklist</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it fixes</th>
+          <th>Cost</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Full-band sample rate and data (44.1 kHz)</td>
+          <td>Missing content above the band limit of the training data</td>
+          <td>More samples to decode; needs full-band training sources</td>
+          <td>DAC (arXiv 2306.06546)</td>
+        </tr>
+        <tr>
+          <td>Stronger vocoder (Snake, anti-aliasing, multi-resolution discriminator)</td>
+          <td>Quality and generalisation to unseen speakers and conditions</td>
+          <td>Larger model, up to 112M parameters</td>
+          <td>BigVGAN (arXiv 2206.04658)</td>
+        </tr>
+        <tr>
+          <td>Adversarial and feature-matching losses</td>
+          <td>Perceived quality at low bitrate</td>
+          <td>Objective reconstruction metrics can degrade</td>
+          <td>Mimi (arXiv 2410.00037), HiFi-GAN (arXiv 2010.05646)</td>
+        </tr>
+        <tr>
+          <td>More codebooks, higher bitrate</td>
+          <td>Reconstruction error (ViSQOL 3.76 to 4.18, 1.78 to 8 kbps)</td>
+          <td>Inference: longer token sequences for an AR LM</td>
+          <td>DAC (arXiv 2306.06546)</td>
+        </tr>
+        <tr>
+          <td>Quantizer dropout, probability 0.5</td>
+          <td>Keeps low-bitrate use without losing full-bandwidth quality</td>
+          <td>One tuned hyperparameter</td>
+          <td>DAC (arXiv 2306.06546)</td>
+        </tr>
+        <tr>
+          <td>Mel resolution (100 bins, hop 256 at 24 kHz) matched to the vocoder</td>
+          <td>Inference: the detail available to the vocoder</td>
+          <td>Inference: more frames for the flow model</td>
+          <td>F5-TTS, BigVGAN configurations</td>
+        </tr>
+        <tr>
+          <td>More ODE steps; Sway Sampling</td>
+          <td>WER and speaker similarity (2.84 to 2.41; 0.62 to 0.66)</td>
+          <td>Steps scale compute linearly; Sway is free</td>
+          <td>F5-TTS (arXiv 2410.06885)</td>
+        </tr>
+        <tr>
+          <td>Audio super-resolution of band-limited data</td>
+          <td>8 kHz training audio upsampled to 24 kHz</td>
+          <td>Extra diffusion model; invented high frequencies (inference)</td>
+          <td>AudioSR (arXiv 2309.07314), Moshi (arXiv 2410.00037)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Sources did not give a confirmed figure for loudness normalisation or PESQ, so they are left out.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Flow-matching TTS is masked infilling: the model learns the velocity that turns noise into the missing mel, given text and the audio around the gap, and cloning is just infilling after a reference clip.
+      Intelligibility comes from the flow model and the step budget; the last-mile fidelity comes from the vocoder or codec, the sample rate, and the training data's real bandwidth."
+    </p>
+  </div>
+</section>

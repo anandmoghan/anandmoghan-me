@@ -1,0 +1,172 @@
+<section id="duplex-wiring-turn-feel">
+  <h2>Wiring the decision and the turn-taking feel</h2>
+  <p>
+    The same families can be read as three wirings of one decision.
+    The wiring explains most of what makes a duplex model feel like, or unlike, a person talking.
+  </p>
+  <h3 id="duplex-schemes-diagram">Three ways to wire the decision</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 366" role="img"
+      aria-label="Three duplex wirings: dual-stream lanes on one clock, a flattened single sequence of user, text and speech chunks, and an LLM with a state head that gates the output">
+      <defs>
+        <marker id="schemes-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-group" x="0" y="4" width="720" height="104" rx="8"/>
+      <text class="d-text" x="10" y="18" text-anchor="start"
+        dominant-baseline="middle">A  Dual-stream (Moshi, PersonaPlex)</text>
+      <text class="d-text--muted" x="710" y="18" text-anchor="end"
+        dominant-baseline="middle">one 80 ms clock</text>
+      <text class="d-text--small" x="10" y="48" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <text class="d-text--small" x="10" y="82" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-lane" x="70" y="34" width="640" height="28" rx="6"/>
+      <rect class="d-box d-box--muted" x="74" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="127" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="180" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="233" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="286" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="339" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="392" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="445" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="498" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="551" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="604" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-box d-box--muted" x="657" y="37" width="49" height="22" rx="5"/>
+      <rect class="d-lane" x="70" y="68" width="640" height="28" rx="6"/>
+      <rect class="d-box" x="74" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="127" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="180" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="233" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="286" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="339" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="392" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="445" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="498" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="551" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="604" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-box" x="657" y="71" width="49" height="22" rx="5"/>
+      <rect class="d-group" x="0" y="118" width="720" height="80" rx="8"/>
+      <text class="d-text" x="10" y="132" text-anchor="start"
+        dominant-baseline="middle">B  Flattened single stream (OmniFlatten)</text>
+      <text class="d-text--muted" x="710" y="132" text-anchor="end"
+        dominant-baseline="middle">one sequence, three roles</text>
+      <rect class="d-lane" x="10" y="148" width="700" height="40" rx="6"/>
+      <rect class="d-box d-box--muted" x="16" y="152" width="100" height="32" rx="6"/>
+      <text class="d-text--small" x="66.0" y="168" text-anchor="middle"
+        dominant-baseline="middle">user chunk</text>
+      <rect class="d-box" x="122" y="152" width="54" height="32" rx="6"/>
+      <text class="d-text--small" x="149" y="168" text-anchor="middle"
+        dominant-baseline="middle">text x2</text>
+      <rect class="d-box" x="182" y="152" width="118" height="32" rx="6"/>
+      <text class="d-text--small" x="241" y="168" text-anchor="middle"
+        dominant-baseline="middle">speech x10</text>
+      <rect class="d-box d-box--muted" x="306" y="152" width="100" height="32" rx="6"/>
+      <text class="d-text--small" x="356.0" y="168" text-anchor="middle"
+        dominant-baseline="middle">user chunk</text>
+      <rect class="d-box" x="412" y="152" width="54" height="32" rx="6"/>
+      <text class="d-text--small" x="439" y="168" text-anchor="middle"
+        dominant-baseline="middle">text x2</text>
+      <rect class="d-box" x="472" y="152" width="118" height="32" rx="6"/>
+      <text class="d-text--small" x="531" y="168" text-anchor="middle"
+        dominant-baseline="middle">speech x10</text>
+      <rect class="d-box d-box--muted" x="596" y="152" width="70" height="32" rx="6"/>
+      <text class="d-text--small" x="631.0" y="168" text-anchor="middle"
+        dominant-baseline="middle">user chunk</text>
+      <rect class="d-group" x="0" y="208" width="720" height="150" rx="8"/>
+      <text class="d-text" x="10" y="222" text-anchor="start"
+        dominant-baseline="middle">C  Control head (Freeze-Omni, MinMo)</text>
+      <rect class="d-box d-box--muted" x="10" y="240" width="140" height="44" rx="8"/>
+      <text class="d-text" x="80.0" y="262.0" text-anchor="middle"
+        dominant-baseline="middle">User audio chunk</text>
+      <rect class="d-box" x="190" y="240" width="160" height="44" rx="8"/>
+      <text class="d-text" x="270.0" y="254.0" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <text class="d-text--small" x="270.0" y="271.0" text-anchor="middle"
+        dominant-baseline="middle">mostly unchanged</text>
+      <rect class="d-box" x="560" y="240" width="150" height="44" rx="8"/>
+      <text class="d-text" x="635.0" y="262.0" text-anchor="middle"
+        dominant-baseline="middle">Speech output</text>
+      <rect class="d-box d-box--accent" x="190" y="306" width="160" height="40" rx="8"/>
+      <text class="d-text" x="270.0" y="326.0" text-anchor="middle"
+        dominant-baseline="middle">State head</text>
+      <path class="d-arrow" d="M 150 262 L 188 262"
+        marker-end="url(#schemes-arrow)"/>
+      <path class="d-arrow" d="M 350 262 L 558 262"
+        marker-end="url(#schemes-arrow)"/>
+      <text class="d-text--muted" x="454" y="252" text-anchor="middle"
+        dominant-baseline="middle">response tokens</text>
+      <path class="d-arrow" d="M 270 284 L 270 304"
+        marker-end="url(#schemes-arrow)"/>
+      <text class="d-text--muted" x="278" y="294" text-anchor="start"
+        dominant-baseline="middle">hidden states</text>
+      <path class="d-arrow d-arrow--dashed" d="M 350 326 L 635 326 L 635 286"
+        marker-end="url(#schemes-arrow)"/>
+      <text class="d-text--muted" x="492" y="318" text-anchor="middle"
+        dominant-baseline="middle">keep listening / interrupted / turn ended</text>
+    </svg>
+    <figcaption>Where the speak-or-listen decision lives: in every frame of two parallel streams (A), in the order of one interleaved sequence (B), or in a small head that reads LLM hidden states (C).</figcaption>
+  </figure>
+  <ul>
+    <li>
+      <strong>Dual-stream:</strong>
+      no separate decision; speaking and listening are both tokens on every frame.
+    </li>
+    <li>
+      <strong>Flattened:</strong>
+      one sequence, so who speaks is decided by which role's tokens come next.
+    </li>
+    <li>
+      <strong>Control head:</strong>
+      a small classifier reads hidden states and gates a mostly unchanged LLM.
+      This is why Freeze-Omni can keep its LLM frozen.
+    </li>
+  </ul>
+  <p>
+    The 2026 survey (arXiv 2606.19453) calls SyncLLM an L2-shaped but "apparent (not substantive)" full-duplex system.
+  </p>
+
+  <h3 id="turn-taking-feel">What causes the turn-taking feel</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Two causes follow from the sources, both about the decision and not about speech quality:
+  </p>
+  <ol>
+    <li>
+      <strong>Decisions quantised at chunk boundaries.</strong>
+      A decision waits for the next boundary, \( c/2 \) on average for chunk length \( c \) (derived).
+      That is 40 ms for an 80 ms frame, 120 ms for a 240 ms chunk and 500 ms for a 1.0 s chunk.
+    </li>
+    <li>
+      <strong>Scarce interaction data.</strong>
+      The 2025 survey names synchronous data scarcity (arXiv 2509.14515).
+      The 2026 survey finds that observed behaviour is constrained by the interaction patterns in training and evaluation (arXiv 2606.19453).
+    </li>
+  </ol>
+  <p>
+    A related finding: audio foundation models miss when to speak, interrupt too aggressively and rarely backchannel
+    (Talking Turns, arXiv 2503.01174).
+    <span class="tag tag--inference">Inference</span>
+    My reading: the speech path is not the bottleneck.
+    The bottleneck is the duplex decision, plus ingesting user audio while the model is speaking its own.
+  </p>
+  <div class="callout callout--inference">
+    <strong>Fit for a Synthesia voice agent</strong>
+    <p>
+      The closest patterns are DSM-style delay streams plus an action channel (DuplexSLA), or a token-level L2 design like Moshi.
+      For reasoning and speech together, name the options: think in the listening window (Chronological Thinking, arXiv 2510.05150; FLAIR, arXiv 2603.17837), pace the voice with a reasoner (arXiv 2510.09592), or pair the duplex model with a bigger thinker (KAME, arXiv 2510.02327; MoshiRAG, arXiv 2604.12928).
+      Their reported gains are on different benchmarks, so compare them only with that in mind.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The speech path is not the hard part.
+      The hard part is the decision, which is quantised by chunk size and limited by the interaction patterns in the training data.
+      So I would compare duplex systems on interaction metrics at a fixed operating point, not on a single latency number."
+    </p>
+  </div>
+</section>

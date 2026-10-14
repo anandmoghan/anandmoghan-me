@@ -1,0 +1,280 @@
+<section id="block-diffusion-lms">
+  <h2>Block diffusion language models</h2>
+  <p>
+    A plain autoregressive model writes one token at a time, which is slow but easy to stream.
+    A fully masked model (previous section) fills a whole clip in a few passes, which is fast but cannot start talking before the clip is planned.
+    Block diffusion sits between the two: it writes the speech one block at a time, left to right, and fills all the tokens inside each block together.
+  </p>
+  <p>
+    Think of a crossword for each sentence.
+    You never leave a sentence half done before moving on, but within one sentence you fill the easy squares first and let those answers help with the hard ones.
+  </p>
+  <h3 id="block-diffusion-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 240" role="img"
+      aria-label="Block diffusion: three blocks left to right. Block 1 is finished. Block 2 is shown in three passes from top to bottom: all four slots masked, then two slots filled, then all four filled. Block 3 is still masked. A long arrow shows that blocks are generated left to right and finished blocks become context">
+      <defs>
+        <marker id="block-diffusion-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="109" y="22" text-anchor="middle">block 1: done</text>
+      <text class="d-text--muted" x="351" y="22" text-anchor="middle">block 2: being filled</text>
+      <text class="d-text--muted" x="593" y="22" text-anchor="middle">block 3: not started</text>
+
+      <!-- == Block 1: finished == -->
+      <rect class="d-box" x="20" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="40" y="130" text-anchor="middle"
+        dominant-baseline="middle">17</text>
+      <rect class="d-box" x="66" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="86" y="130" text-anchor="middle"
+        dominant-baseline="middle">42</text>
+      <rect class="d-box" x="112" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="132" y="130" text-anchor="middle"
+        dominant-baseline="middle">08</text>
+      <rect class="d-box" x="158" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="178" y="130" text-anchor="middle"
+        dominant-baseline="middle">93</text>
+
+      <!-- == Block 2: three passes, top to bottom == -->
+      <rect class="d-group" x="254" y="36" width="194" height="122" rx="8"/>
+      <rect class="d-box d-box--muted" x="262" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="282" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+      <rect class="d-box d-box--muted" x="308" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="328" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+      <rect class="d-box d-box--muted" x="354" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="374" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+      <rect class="d-box d-box--muted" x="400" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="420" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+
+      <rect class="d-box d-box--accent" x="262" y="80" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="282" y="94" text-anchor="middle"
+        dominant-baseline="middle">55</text>
+      <rect class="d-box d-box--muted" x="308" y="80" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="328" y="94" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+      <rect class="d-box d-box--accent" x="354" y="80" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="374" y="94" text-anchor="middle"
+        dominant-baseline="middle">21</text>
+      <rect class="d-box d-box--muted" x="400" y="80" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="420" y="94" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+
+      <rect class="d-box" x="262" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="282" y="130" text-anchor="middle"
+        dominant-baseline="middle">55</text>
+      <rect class="d-box d-box--accent" x="308" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="328" y="130" text-anchor="middle"
+        dominant-baseline="middle">76</text>
+      <rect class="d-box" x="354" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="374" y="130" text-anchor="middle"
+        dominant-baseline="middle">21</text>
+      <rect class="d-box d-box--accent" x="400" y="116" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="420" y="130" text-anchor="middle"
+        dominant-baseline="middle">34</text>
+
+      <path class="d-arrow" d="M 236 56 L 236 134"
+        marker-end="url(#block-diffusion-arrow)"/>
+      <text class="d-text--muted" x="226" y="96" text-anchor="end">passes</text>
+
+      <!-- == Block 3: not started == -->
+      <rect class="d-box d-box--muted" x="504" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="524" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+      <rect class="d-box d-box--muted" x="550" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="570" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+      <rect class="d-box d-box--muted" x="596" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="616" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+      <rect class="d-box d-box--muted" x="642" y="44" width="40" height="28" rx="6"/>
+      <text class="d-text--small" x="662" y="58" text-anchor="middle"
+        dominant-baseline="middle">M</text>
+
+      <path class="d-arrow d-arrow--dashed" d="M 20 198 L 680 198"
+        marker-end="url(#block-diffusion-arrow)"/>
+      <text class="d-text--muted" x="350" y="222" text-anchor="middle">blocks run left to right; a finished block becomes context for the next</text>
+      <text class="d-text--muted" x="20" y="180" text-anchor="start">M = masked (blank) slot; highlighted = filled in this pass</text>
+    </svg>
+    <figcaption>
+      One block is filled in three passes: every slot starts blank (M), the most confident predictions are kept first, and the rest follow.
+      Block 1 is already done and block 3 has not started.
+    </figcaption>
+  </figure>
+  <p>For one block:</p>
+  <ol>
+    <li>Start with the block fully masked; the model sees the text, the voice prompt, every finished block and the blanks.</li>
+    <li>The model predicts a token and a confidence for every blank at once.</li>
+    <li>Keep the most confident predictions and leave the rest blank (confidence-based unmasking).</li>
+    <li>Repeat with the kept tokens as extra context, until no blanks remain or an early-stop rule says the block is good enough.</li>
+    <li>Store the finished block in the KV cache (see <a href="/apps/materials/speech-to-speech/02-listening#streaming-encoders">Streaming encoders</a>) and move to the next block.</li>
+  </ol>
+  <p>
+    <strong>Training.</strong>
+    Take real speech tokens, hide a random share, and ask the model to fill the blanks.
+    Models in this family start from a pretrained text LLM and change its attention step by step, from causal to bidirectional to block-causal: tokens inside a block see each other, while every block sees only earlier blocks.
+    Some recipes also replace a few tokens with wrong ones instead of blanking them (mask-and-replace), so the model learns to work with a noisy context.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Property</th>
+          <th>Autoregressive</th>
+          <th>Block diffusion</th>
+          <th>Fully masked</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Tokens per model call</td>
+          <td>One</td>
+          <td>Several per pass, a block over a few passes</td>
+          <td>The whole clip over a few passes</td>
+        </tr>
+        <tr>
+          <td>Order across time</td>
+          <td>Strictly left to right</td>
+          <td>Left to right by block</td>
+          <td>All at once</td>
+        </tr>
+        <tr>
+          <td>Can stream</td>
+          <td>Yes</td>
+          <td>Yes, one block at a time</td>
+          <td>No, the clip is fixed up front</td>
+        </tr>
+        <tr>
+          <td>KV cache</td>
+          <td>Yes</td>
+          <td>Yes, for finished blocks</td>
+          <td>Not for a whole-clip pass</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The table is a design comparison, not a measurement.
+  </p>
+
+  <h3 id="block-diffusion-systems">Systems to know</h3>
+  <ul>
+    <li>
+      <strong>Luna-TTS</strong> has a full form that fills the whole token grid in a fixed number of parallel passes, and a Realtime form that is autoregressive over blocks of 32 codec frames (1.28 seconds) and denoises each block in parallel.
+      The Realtime form reports a real-time factor (<a href="/apps/materials/speech-to-speech/02-listening#streaming-asr-families">RTF</a>) of 0.0240 (audio about 40 times faster than it plays) and 41.6 ms to the first block.
+    </li>
+    <li>
+      <strong>DLLM-TTS</strong> runs block discrete diffusion over codec tokens; a 0.6B model trained on 20K hours reports a real-time factor of 0.15 and competitive zero-shot results.
+    </li>
+    <li>
+      <strong>Chatterbox-Flash</strong> fine-tunes an existing autoregressive TTS decoder into a block-diffusion decoder, with streaming kept.
+      <strong>OmniVoice</strong> applies the masked-diffusion idea to whole clips, mapping text straight to multi-codebook tokens across over 600 languages.
+    </li>
+  </ul>
+
+  <h3 id="block-diffusion-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Block size</td>
+          <td>Tokens decided together, and the wait before the first audio (32 frames, 1.28 s, in one system)</td>
+          <td>
+            Bigger blocks mean fewer sequential steps but a longer first wait and weaker left-to-right control
+            <span class="tag tag--inference">Inference</span>
+          </td>
+        </tr>
+        <tr>
+          <td>Passes per block</td>
+          <td>How many times blanks are re-predicted</td>
+          <td>More passes give better quality at more compute</td>
+        </tr>
+        <tr>
+          <td>Unmasking rule and prior calibration</td>
+          <td>Which blanks to keep each pass (most confident first); calibration subtracts the block's average token distribution from the scores</td>
+          <td>Confidence ranking is fast but biased toward frequent tokens; calibration repairs it at inference time with no architecture change</td>
+        </tr>
+        <tr>
+          <td>Early stopping</td>
+          <td>Ends the passes once calibrated confidence is high enough</td>
+          <td>Saves passes; stopping too early leaves errors</td>
+        </tr>
+        <tr>
+          <td>Mask-and-replace training</td>
+          <td>Shows the model noisy contexts, not only blanks</td>
+          <td>Lower word error in one study; needs a tuned corruption rate</td>
+        </tr>
+        <tr>
+          <td>Reinforcement learning</td>
+          <td>GRPO (scores a group of samples against each other; method in <a href="/apps/materials/speech-to-speech/08-training#online-rl-speech">Online RL for speech</a>) tunes the denoising path</td>
+          <td>Better quality on the rewarded metric; the policy is the whole multi-pass trajectory, not one token</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Per block, the cost is several model calls instead of one, but those calls produce a whole block, and the latency numbers above show this can still be fast enough for live use.
+    Mask-and-replace is often credited with letting the model fix earlier mistakes; one study finds the gain also holds when every token is frozen once unmasked, so the benefit comes at least partly from training on a noisy context.
+  </p>
+
+  <h3 id="block-diffusion-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Long-tail token bias.</strong>
+      A few tokens (silence, common sounds) are far more frequent than the rest, so the model is most confident about them and confidence-based unmasking picks the same safe tokens again and again.
+      Quality drops; subtracting the block's average token distribution before ranking, as prior-calibrated scoring does, fixes it.
+    </li>
+    <li>
+      <strong>Tokens chosen together do not see each other.</strong>
+      Two tokens unmasked in the same pass are predicted independently, so they can clash at the seam.
+      <span class="tag tag--inference">Inference</span>
+      More passes and fewer tokens per pass reduce this.
+    </li>
+    <li>
+      <strong>Early mistakes stick.</strong>
+      Once a token is unmasked it is usually fixed, so a confident wrong token constrains every later pass.
+      Mask-and-replace training is one defence.
+    </li>
+    <li>
+      <strong>Quality hides in the average.</strong>
+      Word error rate and speaker similarity can look fine while some blocks glitch.
+      Check them per block and across seeds.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Block diffusion is autoregressive across blocks and parallel inside them: it unmasks the most confident tokens first, a few passes per block.
+      It keeps streaming and the KV cache while decoding many tokens at once.
+      The known trap is long-tail token bias, where frequent tokens win every confidence ranking, and calibrating against the block's average distribution fixes it."
+    </p>
+  </div>
+  <h3 id="block-diffusion-lms-sources">Sources</h3>
+  <ul>
+    <li>Luna-TTS Family Technical Report (arXiv 2608.11593)</li>
+    <li>DLLM-TTS: Block Discrete Diffusion Language Model for Text-to-Speech Synthesis (arXiv 2608.00011)</li>
+    <li>Chatterbox-Flash: Prior-Calibrated Block Diffusion for Streaming Zero-Shot TTS (arXiv 2605.30748)</li>
+    <li>OmniVoice: Towards Omnilingual Zero-Shot Text-to-Speech with Diffusion Language Models (arXiv 2604.00688)</li>
+    <li>Beyond Token Revision: Investigating Mask-and-Replace Diffusion for Zero-Shot Text-to-Speech (arXiv 2610.09448)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#block-diffusion-lms">Diffusion language models and block diffusion</a>
+      in the literature review.
+    </li>
+  </ul>
+</section>

@@ -1,0 +1,79 @@
+<section id="q-speech-generation">
+  <h2>Speech generation: codecs, AR, flow, streaming</h2>
+  <ul>
+    <li>The tokenizer fixes the LM's sequence length and the quality ceiling; the trade is rate against fidelity.</li>
+    <li>Mimi is causal, 12.5 Hz, 1.1 kbps, first codebook distilled from WavLM (arXiv 2410.00037).</li>
+    <li>WavTokenizer runs at 40 or 75 tokens/s (arXiv 2408.16532); VibeVoice uses continuous 7.5 Hz latents (arXiv 2508.19205).</li>
+    <li>
+      A controlled frame-rate ablation traces the reported quality cliff at 6.25 Hz to the training configuration, not a fundamental barrier (arXiv 2606.16969).
+    </li>
+    <li>The dominant high-quality design is hybrid: an AR LM for content and prosody, flow matching for acoustics (CosyVoice 2, arXiv 2412.10117; Qwen3-TTS, arXiv 2601.15621; FlashTTS, arXiv 2606.09141).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Flow matching won because it has a plain regression target, straighter paths, fewer steps and natural infilling.
+    </li>
+    <li>Continuous AR (MELLE, arXiv 2407.08551; DiTAR, arXiv 2502.03930; VibeVoice) removes quantization loss but adds per-frame diffusion or flow cost, and RL is harder without discrete tokens (arXiv 2608.03215).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Latency levers: for flow decoders, step distillation (FlashTTS 325 ms at 2 NFE; its table lists 843 ms for CosyVoice 2 at 10 NFE); for AR, lower token rate plus a causal codec.
+    </li>
+    <li>
+      Mel is one route to audio of four: codec decoder, flow plus mel plus vocoder, VAE decoder, or mel plus vocoder
+      (<a href="/apps/materials/speech-lit-review/03-speech-generation#tokens-to-waveform">tokens to waveform</a>).
+    </li>
+    <li>
+      Flow-matching TTS is masked mel infilling given text and audio context; cloning is infilling after a reference clip; fidelity comes from sample rate, vocoder or codec, and bitrate
+      (<a href="/apps/materials/speech-lit-review/03-speech-generation#flow-tts-fidelity">flow TTS and fidelity</a>).
+    </li>
+    <li>
+      RVQ codecs are VQ-VAE-family autoencoders with a discrete bottleneck (codebook, commitment and adversarial losses, quantizer dropout), not VAEs; continuous tokenizers are the VAE counterpart with a KL term.
+      For the LM, MusicGen's delay pattern reaches flattening-like quality at a fraction of the steps, and Moshi adds a depth transformer plus a 1 to 2 step acoustic delay (arXiv 2306.05284; arXiv 2410.00037)
+      (<a href="/apps/materials/speech-lit-review/03-speech-generation#codec-training">codec training</a>,
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#rvq-token-patterns">RVQ token patterns</a>).
+    </li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>First-packet figure (authors' self-report)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>160 ms theoretical, about 200 ms in practice</td>
+        </tr>
+        <tr>
+          <td>Qwen3-TTS 12 Hz (arXiv 2601.15621)</td>
+          <td>97 ms</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni (arXiv 2509.17765)</td>
+          <td>234 ms theoretical cold start</td>
+        </tr>
+        <tr>
+          <td>FlashTTS (arXiv 2606.09141)</td>
+          <td>325 ms at 2 NFE</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The LM decides what is said and how, the renderer decides how it sounds.
+      Flow matching is regression onto a velocity field, so I can stream the LM
+      and distil the renderer separately."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      Do not compare latency across rows: definitions differ.
+      Do not call Qwen3-Omni (causal ConvNet), MiniMax Flow-VAE or MaskGCT flow matching.
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/03-speech-generation">Full chapter</a></p>
+</section>

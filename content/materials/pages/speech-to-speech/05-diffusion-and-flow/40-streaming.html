@@ -1,0 +1,236 @@
+<section id="flow-streaming">
+  <h2>Streaming a flow decoder: chunks, look-ahead and first-packet latency</h2>
+  <p>
+    A flow model normally paints the whole canvas before showing it.
+    That is fine for an audiobook and fatal for a conversation, where the listener expects sound within a fraction of a second.
+  </p>
+  <p>
+    The fix is to paint in strips.
+    Tokens arrive from the language model in small chunks, the flow decoder renders each chunk as soon as it can, and finished audio flows out while later chunks are still being written.
+    The cost is that each strip must join smoothly with its neighbours.
+  </p>
+
+  <h3 id="flow-streaming-how">How it works</h3>
+  <p>
+    <strong>Chunk-wise causal masks.</strong>
+    In an ordinary flow decoder every frame can look at every other frame.
+    For streaming, a frame sees the past and only a short window of the future.
+    CosyVoice 2 trains one model with four mask types picked at random per example (fully non-causal, fully causal, past plus a few future chunks, and a wider version of the same), so one model serves both streaming and offline use.
+  </p>
+  <p>
+    <strong>Look-ahead.</strong>
+    A chunk decoded with no knowledge of what follows tends to end badly, because the right context shapes the last frames.
+    Look-ahead lets each chunk peek at tokens from the next one.
+    CosyVoice 2 adds a right-padded convolution layer before the up-sampling for this reason, and Kimi-Audio uses chunk-wise causal masking with look-ahead to fix chunk-boundary issues.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img"
+      aria-label="Chunk-wise causal flow decoding timeline: LM token chunks arrive, each is decoded with look-ahead tokens from the next chunk, and audio packets are emitted; first-packet latency runs from the start to the first packet">
+      <defs>
+        <marker id="flow-streaming-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-lane" x="0" y="16" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="36" text-anchor="start"
+        dominant-baseline="middle">LM tokens</text>
+      <rect class="d-lane" x="0" y="96" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="116" text-anchor="start"
+        dominant-baseline="middle">Flow decoder</text>
+      <rect class="d-lane" x="0" y="176" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="196" text-anchor="start"
+        dominant-baseline="middle">Audio out</text>
+      <rect class="d-box" x="100" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="150" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 1</text>
+      <rect class="d-box d-box--accent" x="224" y="102" width="76" height="28"
+        rx="8"/>
+      <text class="d-text" x="262" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 1</text>
+      <rect class="d-box d-box--muted" x="304" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="344" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 1</text>
+      <rect class="d-box" x="204" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="254" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 2</text>
+      <rect class="d-box" x="328" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="366" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 2</text>
+      <rect class="d-box d-box--muted" x="408" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="448" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 2</text>
+      <rect class="d-box" x="308" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="358" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 3</text>
+      <rect class="d-box" x="432" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="470" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 3</text>
+      <rect class="d-box d-box--muted" x="512" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="552" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 3</text>
+      <rect class="d-box" x="412" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="462" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 4</text>
+      <rect class="d-box" x="536" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="574" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 4</text>
+      <rect class="d-box d-box--muted" x="616" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="656" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 4</text>
+      <path class="d-arrow" d="M 160 50 L 244 100"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 212 50 L 270 100"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow" d="M 262 130 L 334 180"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow" d="M 264 50 L 348 100"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 316 50 L 374 100"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow" d="M 366 130 L 438 180"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow" d="M 368 50 L 452 100"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 420 50 L 478 100"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow" d="M 470 130 L 542 180"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow" d="M 472 50 L 556 100"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow" d="M 574 130 L 646 180"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 100 218 L 100 254"/>
+      <path class="d-arrow d-arrow--dashed" d="M 304 218 L 304 254"/>
+      <path class="d-arrow" d="M 100 246 L 304 246"
+        marker-start="url(#flow-streaming-arrow)"
+        marker-end="url(#flow-streaming-arrow)"/>
+      <text class="d-text--muted" x="202" y="236" text-anchor="middle"
+        dominant-baseline="middle">first-packet latency</text>
+      <text class="d-text--muted" x="360" y="274" text-anchor="middle"
+        dominant-baseline="middle">solid: chunk tokens; dashed: look-ahead tokens from the next chunk</text>
+    </svg>
+    <figcaption>
+      Chunk-wise causal decoding: tokens arrive in chunks, each chunk is decoded with a peek at the next one, and audio streams out.
+    </figcaption>
+  </figure>
+
+  <p>
+    <strong>Few steps without losing the streaming.</strong>
+    The usual way to cut the per-chunk solve is a mean-flow decoder, which learns the average arrow over an interval
+    (<a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers-distillation">distillation</a>).
+    At one or two steps it tends to struggle to keep acoustic quality.
+    X-Pred MeanFlow changes the output: the network predicts the mel itself, a direct acoustic target, and the average arrow is computed from that prediction by a formula.
+    It also blocks attention in chunks, in selected layers only, so each chunk sees a bounded context.
+    Its abstract reports better few-step token-to-mel quality than a baseline that predicts the average arrow directly, and stable streaming, but gives no numbers.
+  </p>
+  <p>
+    <strong>First-packet latency</strong> is the time from the request to the first audio packet.
+    <span class="tag tag--inference">Inference</span>
+    For a hybrid stack it is roughly the time for the language model to produce its first chunk (plus look-ahead tokens), plus the flow solve for that chunk, plus the vocoder.
+    The flow solve is the part this chapter's levers shrink: fewer steps means a shorter bar for each decoder box in the figure.
+  </p>
+  <p>
+    Self-reported figures show the range, though definitions differ.
+    One 2-step distilled decoder reports 325 ms first packet, where its own table lists 843 ms for a 10-step baseline.
+    Another system reports 97 ms, and a continuous-token system reports 85 ms and 54 ms in two streaming modes after distillation.
+    Do not rank them against each other.
+  </p>
+
+  <h3 id="flow-streaming-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chunk size</td>
+          <td>How much audio each decoder call covers</td>
+          <td><span class="tag tag--inference">Inference</span> Small chunks give a lower first packet but more joins and more overhead</td>
+        </tr>
+        <tr>
+          <td>Look-ahead length</td>
+          <td>How much future context each chunk sees</td>
+          <td>Smoother chunk boundaries, but each look-ahead token adds waiting time</td>
+        </tr>
+        <tr>
+          <td>Mask mix in training</td>
+          <td>Whether one model supports streaming and offline</td>
+          <td>Uniform sampling over four masks gives one model for both; the causal masks are weaker than the full one (<span class="tag tag--inference">Inference</span>)</td>
+        </tr>
+        <tr>
+          <td>Steps per chunk</td>
+          <td>Solve time for each chunk</td>
+          <td>Few-step distillation gives the largest cut; predicting the mel directly targets quality at one or two steps</td>
+        </tr>
+        <tr>
+          <td>Token rate and multi-token prediction</td>
+          <td>How much audio each token covers; several tokens per language-model pass</td>
+          <td>Both speed the language-model half of the pipeline, not the flow solve; lower rates give a coarser time grid</td>
+        </tr>
+        <tr>
+          <td>Causal vocoder or codec decoder</td>
+          <td>Whether the final stage can stream</td>
+          <td>Must carry state between chunks; see <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform">tokens to waveform</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="flow-streaming-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Artefacts at chunk boundaries.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Clicks, a pitch jump or a change in timbre where one chunk ends and the next begins.
+      Listen at the joins, and compare streaming output to the same input decoded offline.
+    </li>
+    <li>
+      <strong>Streaming quality gap.</strong>
+      <span class="tag tag--inference">Inference</span>
+      The causal model is usually a little worse than the non-causal one.
+      Measure word error rate and speaker similarity for both modes.
+    </li>
+    <li>
+      <strong>Latency hidden in look-ahead.</strong>
+      Look-ahead tokens must exist before a chunk can be decoded, so they add to first-packet latency even though the flow solve is short.
+    </li>
+    <li>
+      <strong>Unfair latency comparisons.</strong>
+      Theoretical and measured numbers differ, and papers define the clock differently.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "To stream a flow decoder I train with chunk-wise causal masks and a little look-ahead, so each chunk renders as tokens arrive.
+      I budget first-packet latency per stage; for the renderer the lever is the step count, so I would distil to two or three steps."
+    </p>
+  </div>
+
+  <h3 id="flow-streaming-sources">Sources</h3>
+  <ul>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li>FlashTTS: Fast Streaming TTS with MTP Acceleration and X-pred Mean Flow Distillation (arXiv 2606.09141)</li>
+    <li>Mean Flows for One-step Generative Modeling (arXiv 2505.13447)</li>
+    <li>X-Pred MeanFlow for Streaming Token-to-Mel Speech Decoding (arXiv 2609.12728)</li>
+    <li>Qwen3-TTS Technical Report (arXiv 2601.15621)</li>
+    <li>dots.tts Technical Report (arXiv 2606.07080)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#streaming-low-latency">Streaming and low-latency generation</a>
+    </li>
+  </ul>
+</section>

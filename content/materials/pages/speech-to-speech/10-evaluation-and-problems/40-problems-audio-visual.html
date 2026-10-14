@@ -1,0 +1,365 @@
+<section id="problems-audio-visual">
+  <h2>Common problems: audio-visual avatars</h2>
+  <p>
+    An avatar video is a relay: script to voice, voice to motion, motion to pixels.
+    Each stage can add its own error, and later stages cannot always repair what earlier ones baked in.
+    A mispronounced name reaches the lips as a correctly lip-synced wrong word.
+  </p>
+  <p>
+    Synthesia's Express-2 stack shows the shape: Express-Voice for speech, Express-Animate for motion from audio, Express-Eval for scoring motion candidates, and Express-Render for frames.
+    Its Video Agents "talk, listen, and act in real time", so the duplex failures from the previous section reach the same product.
+    What each level of interactive avatar (talk, listen, see) requires is in
+    <a href="/apps/materials/speech-to-speech/11-system-design#avatar-platform">avatar platform design</a>; most failures below are talking failures, and the listening ones get their own row.
+  </p>
+
+  <h3 id="pav-how">How it works</h3>
+  <p>
+    The figure places each failure where it enters the pipeline.
+    <span class="tag tag--inference">Inference</span>
+    The placement is my mapping, not a published one.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 285" role="img"
+      aria-label="Avatar pipeline from script through TTS, audio-to-motion, motion scoring and renderer to output, annotated with the failures introduced at each stage">
+      <defs>
+        <marker id="arrow-problems-audio-visual" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Row 1 == -->
+      <rect class="d-box" x="20" y="20" width="150" height="44" rx="8"/>
+      <text class="d-text" x="95" y="42" text-anchor="middle"
+        dominant-baseline="middle">Script</text>
+      <text class="d-text--small" x="95" y="84" text-anchor="middle">names, numbers</text>
+      <text class="d-text--small" x="95" y="100" text-anchor="middle">translated length</text>
+
+      <rect class="d-box" x="230" y="20" width="150" height="44" rx="8"/>
+      <text class="d-text" x="305" y="42" text-anchor="middle"
+        dominant-baseline="middle">Text to speech</text>
+      <text class="d-text--small" x="305" y="84" text-anchor="middle">skips, drift</text>
+      <text class="d-text--small" x="305" y="100" text-anchor="middle">leakage, buzz</text>
+
+      <rect class="d-box" x="440" y="20" width="150" height="44" rx="8"/>
+      <text class="d-text" x="515" y="42" text-anchor="middle"
+        dominant-baseline="middle">Audio to motion</text>
+      <text class="d-text--small" x="515" y="84" text-anchor="middle">hands, intent gap</text>
+      <text class="d-text--small" x="515" y="100" text-anchor="middle">face vs voice emotion</text>
+
+      <path class="d-arrow" d="M 170 42 L 228 42" marker-end="url(#arrow-problems-audio-visual)"/>
+      <path class="d-arrow" d="M 380 42 L 438 42" marker-end="url(#arrow-problems-audio-visual)"/>
+      <text class="d-text--muted" x="199" y="34" text-anchor="middle">text</text>
+      <text class="d-text--muted" x="409" y="34" text-anchor="middle">audio</text>
+
+      <!-- == Hand-off between rows == -->
+      <path class="d-arrow" d="M 590 42 L 660 42 L 660 138 L 95 138 L 95 168"
+        marker-end="url(#arrow-problems-audio-visual)"/>
+      <text class="d-text--muted" x="380" y="130" text-anchor="middle">candidate motions + audio</text>
+
+      <!-- == Row 2 == -->
+      <rect class="d-box" x="20" y="170" width="150" height="44" rx="8"/>
+      <text class="d-text" x="95" y="192" text-anchor="middle"
+        dominant-baseline="middle">Motion scoring</text>
+      <text class="d-text--small" x="95" y="234" text-anchor="middle">reranks candidates</text>
+      <text class="d-text--small" x="95" y="250" text-anchor="middle">picks the best motion</text>
+
+      <rect class="d-box d-box--accent" x="230" y="170" width="150" height="44" rx="8"/>
+      <text class="d-text" x="305" y="192" text-anchor="middle"
+        dominant-baseline="middle">Renderer</text>
+      <text class="d-text--small" x="305" y="234" text-anchor="middle">lip-sync, identity</text>
+      <text class="d-text--small" x="305" y="250" text-anchor="middle">flicker, colour drift</text>
+
+      <rect class="d-box" x="440" y="170" width="150" height="44" rx="8"/>
+      <text class="d-text" x="515" y="192" text-anchor="middle"
+        dominant-baseline="middle">Output</text>
+      <text class="d-text--small" x="515" y="234" text-anchor="middle">A/V drift, compression</text>
+      <text class="d-text--small" x="515" y="250" text-anchor="middle">consent, provenance</text>
+
+      <path class="d-arrow" d="M 170 192 L 228 192" marker-end="url(#arrow-problems-audio-visual)"/>
+      <path class="d-arrow" d="M 380 192 L 438 192" marker-end="url(#arrow-problems-audio-visual)"/>
+      <text class="d-text--muted" x="199" y="184" text-anchor="middle">best</text>
+      <text class="d-text--muted" x="409" y="184" text-anchor="middle">frames</text>
+    </svg>
+    <figcaption>
+      Figure: the avatar pipeline with failure entry points.
+      Errors from early stages (names, drift, motion choice) reach the renderer already baked in.
+    </figcaption>
+  </figure>
+
+  <p>The main failures, what they look like, and why:</p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Problem</th>
+          <th>What you see</th>
+          <th>Why it happens</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Lip-sync</td>
+          <td>Mouth misses p, b, m closures; worse on fast speech and non-English audio</td>
+          <td>Closures are brief and exact; fast speech and languages with less data are plausibly harder <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Identity drift</td>
+          <td>The face slowly changes over a long clip</td>
+          <td>Errors accumulate over long generation; the reference can also leak into the lips instead of the audio driving them</td>
+        </tr>
+        <tr>
+          <td>Flicker and colour drift</td>
+          <td>Shimmering texture; unstable teeth and mouth interior</td>
+          <td>Few-step causal students (see below) show flicker, black frames and quality loss under multimodal conditioning</td>
+        </tr>
+        <tr>
+          <td>Gesture and speech mismatch</td>
+          <td>Gestures match the rhythm but not the meaning</td>
+          <td>Audio-only conditioning plausibly yields rhythm without intent <span class="tag tag--inference">Inference</span>; earlier avatar models sync to low-level cues and lack semantic understanding</td>
+        </tr>
+        <tr>
+          <td>Voice-face mismatch</td>
+          <td>Excited voice, blank face</td>
+          <td>Voice and motion are generated by separate stages with no shared emotion state <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Dubbing timing</td>
+          <td>Translation too long, voice changes, lips off</td>
+          <td>Translated speech is often longer than the source line, so a pipeline must shorten the text, speed the speech or retime the video <span class="tag tag--inference">Inference</span>; a joint model sidesteps the choice (see below)</td>
+        </tr>
+        <tr>
+          <td>Streaming error accumulation</td>
+          <td>Flicker, black frames, audio and video clocks drifting apart</td>
+          <td>Each new chunk is built on the previous one, so a small error is inherited and grows with rollout length <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Listening failures</td>
+          <td>A frozen or generic face while the user talks; no nod, no reaction to a laugh or a frown</td>
+          <td>A talk-only avatar is driven by its own audio, so it has no input to react to; a listening avatar must predict its own reaction before the user finishes, with no view of the future</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>Why sync metrics mislead.</strong>
+    The standard lip-sync scores, Sync-C and Sync-D (also written LSE-C and LSE-D), come from SyncNet, a pretrained network that embeds a short stretch of mouth video and a short stretch of audio and checks whether they belong together.
+    Sync-D is the distance between the two embeddings (lower is better); Sync-C is SyncNet's confidence that they match (higher is better).
+    Neither needs a ground-truth video, which is why they are popular.
+    Papers report that they correlate weakly with human judgement and give odd values, such as generated video beating the ground truth, and values from different papers use different protocols.
+    <span class="tag tag--inference">Inference</span>
+    The practical response is phoneme-stratified human ratings, with the automatic score as a coarse alarm.
+  </p>
+
+  <p>
+    <strong>Why streaming errors compound.</strong>
+    A live avatar uses a student trained to imitate a slow teacher in a few steps and to produce video one short chunk at a time, looking only backwards (distillation, from <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Diffusion and flow</a>).
+    Each chunk builds on the previous one, but in training the student saw clean teacher examples rather than its own slightly wrong output.
+    A tiny flaw in chunk 10 is then input to chunk 11, so flaws snowball into flicker or black frames.
+    The remedy is to train the student on its own rollouts so it learns to correct itself; "retrospective" distillation adds a step where the model looks back at what it has produced and repairs accumulated error.
+    <span class="tag tag--inference">Inference</span>
+    The abstract of the retrospective method does not say how the looking back works.
+  </p>
+
+  <p>
+    <strong>Joint generation, a different route.</strong>
+    A cascade makes the voice first and the face second, so the two can disagree.
+    A joint model generates sound and picture together in one network, with each stream attending to the other, so lip movement and voice come out matched by construction.
+    The cost is size and speed, so the 2026 pattern is to distil a joint teacher into a few-step streaming student, which inherits the coupling.
+    For dubbing, one model adapted with a lightweight LoRA can write the translated voice and the matching mouth motion in one pass, instead of translating, retiming and re-rendering lips separately.
+    Synthesia's own dubbing release claims a translation engine that respects the original timing and length, with no published metric.
+  </p>
+
+  <h3 id="pav-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Audio-visual speech expert in the lip-sync loss</td>
+          <td>Lip-sync, especially on closures</td>
+          <td>Another model in training; inherits that model's biases</td>
+        </tr>
+        <tr>
+          <td>Reference conditioning; sparse-frame conditioning for long clips</td>
+          <td>Identity over time</td>
+          <td>Risks the reference leaking into the lips</td>
+        </tr>
+        <tr>
+          <td>Self-correcting or retrospective distillation for streaming students</td>
+          <td>Accumulated error and flicker</td>
+          <td>More training complexity; a strictly unidirectional student can give rigid body dynamics</td>
+        </tr>
+        <tr>
+          <td>Candidate reranking by an audio-motion scorer</td>
+          <td>Hands, gesture and expressiveness variance</td>
+          <td>Several motion candidates per clip; targets plausibility, not lip-sync alone</td>
+        </tr>
+        <tr>
+          <td>Duration-aware translation and retiming; lip re-render after retiming</td>
+          <td>Dubbing fit</td>
+          <td>Shorter or faster lines can sound unnatural</td>
+        </tr>
+        <tr>
+          <td>Joint audio-video dubbing (one adapted model writes the new voice and the new mouth)</td>
+          <td>Dubbing fit and lip sync, without separate retiming and re-render steps</td>
+          <td>Needs a large joint base model; control over the cloned voice is weaker than in a dedicated voice model <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Listening-aware training: feed the user's audio (and camera) into the avatar</td>
+          <td>Whether the face reacts while the user talks</td>
+          <td>Reactions must be predicted without seeing the user's next words; needs labelled or synthetic reaction data</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Consent and provenance are in <a href="/apps/materials/speech-to-speech/09-control-and-prompting#safety-and-provenance">Safety and provenance</a>.
+    The renderer and audio-visual diffusion are explained in the literature review:
+    <a href="/apps/materials/speech-lit-review/07-multimodal-generation#audio-visual-diffusion">audio-visual diffusion</a> and
+    <a href="/apps/materials/speech-lit-review/08-common-problems#audio-visual-problems">audio-visual problems</a>.
+  </p>
+
+  <h3 id="pav-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>A published system with no published failure rates.</strong>
+      The Express-2 post gives no quantitative results, failure cases or latency numbers, so which failures Synthesia measures is the best question to ask.
+    </li>
+    <li>
+      <strong>A listening avatar judged like a talking one.</strong>
+      Lip-sync scores say nothing about nods and reactions, and a benchmark of real video calls found that many models ignore the video stream or fall back to generic captioning.
+      Test listening behaviour separately.
+    </li>
+    <li>
+      <strong>Trusting a sync number, or fixing in the wrong stage.</strong>
+      A high Sync-C score does not prove good lips on bilabials, and a mispronunciation cannot be fixed at the renderer; it belongs in the script or voice model.
+    </li>
+    <li>
+      <strong>Metric drift from re-encoding.</strong>
+      Encoder settings change metric values, so score on one pinned pipeline, and compare similarity scores across systems only when the speaker encoder matches (Synthesia names WavLM).
+    </li>
+  </ul>
+
+  <h3 id="pav-top10">Prioritised top ten</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The ranking is my judgement, weighing how visible a failure is, how often it occurs and how cheaply it can be measured.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Problem</th>
+          <th>Mitigation</th>
+          <th>Metric</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Mispronounced names and brand terms</td>
+          <td>Respelling, project dictionary, glossary</td>
+          <td>Per-entity accuracy on a fixed name list, plus human rating</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Hallucinated or skipped words in long scripts</td>
+          <td>Monotonic alignment loss; alignment-score training</td>
+          <td>WER on a stable ASR; alignment score</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Lip-sync on bilabials and fast speech</td>
+          <td>Audio-visual sync expert; per-phoneme checks</td>
+          <td>Human-rated sync on a phoneme-stratified set, not raw Sync-C</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Identity and voice drift</td>
+          <td>Windowed re-anchoring against the first window or the reference</td>
+          <td>Speaker and face-embedding similarity per window against the first</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>Emotion and noise leakage from a bad reference</td>
+          <td>Quality gate; denoising</td>
+          <td>Emotion similarity and noise floor on the output</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>Voice-face expressiveness mismatch</td>
+          <td>Emotion-conditioned motion; intensity controls</td>
+          <td>Cross-modal emotion agreement</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>Hand and gesture artefacts</td>
+          <td>Candidate reranking</td>
+          <td>Human plausibility; hand-artefact rate</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>Dubbing duration mismatch</td>
+          <td>Duration-aware translation; retiming; or joint dubbing</td>
+          <td>Fraction outside the timing budget; sync after retiming</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>Streaming latency versus quality; audio-video drift</td>
+          <td>Faster renderer; seam smoothing</td>
+          <td>Time to first frame; offset against duration</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td>Duplex failures: barge-in misread, backchannels, multi-turn decay; for an avatar, a face that does not react while the user speaks</td>
+          <td>Echo cancellation; turn-taking evaluation; listening-aware avatar</td>
+          <td>False-yield rate; stop latency; multi-turn benchmark tracks; nonverbal-reaction rubric on real call clips</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Items 1 and 2 are cheap to test automatically and belong in every regression run; items 3 to 7 need human rating because the automatic metrics are weak; items 8 to 10 rank higher if dubbing, streaming or Video Agents is the focus.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The Express-2 post publishes no failure metrics, so I would ask which ones you track.
+      My first three would be per-entity pronunciation, an alignment-based hallucination rate, and phoneme-stratified lip-sync with human raters, because Sync-C correlates weakly with human judgement."
+    </p>
+  </div>
+
+  <h3 id="problems-audio-visual-sources">Sources</h3>
+  <ul>
+    <li>
+      <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Synthesia Express-2 post</a>
+      (stack, gesture generation, intensity controls, two-step renderer)
+    </li>
+    <li><a href="https://www.synthesia.io/post/synthesia-3-0-the-next-era-of-video">Synthesia 3.0 post</a> (Video Agents, dubbing)</li>
+    <li>THEval. Evaluation Framework for Talking Head Video Generation (arXiv 2511.04520)</li>
+    <li>A Comparative Study of Perceptual Quality Metrics for Audio-driven Talking Head Videos (arXiv 2403.06421)</li>
+    <li>Audio-Visual Speech Representation Expert for Enhanced Talking Face Video Generation and Evaluation (arXiv 2405.04327)</li>
+    <li>Assessing Identity Leakage in Talking Face Generation: Metrics and Evaluation Framework (arXiv 2511.08613)</li>
+    <li>InfiniteTalk: Audio-driven Video Generation for Sparse-Frame Video Dubbing (arXiv 2508.14033)</li>
+    <li>SoulX-FlashTalk: Real-Time Infinite Streaming of Audio-Driven Avatars via Self-Correcting Bidirectional Distillation (arXiv 2512.23379)</li>
+    <li>OmniHuman-1.5: Instilling an Active Mind in Avatars via Cognitive Simulation (arXiv 2508.19209)</li>
+    <li>LiveTalk: Real-Time Multimodal Interactive Video Diffusion via Improved On-Policy Distillation (arXiv 2512.23576)</li>
+    <li><a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">Talk, listen, see: the three levels of interactive video agents</a> (Synthesia, 2 Jul 2026; Levels 1 to 3, current systems at Level 1)</li>
+    <li><a href="https://www.synthesia.io/post/introducing-dubbing-2-0">Introducing Dubbing 2.0</a> (Synthesia, 15 Jul 2026; "respects the original timing and length", no metrics)</li>
+    <li>FacePlex: Toward Natural Full-Duplex Conversational Avatars (arXiv 2606.30145)</li>
+    <li>Avatar Forcing: Real-Time Interactive Head Avatar Generation for Natural Conversation (arXiv 2601.00664)</li>
+    <li>VideoFDB: Evaluating Full-Duplex Vision-Speech Capabilities in Conversational Agents (arXiv 2605.30256)</li>
+    <li>JUST-DUB-IT: Video Dubbing via Joint Audio-Visual Diffusion (arXiv 2601.22143)</li>
+    <li>Hallo-Live: Real-Time Streaming Joint Audio-Video Avatar Generation with Asynchronous Dual-Stream and Human-Centric Preference Distillation (arXiv 2604.23632)</li>
+  </ul>
+</section>

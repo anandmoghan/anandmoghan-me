@@ -1,5 +1,6 @@
 import { MetadataRoute } from 'next';
 import { getAllPosts } from '@/common/utils/post';
+import { MATERIALS_PATH, chapterHref, getMaterialsPages, pageHref } from '@/common/utils/materials';
 
 export const dynamic = 'force-static';
 
@@ -15,7 +16,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: 'monthly',
     priority: 0.6,
   }));
-  
+
+  // Materials: home, each page (landing or its single chapter) and every chapter.
+  // The /all views repeat the chapters and are left out.
+  const materialsEntries: MetadataRoute.Sitemap = [
+    MATERIALS_PATH,
+    ...getMaterialsPages().flatMap((page) => [
+      pageHref(page),
+      ...(page.chapters.length > 1 ? page.chapters.map((chapter) => chapterHref(page, chapter)) : []),
+    ]),
+  ].map((path) => ({
+    url: `${baseUrl}${path}`,
+    lastModified: new Date(),
+    changeFrequency: 'monthly',
+    priority: 0.6,
+  }));
+
   return [
     {
       url: baseUrl,
@@ -42,5 +58,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     ...postEntries,
+    ...materialsEntries,
   ];
 }

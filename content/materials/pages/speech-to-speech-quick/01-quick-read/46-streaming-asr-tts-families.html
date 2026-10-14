@@ -1,0 +1,29 @@
+<section id="q-streaming-families">
+  <h2>Streaming ASR and TTS: the modelling families</h2>
+  <p>ASR families:</p>
+  <ul>
+    <li>Chunked with an end-of-chunk token: WER 2.7 / 6.7 at 1.28 s chunks, 3.1 / 7.8 at 0.32 s (SpeechLLM-XL, arXiv 2410.03752).</li>
+    <li>Per-frame wait token: 240 ms frame plus 960 ms right context, WER 3.0 / 7.4 (Speech ReaLLM, arXiv 2406.09569).</li>
+    <li>Transducer with LLM predictor: 160 ms segments, WER 2.47 / 6.53 (Transducer-Llama, arXiv 2412.16464).</li>
+    <li>Delayed text stream: 2.5 s default delay, WER 1.7 / 4.3 (Kyutai DSM, arXiv 2509.08753).</li>
+    <li>Read/write policy on Whisper: LocalAgreement, 3.3 s long-form latency (arXiv 2307.14743).</li>
+    <li>One encoder, dynamic 1 to 8 s window: 2.69 offline, 3.33 streaming (Qwen3-ASR, arXiv 2601.21337).</li>
+  </ul>
+  <p>TTS families:</p>
+  <ul>
+    <li>Full text, causal decoder: 4-token packet = 320 ms, 97 ms first packet (Qwen3-TTS, arXiv 2601.15621).</li>
+    <li>Incremental text, interleaved: starts after 2 text tokens, 0.06 s against 0.22 s (SyncSpeech, arXiv 2502.11094).</li>
+    <li>AR plus chunk-wise causal flow: four masks and N = 5 : M = 15 in CosyVoice 2 (arXiv 2412.10117).</li>
+    <li>Multi-token prediction: audio delay 0 against 1 (Moshi) and 13 (GLM-4-Voice); first chunk 236 to 53 ms (VITA-Audio, arXiv 2505.03739).</li>
+    <li>Fixed dialogue ratio: LLaMA-Omni 2 first speech chunk about 583 ms (arXiv 2505.02625).</li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "For listening I would take a delayed stream or chunked ASR.
+      For speaking I would take interleaved text and speech, because the text arrives token by token from the reasoning LLM.
+      Chunk length or delay is the dial that trades WER for latency."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-asr-tts-families">Full section</a></p>
+</section>

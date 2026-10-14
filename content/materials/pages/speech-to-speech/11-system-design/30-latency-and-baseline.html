@@ -1,0 +1,277 @@
+<section id="latency-and-baseline">
+  <h2>Latency budget, fillers and the cascade baseline</h2>
+  <p>
+    "Under one second" sounds like one number, but it is a sum of stages.
+    Each stage can hide its work behind another if the streams overlap.
+    The craft is overlap: start the next stage on a partial result and cancel if it turns out wrong.
+    A good waiter does the same, writing your order while you finish it and saying "of course" on the way to the kitchen.
+  </p>
+  <p>
+    The number to manage is time to first audio (TTFA, benchmarked from the gold end of turn in
+    <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems#measuring-conversation">Measuring conversation</a>):
+    here, the wait from the moment the user stops talking to the first sound of the reply at the client.
+    Real-time agent platforms usually carry that audio over WebRTC, the W3C standard for sending live audio, video and data directly between browsers and apps.
+    <span class="tag tag--inference">Inference</span>
+    It is built for small buffers and low delay, which is why such platforms tend to use it.
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    All latency targets here are illustrative design targets, not measurements.
+    The sourced anchors are that Synthesia describes interactive dialogue as "typically under one second", and that one end-to-end interactive model reports its own total (below).
+  </p>
+
+  <h3 id="lb-how">How it works</h3>
+  <p>
+    In the target design the exchange runs as four overlapping lanes.
+    Partials stream while the user speaks, end of turn fires the tool call, a filler covers the call and the LLM's first token, and the reply starts when text arrives.
+    Later, a user "mm-hm" is ignored and a real barge-in makes the agent yield.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 246" role="img"
+      aria-label="Timeline over six seconds with four lanes: user audio, listen head, downstream LLM and agent audio. The user speaks while ASR partials stream, the listen head signals end of turn, the tool call and first-token wait are covered by a filler, then reply audio plays. A user backchannel during the reply is ignored, and a later real barge-in makes the listen head yield, the reply audio stop, and the LLM receive the truncation">
+      <defs>
+        <marker id="arrow-latency-and-baseline" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="314" y="14" text-anchor="middle">1 end of turn</text>
+      <text class="d-text--muted" x="502" y="14" text-anchor="middle">2 backchannel ignored</text>
+      <text class="d-text--muted" x="630" y="14" text-anchor="middle">3 barge-in, yield</text>
+
+      <!-- == Lanes == -->
+      <rect class="d-lane" x="114" y="30" width="596" height="36" rx="6"/>
+      <text class="d-text--small" x="8" y="43">user audio</text>
+      <text class="d-text--muted" x="8" y="58">frames in</text>
+      <rect class="d-lane" x="114" y="74" width="596" height="36" rx="6"/>
+      <text class="d-text--small" x="8" y="87">listen head</text>
+      <text class="d-text--muted" x="8" y="102">text, tags, action</text>
+      <rect class="d-lane" x="114" y="118" width="596" height="36" rx="6"/>
+      <text class="d-text--small" x="8" y="131">downstream LLM</text>
+      <text class="d-text--muted" x="8" y="146">text only</text>
+      <rect class="d-lane" x="114" y="162" width="596" height="36" rx="6"/>
+      <text class="d-text--small" x="8" y="175">agent audio</text>
+      <text class="d-text--muted" x="8" y="190">speak head</text>
+
+      <!-- == User audio == -->
+      <rect class="d-box d-box--muted" x="134" y="34" width="158" height="28" rx="6"/>
+      <text class="d-text--muted" x="213" y="48" text-anchor="middle" dominant-baseline="middle">user speaks</text>
+      <rect class="d-box d-box--muted" x="476" y="34" width="48" height="28" rx="6"/>
+      <text class="d-text--muted" x="500" y="48" text-anchor="middle" dominant-baseline="middle">mm-hm</text>
+      <rect class="d-box d-box--muted" x="550" y="34" width="100" height="28" rx="6"/>
+      <text class="d-text--muted" x="600" y="48" text-anchor="middle" dominant-baseline="middle">user barges in</text>
+
+      <!-- == Listen head == -->
+      <rect class="d-box" x="134" y="78" width="154" height="28" rx="6"/>
+      <text class="d-text--small" x="211" y="92" text-anchor="middle" dominant-baseline="middle">ASR partials, tags</text>
+      <rect class="d-box" x="292" y="78" width="44" height="28" rx="6"/>
+      <text class="d-text--small" x="314" y="92" text-anchor="middle" dominant-baseline="middle">EOT</text>
+      <rect class="d-box d-box--muted" x="340" y="78" width="136" height="28" rx="6"/>
+      <text class="d-text--muted" x="408" y="92" text-anchor="middle" dominant-baseline="middle">listening</text>
+      <rect class="d-box" x="480" y="78" width="44" height="28" rx="6"/>
+      <text class="d-text--small" x="502" y="92" text-anchor="middle" dominant-baseline="middle">ignore</text>
+      <rect class="d-box" x="550" y="78" width="52" height="28" rx="6"/>
+      <text class="d-text--small" x="576" y="92" text-anchor="middle" dominant-baseline="middle">YIELD</text>
+      <rect class="d-box d-box--muted" x="606" y="78" width="96" height="28" rx="6"/>
+      <text class="d-text--muted" x="654" y="92" text-anchor="middle" dominant-baseline="middle">listening</text>
+
+      <!-- == Downstream LLM == -->
+      <rect class="d-box d-box--muted" x="296" y="122" width="60" height="28" rx="6"/>
+      <text class="d-text--muted" x="326" y="136" text-anchor="middle" dominant-baseline="middle">call, TTFT</text>
+      <rect class="d-box" x="360" y="122" width="196" height="28" rx="6"/>
+      <text class="d-text--small" x="458" y="136" text-anchor="middle" dominant-baseline="middle">reply tokens (cancelled at yield)</text>
+      <rect class="d-box" x="562" y="122" width="140" height="28" rx="6"/>
+      <text class="d-text--small" x="632" y="136" text-anchor="middle" dominant-baseline="middle">truncate, re-plan</text>
+
+      <!-- == Agent audio == -->
+      <rect class="d-box d-box--muted" x="302" y="166" width="56" height="28" rx="6"/>
+      <text class="d-text--muted" x="330" y="180" text-anchor="middle" dominant-baseline="middle">filler</text>
+      <rect class="d-box d-box--accent" x="371" y="166" width="189" height="28" rx="6"/>
+      <text class="d-text" x="465" y="180" text-anchor="middle" dominant-baseline="middle">reply audio</text>
+
+      <!-- == Time axis == -->
+      <path class="d-arrow" d="M 114 216 L 712 216" marker-end="url(#arrow-latency-and-baseline)"/>
+      <path class="d-arrow" d="M 114 212 L 114 220"/>
+      <text class="d-text--muted" x="114" y="236" text-anchor="middle">0</text>
+      <path class="d-arrow" d="M 213 212 L 213 220"/>
+      <text class="d-text--muted" x="213" y="236" text-anchor="middle">1 s</text>
+      <path class="d-arrow" d="M 312 212 L 312 220"/>
+      <text class="d-text--muted" x="312" y="236" text-anchor="middle">2 s</text>
+      <path class="d-arrow" d="M 411 212 L 411 220"/>
+      <text class="d-text--muted" x="411" y="236" text-anchor="middle">3 s</text>
+      <path class="d-arrow" d="M 510 212 L 510 220"/>
+      <text class="d-text--muted" x="510" y="236" text-anchor="middle">4 s</text>
+      <path class="d-arrow" d="M 609 212 L 609 220"/>
+      <text class="d-text--muted" x="609" y="236" text-anchor="middle">5 s</text>
+      <path class="d-arrow" d="M 708 212 L 708 220"/>
+      <text class="d-text--muted" x="708" y="236" text-anchor="middle">6 s</text>
+    </svg>
+    <figcaption>
+      Figure: one exchange, not to scale.
+      Partials stream while the user speaks; end of turn fires the call; a filler covers the call and the LLM's first token; the reply starts as soon as text arrives.
+      A user "mm-hm" mid-reply is ignored; a real barge-in yields, stops the audio, cancels the tokens and sends the truncation to the LLM.
+    </figcaption>
+  </figure>
+
+  <p>
+    The table sums illustrative targets for the cascade, measured from the end of user speech to first agent audio at the client.
+    The target design replaces the LLM and TTS rows with a filler that plays while the LLM works.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Cascade target</th>
+          <th>Speech LLM path target</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Uplink, silence detector, end of turn</td>
+          <td>50 to 150 ms</td>
+          <td>Under 100 ms (an 80 ms frame plus network)</td>
+        </tr>
+        <tr>
+          <td>ASR final after the endpoint</td>
+          <td>0 to 100 ms, mostly hidden by streaming</td>
+          <td>Included in the listen head</td>
+        </tr>
+        <tr>
+          <td>LLM first token</td>
+          <td>200 to 300 ms</td>
+          <td>200 to 300 ms, hidden behind the filler</td>
+        </tr>
+        <tr>
+          <td>Chunker to first clause</td>
+          <td>50 to 100 ms</td>
+          <td>Inside the speak head</td>
+        </tr>
+        <tr>
+          <td>TTS first packet</td>
+          <td>100 to 200 ms</td>
+          <td>200 to 300 ms to the filler or first audio</td>
+        </tr>
+        <tr>
+          <td>Downlink and jitter buffer</td>
+          <td>50 to 100 ms</td>
+          <td>Included above</td>
+        </tr>
+        <tr>
+          <td>Total</td>
+          <td>About 450 to 950 ms; aim for 500 to 700 ms median</td>
+          <td>Under one second</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    Budget the network as its own line, because the model team cannot shrink it.
+    One end-to-end interactive model reports about 200 ms of response latency on the model side and about 550 ms in total, of which 350 ms is two-way network time.
+    In that system the network is larger than the model, and an avatar that streams video back adds more bytes to the downlink.
+    The levers are servers near users, a jitter buffer sized to the real jitter (a bigger buffer smooths glitches but adds delay), and heavy models kept in one region.
+    <span class="tag tag--inference">Inference</span>
+    The levers are standard practice, not claims from that report.
+  </p>
+  <p>
+    The cascade baseline is three models plus turn logic run as overlapping streams, and the streaming mechanics are in <a href="/apps/materials/speech-to-speech/07-conversation#streaming-inference">Streaming inference</a>.
+    The pieces that matter here: the LLM starts on the end-of-turn candidate using the stable transcript, the chunker cuts its tokens at the first clause for a small first TTS chunk, and on barge-in the turn manager cancels the LLM and queued TTS, flushes buffers and truncates the assistant turn to what was played.
+    Its role is fourfold: launch fallback, comparison point on the same benchmark, first generator of synthetic training dialogue, and the path for sessions the speech model cannot serve.
+    Its structural limits are stacked latency, information lost at each text boundary, no recovery from ASR errors, and turn-taking that is an engineered heuristic.
+  </p>
+
+  <h3 id="lb-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Filler or acknowledgement while the call runs</td>
+          <td>Perceived time to first audio</td>
+          <td>Must fit the product; a wrong filler is awkward</td>
+        </tr>
+        <tr>
+          <td>Speculative LLM start on the end-of-turn candidate</td>
+          <td>Hides ASR finalisation and end-of-turn time</td>
+          <td>Wasted LLM compute on every cancel; skip on long turns</td>
+        </tr>
+        <tr>
+          <td>Prefix caching, chunked prefill, speculative decoding, quantisation; a small model or router for simple turns</td>
+          <td>LLM time to first token, also under load</td>
+          <td>Prefix cache needs identical prefixes, so the prompt must not change per turn; quality on hard turns</td>
+        </tr>
+        <tr>
+          <td>Small first TTS chunk, larger later chunks</td>
+          <td>Time to first audio versus prosody</td>
+          <td>Fragmented intonation if the first chunk is too small</td>
+        </tr>
+        <tr>
+          <td>Separate GPU pools per stage; cap concurrency</td>
+          <td>Tail latency (p95, p99)</td>
+          <td>Idle capacity</td>
+        </tr>
+        <tr>
+          <td>Network as its own line; regional servers; WebRTC; LLM in the same region as the speech model</td>
+          <td>The part of TTFA the model team cannot optimise</td>
+          <td>More regions and deployment constraints</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Model-by-model detail: <a href="/apps/materials/speech-lit-review/09-system-design#streaming-cascaded-voice-agent">the streaming cascade</a> in the literature review.
+  </p>
+
+  <h3 id="lb-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Extra hop latency.</strong>
+      The text LLM's first token is the biggest single lever in the budget, and it grows with load.
+      One vendor reports a median first token of about 1.7 s for a large dense model at high throughput, far above a voice-agent target, so tune for latency rather than throughput.
+    </li>
+    <li>
+      <strong>Quoted figures that do not compare.</strong>
+      "Time to first token", "time to first packet" and "latency between utterances" are different clocks.
+      State where you start and stop, and report p95 and p99 under real concurrency.
+    </li>
+    <li>
+      <strong>Cut off mid-thought, or dead air.</strong>
+      An aggressive endpoint cuts users off; a conservative one adds dead air.
+      A learned detector shifts the curve and does not remove it.
+    </li>
+    <li>
+      <strong>ASR errors and self-interruption.</strong>
+      In a cascade the LLM sees only the transcript, so log ASR confidence and let the agent confirm names and numbers.
+      Without echo cancellation the agent hears itself; telephony needs it server-side or a higher barge-in threshold while the agent talks.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I treat a voice agent as overlapping streams.
+      Latency is the overlap: speculative LLM start at end of turn, a small first TTS chunk, a filler over the tool call, and barge-in that cancels everything and truncates context to what was played."
+    </p>
+  </div>
+
+  <h3 id="latency-and-baseline-sources">Sources</h3>
+  <ul>
+    <li><a href="https://docs.pipecat.ai/server/utilities/turn-detection/smart-turn-overview">Pipecat Smart Turn overview</a> (semantic end of turn)</li>
+    <li><a href="https://docs.livekit.io/agents/logic/turns/tuning/">LiveKit turn-taking tuning</a> (preemptive generation, false-interruption recovery)</li>
+    <li><a href="https://developers.openai.com/api/docs/guides/realtime-conversations">OpenAI Realtime conversations guide</a> (truncating to played audio)</li>
+    <li><a href="https://www.w3.org/TR/mediacapture-streams/">W3C Media Capture and Streams</a> (echo cancellation)</li>
+    <li><a href="https://www.w3.org/TR/webrtc/">W3C WebRTC</a> (live media and data between endpoints)</li>
+    <li><a href="https://inworld.ai/resources/fastest-llm-inference-api">Inworld inference guide</a> (time to first token under load)</li>
+    <li><a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">Synthesia, 2 Jul 2026</a> ("typically under one second")</li>
+    <li>Wan-Streamer v0.1: End-to-end Real-time Interactive Foundation Models (arXiv 2606.25041)</li>
+    <li><a href="https://www.synthesia.io/post/interactive-avatar-api-real-time-avatars">Interactive Avatar API</a> (Synthesia, 15 Jul 2026; the avatar is layered over a LiveKit agent stack)</li>
+  </ul>
+</section>

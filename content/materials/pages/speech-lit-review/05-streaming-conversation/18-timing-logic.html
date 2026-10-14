@@ -1,0 +1,473 @@
+<section id="timing-logic">
+  <h2>Timing logic: choosing input and output rates</h2>
+  <p>
+    Two rates matter when you design a speech model: how fast audio enters the LLM, and how fast the
+    LLM must emit audio frames.
+    They are set by different forces, and the output rate is the one that fixes your latency floor.
+    The clocks themselves are defined in
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#rates-frames-clocks">Rates, frames and clocks</a>;
+    this section covers how to choose them.
+    Numbers are cited to the paper; arithmetic is marked <em>derived</em>, reasoning is marked
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 230" role="img"
+      aria-label="Two ladders. Input: 16 kHz waveform, 100 Hz mel frames, 50 Hz encoder, 12.5 Hz adapter, into the LLM. Output: the LLM emits 12.5 Hz frames, a depth or MTP head expands each into Q codebook tokens, the codec decoder produces 24 kHz audio">
+      <defs>
+        <marker id="timing-logic-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Input ladder == -->
+      <text class="d-text--muted" x="10" y="16">INPUT: continuous, fast, then pooled</text>
+      <rect class="d-box" x="10" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="58" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <text class="d-text--small" x="70" y="75" text-anchor="middle"
+        dominant-baseline="middle">16 kHz</text>
+      <rect class="d-box" x="155" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="215" y="58" text-anchor="middle"
+        dominant-baseline="middle">Mel frames</text>
+      <text class="d-text--small" x="215" y="75" text-anchor="middle"
+        dominant-baseline="middle">100 Hz</text>
+      <rect class="d-box" x="300" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="58" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <text class="d-text--small" x="360" y="75" text-anchor="middle"
+        dominant-baseline="middle">50 Hz</text>
+      <rect class="d-box" x="445" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="505" y="58" text-anchor="middle"
+        dominant-baseline="middle">Adapter</text>
+      <text class="d-text--small" x="505" y="75" text-anchor="middle"
+        dominant-baseline="middle">12.5 Hz</text>
+      <rect class="d-box d-box--accent" x="590" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="66" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <path class="d-arrow" d="M 130 66 L 153 66" marker-end="url(#timing-logic-arrow)"/>
+      <path class="d-arrow" d="M 275 66 L 298 66" marker-end="url(#timing-logic-arrow)"/>
+      <path class="d-arrow" d="M 420 66 L 443 66" marker-end="url(#timing-logic-arrow)"/>
+      <path class="d-arrow" d="M 565 66 L 588 66" marker-end="url(#timing-logic-arrow)"/>
+      <text class="d-text--muted" x="142" y="36" text-anchor="middle">hop 10 ms</text>
+      <text class="d-text--muted" x="287" y="36" text-anchor="middle">stride 2</text>
+      <text class="d-text--muted" x="432" y="36" text-anchor="middle">pool 4x</text>
+      <text class="d-text--muted" x="577" y="36" text-anchor="middle">embeds</text>
+
+      <!-- == Output ladder == -->
+      <text class="d-text--muted" x="10" y="136">OUTPUT: discrete, slow, one step per frame</text>
+      <path class="d-arrow" d="M 650 88 L 650 150" marker-end="url(#timing-logic-arrow)"/>
+      <text class="d-text--muted" x="640" y="124" text-anchor="end">one frame per step</text>
+      <rect class="d-box" x="590" y="152" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="166" text-anchor="middle"
+        dominant-baseline="middle">Depth / MTP</text>
+      <text class="d-text--small" x="650" y="183" text-anchor="middle"
+        dominant-baseline="middle">Q codes per frame</text>
+      <rect class="d-box" x="445" y="152" width="120" height="44" rx="8"/>
+      <text class="d-text" x="505" y="166" text-anchor="middle"
+        dominant-baseline="middle">Codec decoder</text>
+      <text class="d-text--small" x="505" y="183" text-anchor="middle"
+        dominant-baseline="middle">12.5 Hz frames</text>
+      <rect class="d-box" x="300" y="152" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="166" text-anchor="middle"
+        dominant-baseline="middle">Audio out</text>
+      <text class="d-text--small" x="360" y="183" text-anchor="middle"
+        dominant-baseline="middle">24 kHz</text>
+      <path class="d-arrow" d="M 588 174 L 567 174" marker-end="url(#timing-logic-arrow)"/>
+      <path class="d-arrow" d="M 443 174 L 422 174" marker-end="url(#timing-logic-arrow)"/>
+      <text class="d-text--muted" x="577" y="144" text-anchor="middle">8 x 12.5</text>
+      <text class="d-text--muted" x="432" y="144" text-anchor="middle">1920 samples</text>
+      <text class="d-text--muted" x="10" y="174">100 tokens/s for Q = 8 (derived)</text>
+      <text class="d-text--muted" x="10" y="216">Rates shown for a Mimi-style 12.5 Hz, Q = 8 design.</text>
+    </svg>
+    <figcaption>
+      Figure: the input ladder shrinks the rate before the LLM; the output ladder expands one LLM frame
+      into Q codes and then into samples.
+    </figcaption>
+  </figure>
+
+  <h3 id="timing-input">The input path, step by step</h3>
+  <ol>
+    <li>16 kHz waveform, cut into 25 ms windows with a 10 ms hop: 100 Hz mel frames (arXiv 2212.04356).</li>
+    <li>A Whisper-style encoder has a stride-2 convolution: 50 Hz, 20 ms per frame (arXiv 2212.04356; 50 Hz is derived).</li>
+    <li>A pooling or adapter stage cuts the rate again, to 10 to 25 Hz before the LLM.</li>
+  </ol>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Encoder rate</th>
+          <th>Rate into the LLM</th>
+          <th>How</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Whisper (arXiv 2212.04356)</td>
+          <td>50 Hz (derived)</td>
+          <td>not applicable (ASR model)</td>
+          <td>Conv stride 2 on 100 Hz mel</td>
+        </tr>
+        <tr>
+          <td>Qwen2-Audio (arXiv 2407.10759)</td>
+          <td>Whisper-large-v3 init, 25 ms window, 10 ms hop</td>
+          <td>25 Hz (derived from 40 ms)</td>
+          <td>Pooling stride 2; the paper says each output frame is about 40 ms</td>
+        </tr>
+        <tr>
+          <td>Voxtral (arXiv 2507.13264)</td>
+          <td>50 Hz</td>
+          <td>12.5 Hz</td>
+          <td>4x adapter</td>
+        </tr>
+        <tr>
+          <td>Granite-speech (arXiv 2505.08699)</td>
+          <td>100 Hz log-mel, then 50 Hz</td>
+          <td>10 Hz</td>
+          <td>2x stacking, then Q-Former (K = 15, N = 3)</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni AuT (arXiv 2509.17765)</td>
+          <td>8x Conv2D downsample</td>
+          <td>12.5 Hz; each temporal ID is 80 ms</td>
+          <td>Conv downsample inside the encoder</td>
+        </tr>
+        <tr>
+          <td>Kimi-Audio (arXiv 2504.18425)</td>
+          <td>50 Hz Whisper features</td>
+          <td>12.5 Hz</td>
+          <td>Adaptor "from 50Hz to 12.5Hz"; discrete semantic tokens also at 12.5 Hz</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice tokenizer (arXiv 2412.02612)</td>
+          <td>25 Hz encoder output</td>
+          <td>12.5 Hz</td>
+          <td>2x downsample, then VQ (single codebook)</td>
+        </tr>
+        <tr>
+          <td>Step-Audio 2 (arXiv 2507.16632)</td>
+          <td>25 Hz tokenizer</td>
+          <td>12.5 Hz</td>
+          <td>2x adaptor on the LLM side</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Input can be fast and continuous because the audio already exists.
+    The encoder reads it in parallel with no sampling loop, so a high rate only costs encoder compute.
+    Output must be generated one step at a time, each step conditioned on the last, so every extra frame per second
+    is an extra serial LLM step.
+    The pooling stage exists to move that cost out of the LLM, where each position is expensive.
+  </p>
+
+  <h3 id="timing-output">The output path: what fixes the rate</h3>
+  <p>
+    The output rate is the frame rate of the audio codec (or tokenizer) the LLM predicts.
+    Each frame becomes one id per codebook, so
+    \( \text{tokens/s} = f \times Q \),
+    and the bitrate adds the bits per id:
+  </p>
+  \[
+  \text{bitrate} = f \times Q \times \log_2 K
+  \]
+  <p>
+    Mimi: \( 12.5 \times 8 \times 11 = 1100 \) bps (derived), matching the 1.1 kbps in the paper (arXiv 2410.00037).
+    The paper states frame and stride correspond to 80 ms, and that 8 codebooks at 12.5 Hz give
+    "a sequence length of 100 steps per second", against around 3 to 4 text tokens per second for English.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Codec</th>
+          <th>Frame rate</th>
+          <th>Codebooks</th>
+          <th>Bitrate</th>
+          <th>Stated rationale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Mimi (arXiv 2410.00037)</td>
+          <td>12.5 Hz</td>
+          <td>8</td>
+          <td>1.1 kbps</td>
+          <td>100 steps per second at Q = 8, against 3 to 4 text tokens per second</td>
+        </tr>
+        <tr>
+          <td>DAC (arXiv 2306.06546)</td>
+          <td>44.1 kHz / 512, about 86 Hz (derived)</td>
+          <td>9 (10 bits each)</td>
+          <td>not stated here</td>
+          <td>"A lower frame rate is desirable when training a language model", shorter sequences</td>
+        </tr>
+        <tr>
+          <td>SNAC speech (arXiv 2410.14411)</td>
+          <td>12 / 23 / 47 Hz</td>
+          <td>3 scales</td>
+          <td>984 bps</td>
+          <td>Multi-scale, coarse to fine</td>
+        </tr>
+        <tr>
+          <td>WavTokenizer (arXiv 2408.16532)</td>
+          <td>40 or 75 tokens/s</td>
+          <td>1</td>
+          <td>0.5 / 0.9 kbps</td>
+          <td>Single quantizer, 24 kHz</td>
+        </tr>
+        <tr>
+          <td>X-Codec 2 (arXiv 2502.04128)</td>
+          <td>50 Hz</td>
+          <td>1 (65,536 codes)</td>
+          <td>800 bps (derived)</td>
+          <td>none given</td>
+        </tr>
+        <tr>
+          <td>CosyVoice 2 (arXiv 2412.10117)</td>
+          <td>25 Hz</td>
+          <td>1 (FSQ, 6,561 codes)</td>
+          <td>not stated here</td>
+          <td>none given here</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice (arXiv 2412.02612)</td>
+          <td>12.5 Hz</td>
+          <td>1</td>
+          <td>175 bps</td>
+          <td>"Ultra-low bitrate"</td>
+        </tr>
+        <tr>
+          <td>VibeVoice (arXiv 2508.19205)</td>
+          <td>7.5 Hz</td>
+          <td>continuous VAE, no codebooks</td>
+          <td>not applicable</td>
+          <td>Lower rate "substantially reduces the number of decoding steps"</td>
+        </tr>
+        <tr>
+          <td>TaDiCodec (arXiv 2508.16790)</td>
+          <td>6.25 Hz</td>
+          <td>1</td>
+          <td>87.5 bps</td>
+          <td>Needs the text at decode time</td>
+        </tr>
+        <tr>
+          <td>SiTok (arXiv 2602.06602)</td>
+          <td>12.5 Hz default</td>
+          <td>not covered here</td>
+          <td>not covered here</td>
+          <td>Default "to balance efficiency and performance"</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The deeper table of codec bitrates is in
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#codec-rates">Codec frame rates, tokens per second, bitrate</a>.
+  </p>
+
+  <h3 id="timing-choose">How to choose the output rate</h3>
+  <ul>
+    <li>
+      <strong>Sequence length and compute.</strong>
+      Mimi's 100 steps per second is the figure the paper weighs against 3 to 4 text tokens per second (arXiv 2410.00037).
+      VibeVoice's 7.5 Hz is chosen to cut decoding steps (arXiv 2508.19205).
+    </li>
+    <li>
+      <strong>Reconstruction quality.</strong>
+      WavTokenizer scores PESQ 1.70 and UTMOS 3.60 at 40 tokens/s against 2.37 and 4.05 at 75 (arXiv 2408.16532, Table 1).
+      Pooling X-Codec 2 to a 25 Hz variant raises UTMOSv2 on seven languages, for example Dutch 2.168 to 2.457 (arXiv 2601.20185).
+    </li>
+    <li>
+      <strong>Intelligibility and LM difficulty.</strong>
+      SiTok WER is 23.0 at 6.25 Hz, 4.06 at 12.5 Hz and 3.05 at 25 Hz (arXiv 2602.06602).
+      TaDiCodec reaches 6.25 Hz with WER 3.02, but removing the text input at decode causes "significant performance degradation
+      under extremely low token rate" (arXiv 2508.16790).
+      A probing study measures WavTokenizer WER at 11.37% (75 tokens/s) against 24.36% (40 tokens/s) (arXiv 2606.16969, Table 1);
+      it says models below 50 Hz without architectural accommodations degrade, and it attributes its own DAC cliff to a
+      training misconfiguration, so it is not evidence of an intrinsic floor.
+    </li>
+    <li>
+      <strong>Text-rate matching.</strong>
+      GLM-4-Voice alternates 13 text tokens and 26 speech tokens, a 1:2 ratio chosen so text generation is
+      "consistently faster than speech" (arXiv 2412.02612).
+      Details: <a href="/apps/materials/speech-lit-review/05-streaming-conversation#text-audio-duplex-clocks">text and audio clocks</a>.
+    </li>
+    <li>
+      <strong>Reaction granularity.</strong>
+      <span class="tag tag--inference">Inference</span>
+      One frame is the smallest unit the model can emit or react to: 80 ms at 12.5 Hz, 40 ms at 25 Hz.
+    </li>
+  </ul>
+
+  <h3 id="timing-why-12-5">Why 12.5 Hz</h3>
+  <p>Three pressures meet at 12.5 Hz, and a fourth sets the cost.</p>
+  <ul>
+    <li>
+      <strong>Sequence length and compute.</strong>
+      Voxtral cuts its 50 Hz encoder output with a 4x adapter to 12.5 Hz (arXiv 2507.13264).
+      Thirty minutes (1,800 s) at 50 Hz is \( 1800 \times 50 = 90{,}000 \) positions; at 12.5 Hz it is 22,500 (derived).
+    </li>
+    <li>
+      <strong>Text-rate matching.</strong>
+      Moshi puts English at around 3 to 4 text tokens per second against 100 audio steps per second at 8 codebooks (arXiv 2410.00037).
+      At 12.5 Hz that is about \( 12.5 / 4 \approx 3 \) frames per text token (derived).
+    </li>
+    <li>
+      <strong>The quality knee.</strong>
+      SiTok WER is 23.0, 4.06 and 3.05 at 6.25, 12.5 and 25 Hz (arXiv 2602.06602).
+      Going from 12.5 to 25 Hz buys little; going to 6.25 Hz costs a lot.
+    </li>
+    <li>
+      <strong>Reaction quantum.</strong>
+      An 80 ms frame is shorter than the median 151 ms by which human listeners start speaking before the other turn ends in smooth floor transfers
+      (arXiv 2608.25218).
+      <span class="tag tag--inference">Inference</span>
+      So the frame is not the binding constraint on human-like timing.
+    </li>
+    <li>
+      <strong>The cost.</strong>
+      Pooling discards fine acoustic detail.
+      Kimi-Audio keeps continuous 50 Hz Whisper features alongside its 12.5 Hz discrete semantic tokens (arXiv 2504.18425).
+    </li>
+  </ul>
+
+  <h3 id="timing-per-frame">Who emits what, per frame</h3>
+  <p>
+    The LLM does not predict one text token per input speech frame.
+    How text lines up with frames depends on the design:
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Design</th>
+          <th>What happens per frame or chunk</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Encoder + adapter (understanding, ASR)</td>
+          <td>Frames are context only. No per-frame prediction; text is generated afterwards, with no 1:1 alignment</td>
+          <td>Qwen2-Audio (arXiv 2407.10759), Voxtral (arXiv 2507.13264)</td>
+        </tr>
+        <tr>
+          <td>Chunked streaming ASR</td>
+          <td>Text tokens are generated per chunk until an end-of-chunk token; 1.28 s chunks</td>
+          <td>SpeechLLM-XL (arXiv 2410.03752)</td>
+        </tr>
+        <tr>
+          <td>Time-aligned delayed streams</td>
+          <td>One text-stream token per 80 ms frame, mostly PAD (about 65% in Moshi); DSM's ASR text lags audio by a default 2.5 s</td>
+          <td>Moshi (arXiv 2410.00037), DSM (arXiv 2509.08753)</td>
+        </tr>
+        <tr>
+          <td>Interleaved output</td>
+          <td>User speech is context; output alternates 13 text : 26 speech tokens, text leading</td>
+          <td>GLM-4-Voice (arXiv 2412.02612)</td>
+        </tr>
+        <tr>
+          <td>Full-duplex dual stream</td>
+          <td>Each frame: read user audio tokens, emit own text token and own audio tokens (K = 17 sub-steps)</td>
+          <td>Moshi (arXiv 2410.00037)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    So text and speech are 1:1 per frame only in time-aligned designs, and that is why those designs pad the text stream.
+  </p>
+
+  <h3 id="timing-decouple">Decoupling the backbone rate from the output rate</h3>
+  <p>
+    If every codebook needed its own backbone step, Q codebooks at 12.5 Hz would force a \( 12.5 \times Q \) Hz backbone.
+    Designs avoid this by letting one backbone step cover many tokens:
+  </p>
+  <ul>
+    <li>Moshi: a depth transformer fills K = 2Q + 1 = 17 sub-tokens within each 80 ms frame (arXiv 2410.00037).</li>
+    <li>Qwen3-Omni Talker: a linear head predicts codebook 0 per frame, and an MTP module generates the residual codebooks (arXiv 2509.17765).</li>
+    <li>VITA-Audio: ten audio tokens in a single forward pass, 3 to 5x speed-up (arXiv 2505.03739).</li>
+    <li>MusicGen: a delay pattern shifts codebook k by k-1 steps, so one pass predicts all codebooks (arXiv 2306.05284).</li>
+    <li>
+      Patches: VibeVoice and DiTAR predict a patch per step, see
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#continuous-autoregression">continuous autoregression</a>.
+    </li>
+    <li>DiffuPlex predicts multiple future user and assistant frames in one backbone wake: 1.46x and 1.59x wall-clock speedups (arXiv 2610.12214).</li>
+  </ul>
+
+  <h3 id="timing-rules">Minimums and rules of thumb</h3>
+  <ol>
+    <li>Pool the encoder to 12.5 to 25 Hz before the LLM (arXiv 2507.13264, 2509.17765, 2412.02612, 2504.18425).</li>
+    <li>Default output rate 12.5 Hz (arXiv 2410.00037, 2412.02612, 2509.08753, 2602.06602); SiTok shows a steep WER penalty below it.</li>
+    <li>Go to 25 Hz when reconstruction is the bottleneck (arXiv 2412.10117, 2601.20185; SiTok has its best WER at 25 Hz, arXiv 2602.06602).</li>
+    <li>A lower frame rate is cheaper for the LM (arXiv 2306.06546, 2410.00037).</li>
+    <li>When interleaving, let text lead speech (arXiv 2412.02612 at 1:2; Moshi's 3 to 4 text tokens/s, arXiv 2410.00037).</li>
+    <li>With many codebooks, emit several tokens per backbone step (arXiv 2410.00037, 2509.17765, 2505.03739, 2610.12214).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      The minimum reaction time is one frame.
+      Practical chunks are larger: Moshi's latency is 160 ms in theory and 200 ms in practice (arXiv 2410.00037);
+      SyncLLM uses chunks of 160 to 240 ms (arXiv 2409.15594).
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference from the source</span>
+      6.25 Hz is viable only when the transcript is available at decode time (arXiv 2508.16790, ablation).
+    </li>
+  </ol>
+
+  <h3 id="timing-worked">Worked example</h3>
+  <p><em>Derived</em> from the rates above, not measured.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>12.5 Hz, 8 codebooks, depth transformer</th>
+          <th>25 Hz, 1 codebook (CosyVoice 2 style)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Tokens per second</td>
+          <td>\( 12.5 \times 8 = 100 \)</td>
+          <td>\( 25 \times 1 = 25 \)</td>
+        </tr>
+        <tr>
+          <td>Frame period, deadline</td>
+          <td>80 ms per frame</td>
+          <td>40 ms per frame</td>
+        </tr>
+        <tr>
+          <td>Backbone steps per second</td>
+          <td>12.5 (the depth pass fills the other 7 codebooks)</td>
+          <td>25</td>
+        </tr>
+        <tr>
+          <td>Minimum reaction quantum</td>
+          <td>one frame, 80 ms</td>
+          <td>one frame, 40 ms</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The 25 Hz design reacts twice as finely but runs the backbone twice as often (derived).
+    The 12.5 Hz design runs the backbone half as often but adds a depth pass inside each 80 ms deadline.
+    See <a href="/apps/materials/speech-lit-review/05-streaming-conversation#frame-deadline">the per-frame deadline</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I keep five numbers apart.
+      Sample rate is samples per second, like 24 kHz.
+      Feature rate is the 100 Hz mel hop, encoder frame rate is 50 Hz, and the rate into the LLM is pooled to 12.5 Hz.
+      Token rate is frame rate times codebooks, 100 per second for Mimi, and bitrate adds bits per token, 1.1 kbps.
+      A chunk is a batch of frames, so it is a latency choice and not a rate."
+    </p>
+  </div>
+</section>

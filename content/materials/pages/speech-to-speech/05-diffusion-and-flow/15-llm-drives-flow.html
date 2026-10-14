@@ -1,0 +1,218 @@
+<section id="llm-drives-flow">
+  <h2>How an LLM drives a diffusion or flow model</h2>
+  <p>
+    In speech systems that pair a language model with diffusion or flow, the LLM almost never outputs the audio representation itself.
+    It outputs something that conditions the generative model, and that model turns noise into the mel spectrogram or latent.
+    The LLM decides what is said and when; the generative model decides how it sounds.
+  </p>
+  <p>
+    "Latent" here means the compressed continuous vector per frame from an autoencoder
+    (<a href="/apps/materials/speech-to-speech/03-tokenizers#continuous-latents">Continuous latents</a>), not the noisy intermediates of diffusion theory.
+    So the data \( x_1 \) is a mel or a latent, the noise \( x_0 \) has exactly its shape, and a fresh noise sample gives a different but equally valid output.
+  </p>
+
+  <h3 id="llm-flow-how">How it works: two patterns</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 300" role="img"
+      aria-label="Pattern A: the LLM emits discrete semantic tokens; a flow decoder conditioned on the
+        tokens, a speaker embedding and a prompt turns utterance-sized noise into a mel spectrogram, and
+        a vocoder makes audio. Pattern B: the LLM emits a hidden state per step; a small diffusion head
+        conditioned on it turns frame-sized noise into the next latent, which is fed back">
+      <defs>
+        <marker id="llm-flow-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Pattern A == -->
+      <text class="d-text" x="10" y="20">A. LLM emits tokens, flow renders the utterance</text>
+      <rect class="d-box" x="10" y="36" width="100" height="44" rx="8"/>
+      <text class="d-text" x="60" y="58" text-anchor="middle" dominant-baseline="middle">LLM</text>
+      <rect class="d-box" x="150" y="36" width="130" height="44" rx="8"/>
+      <text class="d-text" x="215" y="58" text-anchor="middle"
+        dominant-baseline="middle">semantic tokens</text>
+      <rect class="d-box d-box--accent" x="330" y="36" width="140" height="44" rx="8"/>
+      <text class="d-text" x="400" y="58" text-anchor="middle"
+        dominant-baseline="middle">Flow decoder</text>
+      <rect class="d-box" x="510" y="36" width="80" height="44" rx="8"/>
+      <text class="d-text" x="550" y="58" text-anchor="middle" dominant-baseline="middle">mel</text>
+      <rect class="d-box" x="620" y="36" width="90" height="44" rx="8"/>
+      <text class="d-text" x="665" y="58" text-anchor="middle"
+        dominant-baseline="middle">vocoder</text>
+      <path class="d-arrow" d="M 110 58 L 148 58" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 280 58 L 328 58" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 470 58 L 508 58" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 590 58 L 618 58" marker-end="url(#llm-flow-arrow)"/>
+      <rect class="d-box d-box--muted" x="330" y="104" width="140" height="36" rx="8"/>
+      <text class="d-text--small" x="400" y="122" text-anchor="middle"
+        dominant-baseline="middle">noise, utterance-sized</text>
+      <path class="d-arrow" d="M 400 104 L 400 82" marker-end="url(#llm-flow-arrow)"/>
+      <text class="d-text--muted" x="120" y="116">+ speaker embedding, prompt mel</text>
+      <path class="d-arrow d-arrow--dashed" d="M 262 100 L 328 76" marker-end="url(#llm-flow-arrow)"/>
+
+      <!-- == Pattern B == -->
+      <text class="d-text" x="10" y="178">B. LLM emits a hidden state, a head makes one latent per step</text>
+      <rect class="d-box" x="10" y="194" width="100" height="44" rx="8"/>
+      <text class="d-text" x="60" y="216" text-anchor="middle" dominant-baseline="middle">LLM</text>
+      <rect class="d-box" x="150" y="194" width="130" height="44" rx="8"/>
+      <text class="d-text" x="215" y="216" text-anchor="middle"
+        dominant-baseline="middle">hidden state <tspan font-style="italic">h</tspan></text>
+      <rect class="d-box d-box--accent" x="330" y="194" width="140" height="44" rx="8"/>
+      <text class="d-text" x="400" y="216" text-anchor="middle"
+        dominant-baseline="middle">Diffusion head</text>
+      <rect class="d-box" x="510" y="194" width="110" height="44" rx="8"/>
+      <text class="d-text" x="565" y="216" text-anchor="middle"
+        dominant-baseline="middle">next latent</text>
+      <path class="d-arrow" d="M 110 216 L 148 216" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 280 216 L 328 216" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow" d="M 470 216 L 508 216" marker-end="url(#llm-flow-arrow)"/>
+      <rect class="d-box d-box--muted" x="640" y="194" width="70" height="44" rx="8"/>
+      <text class="d-text" x="675" y="216" text-anchor="middle"
+        dominant-baseline="middle">decoder</text>
+      <path class="d-arrow" d="M 620 216 L 638 216" marker-end="url(#llm-flow-arrow)"/>
+      <rect class="d-box d-box--muted" x="330" y="256" width="140" height="32" rx="8"/>
+      <text class="d-text--small" x="400" y="272" text-anchor="middle"
+        dominant-baseline="middle">noise, one frame</text>
+      <path class="d-arrow" d="M 400 256 L 400 240" marker-end="url(#llm-flow-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 565 240 L 565 296 L 60 296 L 60 240"
+        marker-end="url(#llm-flow-arrow)"/>
+      <text class="d-text--muted" x="160" y="290">fed back as the next input</text>
+    </svg>
+    <figcaption>
+      Pattern A: the flow model generates the whole utterance's mel from the LLM's tokens.
+      Pattern B: a diffusion head generates one latent per LLM step from the LLM's hidden state.
+    </figcaption>
+  </figure>
+  <p>
+    <strong>Pattern A, tokens then flow.</strong>
+    The LLM picks discrete semantic tokens with a normal softmax, exactly like text.
+    The flow decoder starts from noise the size of the whole output and generates the mel, conditioned on those tokens (upsampled to its frame rate, for example 25 Hz tokens to a 50 Hz mel), a speaker embedding (a vector that summarises who is speaking; how it is scored is in <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems#measuring-speech-generation">Measuring speech generation</a>) and the voice prompt's mel; a vocoder then makes audio.
+    The full walk-through is in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#e2e-alternative">tokens, then a flow decoder</a>.
+  </p>
+  <p>
+    <strong>Pattern B, hidden state then a per-frame head.</strong>
+    The LLM outputs no tokens.
+    Its last-layer hidden vector \( h \) at the current position conditions a small diffusion head, which turns one latent's worth of noise into the next latent; that latent is fed back as the next input
+    (<a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#car-head-training">Continuous autoregression</a>).
+    The full life cycle is in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#end-to-end-diffusion-llm">end to end</a>.
+  </p>
+  <p>
+    Some systems skip flow altogether: the LLM predicts codec tokens and a codec decoder makes audio
+    (<a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#multi-codebook-patterns">Multi-codebook patterns</a>,
+    <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#four-routes">Four routes</a>).
+  </p>
+
+  <h3 id="llm-flow-training">How training works, and whether it is end to end</h3>
+  <p>
+    The deciding difference is the interface.
+    A token choice is a discrete pick, so no gradient can pass through it; a hidden vector is continuous, so gradients flow straight through.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Pattern A: tokens then flow</th>
+          <th>Pattern B: hidden state then head</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>LLM objective</td>
+          <td>Next-token cross-entropy on semantic tokens</td>
+          <td>No token loss; it learns from the head's diffusion loss arriving through \( h \)</td>
+        </tr>
+        <tr>
+          <td>Generator objective</td>
+          <td>Flow-matching loss on the mel, conditioned on the tokens</td>
+          <td>Noise-prediction (or velocity) loss on the true next latent, conditioned on \( h \)</td>
+        </tr>
+        <tr>
+          <td>End to end?</td>
+          <td>
+            No in the usual setup: the two objectives are described separately.
+            <span class="tag tag--inference">Inference</span>
+            The decoder is naturally trained on tokens from the tokenizer applied to real audio, not on LLM samples.
+          </td>
+          <td>Yes: the head's loss updates the LLM through \( h \), so the LLM learns to pack into \( h \) what the head needs for the next frame</td>
+        </tr>
+        <tr>
+          <td>Frozen parts</td>
+          <td>The speech tokenizer, trained beforehand as a supervised ASR-style model</td>
+          <td>The audio tokenizers, pre-trained and kept frozen; only the LLM and head learn</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="llm-flow-levers">Levers and optimisations</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Pattern A or B</td>
+          <td>Discrete token interface or continuous hidden-state interface</td>
+          <td>A reuses LLM tooling and token-level RL; B avoids quantisation but needs a sampler per step</td>
+        </tr>
+        <tr>
+          <td>Token rate and upsampling (A)</td>
+          <td>How much timing detail the tokens carry before flow fills in acoustics</td>
+          <td>Lower rate is cheaper for the LLM; the flow model must add more detail</td>
+        </tr>
+        <tr>
+          <td>Patch size (B)</td>
+          <td>How many frames each LLM step produces</td>
+          <td>Bigger patches mean fewer LLM steps but a harder job for the head</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    These trade-offs are engineering reasoning rather than measured results.
+    Head size, steps and the frozen tokenizer are covered in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#e2e-levers">end to end</a>.
+  </p>
+
+  <h3 id="llm-flow-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Pattern A: a decoder trained on clean tokenizer output can meet LLM-sampled tokens it has rarely seen, so errors in the token stream become audible.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Pattern B: the LLM trains on true latents but generates from its own samples, so small errors can compound frame to frame; noise scale and guidance are the main controls.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The LLM rarely outputs the audio representation directly.
+      Either it emits semantic tokens and a separately trained flow decoder renders a mel from noise, or it emits a hidden state that conditions a small per-frame diffusion head, trained end to end through that hidden state.
+      The first reuses LLM tooling; the second avoids quantisation at the cost of sampling every step."
+    </p>
+  </div>
+
+  <h3 id="llm-drives-flow-sources">Sources</h3>
+  <ul>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>Autoregressive Image Generation without Vector Quantization (arXiv 2406.11838)</li>
+    <li>VibeVoice Technical Report (arXiv 2508.19205)</li>
+    <li>DiTAR: Diffusion Transformer Autoregressive Modeling for Speech Generation (arXiv 2502.03930)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#tokens-to-waveform">From tokens to waveform</a>,
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#continuous-autoregression">Continuous autoregression</a>
+    </li>
+  </ul>
+</section>

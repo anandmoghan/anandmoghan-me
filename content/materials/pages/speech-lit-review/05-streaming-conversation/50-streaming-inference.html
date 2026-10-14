@@ -1,0 +1,173 @@
+<section id="streaming-inference">
+  <h2>Streaming inference: deadlines and first packets</h2>
+  <p>
+    A duplex model is a real-time loop, not a request-response call.
+    It must produce a frame on a fixed clock for as long as the session lasts, even when nobody is talking.
+    This section turns the earlier rates into engineering budgets.
+  </p>
+  <h3 id="frame-deadline">The per-frame deadline</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Moshi (arXiv 2410.00037) runs at 12.5 Hz, so it has a hard deadline of 80 ms per frame:
+    one temporal pass plus up to 17 depth sub-steps (the paper's K = 17 streams).
+    A missed deadline is an audible gap, because the audio must keep flowing.
+  </p>
+  <p>
+    The standard check is the real-time factor (RTF), compute time divided by audio time:
+  </p>
+  \[
+  \text{RTF} = \frac{t_{\text{compute}}}{t_{\text{audio}}}
+  \]
+  <p>
+    RTF below 1 is necessary and not sufficient: the worst frame must still fit in 80 ms.
+    MiniCPM-o 4.5 reports RTF 0.21 (INT4) to 0.27 (FP16) with llama.cpp-omni on an RTX 4090 (arXiv 2604.27393).
+    <span class="tag tag--reported">Reported</span>
+    That is 210 to 270 ms of compute per second of audio (derived).
+  </p>
+  <p>
+    LLaMA-Omni 2 (arXiv 2505.02625) shows the chunk version of the same arithmetic.
+    Speech tokens run at 25 Hz, so each is 40 ms and a 10-token chunk is 400 ms.
+    The authors report a 542.7 to 663.3 ms first chunk, so roughly 140 to 260 ms of overhead sits on top of the chunk (derived).
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    The deadline can be relaxed by waking the backbone less often than once per frame.
+    DiffuPlex (arXiv 2610.12214) predicts several future user and assistant frames in one backbone wake,
+    using rolling masked diffusion over an 80 ms interaction interval.
+    The authors report 1.46× (LISTEN) and 1.59× (SPEAK) deployment wall-clock speedups,
+    and 1.61× and 1.80× for the core LM alone.
+  </p>
+
+  <h3 id="chunk-size-tradeoff">Chunk size trade-offs</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Chunk or block</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>80 ms frame</td>
+        </tr>
+        <tr>
+          <td>DuplexSLA (arXiv 2605.20755)</td>
+          <td>160 ms chunk, 80 ms user stride</td>
+        </tr>
+        <tr>
+          <td>SyncLLM (arXiv 2409.15594)</td>
+          <td>160, 200 or 240 ms chunks</td>
+        </tr>
+        <tr>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625)</td>
+          <td>400 ms (10 tokens at 25 Hz)</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice decoder (arXiv 2412.02612)</td>
+          <td>0.8 s (10 tokens at 12.5 Hz)</td>
+        </tr>
+        <tr>
+          <td>MiniCPM-o 4.5 (arXiv 2604.27393)</td>
+          <td>1.0 s preferred in ablation over 0.2 s and 0.1 s</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    MiniCPM-o's ablation (arXiv 2604.27393) finds 1.0 s gives the best balance.
+    The authors report that shorter chunks leave less modelling budget for control and generation,
+    and that too-short chunks lack enough information per window, causing substantial degradation.
+    <span class="tag tag--inference">Inference</span>
+    Shorter chunks cut the average wait for a decision (\( c/2 \), derived) but pay the per-step cost more often.
+    Smaller is not automatically better.
+  </p>
+
+  <h3 id="tools-in-stream">Tool calls inside the budget</h3>
+  <p>
+    A tool call is the longest step a voice agent can add, so the sources try to overlap it with something else.
+  </p>
+  <ul>
+    <li>
+      Stream RAG predicts tool queries in parallel with user speech, before the user finishes.
+      The authors report QA accuracy from 11.1% to 34.2% absolute and tool-use latency down 20% on AudioCRAG (arXiv 2510.02044).
+    </li>
+    <li>
+      MoshiRAG starts retrieval after flagging a knowledge-demanding query and finishes inside the natural gap before the answer's core content arrives (arXiv 2604.12928).
+    </li>
+    <li>
+      NemotronLabs VoiceChat emits function calls on a stream parallel to agent text (arXiv 2609.21967).
+    </li>
+    <li>
+      Full-Duplex-Bench-v3 measures the end result: Gemini Live 3.1 is fastest at 4.25 s but turn-takes only 78.0% of the time, the cascade has a perfect turn-take rate and the highest latency at 10.12 s, and GPT-Realtime leads Pass@1 at 0.600 (arXiv 2604.04847).
+    </li>
+    <li>
+      First-party docs: Gemini 3.8 Live defaults to non-blocking function calls with <code>SILENT</code>, <code>WHEN_IDLE</code> and <code>INTERRUPTED</code> scheduling
+      (<a href="https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live">model page</a>);
+      gpt-realtime-2 says higher reasoning effort can increase latency
+      (<a href="https://developers.openai.com/api/docs/models/gpt-realtime-2">model page</a>).
+    </li>
+  </ul>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    All of these are authors' or vendors' own figures.
+  </p>
+
+  <h3 id="first-packet">First packet against chunk</h3>
+  <p>
+    The first packet is the time until the first playable audio.
+    The chunk is the granularity after that.
+    They are different numbers.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>First-audio figure</th>
+          <th>Condition</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Qwen3-TTS (arXiv 2601.15621)</td>
+          <td>97 ms</td>
+          <td>Authors, 12 Hz tokenizer</td>
+        </tr>
+        <tr>
+          <td>DSM TTS (arXiv 2509.08753)</td>
+          <td>150 ms latency</td>
+          <td>Batch 1 (about 380 ms at batch 32), 1.8B model</td>
+        </tr>
+        <tr>
+          <td>VITA-Audio (arXiv 2505.03739)</td>
+          <td>236 ms vanilla, 53 ms Boost</td>
+          <td>First audio token chunk only, not end to end</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni (arXiv 2509.17765)</td>
+          <td>234 ms audio, 547 ms video</td>
+          <td>Cold start, concurrency 1</td>
+        </tr>
+        <tr>
+          <td>FlashTTS (arXiv 2606.09141)</td>
+          <td>First-packet latency 325 ms, against 843 ms for CosyVoice 2</td>
+          <td>2 NFE decoder</td>
+        </tr>
+        <tr>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625)</td>
+          <td>542.7 to 663.3 ms</td>
+          <td>Total first chunk, one L40, 0.5B to 14B</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      These are authors' numbers on different hardware, batch sizes and definitions (first packet, first chunk, cold start).
+      Never rank systems from this table.
+    </p>
+  </div>
+</section>

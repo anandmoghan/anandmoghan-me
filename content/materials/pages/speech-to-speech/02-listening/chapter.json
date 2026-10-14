@@ -1,0 +1,4 @@
+{
+  "title": "Listening: encoders and streaming",
+  "summary": "How speech encoders turn audio into features, how they stream, look-ahead, how audio meets text inside an LLM, and how streaming latency is measured and tuned."
+}

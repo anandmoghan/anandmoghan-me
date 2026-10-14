@@ -1,0 +1,227 @@
+<section id="speech-to-speech-problems">
+  <h2>Speech-to-speech and duplex problems</h2>
+  <p>
+    End-to-end and full-duplex models add failures that cascades do not have.
+    The model must listen while it speaks, decide when to talk, and keep its text intelligence
+    while operating on audio tokens.
+    Synthesia's Video Agents "talk, listen, and act in real time" inside a video
+    <span class="tag tag--confirmed">Confirmed</span>
+    (<a href="https://www.synthesia.io/post/synthesia-3-0-the-next-era-of-video">Synthesia 3.0 post</a>),
+    so these failures reach its interactive product, not only research systems.
+  </p>
+
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Problem</th>
+          <th>Symptom</th>
+          <th>Metric</th>
+          <th>Mitigation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Intelligence drop</td>
+          <td>Worse answers in speech mode than text mode</td>
+          <td>Speech-vs-text accuracy gap on the same questions</td>
+          <td>Freeze or mix text data; interleaved speech-text data</td>
+        </tr>
+        <tr>
+          <td>Multi-turn degradation</td>
+          <td>Instructions, corrections and entities lost over turns</td>
+          <td>Full-Duplex-Bench v2 multi-turn tracks</td>
+          <td>Multi-turn training data; state tracking in text</td>
+        </tr>
+        <tr>
+          <td>Backchannel as barge-in</td>
+          <td>"mm-hm" makes the agent stop</td>
+          <td>False-yield rate per minute</td>
+          <td>Action channel; backchannel-aware training data</td>
+        </tr>
+        <tr>
+          <td>Self-echo</td>
+          <td>Agent hears itself and reacts</td>
+          <td>Stop latency on echo-cancelled output</td>
+          <td>Echo cancellation; condition on own output stream</td>
+        </tr>
+        <tr>
+          <td>Latency spikes</td>
+          <td>Occasional long pauses; stiff timing</td>
+          <td>p50, p95, p99 response latency</td>
+          <td>Smaller chunks; budget the tail, not the mean</td>
+        </tr>
+        <tr>
+          <td>Interruption recovery</td>
+          <td>Agent talks on, or forgets what it did say</td>
+          <td>Stop latency; speech after onset</td>
+          <td>Truncate context to what was spoken</td>
+        </tr>
+        <tr>
+          <td>Long-session growth</td>
+          <td>Memory climbs; early context fades</td>
+          <td>GPU memory per hour; recall at turn N</td>
+          <td>GQA, cache eviction, summarised state</td>
+        </tr>
+        <tr>
+          <td>Synthetic-data artefacts</td>
+          <td>Regular backchannels; TTS voice overfit</td>
+          <td>Backchannel timing vs human distribution</td>
+          <td>Mix real calls; many TTS voices</td>
+        </tr>
+        <tr>
+          <td>Jailbreaks and multilingual safety gaps</td>
+          <td>Harmful spoken request is obeyed, more so outside English</td>
+          <td>Attack success rate, refusal of benign requests, added latency, per language</td>
+          <td>Per-attack, per-language safety evaluation; guard models; cost-aware comparison</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s2s-intelligence">Intelligence drop and forgetting</h3>
+  <p>
+    Adding speech capability can degrade an LLM's knowledge and reasoning even when inputs stay textual,
+    and performance drops further on spoken queries (arXiv 2509.14930)
+    <span class="tag tag--reported">Reported</span>.
+    The SALAD authors name the resulting shortfall the "text-speech understanding gap" (arXiv 2510.13632).
+    Two recipes exist: freeze the text LLM (Freeze-Omni, arXiv 2411.00774),
+    or keep a high share of text in the training mix
+    (Moshi trains half of the time on text-only batches, arXiv 2410.00037;
+    Kimi-Audio pretrains on text-only, audio-only and interleaved data, arXiv 2504.18425).
+  </p>
+  <p>
+    Interleaved synthetic speech-text data lifted spoken question answering from 13% (Moshi) to 31% in one report
+    (arXiv 2411.17607)
+    <span class="tag tag--reported">Reported</span>.
+    Gate every stage on a strict text QA score so forgetting shows up early
+    <span class="tag tag--inference">Inference</span>.
+    See <a href="/apps/materials/speech-lit-review/05-streaming-conversation">streaming conversation</a>.
+  </p>
+
+  <h3 id="s2s-multi-turn">Multi-turn degradation</h3>
+  <p>
+    Full-Duplex-Bench v2 tests daily, correction, entity-tracking and safety task families.
+    Its authors report that the tested systems often get confused when people talk at the same time,
+    struggle with corrections and sometimes lose track of who or what is being discussed
+    (arXiv 2510.07838)
+    <span class="tag tag--reported">Reported</span>.
+    FLEXI reports significant gaps between open-source and commercial models in emergency awareness,
+    turn terminating and interaction latency
+    (arXiv 2509.22243)
+    <span class="tag tag--reported">Reported</span>.
+  </p>
+
+  <h3 id="s2s-backchannel">Backchannel misread as barge-in</h3>
+  <p>
+    A 2026 survey calls this the single most-cited failure mode in user feedback:
+    the system mistakes the user's acknowledgement ("uh-huh") for a barge-in and stops
+    (arXiv 2606.19453)
+    <span class="tag tag--reported">Reported</span>.
+    Talking Turns finds that audio foundation models can interrupt too aggressively and rarely backchannel themselves
+    (arXiv 2503.01174).
+    The open problem is the trade-off between responding early and yielding falsely
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+  <p>
+    DuplexSLA reports backchannel accuracy of 98.33%, against 40.00% for gemini-3.1-flash-live
+    and 0.33% for gpt-realtime-1.5 with semantic VAD
+    (arXiv 2605.20755, Table 6)
+    <span class="tag tag--reported">Reported</span>.
+    These numbers are self-reported by the DuplexSLA authors on their own scenarios.
+    Quote them as a claim, not a ranking.
+  </p>
+
+  <h3 id="s2s-echo-latency">Self-echo, latency spikes and quantisation</h3>
+  <ul>
+    <li>
+      <strong>Self-echo.</strong>
+      A model that ingests user audio while speaking can hear its own voice.
+      Mitigate with acoustic echo cancellation and by conditioning on the model's own output stream
+      <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      <strong>Chunk quantisation.</strong>
+      SyncLLM alternates 160 ms chunks of user and assistant tokens (arXiv 2409.15594),
+      and the survey calls it an example of "apparent (not substantive)" full duplex,
+      since transitions occur only at chunk boundaries (arXiv 2606.19453)
+      <span class="tag tag--reported">Reported</span>.
+      Turn-taking feel plausibly suffers when decisions are quantised at 80 to 240 ms,
+      trained on heuristic labels, or starved of backchannels in the data
+      <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      <strong>Latency spikes.</strong>
+      Reported latencies are measured under different conditions and do not compare
+      <span class="tag tag--inference">Inference</span>.
+      Track p95 and p99, because a conversation is judged by its worst pauses.
+      See <a href="/apps/materials/speech-lit-review/03-speech-generation#streaming-low-latency">streaming and low latency</a>.
+    </li>
+  </ul>
+
+  <h3 id="s2s-interruption">Interruption recovery and truncation</h3>
+  <p>
+    On barge-in the agent must stop, and its context must record only the words actually spoken.
+    Otherwise it believes it said a sentence the user never heard.
+    Measure stop latency from the gold onset to the last audible agent sample on echo-cancelled output,
+    plus the fraction of agent speech after onset
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+
+  <h3 id="s2s-session">Long-session context and synthetic data</h3>
+  <p>
+    Token-level duplex models grow the KV cache continuously.
+    A back-of-envelope for Moshi's temporal transformer uses its published shape of 32 layers and 4096 dimensions
+    (arXiv 2410.00037) and assumes full multi-head attention in bf16:
+    \( 2 \times 32 \times 4096 \times 2 \) bytes is about 512 KiB per frame,
+    or roughly 23 GB per hour at 12.5 frames per second
+    <span class="tag tag--inference">Inference</span>.
+    Grouped-query attention shrinks it.
+  </p>
+  <p>
+    Duplex training data is often synthetic: an LLM writes dialogue and TTS renders both sides.
+    SyncLLM trains on 212k hours of synthetic dialogue and 2k hours of real speech (arXiv 2409.15594),
+    and PersonaPlex on synthetic conversations from open LLMs and TTS (arXiv 2602.06053)
+    <span class="tag tag--reported">Reported</span>.
+    Risks are TTS voice and prosody leakage, over-regular inserted backchannels,
+    and circularity, since inserting backchannels needs dialogue that already contains them
+    <span class="tag tag--inference">Inference</span>.
+    DuplexPO applies RL over selected windows of human conversations to learn when to speak separately from what to say
+    (arXiv 2607.07148)
+    <span class="tag tag--reported">Reported</span>.
+    See <a href="/apps/materials/speech-lit-review/05-streaming-conversation#online-rl-rewards">online RL rewards</a>
+    for per-axis timing rewards and the hacking risks.
+  </p>
+
+  <h3 id="s2s-jailbreaks">Jailbreaks and multilingual safety</h3>
+  <p>
+    A survey of audio jailbreaks (arXiv 2605.30031) groups attacks by where they act (semantic, acoustic, signal and embedding layers) and defences as guard-based, training-free or training-based.
+    It evaluates representative attacks and defences on ten open-source audio-language models and measures attack success rate, benign refusal rate and latency.
+    The authors report that acoustic best-of-N reveals strong worst-case vulnerabilities, that narrative framing is an effective low-latency semantic attack, and that current defences trade robustness against benign usability.
+    <span class="tag tag--reported">Reported</span>
+    They argue for cost- and utility-aware evaluation beside success-rate-only safety benchmarks.
+  </p>
+  <p>
+    SpeechJBB (arXiv 2606.06037) is a jailbreak dataset in English, French, German, Italian and Spanish, plus code-switched pairs that mix them.
+    It also wraps safety-critical terms in invented, sound-plausible pseudo-words.
+    The authors report high jailbreak success for code-switched harmful audio, strongest for non-English monolingual and non-English code-switched inputs, and refusals that fall as pseudo-word density rises.
+    The failures do not appear to come from weak multilingual comprehension: some models with strong recognition and spoken reasoning are among the most vulnerable.
+    <span class="tag tag--reported">Reported</span>
+  </p>
+  <p>
+    RedVox (arXiv 2606.26968) is a safety and fairness benchmark built on real voices, with unsafe and stereotyped requests in five languages (English, French, Italian, Spanish, German).
+    The authors found that only 8% of reviewed speech-model releases documented any multilingual safety analysis.
+    On eight models, vulnerabilities persisted without adversarial prompts, were worse outside English and were amplified when requests were spoken.
+    <span class="tag tag--reported">Reported</span>
+    The attack side of provenance (watermarks and detectors) is in
+    <a href="/apps/materials/speech-lit-review/06-control-and-quality#safety-provenance">Safety and provenance</a>.
+  </p>
+
+  <div class="callout callout--warn">
+    <strong>Trap:</strong>
+    <p>
+      "Full duplex" in a demo is not full duplex in an evaluation.
+      Ask for false-yield rate, stop latency and multi-turn results, not a recorded conversation.
+    </p>
+  </div>
+</section>

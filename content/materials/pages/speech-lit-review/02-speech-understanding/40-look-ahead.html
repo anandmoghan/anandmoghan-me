@@ -1,0 +1,282 @@
+<section id="look-ahead">
+  <h2>Look-ahead (right context) in streaming encoders</h2>
+  <p>
+    Look-ahead, also called right context, is how much future audio an encoder may see before it
+    commits to an output for the current frame.
+    Zero look-ahead means each output depends only on the past, so it can be emitted as soon as its
+    frame arrives.
+    N frames of look-ahead means each output waits for N more frames, which helps resolve
+    ambiguous sounds and word boundaries but adds latency.
+  </p>
+
+  <h3 id="look-ahead-notation">Reading "0LA" and "12LA"</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Shorthand such as 0LA and 12LA names a streaming configuration by its look-ahead in encoder
+    frames: 0 frames or 12 frames.
+    What 12 frames costs depends on the frame duration after subsampling, and on whether the
+    look-ahead is applied per layer or per chunk (below).
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Frame duration after subsampling</th>
+          <th>12 frames of look-ahead (derived)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>40 ms (4× subsampling of a 10 ms hop)</td>
+          <td>480 ms</td>
+        </tr>
+        <tr>
+          <td>80 ms (8× subsampling of a 10 ms hop)</td>
+          <td>960 ms</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    For comparison, Speech ReaLLM uses 240 ms input frames with 960 ms of encoder right context
+    (arXiv 2406.09569).
+  </p>
+
+  <h3 id="look-ahead-tradeoff">The latency and accuracy trade-off</h3>
+  <p>
+    NVIDIA's cache-aware streaming FastConformer paper measures the trade-off directly
+    (arXiv 2312.17279).
+    On LibriSpeech test-other with a hybrid model and chunk-aware look-ahead, the authors report:
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Look-ahead latency</th>
+          <th>RNNT WER (%)</th>
+          <th>CTC WER (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>0 ms</td>
+          <td>9.5</td>
+          <td>10.6</td>
+        </tr>
+        <tr>
+          <td>40 ms</td>
+          <td>9.0</td>
+          <td>10.1</td>
+        </tr>
+        <tr>
+          <td>240 ms</td>
+          <td>7.8</td>
+          <td>8.8</td>
+        </tr>
+        <tr>
+          <td>520 ms</td>
+          <td>7.5</td>
+          <td>8.4</td>
+        </tr>
+        <tr>
+          <td>680 ms</td>
+          <td>7.3</td>
+          <td>8.0</td>
+        </tr>
+        <tr>
+          <td>1,360 ms</td>
+          <td>6.3</td>
+          <td>7.1</td>
+        </tr>
+        <tr>
+          <td>Offline (full context)</td>
+          <td>5.0</td>
+          <td>5.7</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Zero look-ahead costs about 50% relative WER against the 1,360 ms setting (derived, RNNT),
+    and most of the gain arrives within a few hundred milliseconds.
+    In the same paper, buffered (non-cache-aware) streaming reaches only 11.3% WER at 2,000 ms
+    with RNNT, worse than cache-aware streaming with zero look-ahead.
+  </p>
+
+  <h3 id="look-ahead-regular-vs-chunk">Regular against chunk-aware look-ahead</h3>
+  <p>
+    How look-ahead is implemented matters as much as how much is allowed (arXiv 2312.17279).
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 230" role="img"
+      aria-label="Regular look-ahead compounds across layers; chunk-aware look-ahead stays within a chunk">
+      <defs>
+        <marker id="arrow-la" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Regular look-ahead == -->
+      <text class="d-text" x="10" y="22">Regular: M future frames per layer</text>
+      <rect class="d-lane" x="10" y="34" width="340" height="26" rx="4"/>
+      <rect class="d-lane" x="10" y="70" width="340" height="26" rx="4"/>
+      <rect class="d-lane" x="10" y="106" width="340" height="26" rx="4"/>
+      <text class="d-text--muted" x="16" y="51">layer 1</text>
+      <text class="d-text--muted" x="16" y="87">layer 2</text>
+      <text class="d-text--muted" x="16" y="123">layer 3</text>
+      <rect class="d-box d-box--accent" x="120" y="110" width="24" height="18" rx="3"/>
+      <rect class="d-box" x="150" y="74" width="24" height="18" rx="3"/>
+      <rect class="d-box" x="180" y="38" width="24" height="18" rx="3"/>
+      <path class="d-arrow" d="M 162 92 L 136 108" marker-end="url(#arrow-la)"/>
+      <path class="d-arrow" d="M 192 56 L 166 72" marker-end="url(#arrow-la)"/>
+      <text class="d-text--small" x="215" y="51">reaches further ahead</text>
+      <text class="d-text--small" x="10" y="160">Look-ahead = M × layers</text>
+      <text class="d-text--muted" x="10" y="178">17 layers, 1 frame each: 1,360 ms</text>
+
+      <!-- == Chunk-aware look-ahead == -->
+      <text class="d-text" x="380" y="22">Chunk-aware: cached past + own chunk</text>
+      <rect class="d-group" x="380" y="34" width="98" height="98" rx="6"/>
+      <rect class="d-group" x="486" y="34" width="134" height="98" rx="6"/>
+      <rect class="d-group" x="628" y="34" width="82" height="98" rx="6"/>
+      <text class="d-text--muted" x="388" y="51">previous</text>
+      <text class="d-text--muted" x="494" y="51">current chunk</text>
+      <text class="d-text--muted" x="636" y="51">next</text>
+      <rect class="d-box" x="392" y="96" width="24" height="18" rx="3"/>
+      <rect class="d-box" x="424" y="96" width="24" height="18" rx="3"/>
+      <rect class="d-box d-box--accent" x="496" y="96" width="24" height="18" rx="3"/>
+      <rect class="d-box" x="528" y="96" width="24" height="18" rx="3"/>
+      <rect class="d-box" x="560" y="96" width="24" height="18" rx="3"/>
+      <rect class="d-box" x="592" y="96" width="24" height="18" rx="3"/>
+      <rect class="d-box d-box--muted" x="640" y="96" width="24" height="18" rx="3"/>
+      <rect class="d-box d-box--muted" x="672" y="96" width="24" height="18" rx="3"/>
+      <path class="d-arrow d-arrow--dashed" d="M 508 92 Q 556 70 604 92"/>
+      <path class="d-arrow d-arrow--dashed" d="M 504 118 Q 460 132 416 118"/>
+      <text class="d-text--small" x="540" y="68">look-ahead</text>
+      <text class="d-text--small" x="400" y="146">cached left context</text>
+      <text class="d-text--small" x="634" y="146">not visible</text>
+      <text class="d-text--small" x="380" y="172">Look-ahead: C−1 frames down to 0</text>
+      <text class="d-text--muted" x="380" y="190">Past chunks come from the cache</text>
+      <text class="d-text--muted" x="380" y="208">Does not compound with depth</text>
+    </svg>
+    <figcaption>
+      Regular look-ahead grows with each layer; chunk-aware look-ahead is bounded by the current chunk, while earlier chunks stay visible through the cache.
+      Mechanisms as described in arXiv 2312.17279.
+    </figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Regular look-ahead</th>
+          <th>Chunk-aware look-ahead</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Mechanism</td>
+          <td>Each self-attention layer sees M future steps</td>
+          <td>Input split into chunks of size C; every frame sees its whole chunk, plus earlier chunks as cached left context, but never the next chunk</td>
+        </tr>
+        <tr>
+          <td>Effective look-ahead</td>
+          <td>M × number of layers</td>
+          <td>From C−1 frames (first frame in a chunk) to 0 (last frame)</td>
+        </tr>
+        <tr>
+          <td>Paper's example</td>
+          <td>17 layers, one frame each, 80 ms per frame (8x subsampling of a 10 ms hop): 17 × 80 ms = 1,360 ms</td>
+          <td>Average latency is half the look-ahead size</td>
+        </tr>
+        <tr>
+          <td>RNNT WER at 1,360 ms</td>
+          <td>7.1%</td>
+          <td>6.3%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    So "12LA" is cheap or expensive depending on whether it means 12 frames once at the chunk
+    level, or 12 frames per layer that compound through the stack.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+
+  <h3 id="look-ahead-multi">One model, several look-aheads</h3>
+  <p>
+    The same paper trains a single model with multiple look-ahead settings and compares it to
+    separate single-setting models on LibriSpeech test-other (arXiv 2312.17279).
+    With RNNT, the multi-look-ahead model reports 6.2%, 5.5% and 5.2% WER at 40, 240 and 520 ms,
+    against 6.4%, 5.9% and 5.4% for single-look-ahead models.
+    That lets a product pick the latency at inference time.
+  </p>
+  <h3 id="look-ahead-native">Look-ahead in encoders built to stream</h3>
+  <p>
+    The FastConformer results retrofit look-ahead onto a standard design.
+    Three newer releases put the dial into the architecture or the training recipe.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Look-ahead mechanism</th>
+          <th>Reported results</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moonshine v2 (arXiv 2602.12241)</td>
+          <td>Sliding-window self-attention at 50 Hz: 16 frames of left context in every layer, 4 frames of right context in the first two and last two layers, 0 in the middle layers; 4 × 20 ms = 80 ms look-ahead</td>
+          <td>Open ASR average WER 12.01 (tiny, 33.6M parameters), 7.84 (small) and 6.65 (medium, 244.9M); on an Apple M3, response latency 258 ms for medium against 11,286 ms for Whisper Large v3</td>
+        </tr>
+        <tr>
+          <td>Voxtral Realtime (arXiv 2602.11298)</td>
+          <td>A delay τ is embedded and injected through Ada RMS-Norm in every Transformer block; training samples it from 80 to 2400 ms in 80 ms steps (1 to 30 adapter frames)</td>
+          <td>LibriSpeech clean / other WER 2.08 / 5.54 at 480 ms and 1.96 / 4.59 at 960 ms, against 1.84 / 3.66 for offline Whisper</td>
+        </tr>
+        <tr>
+          <td><a href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">Nemotron Speech streaming</a> (NVIDIA model card)</td>
+          <td>Cache-aware FastConformer-RNNT, 24 encoder layers, about 600M parameters; <code>att_context_size</code> sets the right context in 80 ms frames</td>
+          <td>Chunk 0.08 s: average WER 8.43; 0.16 s: 7.67; 0.56 s: 7.07; 1.12 s: 6.93 (Open ASR datasets, without punctuation and capitalisation)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A later paper argues that the structural delay τ is a weak proxy for perceived latency, and measures a word-level emission delay instead (arXiv 2609.18333;
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-asr-latency">details</a>).
+    <span class="tag tag--inference">Inference</span>
+    The curve has the same shape as the FastConformer table: the first few hundred milliseconds buy most of the accuracy.
+    What differs is that one trained model can sit anywhere on it.
+  </p>
+
+  <p>
+    NVIDIA's <a href="https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1">Parakeet realtime
+    end-of-utterance model card</a> lists a cache-aware streaming FastConformer-RNNT with
+    80 to 160 ms latency.
+  </p>
+
+  <div class="callout callout--inference">
+    <strong>Inference: where each setting fits in a voice agent</strong>
+    <p>
+      Zero look-ahead suits barge-in detection, end-of-turn signals and the fastest partials,
+      where reacting early matters more than a perfect word.
+      Larger look-ahead suits final transcripts handed to the reasoning LLM.
+      A multi-look-ahead encoder can serve both from one model.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      Look-ahead is the future audio the encoder waits for before committing a frame, so it trades
+      latency for accuracy.
+      NVIDIA's cache-aware FastConformer shows RNNT WER going from 9.5% at zero look-ahead to 6.3% at
+      1,360 ms, and chunk-aware look-ahead beats per-layer look-ahead at the same latency because it
+      does not compound with depth.
+      I would train one encoder with several look-aheads (or a delay input, as in Voxtral Realtime) and use zero for turn-taking and a larger
+      one for final transcripts.
+    </p>
+  </div>
+</section>

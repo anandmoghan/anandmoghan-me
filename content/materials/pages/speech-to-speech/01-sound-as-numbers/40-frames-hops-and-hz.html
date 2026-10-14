@@ -1,0 +1,249 @@
+<section id="frames-hops-hz">
+  <h2>Frames, hops and Hz</h2>
+  <p>
+    A speech system runs several clocks at once, and "the rate" can mean any of them.
+    Samples arrive thousands of times a second.
+    Spectrogram frames (the slices from the previous two sections) arrive 100 times a second.
+    The language model sees a few dozen steps a second.
+    Keep the clocks apart and every number in a speech paper becomes easy to check.
+    One rule does most of the work:
+  </p>
+  \[
+  \text{rate (Hz)} = \frac{1000}{\text{ms per frame}}
+  \]
+  <p>
+    So 10 ms per frame is 100 Hz, 20 ms is 50 Hz, 40 ms is 25 Hz, and 80 ms is 12.5 Hz.
+  </p>
+
+  <h3 id="rates-how">How it works: the rate ladder</h3>
+  <p>
+    Each stage between the microphone and the model divides the rate by a fixed factor.
+    Input audio goes down this ladder, because each language-model position is expensive; generated audio goes back up it.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 230" role="img"
+      aria-label="Two ladders. Input: 16 kHz waveform, 100 Hz mel frames, 50 Hz encoder, 12.5 Hz adapter, into the LLM. Output: the LLM emits 12.5 Hz frames, a head expands each into several codebook tokens, the codec decoder produces 24 kHz audio">
+      <defs>
+        <marker id="rates-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Input ladder == -->
+      <text class="d-text--muted" x="10" y="16">INPUT: fast and parallel, then pooled</text>
+      <rect class="d-box" x="10" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="58" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <text class="d-text--small" x="70" y="75" text-anchor="middle"
+        dominant-baseline="middle">16 kHz</text>
+      <rect class="d-box" x="155" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="215" y="58" text-anchor="middle"
+        dominant-baseline="middle">Mel frames</text>
+      <text class="d-text--small" x="215" y="75" text-anchor="middle"
+        dominant-baseline="middle">100 Hz</text>
+      <rect class="d-box" x="300" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="58" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <text class="d-text--small" x="360" y="75" text-anchor="middle"
+        dominant-baseline="middle">50 Hz</text>
+      <rect class="d-box" x="445" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="505" y="58" text-anchor="middle"
+        dominant-baseline="middle">Adapter</text>
+      <text class="d-text--small" x="505" y="75" text-anchor="middle"
+        dominant-baseline="middle">12.5 Hz</text>
+      <rect class="d-box d-box--accent" x="590" y="44" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="66" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <path class="d-arrow" d="M 130 66 L 153 66" marker-end="url(#rates-arrow)"/>
+      <path class="d-arrow" d="M 275 66 L 298 66" marker-end="url(#rates-arrow)"/>
+      <path class="d-arrow" d="M 420 66 L 443 66" marker-end="url(#rates-arrow)"/>
+      <path class="d-arrow" d="M 565 66 L 588 66" marker-end="url(#rates-arrow)"/>
+      <text class="d-text--muted" x="142" y="36" text-anchor="middle">hop 10 ms</text>
+      <text class="d-text--muted" x="287" y="36" text-anchor="middle">stride 2</text>
+      <text class="d-text--muted" x="432" y="36" text-anchor="middle">pool 4x</text>
+      <text class="d-text--muted" x="577" y="36" text-anchor="middle">embeds</text>
+
+      <!-- == Output ladder == -->
+      <text class="d-text--muted" x="10" y="136">OUTPUT: discrete, slow, one step per frame</text>
+      <path class="d-arrow" d="M 650 88 L 650 150" marker-end="url(#rates-arrow)"/>
+      <text class="d-text--muted" x="640" y="124" text-anchor="end">one frame per step</text>
+      <rect class="d-box" x="590" y="152" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="166" text-anchor="middle"
+        dominant-baseline="middle">Codebook head</text>
+      <text class="d-text--small" x="650" y="183" text-anchor="middle"
+        dominant-baseline="middle">Q codes per frame</text>
+      <rect class="d-box" x="445" y="152" width="120" height="44" rx="8"/>
+      <text class="d-text" x="505" y="166" text-anchor="middle"
+        dominant-baseline="middle">Codec decoder</text>
+      <text class="d-text--small" x="505" y="183" text-anchor="middle"
+        dominant-baseline="middle">12.5 Hz frames</text>
+      <rect class="d-box" x="300" y="152" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="166" text-anchor="middle"
+        dominant-baseline="middle">Audio out</text>
+      <text class="d-text--small" x="360" y="183" text-anchor="middle"
+        dominant-baseline="middle">24 kHz</text>
+      <path class="d-arrow" d="M 588 174 L 567 174" marker-end="url(#rates-arrow)"/>
+      <path class="d-arrow" d="M 443 174 L 422 174" marker-end="url(#rates-arrow)"/>
+      <text class="d-text--muted" x="577" y="144" text-anchor="middle">8 x 12.5</text>
+      <text class="d-text--muted" x="432" y="144" text-anchor="middle">1920 samples</text>
+      <text class="d-text--muted" x="10" y="174">100 tokens/s for Q = 8</text>
+      <text class="d-text--muted" x="10" y="216">Rates shown for a Mimi-style 12.5 Hz, Q = 8 design.</text>
+    </svg>
+    <figcaption>The input ladder shrinks the rate before the LLM. The output ladder expands one LLM frame into codes, then into samples.</figcaption>
+  </figure>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Rate</th>
+          <th>Period</th>
+          <th>Worked arithmetic</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Waveform</td>
+          <td>16 kHz (ASR), 24 kHz (Mimi)</td>
+          <td>62.5 \( \mu\text{s} \) at 16 kHz</td>
+          <td>\( 1/16000 \)</td>
+        </tr>
+        <tr>
+          <td>Mel frames</td>
+          <td>100 Hz</td>
+          <td>10 ms hop</td>
+          <td>25 ms window and 10 ms hop at 16 kHz are 400 and 160 samples</td>
+        </tr>
+        <tr>
+          <td>Whisper encoder</td>
+          <td>50 Hz</td>
+          <td>20 ms</td>
+          <td>Stride-2 conv: \( 100/2 = 50 \). A 30 s chunk is 1,500 frames</td>
+        </tr>
+        <tr>
+          <td>Adapter into the LLM</td>
+          <td>12.5 Hz</td>
+          <td>80 ms</td>
+          <td>Voxtral's 4x adapter: \( 50/4 = 12.5 \)</td>
+        </tr>
+        <tr>
+          <td>Codec frame (Mimi)</td>
+          <td>12.5 Hz</td>
+          <td>80 ms</td>
+          <td>\( 24000/12.5 = 1920 \) samples per frame</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Other encoders pool to different rates, but the pattern is the same: read fast, pool before the language model.
+    The encoder side is covered in <a href="/apps/materials/speech-to-speech/02-listening">Listening</a>.
+  </p>
+
+  <h3 id="rates-tokens">Frames, tokens and bitrate</h3>
+  <p>
+    On the output side, a frame becomes discrete integer ids (tokens) through a codebook, which is a lookup table of learned sound pieces.
+    A codec that uses several codebooks per frame emits several tokens per frame, so token rate and frame rate differ.
+    Mimi runs at 12.5 Hz with 8 codebooks, which is \( 12.5 \times 8 = 100 \) tokens per second.
+    The bitrate formula is in
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#why-tokenize">Why tokenize</a>
+    and the full codebook mechanics are in
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#codec-mechanics">Codec mechanics</a>;
+    how these clocks line up with text and the second speaker is in
+    <a href="/apps/materials/speech-to-speech/07-conversation">Conversation</a>.
+  </p>
+
+  <h3 id="rates-why-12-5">Why about 12.5 Hz is common</h3>
+  <p>
+    Three reasons stack up.
+    First, sequence length: thirty minutes is 1,800 s, which is 90,000 positions at 50 Hz but 22,500 at 12.5 Hz.
+    Second, text matching: with English text at roughly 3 to 4 tokens a second, 12.5 Hz leaves about 3 frames per text token.
+    Third, one tokenizer study reports <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">word error rate</a> (the share of words transcribed wrongly) of 23.0 at 6.25 Hz, 4.06 at 12.5 Hz and 3.05 at 25 Hz.
+    Going from 12.5 to 25 Hz buys little; going down to 6.25 Hz costs a lot.
+  </p>
+
+  <h3 id="rates-levers">Levers and optimisations</h3>
+  <p>
+    The sample rate, window, hop and mel-bin levers are in the previous three sections.
+    The ones specific to the rate ladder are:
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Encoder pooling or stride</td>
+          <td>Rate into the LLM (50 Hz to 12.5 Hz with a 4x adapter)</td>
+          <td>Discards fine acoustic detail</td>
+        </tr>
+        <tr>
+          <td>Codec frame rate</td>
+          <td>Output steps per second of audio, and reaction granularity (one frame is the smallest unit a model can emit)</td>
+          <td>Lower is cheaper for the LM; too low hurts intelligibility</td>
+        </tr>
+        <tr>
+          <td>Codebooks per frame</td>
+          <td>Token rate and bitrate</td>
+          <td>More codebooks improve reconstruction but lengthen the sequence</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="rates-wrong">What goes wrong</h3>
+  <div class="callout callout--warn">
+    <strong>Terms get mixed up.</strong>
+    <p>
+      "24 kHz" is a sample rate. "100 Hz" is a feature rate. "12.5 Hz" is a frame rate.
+      "100 tokens per second" is a token rate, and it is 12.5 Hz times 8 codebooks.
+      A chunk is a batch of frames, so it is a latency choice, not a rate.
+    </p>
+  </div>
+  <ul>
+    <li>
+      <strong>Frame rate against token rate.</strong>
+      The LM sees 100 tokens per second on the audio side alone for Mimi, and 200 with a user stream plus an agent stream.
+    </li>
+    <li>
+      <strong>Sample rate against frame rate.</strong>
+      One codec can be both 24 kHz and 12.5 Hz: each frame then covers 1,920 samples.
+    </li>
+    <li>
+      <strong>Going too low.</strong>
+      6.25 Hz is viable only when extra information is available at decode time; one very low-rate codec needs the transcript.
+    </li>
+    <li>
+      <strong>Padding hides compute.</strong>
+      Whisper pads short audio to 30 s, so cost is paid for the full 1,500 frames.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I keep five numbers apart. Sample rate is samples per second, like 24 kHz.
+      Feature rate is the 100 Hz mel hop, encoder rate is 50 Hz, and the rate into the LLM is pooled to 12.5 Hz.
+      Token rate is frame rate times codebooks, 100 per second for Mimi."
+    </p>
+  </div>
+
+  <h3 id="frames-hops-hz-sources">Sources</h3>
+  <ul>
+    <li>Robust Speech Recognition via Large-Scale Weak Supervision (arXiv 2212.04356)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Voxtral (arXiv 2507.13264)</li>
+    <li>Scaling Speech Tokenizers with Diffusion Autoencoders (arXiv 2602.06602)</li>
+    <li>TaDiCodec: Text-aware Diffusion Speech Tokenizer for Speech Language Modeling (arXiv 2508.16790)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#rates-frames-clocks">Rates, frames and clocks</a>
+      in the literature review.
+    </li>
+  </ul>
+</section>

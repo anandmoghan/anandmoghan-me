@@ -1,0 +1,4 @@
+{
+  "title": "Speech understanding",
+  "summary": "How speech enters an LLM, and how ASR is done with speech LLMs, offline and streaming."
+}

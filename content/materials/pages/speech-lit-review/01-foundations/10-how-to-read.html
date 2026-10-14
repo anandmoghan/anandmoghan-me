@@ -1,0 +1,45 @@
+<section id="how-to-read">
+  <h2>How to read this page</h2>
+  <p>
+    <strong>Scope:</strong>
+    how to model speech-to-speech (S2S) systems, treating the reasoning LLM as a downstream component.
+    It covers newer-generation models and strategies in ASR and speech generation, plus a system design for Synthesia.
+  </p>
+  <p>
+    Each section is one topic, at most two printed pages, and ends with a "Say this in the interview" line.
+    The cheat sheet in the last chapter is the one-page recall aid.
+  </p>
+
+  <h3 id="grounding">Grounding legend</h3>
+  <p>
+    Every model detail and number on this page is traced to a research paper (cited inline as arXiv IDs)
+    or to the vendor's own page (linked inline).
+    Numbers that the authors or vendor measured on their own systems are phrased as "the authors report".
+  </p>
+  <ul>
+    <li>
+      <span class="tag tag--reported">Reported</span>
+      A number from the authors' or vendor's own first-party source.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Design opinion, not fact.
+    </li>
+  </ul>
+
+  <h3 id="three-traps">Three traps</h3>
+  <div class="callout callout--warn">
+    <strong>Three traps to avoid out loud</strong>
+    <ul>
+      <li>MiniMax-Speech introduces a "Flow-VAE" (arXiv 2505.07916). Do not read the name as flow matching.</li>
+      <li>
+        Qwen3-Omni's waveform decoder is a lightweight causal ConvNet over a multi-codebook codec (arXiv 2509.17765).
+        It is not a DiT or flow model.
+      </li>
+      <li>
+        MaskGCT is mask-and-predict in both stages (arXiv 2409.00750).
+        Do not call it flow matching.
+      </li>
+    </ul>
+  </div>
+</section>

@@ -1,0 +1,294 @@
+<section id="speech-generation-problems">
+  <h2>Speech generation problems</h2>
+  <p>
+    Thirteen failure modes recur in TTS and voice cloning.
+    Most come from three places: weak text-to-audio alignment, conditioning on a flawed reference,
+    and stochastic sampling.
+    The table is the quick map; the subsections below cover the ones worth explaining aloud.
+  </p>
+  <p>
+    Grounding labels follow the rest of the page.
+    Synthesia facts cite its
+    <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>
+    and its docs; research claims cite arXiv.
+    Mechanisms marked <span class="tag tag--inference">Inference</span> are my reading, not a source.
+    The Metric and Mitigation columns of the table are suggestions unless a subsection cites them.
+  </p>
+
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Problem</th>
+          <th>Symptom</th>
+          <th>Metric</th>
+          <th>Mitigation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>A1 Hallucination</td>
+          <td>Repeated, skipped or babbled words</td>
+          <td>WER/CER by a fixed ASR; alignment score</td>
+          <td>CTC loss, attention priors, alignment-score training</td>
+        </tr>
+        <tr>
+          <td>A2 Long-form drift</td>
+          <td>Voice or prosody wanders over minutes</td>
+          <td>Windowed speaker similarity vs first window</td>
+          <td>Chunk with reference re-conditioning</td>
+        </tr>
+        <tr>
+          <td>A3 Mispronunciation</td>
+          <td>Names, acronyms, numbers, heteronyms wrong</td>
+          <td>Per-entity accuracy on a fixed list</td>
+          <td>Respelling, glossary, text normalisation</td>
+        </tr>
+        <tr>
+          <td>A4 Accents, code-switching</td>
+          <td>Accent slips or blends mid-sentence</td>
+          <td>Per-accent and per-language-pair scores</td>
+          <td>Accent-curated data; per-slice evaluation</td>
+        </tr>
+        <tr>
+          <td>A5 Flat prosody</td>
+          <td>Wrong emphasis, monotone, odd pauses</td>
+          <td>Human rating; emotion classifier</td>
+          <td>Voice styles; punctuation as pause control</td>
+        </tr>
+        <tr>
+          <td>A6 Reference leakage</td>
+          <td>Emotion, noise or channel copied from prompt</td>
+          <td>emotion2vec similarity; noise floor</td>
+          <td>Prompt quality gate; clean references</td>
+        </tr>
+        <tr>
+          <td>A7 Metric pitfalls</td>
+          <td>Scores rise, listeners disagree</td>
+          <td>Same-encoder SIM; human MOS</td>
+          <td>Fix the speaker encoder; report both encoders</td>
+        </tr>
+        <tr>
+          <td>A8 Noisy prompts</td>
+          <td>Output inherits room and noise</td>
+          <td>DNSMOS-style quality of output</td>
+          <td>Denoise, dereverb, reject bad prompts</td>
+        </tr>
+        <tr>
+          <td>A9 Sampling instability</td>
+          <td>Some seeds are bad, others fine</td>
+          <td>Failure rate across seeds</td>
+          <td>Lower temperature; rerank candidates</td>
+        </tr>
+        <tr>
+          <td>A10 Chunk seams</td>
+          <td>Clicks or prosody jumps at boundaries</td>
+          <td>Boundary discontinuity; first-packet time</td>
+          <td>Overlap, look-ahead, crossfade</td>
+        </tr>
+        <tr>
+          <td>A11 Codec artefacts</td>
+          <td>Metallic or buzzy timbre</td>
+          <td>Codec reconstruction scores; listening</td>
+          <td>Better tokenizer; loudness normalisation</td>
+        </tr>
+        <tr>
+          <td>A12 Multilingual gaps</td>
+          <td>Quality drops outside head languages</td>
+          <td>Per-language WER and SIM</td>
+          <td>Per-language data and test sets</td>
+        </tr>
+        <tr>
+          <td>A13 Misuse</td>
+          <td>Cloning a person without consent</td>
+          <td>Consent-check pass rate; mark recovery after editing; detector error rate on marked real speech</td>
+          <td>Consent gate, moderation at creation, multi-bit watermark, detectors trained on marked real and fake speech</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="sp-hallucination">A1 Hallucination and alignment</h3>
+  <p>
+    LLM-based TTS models can repeat words, drop words or produce misaligned speech
+    <span class="tag tag--reported">Reported</span>.
+    The authors of arXiv 2406.17957 find that certain cross-attention heads implicitly learn the
+    text-to-speech alignment, and that nothing in the loss forces that alignment to stay monotonic.
+    Regotron adds a monotonic alignment loss to Tacotron 2 for the same class of problem (arXiv 2204.13437).
+  </p>
+  <p>
+    GOAT reports a strong positive correlation between hallucination and model uncertainty,
+    and over 50% lower character error rate on challenging test cases (arXiv 2508.15442)
+    <span class="tag tag--reported">Reported</span>.
+  </p>
+  <div class="cols-2">
+    <div>
+      <p><strong>How to measure</strong></p>
+      <ul>
+        <li>WER and CER from one fixed, strong ASR model.</li>
+        <li>Optimal Alignment Score, a Viterbi measure of text-speech alignment quality (arXiv 2509.19852).</li>
+      </ul>
+    </div>
+    <div>
+      <p><strong>How to fix</strong></p>
+      <ul>
+        <li>CTC loss plus attention priors encourage monotonic cross-attention, with no new learnable parameters (arXiv 2406.17957).</li>
+        <li>Alignment-score training and attention-guided distillation of CosyVoice 2 (arXiv 2509.19852).</li>
+        <li>Post-training distribution alignment with GFlowNets (arXiv 2508.15442).</li>
+      </ul>
+    </div>
+  </div>
+  <p>
+    Flow-matching TTS is non-autoregressive, so it has no free-running attention to stall
+    (see <a href="/apps/materials/speech-lit-review/03-speech-generation#diffusion-and-flow">diffusion and flow</a>).
+    The cost is that the total duration must be chosen before generation, and that choice can be wrong
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+
+  <h3 id="sp-mispronunciation">A3 Mispronunciation</h3>
+  <p>
+    Names, acronyms, numbers and heteronyms fail when grapheme-to-phoneme rules or text normalisation guess wrong
+    <span class="tag tag--inference">Inference</span>.
+    Express-Voice operates on graphemes directly, so any fix has to live in the model or in the script
+    <span class="tag tag--confirmed">Confirmed</span>
+    (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>).
+  </p>
+  <p>
+    Synthesia's documented workaround is a per-word pronunciation entry
+    <span class="tag tag--confirmed">Confirmed</span>.
+    The <a href="https://docs.synthesia.io/docs/script">script docs</a> give a respelling example, "sin-THEE-zhuh" for Synthesia,
+    and offer two previews: an IPA version and a respelling that replaces the text before it reaches the voice model.
+    Constraints from the docs and the
+    <a href="https://help.synthesia.io/en/articles/9399195-how-do-i-use-pronunciation-in-synthesia">help article</a>:
+  </p>
+  <ul>
+    <li>A saved pronunciation does not automatically apply to instances of the word added to the script later.</li>
+    <li>"Apply to all" covers every instance in the current video.</li>
+    <li>"Add to glossary" applies across the workspace and is available on Enterprise plans only.</li>
+    <li>Pronunciation reliability varies by voice and language; regenerating the scene can help.</li>
+  </ul>
+  <p>
+    The pattern is a manual patch around a grapheme model.
+    A production fix would add a per-customer dictionary applied before synthesis
+    and a fixed name list for regression tests
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+
+  <h3 id="sp-drift">A2 Long-form drift</h3>
+  <p>
+    Over minutes, autoregressive generation can lose speaker identity or flatten prosody
+    because errors compound and nothing re-anchors the voice
+    <span class="tag tag--inference">Inference</span>.
+    Measure speaker similarity in sliding windows against the first window, and plot it against time.
+    Mitigate by synthesising in chunks and re-conditioning each chunk on the original reference.
+  </p>
+
+  <h3 id="sp-leakage">A6 and A8 Reference leakage</h3>
+  <p>
+    Express-Voice clones in context: the reference audio conditions the model with no fine-tuning
+    <span class="tag tag--confirmed">Confirmed</span>
+    (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>).
+    The same mechanism that copies timbre can copy emotion, background noise and microphone channel
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+  <ul>
+    <li>Detect leakage with emotion2vec similarity between prompt and output, and a noise-floor check.</li>
+    <li>Gate prompts at upload: reject clipped, noisy or reverberant audio, or denoise first.</li>
+    <li>Prefer neutral, clean references when the target style is set by the script.</li>
+  </ul>
+
+  <h3 id="sp-metrics">A7 Metric pitfalls and A11 codecs</h3>
+  <p>
+    Synthesia names WavLM for speaker similarity and emotion2vec for emotional similarity in its voice evaluation,
+    and publishes no scores
+    <span class="tag tag--confirmed">Confirmed</span>
+    (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>).
+    A similarity score depends on which speaker encoder computes it,
+    so scores from different encoders do not compare
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+  <p>
+    Express-Voice uses Descript's residual vector-quantised tokenizer
+    <span class="tag tag--confirmed">Confirmed</span>.
+    A metallic or buzzy timbre that survives every sampling setting points at the tokenizer, not the LM
+    <span class="tag tag--inference">Inference</span>.
+    See <a href="/apps/materials/speech-lit-review/03-speech-generation#codecs-tokenizers">codecs and tokenizers</a>
+    for the rate trade-offs.
+  </p>
+
+  <h3 id="sp-sampling">A9 Sampling instability and reranking</h3>
+  <p>
+    Higher temperature plausibly raises the hallucination rate of A1, so a few samples fail
+    even when the average looks good
+    <span class="tag tag--inference">Inference</span>.
+    The cheap fix is best-of-N: sample several candidates, score each, return the best.
+    Score with ASR error plus a speaker-similarity term.
+  </p>
+  <p>
+    Synthesia applies the same idea to video: Express-Eval scores audio-motion alignment and picks the best motion candidate
+    <span class="tag tag--confirmed">Confirmed</span>
+    (see <a href="/apps/materials/speech-lit-review/08-common-problems#audio-visual-problems">audio-visual problems</a>).
+    Pushing the reranking signal into training is online RL, which invites reward hacking.
+    One report finds that GRPO on transcription signals (CER and NLL) lowers error rates but collapses prosody into monotone speech
+    (arXiv 2509.18531)
+    <span class="tag tag--reported">Reported</span>.
+    See <a href="/apps/materials/speech-lit-review/05-streaming-conversation#online-rl-rewards">online RL rewards</a>
+    for composite rewards and KL control.
+  </p>
+
+  <h3 id="sp-other">A4, A5, A10, A12, A13 in brief</h3>
+  <ul>
+    <li>
+      <strong>Accents.</strong>
+      Express-Voice training data was curated for accent coverage, including YODAS and LibriLight.
+      Synthesia reports a blind test with 100 native English-speaking evaluators across 17 accents and top ratings,
+      but names no comparison systems and gives no scores
+      <span class="tag tag--reported">Reported</span>
+      (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>).
+      Report per accent and per language pair
+      <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      <strong>Prosody.</strong>
+      Express-2 offers voice styles for the same voice (for example Excited and Neutral)
+      <span class="tag tag--confirmed">Confirmed</span>.
+      The script docs add a pause tool with durations from 0.1 s to 99 s (default 1 s)
+      (<a href="https://docs.synthesia.io/docs/script">script docs</a>).
+      That is coarse control, and a flat read needs a script edit
+      <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      <strong>Chunk seams.</strong>
+      Streaming trades first-packet time against boundary quality
+      <span class="tag tag--inference">Inference</span>.
+      See <a href="/apps/materials/speech-lit-review/03-speech-generation#streaming-low-latency">streaming and low latency</a>.
+    </li>
+    <li>
+      <strong>Languages.</strong>
+      Synthesia's own pages disagree on language counts.
+      The <a href="https://www.synthesia.io/post/synthesia-3-0-the-next-era-of-video">Synthesia 3.0 post</a> says dubbing covers 30+ languages,
+      while the title of its <a href="https://www.synthesia.io/features/ai-dubbing">AI dubbing page</a> says 130+.
+      Quote the number only with its page.
+    </li>
+    <li>
+      <strong>Misuse.</strong>
+      Synthesia states that it strictly prohibits cloning voices without explicit consent
+      <span class="tag tag--confirmed">Confirmed</span>
+      (<a href="https://www.synthesia.io/features/ai-voice-cloning">voice cloning page</a>), and its cloning flow has the speaker read a random passcode.
+      Consent only controls creation.
+      After release, a watermark such as AudioSeal (arXiv 2401.17264) lets a detector find the marked stretch in a longer clip.
+      Speech enhancement can strip several published marks (arXiv 2609.29040), and a detector trained on marked fakes against unmarked real speech learns the mark instead of the fake: equal error rate rose from 16% to 75% in a white-box test (arXiv 2606.23335).
+      Fingerprints survive DPO and GRPO more than some SFT changes (arXiv 2609.21738)
+      <span class="tag tag--reported">Reported</span>.
+      Details are in <a href="/apps/materials/speech-lit-review/06-control-and-quality#safety-provenance">Safety and provenance</a>.
+    </li>
+  </ul>
+
+  <div class="callout callout--warn">
+    <strong>Trap:</strong>
+    <p>
+      Do not quote a similarity score from a paper next to Synthesia's.
+      The speaker encoder changes the number, so only same-encoder comparisons mean anything.
+    </p>
+  </div>
+</section>

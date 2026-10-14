@@ -1,0 +1,26 @@
+/* Glue between global shell.css (written for body.shell under its own topbar) and the
+   /apps shell: the pane colour shell.css sets on body.shell, and the mobile menu button,
+   which reuses the site's .toc-fab look. Every rule is under .materials. */
+
+.materials {
+  --sidebar-bg: var(--bg);
+}
+
+.materials .materials-menu {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  /* The drawer is a raised panel, so the pane colour switches to the surface. */
+  .materials {
+    --sidebar-bg: var(--surface);
+  }
+
+  .materials .materials-menu {
+    display: inline-flex;
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 45;
+  }
+}

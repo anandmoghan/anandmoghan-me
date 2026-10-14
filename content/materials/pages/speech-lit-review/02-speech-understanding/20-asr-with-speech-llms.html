@@ -1,0 +1,340 @@
+<section id="asr-with-speech-llms">
+  <h2>ASR with speech LLMs: offline and streaming</h2>
+  <p>
+    ASR is one more speech-to-text task on the encoder, projector and LLM stack.
+    The design questions are how much to train, and how to stream.
+  </p>
+
+  <h3 id="asr-training-recipes">Training recipes</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Recipe</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="https://huggingface.co/nvidia/canary-qwen-2.5b">Canary-Qwen</a> (NVIDIA)</td>
+          <td>
+            LLM frozen; train encoder, projection and LoRA.
+            Trained on about 234K h of public speech; the card reports 5.63 mean WER and RTFx 418 on the Open ASR Leaderboard (NVIDIA model card)
+          </td>
+        </tr>
+        <tr>
+          <td>Granite-speech (arXiv 2505.08699)</td>
+          <td>Encoder, projector and LoRA (rank 64 on q, v) trained jointly</td>
+        </tr>
+        <tr>
+          <td>Phi-4-multimodal (arXiv 2503.01743)</td>
+          <td>Two stages: ASR pre-training updates encoder and projector with the language decoder frozen; post-training freezes the encoder and updates projector and speech LoRA</td>
+        </tr>
+        <tr>
+          <td>Voxtral (arXiv 2507.13264)</td>
+          <td>Pretraining, then SFT, then DPO and online DPO</td>
+        </tr>
+        <tr>
+          <td>Qwen-Audio-3.0-ASR (arXiv 2609.07549)</td>
+          <td>MoE LLM-ASR with a SenseVoice audio encoder (Transformer layers initialised from a Qwen3 LLM, causal attention made bidirectional, then BEST-RQ and supervised AED pretraining) and a two-layer Transformer adapter</td>
+        </tr>
+        <tr>
+          <td>NIM4-ASR (arXiv 2604.18105)</td>
+          <td>About 2.3B parameters: a ~600M streaming Conformer encoder, a two-layer MLP adaptor, a phoneme CTC head and a Qwen3-1.7B decoder; SFT, then RL with accuracy, hallucination and context rewards</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li>
+      Freezing the LLM is the direct guard against forgetting.
+      Granite-speech states that in text mode it calls the underlying LLM without LoRA, which preserves its text capabilities.
+    </li>
+    <li>Canary-Qwen's LLM mode takes a text transcript only, not raw audio (<a href="https://huggingface.co/nvidia/canary-qwen-2.5b">NVIDIA model card</a>).</li>
+  </ul>
+
+  <h3 id="asr-streaming">Streaming approaches</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 190" role="img"
+      aria-label="Streaming ASR: audio chunks plus a short look-ahead enter a causal encoder, then a projector and an LLM that emits partial transcripts">
+      <defs>
+        <marker id="asr-chunked-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-lane" x="0" y="12" width="720" height="44" rx="8"/>
+      <text class="d-text--small" x="10" y="34" text-anchor="start"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="70" y="20" width="110" height="28" rx="8"/>
+      <text class="d-text" x="125" y="34" text-anchor="middle"
+        dominant-baseline="middle">chunk 1</text>
+      <rect class="d-box" x="190" y="20" width="110" height="28" rx="8"/>
+      <text class="d-text" x="245" y="34" text-anchor="middle"
+        dominant-baseline="middle">chunk 2</text>
+      <rect class="d-box d-box--muted" x="310" y="20" width="100" height="28"
+        rx="8"/>
+      <text class="d-text" x="360" y="34" text-anchor="middle"
+        dominant-baseline="middle">look-ahead</text>
+      <text class="d-text--muted" x="430" y="34" text-anchor="start"
+        dominant-baseline="middle">time</text>
+      <path class="d-arrow" d="M 470 34 L 710 34"
+        marker-end="url(#asr-chunked-arrow)"/>
+      <rect class="d-box d-box--accent" x="10" y="100" width="130" height="44"
+        rx="8"/>
+      <text class="d-text" x="75" y="114" text-anchor="middle"
+        dominant-baseline="middle">Causal encoder</text>
+      <text class="d-text--small" x="75" y="131" text-anchor="middle"
+        dominant-baseline="middle">chunk + look-ahead</text>
+      <rect class="d-box" x="210" y="100" width="110" height="44" rx="8"/>
+      <text class="d-text" x="265" y="122" text-anchor="middle"
+        dominant-baseline="middle">Projector</text>
+      <rect class="d-box" x="390" y="100" width="100" height="44" rx="8"/>
+      <text class="d-text" x="440" y="122" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <rect class="d-box" x="560" y="100" width="150" height="44" rx="8"/>
+      <text class="d-text" x="635" y="114" text-anchor="middle"
+        dominant-baseline="middle">Text out</text>
+      <text class="d-text--small" x="635" y="131" text-anchor="middle"
+        dominant-baseline="middle">partial transcripts</text>
+      <path class="d-arrow" d="M 245 48 L 245 76 L 75 76 L 75 98"
+        marker-end="url(#asr-chunked-arrow)"/>
+      <text class="d-text--muted" x="255" y="66" text-anchor="start"
+        dominant-baseline="middle">chunk + look-ahead audio</text>
+      <path class="d-arrow" d="M 140 122 L 208 122"
+        marker-end="url(#asr-chunked-arrow)"/>
+      <text class="d-text--muted" x="174" y="112" text-anchor="middle"
+        dominant-baseline="middle">frames</text>
+      <path class="d-arrow" d="M 320 122 L 388 122"
+        marker-end="url(#asr-chunked-arrow)"/>
+      <text class="d-text--muted" x="354" y="112" text-anchor="middle"
+        dominant-baseline="middle">embeds</text>
+      <path class="d-arrow" d="M 490 122 L 558 122"
+        marker-end="url(#asr-chunked-arrow)"/>
+      <text class="d-text--muted" x="524" y="112" text-anchor="middle"
+        dominant-baseline="middle">tokens</text>
+      <text class="d-text--muted" x="360" y="176" text-anchor="middle"
+        dominant-baseline="middle">Inference: look-ahead trades latency for WER</text>
+    </svg>
+    <figcaption>Chunked streaming ASR: the causal encoder sees each chunk plus a short look-ahead, and the LLM emits partial text.</figcaption>
+  </figure>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 200" role="img"
+      aria-label="Delayed streams: the text lane is the audio lane shifted later in time by a delay d">
+      <defs>
+        <marker id="asr-delayed-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-lane" x="0" y="12" width="720" height="44" rx="8"/>
+      <rect class="d-lane" x="0" y="92" width="720" height="44" rx="8"/>
+      <text class="d-text--small" x="10" y="34" text-anchor="start"
+        dominant-baseline="middle">audio in</text>
+      <text class="d-text--small" x="10" y="114" text-anchor="start"
+        dominant-baseline="middle">text out</text>
+      <rect class="d-box" x="100" y="20" width="78" height="28" rx="8"/>
+      <text class="d-text" x="139" y="34" text-anchor="middle"
+        dominant-baseline="middle">a1</text>
+      <rect class="d-box d-box--muted" x="190" y="100" width="78" height="28"
+        rx="8"/>
+      <text class="d-text" x="229" y="114" text-anchor="middle"
+        dominant-baseline="middle">t1</text>
+      <rect class="d-box" x="186" y="20" width="78" height="28" rx="8"/>
+      <text class="d-text" x="225" y="34" text-anchor="middle"
+        dominant-baseline="middle">a2</text>
+      <rect class="d-box d-box--muted" x="276" y="100" width="78" height="28"
+        rx="8"/>
+      <text class="d-text" x="315" y="114" text-anchor="middle"
+        dominant-baseline="middle">t2</text>
+      <rect class="d-box" x="272" y="20" width="78" height="28" rx="8"/>
+      <text class="d-text" x="311" y="34" text-anchor="middle"
+        dominant-baseline="middle">a3</text>
+      <rect class="d-box d-box--muted" x="362" y="100" width="78" height="28"
+        rx="8"/>
+      <text class="d-text" x="401" y="114" text-anchor="middle"
+        dominant-baseline="middle">t3</text>
+      <rect class="d-box" x="358" y="20" width="78" height="28" rx="8"/>
+      <text class="d-text" x="397" y="34" text-anchor="middle"
+        dominant-baseline="middle">a4</text>
+      <rect class="d-box d-box--muted" x="448" y="100" width="78" height="28"
+        rx="8"/>
+      <text class="d-text" x="487" y="114" text-anchor="middle"
+        dominant-baseline="middle">t4</text>
+      <rect class="d-box" x="444" y="20" width="78" height="28" rx="8"/>
+      <text class="d-text" x="483" y="34" text-anchor="middle"
+        dominant-baseline="middle">a5</text>
+      <rect class="d-box d-box--muted" x="534" y="100" width="78" height="28"
+        rx="8"/>
+      <text class="d-text" x="573" y="114" text-anchor="middle"
+        dominant-baseline="middle">t5</text>
+      <rect class="d-box" x="530" y="20" width="78" height="28" rx="8"/>
+      <text class="d-text" x="569" y="34" text-anchor="middle"
+        dominant-baseline="middle">a6</text>
+      <rect class="d-box d-box--muted" x="620" y="100" width="78" height="28"
+        rx="8"/>
+      <text class="d-text" x="659" y="114" text-anchor="middle"
+        dominant-baseline="middle">t6</text>
+      <path class="d-arrow d-arrow--dashed" d="M 100 56 L 100 92"/>
+      <path class="d-arrow d-arrow--dashed" d="M 190 56 L 190 92"/>
+      <path class="d-arrow" d="M 100 74 L 190 74"
+        marker-start="url(#asr-delayed-arrow)"
+        marker-end="url(#asr-delayed-arrow)"/>
+      <text class="d-text--muted" x="145" y="66" text-anchor="middle"
+        dominant-baseline="middle">delay d</text>
+      <path class="d-arrow" d="M 40 166 L 700 166"
+        marker-end="url(#asr-delayed-arrow)"/>
+      <text class="d-text--muted" x="370" y="186" text-anchor="middle"
+        dominant-baseline="middle">time</text>
+    </svg>
+    <figcaption>Delayed streams: ASR is the text stream delayed by d relative to audio (Kyutai DSM).</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Mechanism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chunked or causal encoder</td>
+          <td>
+            Qwen3-ASR's AuT encoder uses a 1-8 s dynamic attention window, so one model serves streaming (short chunks) and offline inference;
+            the authors report an average TTFT as low as 92 ms for the 0.6B model (arXiv 2601.21337)
+          </td>
+        </tr>
+        <tr>
+          <td>Delayed streams</td>
+          <td>
+            Kyutai DSM: a decoder-only LM over time-aligned streams.
+            ASR corresponds to delaying the text stream relative to the audio, and the reverse gives TTS (arXiv 2509.08753)
+          </td>
+        </tr>
+        <tr>
+          <td>Native streaming with a delay input</td>
+          <td>
+            Voxtral Realtime: causal encoder trained from scratch, delay injected through Ada RMS-Norm and sampled from 80 to 2400 ms in training, built on Delayed Streams Modeling.
+            LibriSpeech clean / other WER is 2.08 / 5.54 at 480 ms and 1.96 / 4.59 at 960 ms, against 1.84 / 3.66 for offline Whisper (arXiv 2602.11298)
+          </td>
+        </tr>
+        <tr>
+          <td>Sliding-window encoder</td>
+          <td>
+            Moonshine v2: 16 frames of left context and 4 of right context in the first two and last two layers, at 50 Hz (80 ms look-ahead).
+            Open ASR average WER is 12.01 (tiny, 33.6M parameters), 7.84 (small) and 6.65 (medium, 244.9M), and the medium model's response latency is 258 ms on an Apple M3, against 11,286 ms for Whisper Large v3 (arXiv 2602.12241)
+          </td>
+        </tr>
+        <tr>
+          <td>Streaming variant of an LLM-ASR</td>
+          <td>
+            Qwen-Audio-3.0-ASR: first-token latency under 200 ms in the low-latency setting; at 400 ms algorithmic latency streaming costs 9.24% against 8.03% CER (Chinese) and 13.38% against 11.78% WER (English) (arXiv 2609.07549)
+          </td>
+        </tr>
+        <tr>
+          <td>Streaming transcription head in a duplex model</td>
+          <td>
+            A lightweight ASR head runs in parallel with the agent text head on one backbone; 10.21% average WER on the Open ASR Leaderboard in the duplex model, 7.73% as a standalone streaming model (arXiv 2609.15759)
+          </td>
+        </tr>
+        <tr>
+          <td>Chunked decoder</td>
+          <td>
+            SpeechLLM-XL: decoder-only model over configurable audio chunks;
+            the authors report 2.7 / 6.7 WER on LibriSpeech test clean / other with 1.28 s chunks.
+            CTC forced alignment segments the training transcripts (arXiv 2410.03752)
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Chunk size and lookahead trade latency against WER.
+    The newer designs make that dial an input instead of a fixed property of the model.
+  </p>
+
+  <p>
+    Latency measurement, GRPO for latency, factorized wait and end-of-turn detection inside the recogniser are in
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-asr-latency">Measuring and optimising ASR latency</a>.
+  </p>
+
+  <h3 id="asr-decoding-speed">Decoding speed</h3>
+  <p>
+    Autoregressive LLM decoding is the slow part of LLM-based ASR, and two papers attack it from opposite ends.
+    RTF is real-time factor (processing time divided by audio duration); RTFx is its inverse.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Mechanism</th>
+          <th>Reported speed</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Multi-token prediction: ParaASR (arXiv 2607.29279)</td>
+          <td>4B dense decoder with a frozen 0.6B audio encoder; the main branch plus five MTP branches propose six tokens per step and the verified prefix is kept. Native 32K context, up to 30 minutes of audio in one pass</td>
+          <td>5.0 of 6 tokens accepted on average; RTF 0.0053 on 100 clips of 30 s on one H800, against 0.0094 for Qwen3-ASR-1.7B, 0.0591 for FunASR-Nano and 0.1039 for VibeVoice-ASR in the same setup</td>
+        </tr>
+        <tr>
+          <td>CTC only: Granite 5.0 TurboCTC (arXiv 2609.20104)</td>
+          <td>470M encoder-only model: 16 Conformer blocks, 100 Hz log-mel stacked to 50 Hz, then 12.5 Hz after two stride-2 blocks, 16,384 BPE units, CTC loss, greedy decoding</td>
+          <td>RTFx 13,715 on one H100 at batch size 128, against 9,229 for the baseline, for a checkpoint before distillation and robust fine-tuning; 5.72% average WER over seven public English sets; the abstract claims twice the speed of the fastest competitor, and the paper gives no competitor RTFx</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    This fits the Open ASR Leaderboard finding that CTC and TDT decoders give the best RTFx (arXiv 2510.06961).
+    <span class="tag tag--inference">Inference</span>
+    The choice is between a CTC encoder that is very fast and has no language model at decode time, and an LLM decoder that is slower but reads context, with multi-token prediction narrowing the gap.
+  </p>
+
+  <h3 id="asr-production-features">Production features</h3>
+  <ul>
+    <li>
+      <strong>Hotwords and entities.</strong>
+      Qwen-Audio-3.0-ASR raises hotword recall, for example person names from 62.12 to 99.43 and AI entities from 88.22 to 99.39, when a hotword list is supplied (arXiv 2609.07549).
+      NIM4-ASR retrieves hotwords by exact phoneme-sequence matching (Aho-Corasick) and injects the matches into the LLM prompt; on an internal point-of-interest set, entity recall rose from 82.63% to 88.07% in one city and from 77.48% to 83.60% in another (arXiv 2604.18105).
+    </li>
+    <li>
+      <strong>Speaker attribution.</strong>
+      VibeVoice-ASR-Streaming does ASR and speaker attribution in one autoregressive pass, without a separate diarization stage (<a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-asr-families">details in the streaming families</a>; arXiv 2609.02812).
+    </li>
+    <li>
+      <strong>Hallucination.</strong>
+      Under masked audio, 86% of Whisper-small's 51,797 insertions were repetition loops; explicit-LLM decoders produced 38x fewer insertions, but a Q-Former encoder brought repetition back (49 to 57% for Granite-Speech 2B and 8B; arXiv 2604.21276).
+      NIM4-ASR reports a Mandarin hallucination rate of 0.002% after RL, against 0.018% for Fun-ASR-Nano and Qwen3-ASR-1.7B, and credits silence padding before noise injection plus RL rewards (arXiv 2604.18105).
+    </li>
+  </ul>
+
+  <h3 id="asr-multilingual">Multilingual scale</h3>
+  <p>
+    Omnilingual ASR (Meta) covers over 1,600 languages, in models from 300M to 7B parameters (arXiv 2511.09690).
+    Qwen3-ASR covers 52 languages and dialects (arXiv 2601.21337).
+  </p>
+
+  <h3 id="asr-leaderboard">Leaderboard state</h3>
+  <p>
+    The Open ASR Leaderboard compares 86 systems on 12 datasets, with English short- and long-form and multilingual tracks (arXiv 2510.06961).
+    Its authors observe that Conformer encoders paired with Transformer decoders reach the best average WER, while CTC and TDT decoders give the best RTFx.
+  </p>
+
+  <h3 id="asr-open-questions">Open question and scope</h3>
+  <ul>
+    <li>Not covered here: transducer plus LLM hybrids (see <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-asr-families">Streaming ASR families</a>) and CTC-prefix joint decoding.</li>
+    <li>Further reading, not summarised here: Uni-ASR (arXiv 2603.11123), Fun-ASR (arXiv 2509.12508) and GRPO for speech recognition (arXiv 2509.01939).</li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "From my streaming ASR work: chunk size and lookahead set the latency/WER trade-off.
+      The new twist is delayed text streams, so ASR becomes a special case of a multistream LM."
+    </p>
+  </div>
+</section>

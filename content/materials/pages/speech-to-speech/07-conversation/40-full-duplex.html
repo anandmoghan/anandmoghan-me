@@ -1,0 +1,337 @@
+<section id="full-duplex">
+  <h2>Full duplex and the turn-taking feel</h2>
+  <p>
+    A walkie-talkie is half duplex: one side talks, the other waits.
+    A phone call is full duplex: both sides can speak and hear at the same moment.
+    A full-duplex voice model listens while it speaks, so overlap, backchannels and interruptions come from the model's own decisions and not from a silence timer.
+  </p>
+  <p>
+    The design question is where the speak-or-listen decision lives.
+    There are six common answers, and the choice explains most of what a duplex model feels like to talk to.
+  </p>
+
+  <h3 id="full-duplex-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 360" role="img"
+      aria-label="Three ways to wire the speak-or-listen decision: dual-stream
+        lanes decided in every frame, one flattened sequence decided by chunk
+        order, and a control head that gates a language model">
+      <defs>
+        <marker id="wire-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="10" y="12" text-anchor="start"
+        dominant-baseline="middle">A. Dual-stream: speak or listen is decided in
+        every frame</text>
+      <rect class="d-lane" x="100" y="24" width="610" height="26" rx="6"/>
+      <rect class="d-lane" x="100" y="56" width="610" height="26" rx="6"/>
+      <text class="d-text--small" x="8" y="37" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <text class="d-text--small" x="8" y="69" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-box d-box--muted" x="106" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="106" y="60" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="156" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="156" y="60" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="206" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="206" y="60" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="256" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="256" y="60" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="306" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="306" y="60" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box d-box--muted" x="356" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box" x="356" y="60" width="44" height="18" rx="5"/>
+      <rect class="d-box d-box--muted" x="406" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box" x="406" y="60" width="44" height="18" rx="5"/>
+      <rect class="d-box d-box--muted" x="456" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box" x="456" y="60" width="44" height="18" rx="5"/>
+      <rect class="d-box d-box--muted" x="506" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box" x="506" y="60" width="44" height="18" rx="5"/>
+      <rect class="d-box d-box--muted" x="556" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box" x="556" y="60" width="44" height="18" rx="5"/>
+      <rect class="d-box d-box--muted" x="606" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box" x="606" y="60" width="44" height="18" rx="5"/>
+      <rect class="d-box d-box--muted" x="656" y="28" width="44" height="18"
+        rx="5"/>
+      <rect class="d-box" x="656" y="60" width="44" height="18" rx="5"/>
+      <text class="d-text--muted" x="405" y="98" text-anchor="middle"
+        dominant-baseline="middle">the agent lane stays on the clock through
+        silence, then fills with speech</text>
+      <text class="d-text--muted" x="10" y="128" text-anchor="start"
+        dominant-baseline="middle">B. Flattened: who speaks is the order of
+        chunks</text>
+      <rect class="d-lane" x="100" y="140" width="610" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="160" text-anchor="start"
+        dominant-baseline="middle">sequence</text>
+      <rect class="d-box d-box--muted" x="106" y="144" width="80" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="146.0" y="160.0" text-anchor="middle"
+        dominant-baseline="middle">user</text>
+      <rect class="d-box" x="190" y="144" width="80" height="32" rx="8"/>
+      <text class="d-text--small" x="230.0" y="160.0" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <rect class="d-box" x="274" y="144" width="80" height="32" rx="8"/>
+      <text class="d-text--small" x="314.0" y="160.0" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <rect class="d-box d-box--muted" x="358" y="144" width="80" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="398.0" y="160.0" text-anchor="middle"
+        dominant-baseline="middle">user</text>
+      <rect class="d-box" x="442" y="144" width="80" height="32" rx="8"/>
+      <text class="d-text--small" x="482.0" y="160.0" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <rect class="d-box" x="526" y="144" width="80" height="32" rx="8"/>
+      <text class="d-text--small" x="566.0" y="160.0" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <rect class="d-box d-box--muted" x="610" y="144" width="80" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="650.0" y="160.0" text-anchor="middle"
+        dominant-baseline="middle">user</text>
+      <text class="d-text--muted" x="10" y="214" text-anchor="start"
+        dominant-baseline="middle">C. Control head: a small head gates the
+        output</text>
+      <rect class="d-box" x="10" y="232" width="110" height="44" rx="8"/>
+      <text class="d-text" x="65.0" y="254.0" text-anchor="middle"
+        dominant-baseline="middle">Audio in</text>
+      <rect class="d-box" x="160" y="232" width="140" height="44" rx="8"/>
+      <text class="d-text" x="230.0" y="254.0" text-anchor="middle"
+        dominant-baseline="middle">Language model</text>
+      <rect class="d-box d-box--accent" x="360" y="232" width="140" height="44"
+        rx="8"/>
+      <text class="d-text" x="430.0" y="254.0" text-anchor="middle"
+        dominant-baseline="middle">State head</text>
+      <rect class="d-box" x="560" y="232" width="150" height="44" rx="8"/>
+      <text class="d-text" x="635.0" y="254.0" text-anchor="middle"
+        dominant-baseline="middle">Speak or listen</text>
+      <path class="d-arrow" d="M 120 254 L 158 254"
+        marker-end="url(#wire-arrow)"/>
+      <path class="d-arrow" d="M 300 254 L 358 254"
+        marker-end="url(#wire-arrow)"/>
+      <text class="d-text--muted" x="329" y="244" text-anchor="middle"
+        dominant-baseline="middle">states</text>
+      <path class="d-arrow" d="M 500 254 L 558 254"
+        marker-end="url(#wire-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 230 276 L 230 306 L 635 306 L
+        635 278" marker-end="url(#wire-arrow)"/>
+      <text class="d-text--muted" x="432" y="322" text-anchor="middle"
+        dominant-baseline="middle">reply tokens pass only while the head says
+        speak</text>
+    </svg>
+    <figcaption>Figure: where the decision lives. A: inside every frame of two
+      parallel streams. B: in the order of chunks in one sequence. C: in a small
+      head that reads the language model's hidden states and gates its
+      output.</figcaption>
+  </figure>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Design</th>
+          <th>Where the decision lives</th>
+          <th>Canonical example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Dual-stream</td>
+          <td>Implicit: both audio streams are tokens on every frame, and silence is tokens too</td>
+          <td>Moshi, on one 80 ms clock</td>
+        </tr>
+        <tr>
+          <td>Flattened</td>
+          <td>The order of chunks: input speech, output text and output speech in one sequence</td>
+          <td>OmniFlatten, with text chunks of 2 and speech chunks of 10</td>
+        </tr>
+        <tr>
+          <td>Control head</td>
+          <td>A tiny add-on reads the LLM's internal summary of the audio so far (its hidden states) and acts as a gate, choosing "keep listening" or "speak"</td>
+          <td>Freeze-Omni keeps the LLM frozen and predicts a chunk-wise state</td>
+        </tr>
+        <tr>
+          <td>Time-division</td>
+          <td>Chunks of input and output alternate on a coarse clock</td>
+          <td>SyncLLM with 160 to 240 ms chunks</td>
+        </tr>
+        <tr>
+          <td>Action channel</td>
+          <td>An explicit token each chunk: respond, interrupt or backchannel</td>
+          <td>DuplexSLA, on a 160 ms chunk clock</td>
+        </tr>
+        <tr>
+          <td>Token-state</td>
+          <td>A few special tokens added to an ordinary LLM vocabulary; the LLM itself says when to listen, speak or stop</td>
+          <td>A model fine-tuned from an existing speech LLM with only special tokens added</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The token-state route is the cheapest to adopt: no new module, only a few extra tokens, so it reuses the existing training and serving stack.
+    Its authors report 92% turn-taking success and 100% interruption success on one benchmark after fine-tuning on a few hundred thousand duplex samples, and a better speech-response score than Moshi on the same test.
+    Those numbers come from their own benchmark.
+  </p>
+  <p>
+    A 2026 survey frames the designs as levels.
+    L0 is an external scheduler around a half-duplex model, L1 is a control head, and L2 encodes the duties in the token stream itself.
+    Its line to remember: architecture sets the capacity, training realises it.
+  </p>
+  <p>
+    <strong>What causes the turn-taking feel.</strong>
+    Two causes follow from the sources, and both are about the decision, not the voice quality.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <ol>
+    <li>
+      <strong>Decisions quantised at chunk boundaries.</strong>
+      As in
+      <a href="/apps/materials/speech-to-speech/07-conversation#conversation-clock">The conversation clock</a>,
+      a decision waits \( c/2 \) on average for chunk length \( c \).
+      Systems that alternate user and assistant chunks only switch at boundaries, which a survey calls "apparent (not substantive)" full duplex.
+    </li>
+    <li>
+      <strong>Scarce interaction data.</strong>
+      Real two-channel conversation with overlap is rare, so models learn timing from a small amount of it, or from synthetic dialogue with regular timing.
+    </li>
+  </ol>
+  <p>
+    A related finding is that the bottleneck is not the speech path.
+    It is the duplex decision, plus ingesting the user's audio while the model speaks its own.
+    <span class="tag tag--inference">Inference</span>
+    The behaviours the decision must produce are the ones in
+    <a href="/apps/materials/speech-to-speech/07-conversation#turn-taking">Turn-taking, backchannels and barge-in</a>.
+  </p>
+
+  <h3 id="full-duplex-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Decision granularity</td>
+          <td>How often the model can switch between listening and speaking</td>
+          <td>Per frame is most natural and most expensive; chunk-wise saves compute and quantises the decision</td>
+        </tr>
+        <tr>
+          <td>Action channel</td>
+          <td>Whether the decision is an explicit, supervised output</td>
+          <td>Measurable and trainable; needs labels for each action</td>
+        </tr>
+        <tr>
+          <td>Frozen LLM plus head</td>
+          <td>How much text ability survives</td>
+          <td>Keeps intelligence by construction; the head sees only hidden states</td>
+        </tr>
+        <tr>
+          <td>Look-ahead</td>
+          <td>Future frames used before committing</td>
+          <td>One block of look-ahead costs one block of delay</td>
+        </tr>
+        <tr>
+          <td>Predicting several frames per wake</td>
+          <td>How often the backbone must run</td>
+          <td>Reduces compute per second; hard to keep timing sharp</td>
+        </tr>
+        <tr>
+          <td>Steering after training</td>
+          <td>Whether tone, persona, speaking rate and voice style follow instructions</td>
+          <td>A Moshi-based model fine-tuned for steering improves its audio-steering pass rate over the open baselines it was tested against; a later reinforcement-learning stage improved interruption response but exposed reward hacking, where the model earned reward by giving incomplete answers</td>
+        </tr>
+        <tr>
+          <td>Interaction data mix</td>
+          <td>What overlap patterns the model sees</td>
+          <td>Real two-channel speech teaches timing; synthetic dialogue scales and carries artefacts</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A choice for a product that must reason and talk together: delay streams plus an action channel, or a token-level L2 design.
+    <span class="tag tag--inference">Inference</span>
+    Reasoning and tools can also sit beside the duplex model; see
+    <a href="/apps/materials/speech-to-speech/07-conversation#thinking-while-talking">Thinking while talking</a>
+    and <a href="/apps/materials/speech-to-speech/07-conversation#tools-while-talking">Using tools while talking</a>.
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#duplex-wiring-turn-feel">Wiring the decision and the turn-taking feel</a>
+    and <a href="/apps/materials/speech-lit-review/05-streaming-conversation#full-duplex-models">Full-duplex models compared</a>.
+  </p>
+
+  <h3 id="full-duplex-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Latency numbers that do not compare.</strong>
+      Theoretical, first-packet and turn-taking delays are different quantities on different hardware.
+      Quote a number with its definition, never as a ranking.
+    </li>
+    <li>
+      <strong>Synthetic-data timing artefacts.</strong>
+      Dialogue written by an LLM and rendered by TTS has regular timing and inserted backchannels at fixed spots.
+      The model copies the regularity.
+      Mix in real two-channel conversation and compare backchannel timing with the human distribution.
+    </li>
+    <li>
+      <strong>Instruction gaps.</strong>
+      One benchmark finds the best of six full-duplex systems follows turn-taking instructions in under two thirds of cases.
+    </li>
+    <li>
+      <strong>A demo is not an evaluation.</strong>
+      Ask for false-yield rate, stop latency and multi-turn results, not a recorded conversation.
+      The tool-use benchmark in
+      <a href="/apps/materials/speech-to-speech/07-conversation#tools-while-talking">Using tools while talking</a>
+      shows why: the accuracy leader was not the fastest, and the fastest did not reliably take its turn.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The hard part of duplex is the decision, not the voice. It is quantised by chunk size and shaped by the interaction patterns in the training data.
+      So I would compare duplex systems on interaction metrics at one operating point, not on a single latency number."
+    </p>
+  </div>
+
+  <h3 id="full-duplex-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>OmniFlatten: An End-to-end GPT Model for Seamless Voice Conversation (arXiv 2410.17799)</li>
+    <li>Freeze-Omni: A Smart and Low Latency Speech-to-speech Dialogue Model with Frozen LLM (arXiv 2411.00774)</li>
+    <li>MinMo: A Multimodal Large Language Model for Seamless Voice Interaction (arXiv 2501.06282)</li>
+    <li>BayLing-Duplex: Native Full-Duplex Speech Dialogue with a Single Autoregressive LLM (arXiv 2606.14528)</li>
+    <li>SteerDuplex: Steerable Duplex Speech Dialogue Models (arXiv 2609.12623)</li>
+    <li>Beyond Turn-Based Interfaces: Synchronous LLMs as Full-Duplex Dialogue Agents (arXiv 2409.15594)</li>
+    <li>DuplexSLA: A Full-Duplex Spoken Language Model with Synchronized Speech, Language, and Action (arXiv 2605.20755)</li>
+    <li>MiniCPM-o 4.5: Towards Real-Time Full-Duplex Omni-Modal Interaction (arXiv 2604.27393)</li>
+    <li>DiffuPlex: Accelerating Full-Duplex Spoken Dialog Models via Rolling Masked Diffusion (arXiv 2610.12214)</li>
+    <li>PersonaPlex: Voice and Role Control for Full Duplex Conversational Speech Models (arXiv 2602.06053)</li>
+    <li>Full-duplex survey (arXiv 2606.19453); synchronous data survey (arXiv 2509.14515)</li>
+    <li>Instruct-FD: Can Your Full-Duplex Speech System Follow Turn-Taking Instructions? (arXiv 2607.20460)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems#full-duplex">Full-duplex and backchannelling</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#full-duplex-models">Full-duplex models compared</a>,
+      <a href="/apps/materials/speech-lit-review/08-common-problems#speech-to-speech-problems">Speech-to-speech and duplex problems</a>
+    </li>
+  </ul>
+</section>

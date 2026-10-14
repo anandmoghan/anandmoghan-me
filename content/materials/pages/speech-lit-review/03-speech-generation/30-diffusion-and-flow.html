@@ -1,0 +1,117 @@
+<section id="diffusion-and-flow">
+  <h2>Diffusion and flow matching for speech</h2>
+  <p>
+    Flow matching is the objective behind many recent TTS systems.
+    It plays two roles: fully NAR TTS, and the acoustic decoder after an AR LM.
+    It is not the only recent route: diffusion language models denoise blocks of discrete codec tokens
+    (see <a href="#block-diffusion-lms">Diffusion language models and block diffusion</a>).
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 190" role="img"
+      aria-label="Noise to data: flow matching follows a straight path, diffusion follows a curved path">
+      <defs>
+        <marker id="diffusion-flow-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="93" width="110" height="44" rx="8"/>
+      <text class="d-text" x="65" y="115" text-anchor="middle"
+        dominant-baseline="middle">Noise</text>
+      <rect class="d-box" x="600" y="93" width="110" height="44" rx="8"/>
+      <text class="d-text" x="655" y="115" text-anchor="middle"
+        dominant-baseline="middle">Data</text>
+      <path class="d-arrow" d="M 120 115 L 598 115"
+        marker-end="url(#diffusion-flow-arrow)"/>
+      <path class="d-arrow" d="M 120 106 Q 360 -20 598 106"
+        marker-end="url(#diffusion-flow-arrow)"/>
+      <text class="d-text--muted" x="360" y="24" text-anchor="middle"
+        dominant-baseline="middle">diffusion path: curved, more steps</text>
+      <text class="d-text--muted" x="360" y="138" text-anchor="middle"
+        dominant-baseline="middle">flow matching (OT) path: straight, fewer steps</text>
+    </svg>
+    <figcaption>Schematic: a straight path needs fewer steps than a curved one (inference). Lipman et al. report OT paths sample faster.</figcaption>
+  </figure>
+
+  <!-- == Objectives (shared fragments) == -->
+  <!-- @include content/materials/fragments/generative/diffusion-objective.html -->
+  <!-- @include content/materials/fragments/generative/flow-matching-objective.html -->
+  <!-- @include content/materials/fragments/generative/classifier-free-guidance.html -->
+
+  <p>
+    In speech, ZipVoice targets the CFG cost (arXiv 2506.13053).
+    Lipman et al. show OT paths train and sample faster than diffusion paths (arXiv 2210.02747).
+  </p>
+  <div class="callout callout--inference">
+    <strong>Inference, why flow matching won:</strong>
+    <p>
+      A plain regression target with no noise schedule or SNR weighting.
+      Straighter paths mean fewer steps and better RTF.
+      Infilling is natural (Voicebox, E2).
+    </p>
+  </div>
+
+  <h3 id="flow-where-it-sits">Where it sits</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Models</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Fully NAR TTS</td>
+          <td>
+            Voicebox (arXiv 2306.15687), E2 TTS (arXiv 2406.18009),
+            F5-TTS (arXiv 2410.06885; the authors report RTF 0.15, trained on 100K h),
+            ZipVoice (arXiv 2506.13053; the authors report 3x smaller and up to 30x faster than a DiT-based flow-matching baseline)
+          </td>
+        </tr>
+        <tr>
+          <td>Diffusion, not flow</td>
+          <td>
+            DiTTo-TTS (latent diffusion DiT, 790M parameters, 82K h; arXiv 2406.11427);
+            Seed-TTS DiT (fully diffusion-based NAR variant; arXiv 2406.02430)
+          </td>
+        </tr>
+        <tr>
+          <td>Decoder after AR LM</td>
+          <td>
+            CosyVoice 2 (arXiv 2412.10117),
+            GLM-4-Voice (conditional flow matching plus HiFi-GAN; arXiv 2412.02612),
+            Kimi-Audio (chunk-wise flow matching from 12.5 Hz tokens to 50 Hz mel, then a BigVGAN vocoder; arXiv 2504.18425)
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="flow-traps">Counterexamples and traps</h3>
+  <div class="callout callout--warn">
+    <strong>Do not mislabel these as flow matching:</strong>
+    <ul>
+      <li>
+        Qwen3-Omni: the Talker emits AR codec frames with an MTP module;
+        a lightweight causal ConvNet (Code2Wav) makes the waveform. Not flow.
+        Qwen2.5-Omni used a sliding-window DiT (arXiv 2503.20215).
+      </li>
+      <li>
+        MiniMax-Speech has a "Flow-VAE" (arXiv 2505.07916). Do not call it flow matching.
+      </li>
+      <li>MaskGCT: mask-and-predict in both stages (arXiv 2409.00750).</li>
+    </ul>
+  </div>
+  <p>
+    ASR has little flow work.
+    Drax is the clearest, using discrete flow matching for NAR ASR (arXiv 2510.04162).
+  </p>
+  <div class="callout callout--say">
+    <strong>Say this in the interview:</strong>
+    <p>
+      "Flow matching is regression onto a velocity field, so training is simple and few-step sampling is natural.
+      In S2S it is mostly the acoustic renderer behind an AR content model."
+    </p>
+  </div>
+</section>

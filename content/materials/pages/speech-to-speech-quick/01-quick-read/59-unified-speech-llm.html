@@ -1,0 +1,45 @@
+<section id="q-unified-speech-llm">
+  <h2>System design: the unified speech LLM</h2>
+  <ul>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      One speech model owns everything audio: streaming ASR with emotion tags, turn-taking, backchannels, barge-in and expressive TTS on one 12.5 Hz clock.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Reasoning stays in a swappable text LLM behind a tool call: transcript, tags and turn state go in, streamed text comes back and is spoken.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Fillers and backchannels come from the speech LLM, so the extra LLM hop is covered; the hop and two models to serve are the honest costs.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      The speech LLM, not the text LLM, yields on a real barge-in, ignores a user "mm-hm", and sends the played and heard text back.
+    </li>
+    <li>
+      Precedents <span class="tag tag--confirmed">Confirmed</span>:
+      Kyutai DSM (ASR and TTS as delays of one architecture; arXiv 2509.08753),
+      Step-Audio 2 tool calls (arXiv 2507.16632),
+      Qwen3-Omni Thinker-Talker (arXiv 2509.17765),
+      Freeze-Omni (arXiv 2411.00774) and MinMo (arXiv 2501.06282) with small decision modules beside a text LLM.
+    </li>
+    <li>DuplexSLA is the precedent for an action channel: 160 ms chunk clock, 98.33% backchannel accuracy, self-reported (arXiv 2605.20755) <span class="tag tag--reported">Reported</span>.</li>
+    <li>
+      Training data: unlabelled audio (Moshi 7M h, Kimi-Audio over 13M h), interleaved synthetic speech-text (spoken QA 13% to 31%; arXiv 2411.17607), and dual-channel conversation (Fisher, about 2,000 h; arXiv 2410.00037).
+    </li>
+    <li>Then DPO on text tokens (arXiv 2506.21463) and timing RL (DuplexPO, arXiv 2607.07148; Kyutai, arXiv 2606.11167).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Native full-duplex is the research track; the independent ASR, LLM and TTS cascade is the baseline and fallback.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "One speech LLM owns listening, turn-taking and speaking; a swappable text LLM behind a tool call owns content.
+      Fillers cover the extra hop, and the cascade is the baseline and fallback, with full duplex as the next step."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/09-system-design#unified-speech-llm">Full section</a></p>
+</section>

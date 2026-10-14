@@ -1,0 +1,363 @@
+<section id="cheat-sheet">
+  <h2>Cheat sheet: key models</h2>
+  <p>
+    Every cell comes from the cited paper (arXiv), or from the first-party page where one is named.
+    Years are the arXiv first-submission year; latency figures are the authors' own reports.
+    A dash means I have no sourced value for that cell.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Year</th>
+          <th>Input rep</th>
+          <th>Output rep</th>
+          <th>Renderer</th>
+          <th>Streaming</th>
+          <th>Why it matters</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>2024</td>
+          <td>Mimi codec tokens</td>
+          <td>Mimi codec tokens plus text</td>
+          <td>Mimi decoder</td>
+          <td>Yes; 160 ms theoretical, 200 ms in practice</td>
+          <td>First real-time full-duplex spoken LLM (authors' claim); Inner Monologue</td>
+        </tr>
+        <tr>
+          <td>dGSLM (arXiv 2203.16502)</td>
+          <td>2022</td>
+          <td>Textless, two-channel audio</td>
+          <td>Textless speech</td>
+          <td>—</td>
+          <td>—</td>
+          <td>First textless dialogue model (authors' claim); trained on 2000 h of Fisher</td>
+        </tr>
+        <tr>
+          <td>Voicebox (arXiv 2306.15687)</td>
+          <td>2023</td>
+          <td>Text plus audio context</td>
+          <td>Speech (infilled)</td>
+          <td>Flow matching, non-autoregressive</td>
+          <td>—</td>
+          <td>Flow-matching infilling; 50K hours of speech</td>
+        </tr>
+        <tr>
+          <td>F5-TTS (arXiv 2410.06885)</td>
+          <td>2024</td>
+          <td>Text padded with filler tokens</td>
+          <td>Speech</td>
+          <td>DiT flow matching</td>
+          <td>—</td>
+          <td>Fully non-autoregressive flow TTS; RTF 0.15</td>
+        </tr>
+        <tr>
+          <td>CosyVoice 2 (arXiv 2412.10117)</td>
+          <td>2024</td>
+          <td>Text</td>
+          <td>FSQ speech tokens</td>
+          <td>Chunk-aware causal flow matching</td>
+          <td>Yes</td>
+          <td>LM plus flow; streaming and non-streaming in one model</td>
+        </tr>
+        <tr>
+          <td>CosyVoice 3 (arXiv 2505.17589)</td>
+          <td>2025</td>
+          <td>Text</td>
+          <td>Speech tokens</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Differentiable reward model for post-training; 1M hours of data</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice (arXiv 2412.02612)</td>
+          <td>2024</td>
+          <td>Discrete 12.5 Hz tokens</td>
+          <td>Discrete tokens</td>
+          <td>Flow matching plus HiFi-GAN</td>
+          <td>Yes</td>
+          <td>Interleaved text and speech; 175 bps tokenizer</td>
+        </tr>
+        <tr>
+          <td>Freeze-Omni (arXiv 2411.00774)</td>
+          <td>2024</td>
+          <td>Speech encoder</td>
+          <td>Text, then speech</td>
+          <td>Speech decoder</td>
+          <td>Yes</td>
+          <td>Frozen LLM keeps text intelligence</td>
+        </tr>
+        <tr>
+          <td>OmniFlatten (arXiv 2410.17799)</td>
+          <td>2024</td>
+          <td>Flattened tokens</td>
+          <td>Flattened tokens</td>
+          <td>—</td>
+          <td>Yes</td>
+          <td>Three-stage post-training on a flattened stream</td>
+        </tr>
+        <tr>
+          <td>Kimi-Audio (arXiv 2504.18425)</td>
+          <td>2025</td>
+          <td>Continuous features, 12.5 Hz tokens</td>
+          <td>Discrete tokens</td>
+          <td>Flow-matching detokenizer plus BigVGAN</td>
+          <td>Yes, chunk-wise</td>
+          <td>More than 13M hours of pretraining audio</td>
+        </tr>
+        <tr>
+          <td>Step-Audio 2 (arXiv 2507.16632)</td>
+          <td>2025</td>
+          <td>Audio encoder, 12.5 Hz output</td>
+          <td>Text and audio tokens</td>
+          <td>Flow matching plus HiFi-GAN</td>
+          <td>—</td>
+          <td>Calls tools: web search, audio search</td>
+        </tr>
+        <tr>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625)</td>
+          <td>2025</td>
+          <td>Speech encoder</td>
+          <td>Text, then speech</td>
+          <td>Streaming speech decoder</td>
+          <td>Yes</td>
+          <td>Trained on only 200K dialogues</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni (arXiv 2509.17765)</td>
+          <td>2025</td>
+          <td>AuT encoder</td>
+          <td>Multi-codebook codec frames</td>
+          <td>Causal ConvNet</td>
+          <td>Yes; 234 ms theoretical first packet</td>
+          <td>Thinker-Talker MoE; ConvNet replaces block-wise diffusion</td>
+        </tr>
+        <tr>
+          <td>Qwen3-TTS (arXiv 2601.15621)</td>
+          <td>2026</td>
+          <td>Text</td>
+          <td>25 Hz or 12.5 Hz tokens</td>
+          <td>Block-wise DiT (25 Hz) or causal ConvNet (12.5 Hz)</td>
+          <td>Yes; 97 ms first packet (12.5 Hz)</td>
+          <td>Two tokenizers; Apache 2.0</td>
+        </tr>
+        <tr>
+          <td>Llasa (arXiv 2502.04128)</td>
+          <td>2025</td>
+          <td>Text</td>
+          <td>Single-codebook VQ codec tokens</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Single Transformer; inference-time search with verifiers</td>
+        </tr>
+        <tr>
+          <td>MELLE (arXiv 2407.08551)</td>
+          <td>2024</td>
+          <td>Text</td>
+          <td>Continuous mel frames</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Autoregressive without vector quantization</td>
+        </tr>
+        <tr>
+          <td>VibeVoice (arXiv 2508.19205)</td>
+          <td>2025</td>
+          <td>Text</td>
+          <td>Continuous latents, 7.5 Hz tokenizer</td>
+          <td>Diffusion head</td>
+          <td>—</td>
+          <td>Up to 90 minutes and 4 speakers</td>
+        </tr>
+        <tr>
+          <td>IndexTTS2 (arXiv 2506.21619)</td>
+          <td>2025</td>
+          <td>Text plus timbre and style prompts</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Duration control; emotion and timbre disentangled</td>
+        </tr>
+        <tr>
+          <td>Hibiki (arXiv 2502.03382)</td>
+          <td>2025</td>
+          <td>Source speech, multistream</td>
+          <td>Text and audio tokens</td>
+          <td>—</td>
+          <td>Yes, simultaneous</td>
+          <td>Simultaneous speech translation, French to English</td>
+        </tr>
+        <tr>
+          <td>MiniCPM-o 4.5 (arXiv 2604.27393)</td>
+          <td>2026</td>
+          <td>Omni-modal streams</td>
+          <td>Speech</td>
+          <td>—</td>
+          <td>Yes, full duplex</td>
+          <td>9B parameters; edge devices with under 12 GB RAM</td>
+        </tr>
+        <tr>
+          <td>FlashTTS (arXiv 2606.09141)</td>
+          <td>2026</td>
+          <td>Text</td>
+          <td>Tokens, then mel</td>
+          <td>Mean-flow decoder, 2 NFE</td>
+          <td>Yes; 325 ms first packet</td>
+          <td>Lagged multi-track; no sentence-level buffering</td>
+        </tr>
+        <tr>
+          <td>Voxtral Realtime (arXiv 2602.11298)</td>
+          <td>2026</td>
+          <td>Streaming audio into a causal encoder trained from scratch (50 Hz, 4x adapter to 12.5 Hz)</td>
+          <td>Text (ASR)</td>
+          <td>—</td>
+          <td>Yes; configurable delay</td>
+          <td>Natively streaming 4.4B ASR; LibriSpeech clean/other WER 2.08/5.54 at 480 ms</td>
+        </tr>
+        <tr>
+          <td>Qwen3.5-Omni (arXiv 2604.15804)</td>
+          <td>2026</td>
+          <td>AuT encoder at 6.25 Hz (160 ms per frame), trained on 40M hours</td>
+          <td>Speech in 10 languages</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Halves the encoder frame rate stated for Qwen3-Omni</td>
+        </tr>
+        <tr>
+          <td>NemotronLabs VoiceChat (arXiv 2609.21967)</td>
+          <td>2026</td>
+          <td>Streaming encoder; auxiliary RNN-T branch for incremental user transcription</td>
+          <td>Parallel agent-text and function-call streams</td>
+          <td>Streaming TTS decoder</td>
+          <td>Yes, full duplex</td>
+          <td>Open duplex model with tool calling; reports 100% takeover after interruptions and 93% resume after backchannels (Full-Duplex-Bench 1.5)</td>
+        </tr>
+        <tr>
+          <td>Luna-TTS Realtime (arXiv 2608.11593)</td>
+          <td>2026</td>
+          <td>Text</td>
+          <td>Diffusion-LM speech tokens in 32-frame (1.28 s) blocks</td>
+          <td>—</td>
+          <td>Yes; 41.6 ms first-block latency</td>
+          <td>0.6B block-AR with parallel denoising; RTF 0.0240</td>
+        </tr>
+        <tr>
+          <td>ZipCodec (arXiv 2609.11642)</td>
+          <td>2026</td>
+          <td>Speech</td>
+          <td>6.25 Hz tokens at 0.80 kbps</td>
+          <td>Latency-aware decoder</td>
+          <td>Yes; 160 ms theoretical latency</td>
+          <td>Ultra-low-rate streaming codec; 842M parameters, real time on a consumer CPU</td>
+        </tr>
+        <tr>
+          <td>LTX-2 (arXiv 2601.03233)</td>
+          <td>2026</td>
+          <td>Text (multilingual encoder)</td>
+          <td>Video and synchronised audio</td>
+          <td>14B video stream and 5B audio stream, bidirectional cross-attention</td>
+          <td>—</td>
+          <td>Open joint audio-video model; teacher for Omni-LiveAvatar</td>
+        </tr>
+        <tr>
+          <td>MOVA (arXiv 2602.08794)</td>
+          <td>2026</td>
+          <td>Image and text</td>
+          <td>Video and lip-synced audio</td>
+          <td>Mixture-of-Experts DiT, 32B total and about 18B active</td>
+          <td>—</td>
+          <td>Open joint video-audio model with LoRA fine-tuning support</td>
+        </tr>
+        <tr>
+          <td>JavisDiT (arXiv 2503.23377)</td>
+          <td>2025</td>
+          <td>Text</td>
+          <td>Audio and video</td>
+          <td>Joint DiT with a hierarchical synchronised prior (HiST-Sypo)</td>
+          <td>—</td>
+          <td>Ships JavisBench with 10,140 captioned sounding videos</td>
+        </tr>
+        <tr>
+          <td>Hallo-Live (arXiv 2604.23632)</td>
+          <td>2026</td>
+          <td>Text (portrait and speech generated together)</td>
+          <td>Video and speech</td>
+          <td>Asynchronous dual-stream diffusion, preference-guided distillation</td>
+          <td>Yes; 20.38 FPS at 0.94 s on two H200 GPUs</td>
+          <td>Streaming student of Ovi: 16.0x throughput and 99.3x lower latency than the teacher</td>
+        </tr>
+        <tr>
+          <td>Omni-LiveAvatar (arXiv 2608.13602)</td>
+          <td>2026</td>
+          <td>Prompts, streaming</td>
+          <td>Joint audio and video</td>
+          <td>Few-step autoregressive generator distilled from LTX-2</td>
+          <td>Yes, minute-level; about 33x faster than the teacher on one H200</td>
+          <td>Synchronised audio-video long-short-term memory; rolling prompt planning</td>
+        </tr>
+        <tr>
+          <td>Wan-Streamer v0.1 (arXiv 2606.25041)</td>
+          <td>2026</td>
+          <td>Text, speech and video</td>
+          <td>Text, speech and video</td>
+          <td>One Transformer, no separate ASR, TTS or avatar models</td>
+          <td>Yes; 160 ms units at 25 fps; about 200 ms model-side, about 550 ms total with 350 ms network</td>
+          <td>End-to-end full-duplex audio-visual conversation; network latency itemised</td>
+        </tr>
+        <tr>
+          <td>FacePlex (arXiv 2606.30145)</td>
+          <td>2026</td>
+          <td>User audio</td>
+          <td>Speech and facial motion</td>
+          <td>Gaussian splatting</td>
+          <td>Yes; 122 ms end-to-end avatar interaction</td>
+          <td>Predicts a short speech continuation so facial reactions start early</td>
+        </tr>
+        <tr>
+          <td>Avatar Forcing (arXiv 2601.00664)</td>
+          <td>2026</td>
+          <td>User audio and motion</td>
+          <td>Head-avatar motion and video</td>
+          <td>Diffusion forcing</td>
+          <td>Yes; about 500 ms</td>
+          <td>Learns reactions without labels from "losing" samples that drop the user condition; 6.8x speed-up over baseline</td>
+        </tr>
+        <tr>
+          <td>Avatar V (arXiv 2606.13872)</td>
+          <td>2026</td>
+          <td>Reference video and audio</td>
+          <td>1080p video</td>
+          <td>Video DiT conditioned on the full reference-video token sequence</td>
+          <td>—</td>
+          <td>Trained on 100M+ clips; over 10x acceleration from two-phase distillation</td>
+        </tr>
+        <tr>
+          <td>Muse Realtime Avatar (Meta, first-party post, 23 Sep 2026)</td>
+          <td>2026</td>
+          <td>Voice model speech tokens, reference media, recent video latents</td>
+          <td>448x768 video at 25 fps</td>
+          <td>Audio-driven causal-chunk DiT; two-step student of a 120-evaluation teacher</td>
+          <td>Yes; about 870 ms from end of user turn to first synchronised byte; 12 sessions per GB200</td>
+          <td>Same speech-token stream feeds the audio decoder and the avatar</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="five-sentences">Six sentences to remember</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    My synthesis of the table, not a sourced claim.
+  </p>
+  <ol>
+    <li>Several systems here run audio at about 12.5 Hz (Moshi, GLM-4-Voice, Kimi-Audio, Step-Audio 2, Qwen3-Omni).</li>
+    <li>Output is often an LM for content plus a flow or ConvNet renderer.</li>
+    <li>Text is the scaffold and the supervision.</li>
+    <li>Duplex looks limited by data and evaluation more than by architecture.</li>
+    <li>Latency comes from token rate, NFE and chunking.</li>
+    <li>In 2026 avatar work, joint audio-video teachers (Ovi, LTX-2) are distilled into streaming students, and the open gap is avatars that listen.</li>
+  </ol>
+</section>

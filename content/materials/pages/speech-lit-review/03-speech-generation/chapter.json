@@ -1,0 +1,4 @@
+{
+  "title": "Speech generation",
+  "summary": "Codecs, autoregressive and masked generation, diffusion and flow matching, continuous autoregression, and streaming."
+}

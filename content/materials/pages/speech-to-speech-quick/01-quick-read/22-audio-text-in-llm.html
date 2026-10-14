@@ -1,0 +1,21 @@
+<section id="q-audio-text-in-llm">
+  <h2>How audio and ASR text meet in the LLM</h2>
+  <ul>
+    <li>Prefix: projected audio frames, then a task prompt, then text; text is predicted given the audio (Qwen2-Audio, arXiv 2407.10759; Voxtral, arXiv 2507.13264).</li>
+    <li>Chunk-interleaved: audio chunk, its text, then a <code>$</code> end-of-chunk token; 1.28 s chunks, CTC forced alignment for targets (SpeechLLM-XL, arXiv 2410.03752).</li>
+    <li>Per-frame wait: after each 240 ms embedding the model emits zero or more words, then <code>BLANK</code> (Speech ReaLLM, arXiv 2406.09569).</li>
+    <li>Transducer: the LLM is the non-blank predictor; encoder frames enter through the joint network (Transducer-Llama, arXiv 2412.16464).</li>
+    <li>Time-aligned streams: per-stream embeddings summed into one vector per 80 ms step; ASR text is delayed, 2.5 s by default in DSM (Moshi, arXiv 2410.00037; DSM, arXiv 2509.08753).</li>
+    <li>Hybrid input: Whisper features (50 to 12.5 Hz) added to semantic-token embeddings; the Introduction says concatenated, the method sections say added (Kimi-Audio, arXiv 2504.18425).</li>
+    <li>Audio positions: Qwen3-Omni TM-RoPE gives audio temporal IDs of 80 ms each (arXiv 2509.17765).</li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Offline models put audio frames first and decode text after; streaming models interleave chunks, emit a blank per frame, or sum time-aligned streams per 80 ms step.
+      The trade-off is alignment: chunks and frames need CTC alignments, time-aligned streams need word timestamps.
+      For a voice agent I want text while the user is still speaking, so I would pick chunks or time-aligned streams."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/02-speech-understanding#audio-text-in-llm">Full section</a></p>
+</section>

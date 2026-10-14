@@ -1,0 +1,275 @@
+<section id="conversational-evaluation">
+  <h2>Evaluating conversational systems</h2>
+  <p>
+    Evaluation moved from demos to automated overlap benchmarks (Full-Duplex-Bench) and annotated dual-channel benchmarks (TurnBench, arXiv 2608.25218, Aug 2026).
+    Latency alone is a weak number: it only means something at a stated false-interruption rate.
+    Fixed binary timing windows are a second weakness: TACT (arXiv 2609.27372) scores turn-taking against the speaker's inferred intent instead.
+    Timing is also only half the picture, so capability and instruction-following suites (URO-Bench, DuplexSpeechBench-IFEval, M3-DuplexBench) sit beside it.
+    The open problem, per the TurnBench authors, is that no current system matches human timing without excessive false positives.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 250" role="img"
+      aria-label="Timeline with a user lane and an agent lane showing four reference points: gold end of turn, agent first audio, barge-in onset and agent stop, with time to first audio measured from the first to the second and stop latency from the third to the fourth">
+      <defs>
+        <marker id="arrow-conversational-evaluation" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Lanes == -->
+      <rect class="d-box" x="20" y="30" width="230" height="44" rx="8"/>
+      <text class="d-text" x="135" y="52" text-anchor="middle"
+        dominant-baseline="middle">User turn</text>
+      <rect class="d-box d-box--accent" x="330" y="110" width="260" height="44" rx="8"/>
+      <text class="d-text" x="460" y="132" text-anchor="middle"
+        dominant-baseline="middle">Agent reply</text>
+      <rect class="d-box" x="520" y="30" width="190" height="44" rx="8"/>
+      <text class="d-text" x="615" y="52" text-anchor="middle"
+        dominant-baseline="middle">User barge-in</text>
+      <text class="d-text--muted" x="12" y="96">User</text>
+      <text class="d-text--muted" x="12" y="176">Agent</text>
+
+      <!-- == Reference points == -->
+      <path class="d-arrow d-arrow--dashed" d="M 250 24 L 250 186"/>
+      <path class="d-arrow d-arrow--dashed" d="M 330 104 L 330 186"/>
+      <path class="d-arrow d-arrow--dashed" d="M 520 24 L 520 186"/>
+      <path class="d-arrow d-arrow--dashed" d="M 590 104 L 590 186"/>
+
+      <!-- == Metrics == -->
+      <path class="d-arrow" d="M 252 176 L 328 176" marker-end="url(#arrow-conversational-evaluation)"/>
+      <text class="d-text--small" x="290" y="168" text-anchor="middle">TTFA</text>
+      <path class="d-arrow" d="M 522 176 L 588 176" marker-end="url(#arrow-conversational-evaluation)"/>
+      <text class="d-text--small" x="555" y="168" text-anchor="middle">stop latency</text>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="250" y="204" text-anchor="end">gold EOT</text>
+      <text class="d-text--muted" x="330" y="204" text-anchor="start">first audio</text>
+      <text class="d-text--muted" x="520" y="204" text-anchor="end">barge-in onset</text>
+      <text class="d-text--muted" x="590" y="204" text-anchor="start">agent stop</text>
+
+      <!-- == Time axis == -->
+      <path class="d-arrow" d="M 20 232 L 700 232" marker-end="url(#arrow-conversational-evaluation)"/>
+      <text class="d-text--muted" x="360" y="244" text-anchor="middle">time</text>
+    </svg>
+    <figcaption>Figure: where each latency metric is measured. TTFA runs from the gold end of turn (not the VAD stop) to the agent's first audio. Stop latency runs from the gold barge-in onset to the last audible agent sample, measured on echo-cancelled output.</figcaption>
+  </figure>
+
+  <!-- == Latency definitions == -->
+  <h3 id="latency-definitions">Latency definitions and operating points</h3>
+  <p>
+    LiveKit's eot-bench (<a href="https://livekit.com/blog/solving-end-of-turn-detection">LiveKit blog</a>) reports two views of the same detector:
+    the false-cutoff rate at a fixed latency budget (300 or 600 ms), and the mean latency at a fixed false-cutoff target (5% or 10%).
+    <span class="tag tag--reported">Reported</span>
+    For LiveKit's own v1, the blog gives 9.9% false cutoffs at 300 ms and 4.5% at 600 ms, and 543 ms mean latency at 5% and 295 ms at 10%.
+    It is a vendor benchmark, but the operating-point framing is reusable for any turn-taking system.
+  </p>
+  <p>
+    Vendor latency claims are not comparable.
+    Deepgram's <a href="https://developers.deepgram.com/docs/flux/quickstart">Flux docs</a> state "~260ms end-of-turn detection" inside the STT model, without a stated benchmark.
+    That cannot be compared with the eot-bench operating points above.
+  </p>
+
+  <!-- == Benchmarks == -->
+  <h3 id="benchmarks">Benchmarks</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Benchmark</th>
+          <th>What it measures</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Full-Duplex-Bench v1 (arXiv 2503.04721)</td>
+          <td>Pause handling, backchanneling, turn-taking, interruption</td>
+          <td>Automatic, reproducible metrics; released with code</td>
+        </tr>
+        <tr>
+          <td>Full-Duplex-Bench v1.5 (2507.23159)</td>
+          <td>User interruption, user backchannel, talking to others, background speech</td>
+          <td>Categorical behaviour, stop and response latency, prosodic adaptation; on five agents the authors find "responsive" and "floor-holding" strategies (ICASSP 2026)</td>
+        </tr>
+        <tr>
+          <td>Full-Duplex-Bench v2 (2510.07838)</td>
+          <td>Multi-turn streaming interaction</td>
+          <td>Automated examiner with staged goals under Fast and Slow pacing; task families daily, correction, entity tracking and safety; supports commercial APIs and open models</td>
+        </tr>
+        <tr>
+          <td>FLEXI (2509.22243)</td>
+          <td>Latency, response quality and conversational effectiveness across six scenarios, including emergency interruption</td>
+          <td>The authors report gaps between open-source and commercial models in recognising emergencies, ending turns and latency</td>
+        </tr>
+        <tr>
+          <td>TurnBench (2608.25218)</td>
+          <td>End-of-turn and interruption detection</td>
+          <td>~30 h dual-channel, 154 dialogues, triple-annotated, plus a 104 h training set and public leaderboard; gold is 2 of 3 annotators within ±200 ms; 14 systems scored on recall, false-positive rate, median latency</td>
+        </tr>
+        <tr>
+          <td>TACT (2609.27372)</td>
+          <td>Intent-conditioned turn-taking</td>
+          <td>9,728 episodes (73.2 h) from five dyadic corpora, each with dialogue history, a per-speaker memory profile and an annotator posterior over six intent classes. Scored with a strictly proper, threshold-weighted continuous ranked probability score whose weights come from intent-conditioned timing kernels fitted to human floor-transfer offsets</td>
+        </tr>
+        <tr>
+          <td>DuplexSpeechBench-IFEval (2609.03423)</td>
+          <td>Implicit instruction following in full-duplex agents</td>
+          <td>1,038 cases from 240 controlled conversations, eight assistant roles, five conditioning setups (default, explicit instructions, persona-implied behaviour, persona plus rule, instruction conflict). Deterministic Instruction Adherence Score for turn-taking plus an LLM-judged Persona Adherence Score for content; 11 real-time speech models</td>
+        </tr>
+        <tr>
+          <td>M3-DuplexBench (2607.29125)</td>
+          <td>Multi-turn, multilingual, multidomain duplex</td>
+          <td>Timing and content jointly, in English and Japanese, over casual conversation and multi-turn question answering from a common source corpus; an optional reference-conditioned setting diagnoses sensitivity to dialogue history. The abstract gives no numbers; code is public</td>
+        </tr>
+        <tr>
+          <td>URO-Bench (2502.17810)</td>
+          <td>End-to-end spoken dialogue: understanding, reasoning, oral conversation</td>
+          <td>Basic and pro tracks of 20 test sets each, covering multilingualism, multi-round dialogue and paralinguistics. Open models do well on daily QA, trail their backbone LLMs on instruction following, show catastrophic forgetting, and stay weak on paralinguistics and audio understanding</td>
+        </tr>
+        <tr>
+          <td>SteerBench (in 2609.12623)</td>
+          <td>Steerability of duplex models</td>
+          <td>390 spoken prompts and 1,067 human-authored binary audio and text rubrics covering tone, persona, style or accent, and speed or length</td>
+        </tr>
+        <tr>
+          <td>Talking Turns (ICLR 2025, 2503.01174)</td>
+          <td>When to speak, interrupt, backchannel</td>
+          <td>Audio foundation models sometimes miss when to speak, interrupt too aggressively and rarely backchannel; supervised turn-event model as judge; benchmarks curated from Switchboard</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="reported-numbers">Reported numbers</h3>
+  <ul>
+    <li>
+      <strong>TurnBench.</strong>
+      <span class="tag tag--confirmed">Confirmed</span>
+      The VAP baseline scores end-of-turn recall 0.845, false-positive rate (FPR) 0.055, median latency 368 ms; interruption recall 0.945, FPR 0.107, median 994 ms.
+      Humans on smooth transfers start a median 151 ms <em>before</em> the current turn ends.
+    </li>
+    <li>
+      <strong>DuplexSLA-Bench (arXiv 2605.20755).</strong>
+      <span class="tag tag--reported">Reported</span>
+      Authors' backchannel accuracy, context-prefill setting: gpt-realtime-1.5 0.33% (semantic VAD), gemini-3.1-flash-live 40.00%, DuplexSLA 98.33%.
+    </li>
+    <li>
+      <strong>Instruct-FD (arXiv 2607.20460).</strong>
+      <span class="tag tag--reported">Reported</span>
+      The authors report that the best of six full-duplex systems achieves only 64.4% adherence to turn-taking instructions.
+    </li>
+    <li>
+      <strong>TACT (arXiv 2609.27372).</strong>
+      <span class="tag tag--reported">Reported</span>
+      Across 11 systems the best scores 0.47 against a human topline of 0.86, scores barely change across speaker profiles, and Spearman agreement with human judgement is 0.81 against 0.46 for binary metrics.
+    </li>
+    <li>
+      <strong>DuplexSpeechBench-IFEval (arXiv 2609.03423).</strong>
+      <span class="tag tag--reported">Reported</span>
+      Following an explicit floor-management policy did not reliably mean a model could infer it from a persona, even for frontier models.
+      Models that resolved benign instruction conflicts often failed when safety-relevant role behaviour should have overridden an explicit directive.
+    </li>
+    <li>
+      <strong>Qwen-Audio-3.1-Realtime (arXiv 2609.25176).</strong>
+      <span class="tag tag--reported">Reported</span>
+      The response rate to background speech on Full-Duplex-Bench v1.5 fell from 73.0% to 13.0%.
+    </li>
+    <li>
+      <strong>PersonaPlex (arXiv 2602.06053).</strong>
+      <span class="tag tag--reported">Reported</span>
+      The authors report 0.170 s smooth turn-taking and 0.240 s user-interruption latency for the released 7B checkpoint, against 0.265 s and 0.257 s for Moshi.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <strong>Trap: self-reported numbers and unvalidated judges</strong>
+    <p>
+      DuplexSLA-Bench, Instruct-FD, TACT, DuplexSpeechBench-IFEval, Qwen-Audio-3.1-Realtime and PersonaPlex numbers come from the authors, and systems are measured under different conditions.
+      LLM and audio judges need validation against human labels before their scores gate a release.
+    </p>
+  </div>
+
+  <!-- == Proposed metrics == -->
+  <h3 id="proposed-metrics">Ten proposed latency-aware and interaction-based metrics</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    This list is my proposal, built on the benchmarks above.
+    Every timing metric uses gold event labels and echo-cancelled agent output, never the system's own VAD.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Metric</th>
+          <th>Definition and how to compute</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Floor-transfer offset</td>
+          <td>Distribution of agent onset minus gold EOT, compared with a human baseline (anchor: 151 ms before the turn ends, TurnBench)</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Time to first audio</td>
+          <td>Gold EOT to first agent audio; report p50, p90, p95. Use gold EOT, not the VAD stop</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Latency at fixed false-yield rate</td>
+          <td>Threshold sweep; read mean latency at 5% and 10% false yield (eot-bench framing)</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Stop latency after barge-in</td>
+          <td>Gold onset to last audible agent sample on echo-cancelled output; plus the fraction of agent speech after onset</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>False-yield rate per minute</td>
+          <td>Count of stops caused by backchannels, laughter or background speech, divided by conversation minutes</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>Premature-takeover rate</td>
+          <td>Fraction of user mid-turn pauses in which the agent starts speaking</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>Backchannel rate and placement</td>
+          <td>Rate versus human; share within a window after a prosodic boundary; Jensen-Shannon divergence of inter-event intervals</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>Overlap quality</td>
+          <td>Cooperative versus competitive overlap share, and the overlap-duration distribution</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>Interrupted-thread recovery</td>
+          <td>Does the agent resume or address the interrupted thread? LLM judge, validated on a human-labelled subset</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td>Turn-taking naturalness MOS</td>
+          <td>Human ratings of 10 s clips, paired against human-human conversation</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The set separates timing from content, in line with DuplexPO, and ties latency to an operating point.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would never report latency alone.
+      I would report time to first audio from gold end-of-turn at a fixed false-yield rate, stop latency after barge-in on echo-cancelled output, and false yields per minute, anchored to the human 151 ms offset.
+      Judge-based metrics get validated on a human subset first."
+    </p>
+  </div>
+</section>

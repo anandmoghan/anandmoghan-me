@@ -1,0 +1,467 @@
+<section id="audio-visual-diffusion">
+  <h2>Audio-visual diffusion</h2>
+  <p>
+    Three threads have converged.
+    Large DiT video backbones now take audio as a condition or generate it jointly.
+    Avatar models bolt audio conditioning and long-video stitching onto those backbones.
+    Causal few-step distillation turns the result into a streamer.
+    The 2026 variation is that the teacher can itself be a joint audio-video model, so the streamer inherits sound and picture together.
+    A fourth thread, listening and reacting to the user, is the Level 2 and 3 gap in Synthesia's taxonomy (see the
+    <a href="/apps/materials/speech-lit-review/09-system-design#realtime-avatar">real-time avatar section</a>).
+  </p>
+  <p>
+    Real-time numbers in this section are author-reported, often multi-GPU, and not comparable across papers.
+  </p>
+
+  <!-- == Backbones == -->
+  <h3 id="avd-backbones">Video diffusion backbones</h3>
+  <p>
+    The shared recipe is a 3D causal VAE, a DiT denoiser, and a flow-matching or rectified-flow objective
+    <span class="tag tag--inference">Inference</span>.
+    Models differ in attention sparsity, text encoders, and how causal the VAE is.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Design</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Wan 2.1 (arXiv 2503.20314)</td>
+          <td>3D causal VAE; GroupNorm replaced by RMSNorm to preserve temporal causality and enable a feature cache</td>
+          <td>
+            Open 1.3B and 14B models; the authors report 8.19 GB VRAM for the 1.3B model
+            <span class="tag tag--reported">Reported</span>
+          </td>
+        </tr>
+        <tr>
+          <td><a href="https://huggingface.co/Wan-AI/Wan2.2-S2V-14B">Wan2.2-S2V-14B</a></td>
+          <td>Audio-driven video from audio, a reference image and optional text; optional pose video</td>
+          <td>Model card says "built upon Wan"; Apache 2.0. The card gives no further architecture detail</td>
+        </tr>
+        <tr>
+          <td>HunyuanVideo 1.5 (arXiv 2511.18870)</td>
+          <td>8.3B open DiT for consumer GPUs; selective and sliding tile attention (SSTA); glyph-aware text encoding</td>
+          <td>Includes an efficient video super-resolution network</td>
+        </tr>
+        <tr>
+          <td>LTX-2 (arXiv 2601.03233; <a href="https://huggingface.co/Lightricks/LTX-2">model card</a>)</td>
+          <td>Asymmetric dual-stream transformer: 14B video stream and 5B audio stream, linked by bidirectional audio-video cross-attention with temporal positional embeddings; cross-modality AdaLN for shared timestep conditioning; modality-aware classifier-free guidance</td>
+          <td>
+            Open weights and code; audio covers speech, background sound and foley (paper). The card calls it a 19B model that generates synchronized video and audio in a single model; community licence.
+            The authors claim the best open-source audiovisual quality and prompt adherence
+            <span class="tag tag--reported">Reported</span>
+          </td>
+        </tr>
+        <tr>
+          <td>MOVA (arXiv 2602.08794)</td>
+          <td>Mixture-of-Experts, 32B parameters in total and about 18B active at inference; image-text to video-audio</td>
+          <td>Open weights and code; lip-synced speech, scene-matched sound effects and music. The abstract gives no metric. Supports LoRA fine-tuning</td>
+        </tr>
+        <tr>
+          <td>Seedance 1.5 pro (arXiv 2512.13507)</td>
+          <td>Dual-branch DiT with a cross-modal joint module; joint audio and video</td>
+          <td>Reports more than 10x inference speedup <span class="tag tag--reported">Reported</span></td>
+        </tr>
+        <tr>
+          <td><a href="https://deepmind.google/models/veo/">Veo 3</a> (Google DeepMind)</td>
+          <td>Generates audio natively: sound effects, ambient noise and dialogue</td>
+          <td>Google's page describes the feature; no architecture report was retrieved</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Caveat on Veo 3</strong>
+    <p>
+      Treat anything about its internals as unknown.
+      Cite only what Google's own page says.
+    </p>
+  </div>
+
+  <!-- == Audio-driven animation == -->
+  <h3 id="avd-animation">Audio-driven human animation</h3>
+  <p>
+    These models take a reference image plus audio and render a talking person.
+    Most reuse a video foundation model (Wan, Hunyuan) and add audio cross-attention
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 170" role="img"
+      aria-label="Audio-driven avatar: reference image and audio features condition a video DiT, whose latents a 3D causal VAE decodes into frames">
+      <defs>
+        <marker id="arrow-avd-avatar" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="20" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="42" text-anchor="middle" dominant-baseline="middle">Reference image</text>
+      <rect class="d-box" x="10" y="100" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="122" text-anchor="middle" dominant-baseline="middle">Audio features</text>
+      <rect class="d-box d-box--accent" x="260" y="20" width="150" height="124" rx="8"/>
+      <text class="d-text" x="335" y="74" text-anchor="middle" dominant-baseline="middle">Video DiT</text>
+      <text class="d-text--muted" x="335" y="91" text-anchor="middle" dominant-baseline="middle">denoises latents</text>
+      <path class="d-arrow" d="M 140 42 L 258 42" marker-end="url(#arrow-avd-avatar)"/>
+      <text class="d-text--muted" x="199" y="34" text-anchor="middle">identity</text>
+      <path class="d-arrow" d="M 140 122 L 258 122" marker-end="url(#arrow-avd-avatar)"/>
+      <text class="d-text--muted" x="199" y="114" text-anchor="middle">cross-attention</text>
+      <rect class="d-box" x="460" y="60" width="130" height="44" rx="8"/>
+      <text class="d-text" x="525" y="82" text-anchor="middle" dominant-baseline="middle">3D causal VAE</text>
+      <path class="d-arrow" d="M 410 82 L 458 82" marker-end="url(#arrow-avd-avatar)"/>
+      <text class="d-text--muted" x="434" y="72" text-anchor="middle">latents</text>
+      <rect class="d-box" x="640" y="60" width="70" height="44" rx="8"/>
+      <text class="d-text" x="675" y="82" text-anchor="middle" dominant-baseline="middle">Frames</text>
+      <path class="d-arrow" d="M 590 82 L 638 82" marker-end="url(#arrow-avd-avatar)"/>
+    </svg>
+    <figcaption>Figure: audio-driven human animation on a video foundation model. Audio features cross-attend into the DiT; the 3D causal VAE decodes the denoised latents.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      <strong>OmniHuman-1</strong> (arXiv 2502.01061): a DiT that scales up data by mixing motion-related conditions into training.
+      <strong>OmniHuman-1.5</strong> (arXiv 2508.19209): an MLLM writes a structured textual representation for semantic and emotional guidance;
+      a "Pseudo Last Frame" design mitigates inter-modality conflicts.
+      The authors argue earlier models sync to low-level cues such as audio rhythm and lack understanding of emotion and intent.
+    </li>
+    <li>
+      <strong>HunyuanVideo-Avatar</strong> (arXiv 2505.20156): an MM-DiT for multi-character, emotion-controllable dialogue video.
+      A face-aware audio adapter isolates each character with a latent-level face mask, so audio is injected per character through cross-attention.
+    </li>
+    <li>
+      <strong>FantasyTalking</strong> (arXiv 2504.04842): audio-to-video in a pretrained video DiT, then lip-focused refinement.
+      <strong>FantasyTalking2</strong> (arXiv 2508.11255): preference optimisation (TLPO) with a reward model, Talking-Critic, and a 410K-pair dataset.
+    </li>
+    <li>
+      <strong>MultiTalk</strong> (arXiv 2505.22647): multi-person conversation with per-stream audio; Label RoPE (L-RoPE) resolves which audio stream binds to which person.
+      <strong>InfiniteTalk</strong> (arXiv 2508.14033): sparse-frame dubbing for infinite-length sequences, editing full-body motion rather than only the mouth region.
+    </li>
+    <li>
+      <strong>EchoMimicV3</strong> (arXiv 2507.03905): a 1.3B-parameter framework that unifies multi-task and multi-modal human animation.
+    </li>
+    <li>
+      <strong>Avatar V</strong> (HeyGen, arXiv 2606.13872): conditions on a reference video, attending to its full token sequence, instead of a single photo,
+      so it can capture dynamic traits such as talking rhythm as well as static looks.
+      The authors curate 100M+ training clips from 50M raw videos, generate 1080p with no stated duration limit, and report over 10x acceleration from two-phase distillation
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      <strong>Synthesia Express-2</strong> (4 Sep 2025): Express-Voice, Express-Animate (co-speech motion from audio), Express-Eval and Express-Render (1080p, 30 fps, arbitrary length).
+      Express-Render is distilled to two diffusion steps.
+      The <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">post</a> makes no real-time claim
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+  </ul>
+
+  <!-- == Joint AV == -->
+  <h3 id="avd-joint">Joint audio and video generation</h3>
+  <p>
+    Joint models replace post-hoc lip sync by generating both streams together.
+    Audio quality is still the open question.
+  </p>
+  <p>
+    <strong>Ovi</strong> (Character.AI, arXiv 2510.01284) is the clearest open recipe.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 250" role="img"
+      aria-label="Ovi: a video DiT tower and an audio DiT tower exchange information through bidirectional cross-attention in every block">
+      <defs>
+        <marker id="arrow-avd-ovi" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="30" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="44" text-anchor="middle" dominant-baseline="middle">Video latents</text>
+      <text class="d-text--muted" x="75" y="61" text-anchor="middle" dominant-baseline="middle">31 frames</text>
+      <rect class="d-box" x="10" y="176" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="190" text-anchor="middle" dominant-baseline="middle">Audio latents</text>
+      <text class="d-text--muted" x="75" y="207" text-anchor="middle" dominant-baseline="middle">157 tokens</text>
+      <rect class="d-box d-box--muted" x="10" y="96" width="130" height="56" rx="8"/>
+      <text class="d-text" x="75" y="116" text-anchor="middle" dominant-baseline="middle">RoPE on both</text>
+      <text class="d-text--muted" x="75" y="133" text-anchor="middle" dominant-baseline="middle">audio scaled to video rate</text>
+      <path class="d-arrow d-arrow--dashed" d="M 75 96 L 75 76" marker-end="url(#arrow-avd-ovi)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 75 152 L 75 174" marker-end="url(#arrow-avd-ovi)"/>
+      <rect class="d-box" x="190" y="20" width="230" height="64" rx="8"/>
+      <text class="d-text" x="305" y="44" text-anchor="middle" dominant-baseline="middle">Video DiT tower</text>
+      <text class="d-text--muted" x="305" y="61" text-anchor="middle" dominant-baseline="middle">init from Wan2.2 5B</text>
+      <rect class="d-box" x="190" y="166" width="230" height="64" rx="8"/>
+      <text class="d-text" x="305" y="190" text-anchor="middle" dominant-baseline="middle">Audio DiT tower</text>
+      <text class="d-text--muted" x="305" y="207" text-anchor="middle" dominant-baseline="middle">same shape, from scratch</text>
+      <path class="d-arrow" d="M 140 52 L 188 52" marker-end="url(#arrow-avd-ovi)"/>
+      <path class="d-arrow" d="M 140 198 L 188 198" marker-end="url(#arrow-avd-ovi)"/>
+      <path class="d-arrow" d="M 260 86 L 260 164" marker-start="url(#arrow-avd-ovi)" marker-end="url(#arrow-avd-ovi)"/>
+      <path class="d-arrow" d="M 350 86 L 350 164" marker-start="url(#arrow-avd-ovi)" marker-end="url(#arrow-avd-ovi)"/>
+      <text class="d-text--muted" x="440" y="121">bidirectional cross-attention</text>
+      <text class="d-text--muted" x="440" y="138">in every block</text>
+      <path class="d-arrow" d="M 420 52 L 638 52" marker-end="url(#arrow-avd-ovi)"/>
+      <path class="d-arrow" d="M 420 198 L 638 198" marker-end="url(#arrow-avd-ovi)"/>
+      <rect class="d-box" x="640" y="30" width="70" height="44" rx="8"/>
+      <text class="d-text" x="675" y="52" text-anchor="middle" dominant-baseline="middle">Video</text>
+      <rect class="d-box" x="640" y="176" width="70" height="44" rx="8"/>
+      <text class="d-text" x="675" y="198" text-anchor="middle" dominant-baseline="middle">Audio</text>
+    </svg>
+    <figcaption>Figure: Ovi twin towers. The dashed arrows show RoPE applied to both streams, with the audio frequencies rescaled to align the token rates.</figcaption>
+  </figure>
+  <ul>
+    <li>Twin DiT towers: video initialised from Wan2.2 5B; the audio tower has the same shape (30 blocks, dim 3072) and trains from scratch.</li>
+    <li>Bidirectional audio-video cross-attention in every block.</li>
+    <li>
+      RoPE on both streams, with the audio frequencies scaled to match the coarser video resolution.
+      Video latents span 31 frames while audio latents form 157 tokens.
+    </li>
+    <li>The authors note that dense blockwise fusion costs time per sampling step, and name distillation such as DMD2 as a way to reduce steps.</li>
+  </ul>
+  <p>
+    <strong>UniVerse-1</strong> (arXiv 2509.06155) takes the other route.
+    It stitches pretrained experts, Wan2.1 (1.3B) for video and ACE-Step (3.5B) for music, with lightweight cross-modal MLP connectors in corresponding blocks.
+    It was fine-tuned on about 7,600 hours of audio-video data.
+  </p>
+  <p>
+    <strong>JavisDiT</strong> (arXiv 2503.23377, ICLR 2026) is a DiT for joint audio-video generation from open-ended text.
+    Its synchronisation comes from a Hierarchical Spatial-Temporal Synchronized Prior (HiST-Sypo) estimator, which extracts global and fine-grained spatio-temporal priors to guide alignment between the two streams.
+    It also introduces JavisBench, 10,140 text-captioned sounding videos, and a synchrony metric for real-world content.
+    The authors report that it significantly outperforms existing methods on quality and synchronisation
+    <span class="tag tag--reported">Reported</span>.
+  </p>
+  <p>
+    Coupling therefore comes in several patterns: same-shape twin towers with per-block cross-attention (Ovi),
+    an asymmetric pair with a larger video stream (LTX-2, 14B video and 5B audio),
+    a Mixture-of-Experts joint model (MOVA),
+    explicit synchronisation priors (JavisDiT),
+    or pretrained experts joined by connectors (UniVerse-1).
+    Ovi handles the token-rate mismatch with RoPE rescaling.
+  </p>
+  <p>
+    Joint models are the route the Synthesia post argues for at Level 2: Synthesia says that listening avatars require treating audio and video as a single problem
+    (<a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">post</a>).
+    Dubbing is the clearest product use.
+    JUST-DUB-IT (arXiv 2601.22143) adapts a foundation audio-video diffusion model to video-to-video dubbing with a lightweight LoRA, generating translated audio and synchronised facial motion together.
+    For training pairs, it uses the generative model to make clips where the language switches midway, then inpaints face and audio in each half to match the other language.
+    The authors report better visual fidelity, lip sync and robustness than existing dubbing pipelines
+    <span class="tag tag--reported">Reported</span>.
+    The reverse direction, video to speech, is covered by HiCoDiT (arXiv 2604.15923), a hierarchical codec diffusion transformer that conditions lower RVQ levels on lip motion and identity, and higher levels on facial expression for prosody.
+  </p>
+
+  <!-- == Streaming == -->
+  <h3 id="avd-streaming">Streaming and real-time</h3>
+  <p>
+    The recipe is to distil a bidirectional teacher into a causal few-step student with a KV cache.
+    The teacher is increasingly a joint audio-video model (Ovi, LTX-2), so the student generates sound and picture together.
+    The failure mode is error accumulation over long rollouts (CausVid, Self Forcing and AvatarForcing all discuss it).
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 276" role="img"
+      aria-label="Causal streaming video diffusion: chunks are denoised one after another, each reading a rolling KV cache and writing its own entries, and decoded to frames">
+      <defs>
+        <marker id="arrow-avd-stream" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-lane" x="0" y="8" width="720" height="64" rx="6"/>
+      <text class="d-text--small" x="10" y="44">Frames out</text>
+      <rect class="d-lane" x="0" y="88" width="720" height="64" rx="6"/>
+      <text class="d-text--small" x="10" y="124">Denoise chunk</text>
+      <rect class="d-lane" x="0" y="168" width="720" height="64" rx="6"/>
+      <text class="d-text--small" x="10" y="204">KV cache</text>
+      <rect class="d-box" x="130" y="22" width="110" height="36" rx="8"/>
+      <text class="d-text" x="185" y="40" text-anchor="middle" dominant-baseline="middle">Frames 1</text>
+      <rect class="d-box" x="130" y="102" width="110" height="36" rx="8"/>
+      <text class="d-text" x="185" y="120" text-anchor="middle" dominant-baseline="middle">Chunk 1</text>
+      <rect class="d-box d-box--muted" x="130" y="182" width="110" height="36" rx="8"/>
+      <text class="d-text" x="185" y="200" text-anchor="middle" dominant-baseline="middle">KV 1</text>
+      <path class="d-arrow" d="M 185 102 L 185 60" marker-end="url(#arrow-avd-stream)"/>
+      <path class="d-arrow" d="M 185 140 L 185 180" marker-end="url(#arrow-avd-stream)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 240 182 L 280 140" marker-end="url(#arrow-avd-stream)"/>
+      <rect class="d-box" x="270" y="22" width="110" height="36" rx="8"/>
+      <text class="d-text" x="325" y="40" text-anchor="middle" dominant-baseline="middle">Frames 2</text>
+      <rect class="d-box" x="270" y="102" width="110" height="36" rx="8"/>
+      <text class="d-text" x="325" y="120" text-anchor="middle" dominant-baseline="middle">Chunk 2</text>
+      <rect class="d-box" x="270" y="182" width="110" height="36" rx="8"/>
+      <text class="d-text" x="325" y="200" text-anchor="middle" dominant-baseline="middle">KV 2</text>
+      <path class="d-arrow" d="M 325 102 L 325 60" marker-end="url(#arrow-avd-stream)"/>
+      <path class="d-arrow" d="M 325 140 L 325 180" marker-end="url(#arrow-avd-stream)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 380 182 L 420 140" marker-end="url(#arrow-avd-stream)"/>
+      <rect class="d-box" x="410" y="22" width="110" height="36" rx="8"/>
+      <text class="d-text" x="465" y="40" text-anchor="middle" dominant-baseline="middle">Frames 3</text>
+      <rect class="d-box" x="410" y="102" width="110" height="36" rx="8"/>
+      <text class="d-text" x="465" y="120" text-anchor="middle" dominant-baseline="middle">Chunk 3</text>
+      <rect class="d-box" x="410" y="182" width="110" height="36" rx="8"/>
+      <text class="d-text" x="465" y="200" text-anchor="middle" dominant-baseline="middle">KV 3</text>
+      <path class="d-arrow" d="M 465 102 L 465 60" marker-end="url(#arrow-avd-stream)"/>
+      <path class="d-arrow" d="M 465 140 L 465 180" marker-end="url(#arrow-avd-stream)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 520 182 L 560 140" marker-end="url(#arrow-avd-stream)"/>
+      <rect class="d-box" x="550" y="22" width="110" height="36" rx="8"/>
+      <text class="d-text" x="605" y="40" text-anchor="middle" dominant-baseline="middle">Frames 4</text>
+      <rect class="d-box d-box--accent" x="550" y="102" width="110" height="36" rx="8"/>
+      <text class="d-text" x="605" y="120" text-anchor="middle" dominant-baseline="middle">Chunk 4</text>
+      <rect class="d-box" x="550" y="182" width="110" height="36" rx="8"/>
+      <text class="d-text" x="605" y="200" text-anchor="middle" dominant-baseline="middle">KV 4</text>
+      <path class="d-arrow" d="M 605 102 L 605 60" marker-end="url(#arrow-avd-stream)"/>
+      <path class="d-arrow" d="M 605 140 L 605 180" marker-end="url(#arrow-avd-stream)"/>
+      <rect class="d-group" x="262" y="176" width="410" height="48" rx="10"/>
+      <text class="d-text--muted" x="467" y="240" text-anchor="middle">rolling window: KV 1 is evicted</text>
+      <path class="d-arrow" d="M 130 262 L 714 262" marker-end="url(#arrow-avd-stream)"/>
+      <text class="d-text--muted" x="122" y="266" text-anchor="end">time</text>
+    </svg>
+    <figcaption>Figure: chunked autoregressive generation (illustrative chunk count). Dashed arrows are cache reads; solid arrows write and decode.</figcaption>
+  </figure>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Idea</th>
+          <th>Reported figures</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CausVid (arXiv 2412.07772)</td>
+          <td>DMD extended to video; 50-step bidirectional model distilled into a 4-step causal student with KV cache</td>
+          <td>9.4 FPS on a single GPU, 1.3 s initial latency; the bidirectional teacher needs 219 s for 128 frames</td>
+        </tr>
+        <tr>
+          <td>Self Forcing (arXiv 2506.08009)</td>
+          <td>AR rollout with KV cache during training; rolling KV cache at inference; stochastic gradient truncation</td>
+          <td>17 FPS with sub-second latency on one H100</td>
+        </tr>
+        <tr>
+          <td>LiveTalk (arXiv 2512.23576)</td>
+          <td>Improves Self Forcing under text, image and audio conditioning: condition quality, on-policy initialisation and schedule; Anchor-Heavy Identity Sinks for long video</td>
+          <td>Matches full-step bidirectional baselines with 20x less inference cost and latency (authors)</td>
+        </tr>
+        <tr>
+          <td>StreamAvatar (arXiv 2512.22065)</td>
+          <td>Autoregressive distillation plus adversarial refinement; Reference Sink and reference-anchored positional re-encoding for long-term stability</td>
+          <td>No figure quoted</td>
+        </tr>
+        <tr>
+          <td>AvatarForcing (arXiv 2603.14331)</td>
+          <td>One-step streaming over a local-future window; 1.3B student</td>
+          <td>34 ms per frame</td>
+        </tr>
+        <tr>
+          <td>Live Avatar (arXiv 2512.04677)</td>
+          <td>14B model distilled into a causal few-step streamer; Timestep-forcing Pipeline Parallelism</td>
+          <td>45 FPS, 1.21 s time to first frame on 5 H800 GPUs</td>
+        </tr>
+        <tr>
+          <td>SoulX-FlashTalk (arXiv 2512.23379)</td>
+          <td>14B; self-correcting bidirectional distillation keeps bidirectional attention within video chunks</td>
+          <td>0.87 s start-up latency, 32 FPS</td>
+        </tr>
+        <tr>
+          <td>Hallo-Live (arXiv 2604.23632)</td>
+          <td>Joint streaming of portrait video and speech from text: asynchronous dual-stream diffusion; Future-Expanding Attention gives each video block synchronous audio plus a short window of future phonetic cues; Human-Centric Preference-Guided DMD reweights training samples by rewards for visual fidelity, speech naturalness and A/V sync. Teacher: Ovi</td>
+          <td>20.38 FPS at 0.94 s latency on two H200 GPUs; 16.0x throughput and 99.3x lower latency than Ovi; VideoAlign and Sync Confidence comparable to the teacher</td>
+        </tr>
+        <tr>
+          <td>Omni-LiveAvatar (arXiv 2608.13602)</td>
+          <td>Joint audio-video avatar for minute-level streaming: progressive autoregressive distillation of a bidirectional model into a few-step AR generator; synchronised audio-video long-short-term memory; hierarchical rolling prompt planning. Teacher: LTX-2</td>
+          <td>About 33x faster than LTX-2 on one H200; the abstract gives no fps or latency</td>
+        </tr>
+        <tr>
+          <td>Avatar Forcing (arXiv 2601.00664)</td>
+          <td>Interactive head avatar using diffusion forcing: takes the user's audio and motion; preference optimisation with "losing" samples made by removing the user conditions. Not the same paper as AvatarForcing (arXiv 2603.14331)</td>
+          <td>About 500 ms latency; 6.8x speedup over the baseline; motion preferred in over 80% of comparisons</td>
+        </tr>
+        <tr>
+          <td>Avatar-Forever (arXiv 2608.12107)</td>
+          <td>Built on a 22B video foundation model; trains two parts in parallel: a full-parameter-distilled fast generator, and a lightweight adapter trained with recovery-oriented rollouts to stay stable over long rollouts; ForeverCache reduces repeated history computation</td>
+          <td>27.2 FPS end to end at 768x512 on one H100</td>
+        </tr>
+        <tr>
+          <td>Wan-Streamer v0.1 (arXiv 2606.25041)</td>
+          <td>One Transformer for text, speech and video in and out; encoders, decoders and attention redesigned for streaming; units of 160 ms at 25 fps; no separate ASR, TTS, avatar or video models</td>
+          <td>About 200 ms model-side response latency; about 550 ms total including 350 ms of bidirectional network latency</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Do not rank these rows</strong>
+    <p>
+      Figures are author-reported and use different GPUs (one H100, two H200, five H800), resolutions and definitions of latency.
+      Wan-Streamer's total includes 350 ms of network time; the other rows are not stated to include network time.
+      All figures here come from the papers' own abstracts or text.
+    </p>
+  </div>
+  <p>
+    Error accumulation has several named causes and fixes.
+    The train-test gap is closed by training on own rollouts (Self Forcing).
+    LiveTalk reports flicker and black frames when Self Forcing meets multimodal conditioning, and repairs them with a better distillation recipe.
+    Identity drift is handled with identity sinks (LiveTalk) and a reference sink (StreamAvatar).
+    Mechanisms are rolling or sink KV caches, on-policy rollouts and distribution matching.
+  </p>
+  <p>
+    Decoupled Self-Forcing (arXiv 2609.10317) frames two routes:
+    end-to-end audio-conditioned video diffusion (high quality, but only at large scale) against two-stage methods that generate an intermediate motion representation (cheaper, lower fidelity).
+    Its own approach pairs a small causal AR motion generator with a diffusion renderer and reports 15.4 FPS at 1.3 s latency.
+    SoulX-FlashTalk (arXiv 2512.23379) argues that strictly unidirectional attention often compromises visual fidelity.
+  </p>
+
+  <!-- == Listening == -->
+  <h3 id="avd-listening">Listening and reacting</h3>
+  <p>
+    Everything above drives the face from the avatar's own audio.
+    Two 2026 papers add the user.
+    Avatar Forcing (arXiv 2601.00664, CVPR 2026) models live interaction with diffusion forcing: the avatar takes the user's audio and motion and responds to spoken and nonverbal cues such as nods and laughter.
+    The paper names two challenges, real-time causal motion generation and learning expressive reactions without extra labels, and addresses the second with preference optimisation on losing samples made by removing the user conditions.
+    FacePlex (arXiv 2606.30145) generates speech and facial motion together and renders with Gaussian splatting.
+    It predicts a short speech continuation so facial motion is ready before the audio plays, updates as new user audio arrives without seeing future user input, and routes behaviour through a semantic router trained on SemReact, a dataset linking dialogue context, reaction semantics and facial motion.
+    Reported: 122 ms end-to-end avatar interaction
+    <span class="tag tag--reported">Reported</span>.
+  </p>
+
+  <!-- == Metrics and data == -->
+  <h3 id="avd-metrics">Metrics and data</h3>
+  <ul>
+    <li>
+      Lip sync: Sync-C and Sync-D (also LSE-C and LSE-D) come from SyncNet, a pretrained audio-visual embedding network.
+      Sync-D is the average distance between the visual and audio embeddings (lower is better); Sync-C is SyncNet's lip-audio confidence (higher is better) (arXiv 2405.04327).
+      Ovi's data filter uses SyncNet to filter out clips lacking audio-video synchronization (arXiv 2510.01284); UniVerse-1 reports LSE-C (arXiv 2509.06155).
+    </li>
+    <li>
+      Joint-generation benchmarks: JavisBench has 10,140 captioned sounding videos with a proposed synchrony metric (arXiv 2503.23377);
+      VABench scores synchronised audio-video generation on 15 dimensions across text-to-audio-video, image-to-audio-video and stereo tasks, including audio-video synchronisation and lip-speech consistency (arXiv 2512.09299).
+    </li>
+    <li>
+      Conversational benchmark: VideoFDB has 237 dyadic clips from real video calls across 11 nonverbal dynamics, with a taxonomy separating perception from generation and a rubric scored by a language-model judge (arXiv 2605.30256).
+      It reports that models often collapse into generic captioning and largely ignore the video stream, and that cascaded speech-to-avatar systems cannot produce full-duplex nonverbal cues.
+    </li>
+    <li>Identity: UniVerse-1 scores identity as mean DINOv3 feature similarity between the reference image and each generated frame (arXiv 2509.06155).</li>
+    <li>
+      Datasets named in the papers above: HDTF, CelebV-HQ and EMTD (InfiniteTalk), and HDTF, AVSpeech and CelebV-HQ (LiveTalk).
+    </li>
+    <li>
+      Human preference studies (Ovi ran a blind pairwise study with 50 participants) and reward-model judges (Talking-Critic, arXiv 2508.11255) appear in the papers above.
+    </li>
+    <li>
+      Ovi's curation also filters clips on a minimum mean volume and adds captions (arXiv 2510.01284).
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <strong>Comparability</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      Papers use different benchmarks, baselines and sync definitions, so cross-paper sync and identity numbers should not be compared.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Audio is moving into the backbone, and streaming is the frontier.
+      The standard fix is distillation plus on-policy training, and multimodal conditioning is where it breaks.
+      In 2026 the teachers became joint audio-video models, and the open gap is avatars that listen, not only talk.
+      Because published sync numbers are not comparable, I would build a shared internal benchmark first."
+    </p>
+  </div>
+</section>

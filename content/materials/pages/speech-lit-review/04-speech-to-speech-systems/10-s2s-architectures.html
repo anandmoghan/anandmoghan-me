@@ -1,0 +1,329 @@
+<section id="s2s-architectures">
+  <h2>S2S architectures with the LLM as a downstream component</h2>
+  <p>
+    Six families, ordered by how tightly speech is fused into the LLM, plus a seventh that pairs two models.
+    The first three are the most conservative designs; the next three fuse speech into the LLM most tightly.
+    The tandem family sits outside that ordering: a small real-time model keeps the floor while a larger model supplies knowledge.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 492" role="img"
+      aria-label="Five S2S families as rows: cascaded, half-cascade, Thinker-Talker, interleaved single stream, parallel streams with Inner Monologue">
+      <defs>
+        <marker id="s2s-architectures-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text" x="8" y="36" text-anchor="start"
+        dominant-baseline="middle">Cascaded</text>
+      <text class="d-text--muted" x="8" y="54" text-anchor="start"
+        dominant-baseline="middle">ASR, LLM, TTS</text>
+      <rect class="d-box" x="150" y="22" width="110" height="44" rx="8"/>
+      <text class="d-text" x="205" y="44" text-anchor="middle"
+        dominant-baseline="middle">ASR</text>
+      <rect class="d-box" x="340" y="22" width="110" height="44" rx="8"/>
+      <text class="d-text" x="395" y="44" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <rect class="d-box" x="530" y="22" width="120" height="44" rx="8"/>
+      <text class="d-text" x="590" y="44" text-anchor="middle"
+        dominant-baseline="middle">TTS</text>
+      <path class="d-arrow" d="M 260 44 L 338 44"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="299" y="34" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <path class="d-arrow" d="M 450 44 L 528 44"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="489" y="34" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <path class="d-arrow" d="M 650 44 L 716 44"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="683" y="34" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <path class="d-arrow d-arrow--dashed" d="M 0 84 L 720 84"/>
+      <text class="d-text" x="8" y="126" text-anchor="start"
+        dominant-baseline="middle">Half-cascade</text>
+      <text class="d-text--muted" x="8" y="144" text-anchor="start"
+        dominant-baseline="middle">Freeze-Omni</text>
+      <rect class="d-box" x="150" y="112" width="110" height="44" rx="8"/>
+      <text class="d-text" x="205" y="134" text-anchor="middle"
+        dominant-baseline="middle">Speech enc.</text>
+      <rect class="d-box" x="340" y="112" width="110" height="44" rx="8"/>
+      <text class="d-text" x="395" y="134" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <rect class="d-box" x="530" y="112" width="120" height="44" rx="8"/>
+      <text class="d-text" x="590" y="134" text-anchor="middle"
+        dominant-baseline="middle">Speech dec.</text>
+      <path class="d-arrow" d="M 260 134 L 338 134"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="299" y="124" text-anchor="middle"
+        dominant-baseline="middle">embeds</text>
+      <path class="d-arrow d-arrow--dashed" d="M 450 134 L 528 134"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="489" y="106" text-anchor="middle"
+        dominant-baseline="middle">text or</text>
+      <text class="d-text--muted" x="489" y="118" text-anchor="middle"
+        dominant-baseline="middle">hidden</text>
+      <path class="d-arrow" d="M 650 134 L 716 134"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="683" y="124" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <path class="d-arrow d-arrow--dashed" d="M 0 174 L 720 174"/>
+      <text class="d-text" x="8" y="216" text-anchor="start"
+        dominant-baseline="middle">Thinker-Talker</text>
+      <text class="d-text--muted" x="8" y="234" text-anchor="start"
+        dominant-baseline="middle">Qwen3-Omni</text>
+      <rect class="d-box" x="150" y="202" width="110" height="44" rx="8"/>
+      <text class="d-text" x="205" y="224" text-anchor="middle"
+        dominant-baseline="middle">Thinker</text>
+      <rect class="d-box" x="340" y="202" width="110" height="44" rx="8"/>
+      <text class="d-text" x="395" y="224" text-anchor="middle"
+        dominant-baseline="middle">Talker</text>
+      <rect class="d-box" x="530" y="202" width="120" height="44" rx="8"/>
+      <text class="d-text" x="590" y="224" text-anchor="middle"
+        dominant-baseline="middle">Renderer</text>
+      <path class="d-arrow" d="M 260 224 L 338 224"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="299" y="214" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <path class="d-arrow d-arrow--dashed" d="M 450 224 L 528 224"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="489" y="196" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <text class="d-text--muted" x="489" y="208" text-anchor="middle"
+        dominant-baseline="middle">codes</text>
+      <path class="d-arrow" d="M 650 224 L 716 224"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <text class="d-text--muted" x="683" y="214" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <path class="d-arrow d-arrow--dashed" d="M 0 264 L 720 264"/>
+      <text class="d-text" x="8" y="306" text-anchor="start"
+        dominant-baseline="middle">Interleaved</text>
+      <text class="d-text--muted" x="8" y="324" text-anchor="start"
+        dominant-baseline="middle">GLM-4-Voice</text>
+      <rect class="d-box" x="150" y="292" width="110" height="44" rx="8"/>
+      <text class="d-text" x="205" y="314" text-anchor="middle"
+        dominant-baseline="middle">LM</text>
+      <rect class="d-lane" x="300" y="288" width="410" height="52" rx="8"/>
+      <path class="d-arrow" d="M 260 314 L 298 314"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <rect class="d-box d-box--muted" x="310" y="298" width="58" height="32"
+        rx="8"/>
+      <text class="d-text" x="339" y="314" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <rect class="d-box" x="376" y="298" width="58" height="32" rx="8"/>
+      <text class="d-text" x="405" y="314" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box d-box--muted" x="442" y="298" width="58" height="32"
+        rx="8"/>
+      <text class="d-text" x="471" y="314" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <rect class="d-box" x="508" y="298" width="58" height="32" rx="8"/>
+      <text class="d-text" x="537" y="314" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box d-box--muted" x="574" y="298" width="58" height="32"
+        rx="8"/>
+      <text class="d-text" x="603" y="314" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <rect class="d-box" x="640" y="298" width="58" height="32" rx="8"/>
+      <text class="d-text" x="669" y="314" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <path class="d-arrow d-arrow--dashed" d="M 0 364 L 720 364"/>
+      <text class="d-text" x="8" y="412" text-anchor="start"
+        dominant-baseline="middle">Parallel</text>
+      <text class="d-text--muted" x="8" y="430" text-anchor="start"
+        dominant-baseline="middle">Moshi</text>
+      <rect class="d-box" x="150" y="398" width="110" height="44" rx="8"/>
+      <text class="d-text" x="205" y="420" text-anchor="middle"
+        dominant-baseline="middle">LM</text>
+      <rect class="d-lane" x="300" y="372" width="410" height="44" rx="8"/>
+      <rect class="d-lane" x="300" y="424" width="410" height="44" rx="8"/>
+      <text class="d-text--small" x="306" y="394" text-anchor="start"
+        dominant-baseline="middle">text</text>
+      <text class="d-text--small" x="306" y="446" text-anchor="start"
+        dominant-baseline="middle">audio</text>
+      <path class="d-arrow" d="M 260 420 L 298 420"
+        marker-end="url(#s2s-architectures-arrow)"/>
+      <rect class="d-box d-box--muted" x="350" y="378" width="56" height="32"
+        rx="8"/>
+      <text class="d-text" x="378" y="394" text-anchor="middle"
+        dominant-baseline="middle">t</text>
+      <rect class="d-box" x="390" y="430" width="56" height="32" rx="8"/>
+      <text class="d-text" x="418" y="446" text-anchor="middle"
+        dominant-baseline="middle">a</text>
+      <rect class="d-box d-box--muted" x="412" y="378" width="56" height="32"
+        rx="8"/>
+      <text class="d-text" x="440" y="394" text-anchor="middle"
+        dominant-baseline="middle">t</text>
+      <rect class="d-box" x="452" y="430" width="56" height="32" rx="8"/>
+      <text class="d-text" x="480" y="446" text-anchor="middle"
+        dominant-baseline="middle">a</text>
+      <rect class="d-box d-box--muted" x="474" y="378" width="56" height="32"
+        rx="8"/>
+      <text class="d-text" x="502" y="394" text-anchor="middle"
+        dominant-baseline="middle">t</text>
+      <rect class="d-box" x="514" y="430" width="56" height="32" rx="8"/>
+      <text class="d-text" x="542" y="446" text-anchor="middle"
+        dominant-baseline="middle">a</text>
+      <rect class="d-box d-box--muted" x="536" y="378" width="56" height="32"
+        rx="8"/>
+      <text class="d-text" x="564" y="394" text-anchor="middle"
+        dominant-baseline="middle">t</text>
+      <rect class="d-box" x="576" y="430" width="56" height="32" rx="8"/>
+      <text class="d-text" x="604" y="446" text-anchor="middle"
+        dominant-baseline="middle">a</text>
+      <text class="d-text--muted" x="640" y="394" text-anchor="middle"
+        dominant-baseline="middle">text leads</text>
+    </svg>
+    <figcaption>Five families by how text and speech are coupled in time. Dashed arrows: streaming hand-off to the speech side.</figcaption>
+  </figure>
+
+  <h3 id="s2s-families">The seven families</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>Models</th>
+          <th>How text and speech are produced together</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cascaded</td>
+          <td>ASR, LLM, TTS</td>
+          <td>Sequential; latencies add (Moshi, arXiv 2410.00037, cites a latency of several seconds)</td>
+        </tr>
+        <tr>
+          <td>Half-cascade</td>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625), Freeze-Omni (arXiv 2411.00774)</td>
+          <td>Speech encoder into text LLM; a streaming speech decoder consumes LLM text or hidden states</td>
+        </tr>
+        <tr>
+          <td>Thinker-Talker</td>
+          <td>Qwen3-Omni (arXiv 2509.17765), Qwen3.5-Omni (arXiv 2604.15804)</td>
+          <td>Thinker produces text; Talker conditions on it and emits speech codes</td>
+        </tr>
+        <tr>
+          <td>Interleaved</td>
+          <td>GLM-4-Voice (arXiv 2412.02612), Step-Audio 2 (arXiv 2507.16632), VITA-Audio (arXiv 2505.03739)</td>
+          <td>One sequence alternates text and audio tokens</td>
+        </tr>
+        <tr>
+          <td>Parallel streams</td>
+          <td>Moshi (arXiv 2410.00037), Kimi-Audio (arXiv 2504.18425)</td>
+          <td>Moshi: text tokens run time-aligned with audio tokens (Inner Monologue). Kimi-Audio: shared transformer layers, then parallel text and audio heads</td>
+        </tr>
+        <tr>
+          <td>Codec-free</td>
+          <td>SALMONN-omni (arXiv 2411.18138)</td>
+          <td>Embeddings instead of codec tokens; a "thinking" mechanism facilitates asynchronous text and speech generation</td>
+        </tr>
+        <tr>
+          <td>Tandem</td>
+          <td>KAME (arXiv 2510.02327), MoshiRAG (arXiv 2604.12928), DuplexOmni (arXiv 2606.09186)</td>
+          <td>
+            A compact real-time speech model answers immediately.
+            A second, larger module (back-end LLM, retriever or pluggable thinking layer) works asynchronously and feeds text or results back into the speech model's output
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s2s-key-facts">Key facts per model</h3>
+  <ul>
+    <li>
+      <strong>LLaMA-Omni 2:</strong>
+      0.5B to 14B on Qwen2.5, Whisper-large-v3 encoder, a streaming speech decoder inspired by CosyVoice 2, trained on 200K multi-turn dialogues; the authors report beating GLM-4-Voice (arXiv 2505.02625).
+    </li>
+    <li>
+      <strong>Freeze-Omni:</strong>
+      frozen LLM, so the authors report speech-mode intelligence at the same level as the text mode of the backbone, plus chunk-wise state prediction for duplex dialogue (arXiv 2411.00774).
+    </li>
+    <li>
+      <strong>Qwen3-Omni:</strong>
+      text in 119 languages, speech understanding in 19, speech generation in 10 (arXiv 2509.17765).
+    </li>
+    <li>
+      <strong>Qwen3.5-Omni (Apr 2026):</strong>
+      hybrid-attention MoE Thinker and Talker, 256k context, and ARIA, which dynamically aligns text and speech units to stabilise streaming speech and prosody (arXiv 2604.15804).
+      The authors claim SOTA on 215 audio and audio-visual subtasks.
+    </li>
+    <li>
+      <strong>Kimi-Audio:</strong>
+      continuous audio features in, discrete tokens out, more than 13M h of audio pretraining (arXiv 2504.18425).
+    </li>
+    <li>
+      <strong>MiniCPM-o 2.6:</strong>
+      8B, built from SigLip-400M, Whisper-medium-300M, ChatTTS-200M and Qwen2.5-7B, with a time-division multiplexing mechanism for streaming
+      (<a href="https://huggingface.co/openbmb/MiniCPM-o-2_6">OpenBMB model card</a>).
+    </li>
+    <li>
+      <strong>Commercial:</strong>
+      OpenAI's Realtime API model "works directly with audio"
+      (<a href="https://developers.openai.com/api/docs/guides/realtime">OpenAI docs</a>).
+      Google's Live API offers native audio output models
+      (<a href="https://ai.google.dev/gemini-api/docs/live-api/capabilities">Gemini API docs</a>).
+    </li>
+    <li>
+      <strong>KAME:</strong>
+      the S2S transformer processes user speech for immediate responsiveness while the query is relayed to a back-end LLM; the LLM's text response is injected in real time to guide speech generation.
+      On a speech-synthesized variant of MT-Bench the authors report correctness approaching a cascade, at latency on par with the S2S baseline (arXiv 2510.02327).
+    </li>
+    <li>
+      <strong>MoshiRAG:</strong>
+      a compact full-duplex model identifies knowledge-demanding queries and grounds the answer in retrieved information.
+      Retrieval finishes inside the natural gap between the start of a response and the delivery of its core information.
+      The authors report factuality comparable to the best publicly released non-duplex speech LMs, and retrieval methods can be swapped without retraining (arXiv 2604.12928).
+    </li>
+    <li>
+      <strong>DuplexOmni:</strong>
+      an interaction layer handles streaming audio and video and speaks in real time; a pluggable thinking layer provides reasoning and tool use; the two run asynchronously in parallel.
+      A Writer-Director pipeline builds its continuous-interaction training data (arXiv 2606.09186).
+    </li>
+    <li>
+      <strong>Mind-Paced Speaking:</strong>
+      a "Formulation Brain" reasons and paces a separate "Articulation Brain" that speaks.
+      Under a zero-latency configuration the authors report 92.8% on Spoken-MQA and 82.5 on URO-Bench, and say the method underlies their released Step-Audio R1.1 (arXiv 2510.09592).
+    </li>
+    <li>
+      <strong>Stream RAG:</strong>
+      tool queries are predicted while the user is still speaking.
+      On AudioCRAG the authors report QA accuracy rising from 11.1% to 34.2% absolute and tool-use latency down 20% (arXiv 2510.02044).
+    </li>
+    <li>
+      <strong>Gemini 3.8 Live (first-party model page, updated 2026-09-15):</strong>
+      asynchronous function calling (<code>NON_BLOCKING</code>) is the default, scheduling modes are <code>SILENT</code>, <code>WHEN_IDLE</code> and <code>INTERRUPTED</code>, reasoning is interleaved, proactive audio is permanently on, and the input limit is 131,072 tokens
+      (<a href="https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live">model page</a>).
+    </li>
+    <li>
+      <strong>gpt-realtime-2 (first-party model page):</strong>
+      configurable reasoning effort, where higher effort "can increase latency and output token usage", a 128,000-token context window, 32,000 max output tokens and function calling
+      (<a href="https://developers.openai.com/api/docs/models/gpt-realtime-2">model page</a>).
+    </li>
+  </ul>
+
+  <h3 id="s2s-intelligence-gap">The intelligence gap</h3>
+  <p>
+    Speaking costs reasoning quality.
+    Causes reported: catastrophic forgetting and modality inequivalence (arXiv 2509.14930), and a bottleneck in condensing redundant speech into stable late-layer decisions (arXiv 2603.01502).
+    Mitigations: a frozen LLM (arXiv 2411.00774), cross-modal distillation from a text teacher (arXiv 2509.14930), layer-wise hidden-state alignment with RL (arXiv 2601.05543), EchoX (arXiv 2509.09174).
+    The tandem family offers a different answer: leave the speech model small and let a larger model or a retriever supply the knowledge while the speech model keeps talking (arXiv 2510.02327, arXiv 2604.12928).
+  </p>
+  <div class="callout callout--inference">
+    <strong>Inference</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      Half-cascade or Thinker-Talker with a frozen or lightly tuned LLM looks like the pragmatic route to keep text-level quality.
+      A tandem keeps full-duplex timing and borrows knowledge from a larger model, at the price of an interface between the two and a wait for the slow side.
+      Native interleaved is the frontier.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I think of the LLM as swappable.
+      The real design choice is how text and speech are coupled in time: sequentially, by a Thinker-Talker handoff, interleaved, as parallel streams, or as a small talker paired with a large thinker."
+    </p>
+  </div>
+</section>

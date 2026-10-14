@@ -1,0 +1,255 @@
+<section id="design-space">
+  <h2>The design space: three ways to build a voice agent</h2>
+  <p>
+    Every voice agent has to decide where listening, thinking and speaking live.
+    There are three common answers, and they sit on a line from most modular to most native.
+    You pick a point on it by how much you value control, the data you can get, and timing that feels human.
+  </p>
+  <p>
+    Think of a call centre.
+    In a cascade, a transcriber, an analyst and a voice actor pass notes on paper.
+    In the unified design, one agent hears and speaks, and phones an expert for facts.
+    In native full duplex, a single person does everything in one breath.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 330" role="img"
+      aria-label="Three designs. Cascade: audio goes through ASR, a text LLM and TTS to audio out. Unified: audio goes into one speech LLM with listen and speak heads, which calls a downstream text LLM through a tool call and speaks the reply. Native full duplex: audio goes into one model that listens and speaks on one clock and outputs audio">
+      <defs>
+        <marker id="arrow-design-space" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Row 1: cascade == -->
+      <text class="d-text--small" x="20" y="20">Cascade (baseline)</text>
+      <rect class="d-box" x="100" y="32" width="140" height="44" rx="8"/>
+      <text class="d-text" x="170" y="54" text-anchor="middle" dominant-baseline="middle">Streaming ASR</text>
+      <rect class="d-box" x="290" y="32" width="140" height="44" rx="8"/>
+      <text class="d-text" x="360" y="54" text-anchor="middle" dominant-baseline="middle">Text LLM</text>
+      <rect class="d-box" x="480" y="32" width="140" height="44" rx="8"/>
+      <text class="d-text" x="550" y="54" text-anchor="middle" dominant-baseline="middle">Streaming TTS</text>
+      <path class="d-arrow" d="M 20 54 L 98 54" marker-end="url(#arrow-design-space)"/>
+      <path class="d-arrow" d="M 240 54 L 288 54" marker-end="url(#arrow-design-space)"/>
+      <path class="d-arrow" d="M 430 54 L 478 54" marker-end="url(#arrow-design-space)"/>
+      <path class="d-arrow" d="M 620 54 L 698 54" marker-end="url(#arrow-design-space)"/>
+      <text class="d-text--muted" x="59" y="46" text-anchor="middle">audio</text>
+      <text class="d-text--muted" x="264" y="46" text-anchor="middle">text</text>
+      <text class="d-text--muted" x="454" y="46" text-anchor="middle">text</text>
+      <text class="d-text--muted" x="659" y="46" text-anchor="middle">audio</text>
+      <text class="d-text--muted" x="360" y="96" text-anchor="middle">turn logic is a separate heuristic: VAD and a turn manager</text>
+
+      <!-- == Row 2: unified + LLM == -->
+      <text class="d-text--small" x="20" y="136">Unified speech LLM + text LLM (target)</text>
+      <rect class="d-box d-box--accent" x="100" y="148" width="190" height="44" rx="8"/>
+      <text class="d-text" x="195" y="163" text-anchor="middle" dominant-baseline="middle">Speech LLM</text>
+      <text class="d-text--muted" x="195" y="180" text-anchor="middle" dominant-baseline="middle">listen head + speak head</text>
+      <rect class="d-box" x="480" y="148" width="140" height="44" rx="8"/>
+      <text class="d-text" x="550" y="163" text-anchor="middle" dominant-baseline="middle">Text LLM</text>
+      <text class="d-text--muted" x="550" y="180" text-anchor="middle" dominant-baseline="middle">tools, retrieval</text>
+      <path class="d-arrow" d="M 20 170 L 98 170" marker-end="url(#arrow-design-space)"/>
+      <text class="d-text--muted" x="59" y="162" text-anchor="middle">audio</text>
+      <path class="d-arrow" d="M 290 160 L 478 160" marker-end="url(#arrow-design-space)"/>
+      <text class="d-text--muted" x="384" y="152" text-anchor="middle">tool call: transcript + tags</text>
+      <path class="d-arrow" d="M 478 182 L 292 182" marker-end="url(#arrow-design-space)"/>
+      <text class="d-text--muted" x="384" y="200" text-anchor="middle">reply text + style</text>
+      <path class="d-arrow" d="M 195 192 L 195 222" marker-end="url(#arrow-design-space)"/>
+      <text class="d-text--muted" x="203" y="214">audio out</text>
+
+      <!-- == Row 3: native full duplex == -->
+      <text class="d-text--small" x="20" y="246">Native full duplex (research track)</text>
+      <rect class="d-box" x="100" y="258" width="340" height="44" rx="8"/>
+      <text class="d-text" x="270" y="273" text-anchor="middle" dominant-baseline="middle">One model, one clock</text>
+      <text class="d-text--muted" x="270" y="290" text-anchor="middle" dominant-baseline="middle">listens and speaks every frame, reasoning inside</text>
+      <path class="d-arrow" d="M 20 280 L 98 280" marker-end="url(#arrow-design-space)"/>
+      <path class="d-arrow" d="M 440 280 L 518 280" marker-end="url(#arrow-design-space)"/>
+      <text class="d-text--muted" x="59" y="272" text-anchor="middle">audio</text>
+      <text class="d-text--muted" x="479" y="272" text-anchor="middle">audio</text>
+    </svg>
+    <figcaption>
+      Figure: the design space.
+      The cascade passes text between three models and adds turn logic on the side.
+      The unified design gives audio and timing to one speech model and content to a text LLM behind a tool call.
+      Native full duplex merges everything into one model.
+    </figcaption>
+  </figure>
+
+  <h3 id="ds-how">How it works</h3>
+  <p>
+    The cascade is the familiar pipeline: streaming speech recognition, a text LLM, streaming text-to-speech.
+    Its weakness is the text boundary.
+    Emotion, pace and uncertainty vanish when speech becomes a transcript, and the turn logic is a separate heuristic: a voice activity detector (VAD, introduced in <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">The speech encoder</a>) plus a turn manager that ends the turn after enough silence.
+    Native full duplex sits at the other end.
+    One model listens and speaks on the same clock and reasons inside, so nothing is lost and timing is learned, but it is hard to swap the reasoning, hard to evaluate, and starved of data.
+    The mechanics are in <a href="/apps/materials/speech-to-speech/07-conversation#full-duplex">Conversation</a>.
+  </p>
+  <p>
+    The unified design sits between them.
+    One speech LLM owns everything audio: streaming transcription with paralinguistic tags, turn-taking and expressive speech.
+    Reasoning goes to a separate text LLM, called the way an agent calls a tool.
+    No design wins on every axis, as the table shows.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Axis</th>
+          <th>Cascade</th>
+          <th>Unified speech LLM + text LLM</th>
+          <th>Native full duplex</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Emotion, rate and voice</td>
+          <td>Lost at the text boundary; TTS voice is separate from what was heard</td>
+          <td>Kept in the listen head and passed as tags; one model hears and voices the reply</td>
+          <td>Kept end to end</td>
+        </tr>
+        <tr>
+          <td>Turn-taking</td>
+          <td>Heuristic VAD and turn manager across three models</td>
+          <td>Learned, in one model on one clock</td>
+          <td>Native, every frame</td>
+        </tr>
+        <tr>
+          <td>Swap or upgrade the reasoning</td>
+          <td>Easy</td>
+          <td>Easy: the LLM sees text</td>
+          <td>Hard: retrain or distil</td>
+        </tr>
+        <tr>
+          <td>Tools, safety, evaluation</td>
+          <td>In text; evaluated per stage</td>
+          <td>In text (retrieval and moderation run on transcript and reply); errors stay attributable per head</td>
+          <td>Harder: text is a side stream; end-to-end evaluation only</td>
+        </tr>
+        <tr>
+          <td>Latency</td>
+          <td>Stages stack, one hop per model</td>
+          <td>One extra hop (the LLM's first token), covered by a filler</td>
+          <td>Lowest; no hop</td>
+        </tr>
+        <tr>
+          <td>Data</td>
+          <td>Abundant for each stage</td>
+          <td>Speech data for the heads only</td>
+          <td>Dual-channel conversation is scarce</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--inference">
+    <strong>Inference: how to choose</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      The target is the unified speech LLM with a downstream text LLM.
+      It keeps the cascade's strengths (swappable reasoning, text-level tools and safety, attributable errors) and learns the timing the cascade has to fake.
+      The cascade is the baseline: the launch fallback, the comparison point and the first generator of training dialogue.
+      Native full duplex is the research track, because the data and the evaluations are the long pole.
+    </p>
+  </div>
+  <p>
+    There are precedents for each piece.
+    Kyutai's streaming models apply one architecture to both recognition and synthesis by delaying the text behind the audio or the audio behind the text.
+    Qwen3-Omni splits a Thinker from a Talker, the in-model analogue of the tool-call split.
+    Freeze-Omni and MinMo keep a text LLM and add a small decision module beside it.
+  </p>
+
+  <h3 id="ds-face">Adding a face: cascaded or joint</h3>
+  <p>
+    The same choice returns when the agent has an avatar.
+    A cascaded avatar makes the voice first and a face model second; a joint avatar generates sound and picture in one network.
+    The trade-offs, including why the 2026 pattern is a distilled streaming student, are in
+    <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems#problems-audio-visual">Problems in audio-visual systems</a>.
+    The middle path (the voice model's speech tokens drive the face) and the serving figures are in the
+    <a href="/apps/materials/speech-to-speech/11-system-design#avatar-platform">avatar platform</a> section.
+  </p>
+
+  <h3 id="ds-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Where reasoning lives (in the model, beside a frozen LLM, or in a separate LLM)</td>
+          <td>Swappability, tool use and moderation versus an extra hop</td>
+          <td>A separate LLM adds the hop and a lossy interface; in-model reasoning ties you to retraining</td>
+        </tr>
+        <tr>
+          <td>Interface to the LLM (transcript only, plus tags, or speech embeddings)</td>
+          <td>How much audio information the LLM sees</td>
+          <td>Tags keep the LLM swappable but must be calibrated or the LLM over-trusts them</td>
+        </tr>
+        <tr>
+          <td>Heads: two models or one backbone</td>
+          <td>Shared representation, voice and clock</td>
+          <td>One backbone couples the training of listening and speaking</td>
+        </tr>
+        <tr>
+          <td>Input representation (continuous features, or the discrete codes from <a href="/apps/materials/speech-to-speech/03-tokenizers">a neural audio codec</a>)</td>
+          <td>Understanding quality versus a uniform token stream</td>
+          <td>Ablate on WER and tag accuracy</td>
+        </tr>
+        <tr>
+          <td>Fallback route to the cascade</td>
+          <td>Availability when the speech model misses deadlines</td>
+          <td>Two stacks to run and keep behaviourally consistent</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The pieces are taught in <a href="/apps/materials/speech-to-speech/02-listening">Listening</a>,
+    <a href="/apps/materials/speech-to-speech/07-conversation">Conversation</a>,
+    <a href="/apps/materials/speech-to-speech/08-training">Training</a> and
+    <a href="/apps/materials/speech-to-speech/09-control-and-prompting">Control and prompting</a>.
+    Model-by-model detail: <a href="/apps/materials/speech-lit-review/09-system-design#unified-speech-llm">the literature review</a>.
+  </p>
+
+  <h3 id="ds-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>The hop erases the latency gain.</strong>
+      The LLM's first token arrives after end of turn, so without a filler the unified design is no faster than a good cascade.
+    </li>
+    <li>
+      <strong>Tags the LLM cannot use.</strong>
+      Anything the tags omit, the LLM never sees.
+    </li>
+    <li>
+      <strong>Two models drifting apart across versions.</strong>
+      Version them and evaluate them together.
+    </li>
+    <li>
+      <strong>Going native too early.</strong>
+      Real dual-channel conversation with genuine overlap is scarce, and the authors of one duplex training method describe a tension between interactive dynamics and reasoning ability.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would build one speech model that owns everything audio, with reasoning in a swappable text LLM behind a tool call.
+      A cascade is the baseline and fallback, and native full duplex is where the speech model goes next, once the data and evaluations are there."
+    </p>
+  </div>
+
+  <h3 id="design-space-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Streaming Sequence-to-Sequence Learning with Delayed Streams Modeling (arXiv 2509.08753)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>Freeze-Omni: A Smart and Low Latency Speech-to-speech Dialogue Model with Frozen LLM (arXiv 2411.00774)</li>
+    <li>MinMo: A Multimodal Large Language Model for Seamless Voice Interaction (arXiv 2501.06282)</li>
+    <li>Decoupling Conversational Dynamics in Full-Duplex Spoken Models through Reinforcement Learning (arXiv 2607.07148)</li>
+    <li>Cross-Modal Knowledge Distillation for Speech Large Language Models (arXiv 2509.14930)</li>
+  </ul>
+</section>

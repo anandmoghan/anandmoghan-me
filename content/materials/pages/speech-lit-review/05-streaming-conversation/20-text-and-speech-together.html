@@ -1,0 +1,301 @@
+<section id="text-and-speech-together">
+  <h2>Producing text and speech together: Moshi</h2>
+  <p>
+    Voice-to-voice models that "reason and talk" must emit text and audio at the same time.
+    The sources show three coupling patterns.
+    This section covers Moshi, the delayed parallel stream, and then the work that uses the same streams to think while listening or while speaking.
+    The next section covers delay as a knob and fixed interleaving.
+    The control head that decides when to speak is in the full-duplex sections.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Pattern</th>
+          <th>How text and audio line up</th>
+          <th>Models</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Delayed parallel stream</td>
+          <td>Same clock; text and audio are separate token streams offset by a chosen delay</td>
+          <td>Moshi (arXiv 2410.00037), DSM (arXiv 2509.08753), Hibiki (arXiv 2502.03382)</td>
+        </tr>
+        <tr>
+          <td>Fixed interleave</td>
+          <td>One sequence; N text tokens, then M speech tokens, in a fixed ratio</td>
+          <td>GLM-4-Voice (arXiv 2412.02612), Step-Audio 2 (arXiv 2507.16632)</td>
+        </tr>
+        <tr>
+          <td>Thinker-Talker</td>
+          <td>The Talker uses the Thinker's hidden representations to produce audio tokens</td>
+          <td>Qwen2.5-Omni (arXiv 2503.20215), Qwen3-Omni (arXiv 2509.17765)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <h3 id="moshi-mimi">Moshi: the codec and the clock</h3>
+  <p>
+    Moshi (arXiv 2410.00037) models speech with Mimi tokens at 12.5 Hz.
+    Mimi has 8 RVQ levels of 2048 codes.
+    The first level is a semantic code distilled from WavLM; the other seven are acoustic.
+    The codec is causal, with an 80 ms frame.
+    <span class="tag tag--confirmed">Confirmed</span>
+  </p>
+  <p>
+    Each 80 ms frame holds 17 streams: 1 text token, 8 Moshi audio tokens and 8 user audio tokens
+    (\( K = 2Q + 1 = 17 \) with \( Q = 8 \)).
+    The user stream is just another input: the model hears the user continuously while it speaks.
+  </p>
+
+  <h3 id="moshi-transformers">Two transformers per frame</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 262" role="img"
+      aria-label="Moshi per-frame stacking: a temporal transformer runs once per frame over time, and passes a context vector to a depth transformer that predicts 17 sub-tokens: one text token, eight agent audio tokens and eight user audio tokens">
+      <defs>
+        <marker id="moshi-stack-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="30" y="24" width="160" height="48" rx="8"/>
+      <text class="d-text" x="110.0" y="40.0" text-anchor="middle"
+        dominant-baseline="middle">Temporal</text>
+      <text class="d-text--small" x="110.0" y="57.0" text-anchor="middle"
+        dominant-baseline="middle">frame t-1</text>
+      <rect class="d-box d-box--accent" x="280" y="24" width="160" height="48" rx="8"/>
+      <text class="d-text" x="360.0" y="40.0" text-anchor="middle"
+        dominant-baseline="middle">Temporal transformer</text>
+      <text class="d-text--small" x="360.0" y="57.0" text-anchor="middle"
+        dominant-baseline="middle">frame t, 4096-d, 32 layers</text>
+      <rect class="d-box" x="530" y="24" width="160" height="48" rx="8"/>
+      <text class="d-text" x="610.0" y="40.0" text-anchor="middle"
+        dominant-baseline="middle">Temporal</text>
+      <text class="d-text--small" x="610.0" y="57.0" text-anchor="middle"
+        dominant-baseline="middle">frame t+1</text>
+      <path class="d-arrow" d="M 190 48 L 278 48"
+        marker-end="url(#moshi-stack-arrow)"/>
+      <path class="d-arrow" d="M 440 48 L 528 48"
+        marker-end="url(#moshi-stack-arrow)"/>
+      <text class="d-text--muted" x="234" y="38" text-anchor="middle"
+        dominant-baseline="middle">state over time</text>
+      <path class="d-arrow" d="M 360 72 L 360 118"
+        marker-end="url(#moshi-stack-arrow)"/>
+      <text class="d-text--muted" x="368" y="96" text-anchor="start"
+        dominant-baseline="middle">context vector</text>
+      <path class="d-arrow d-arrow--dashed" d="M 640 118 L 640 74"
+        marker-end="url(#moshi-stack-arrow)"/>
+      <text class="d-text--muted" x="632" y="96" text-anchor="end"
+        dominant-baseline="middle">sampled tokens</text>
+      <rect class="d-group" x="10" y="120" width="700" height="112" rx="8"/>
+      <text class="d-text--muted" x="22" y="134" text-anchor="start"
+        dominant-baseline="middle">Depth transformer: 1024-d, 6 layers, up to 17 sub-steps in order</text>
+      <rect class="d-box" x="22" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="39.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">txt</text>
+      <rect class="d-box d-box--muted" x="62" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="79.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a1</text>
+      <rect class="d-box d-box--muted" x="102" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="119.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a2</text>
+      <rect class="d-box d-box--muted" x="142" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="159.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a3</text>
+      <rect class="d-box d-box--muted" x="182" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="199.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a4</text>
+      <rect class="d-box d-box--muted" x="222" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="239.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a5</text>
+      <rect class="d-box d-box--muted" x="262" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="279.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a6</text>
+      <rect class="d-box d-box--muted" x="302" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="319.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a7</text>
+      <rect class="d-box d-box--muted" x="342" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="359.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">a8</text>
+      <rect class="d-box d-box--muted" x="382" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="399.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u1</text>
+      <rect class="d-box d-box--muted" x="422" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="439.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u2</text>
+      <rect class="d-box d-box--muted" x="462" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="479.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u3</text>
+      <rect class="d-box d-box--muted" x="502" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="519.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u4</text>
+      <rect class="d-box d-box--muted" x="542" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="559.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u5</text>
+      <rect class="d-box d-box--muted" x="582" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="599.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u6</text>
+      <rect class="d-box d-box--muted" x="622" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="639.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u7</text>
+      <rect class="d-box d-box--muted" x="662" y="148" width="35" height="34" rx="6"/>
+      <text class="d-text--small" x="679.5" y="165" text-anchor="middle"
+        dominant-baseline="middle">u8</text>
+      <path class="d-arrow" d="M 22 192 L 57 192"/>
+      <text class="d-text--muted" x="39.5" y="206" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <path class="d-arrow" d="M 62 192 L 377 192"/>
+      <text class="d-text--muted" x="219.5" y="206" text-anchor="middle"
+        dominant-baseline="middle">agent audio, Mimi levels 1 to 8</text>
+      <path class="d-arrow" d="M 382 192 L 697 192"/>
+      <text class="d-text--muted" x="539.5" y="206" text-anchor="middle"
+        dominant-baseline="middle">user audio, levels 1 to 8</text>
+      <path class="d-arrow" d="M 22 222 L 697 222"
+        marker-end="url(#moshi-stack-arrow)"/>
+      <text class="d-text--muted" x="360" y="246" text-anchor="middle"
+        dominant-baseline="middle">within one 80 ms frame</text>
+    </svg>
+    <figcaption>Moshi at one 80 ms frame. The temporal transformer runs over frames; the depth transformer expands each context vector into up to 17 sub-tokens, which are fed back as input to the next frame.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      <strong>Temporal transformer:</strong>
+      4096-dim, 32 layers, run once per frame over time.
+      It is initialised from the Helium text LM (about 2.1T training tokens) and outputs a context vector.
+    </li>
+    <li>
+      <strong>Depth transformer:</strong>
+      1024-dim, 6 layers, random initialisation.
+      It turns the context vector into up to 17 sub-tokens inside the frame.
+    </li>
+    <li>
+      The split keeps the big model at 12.5 steps per second.
+      Only the small model runs 17 times per step.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+  </ul>
+
+  <h3 id="inner-monologue">Inner Monologue: text, PAD and delays</h3>
+  <p>
+    Moshi predicts a text token for the agent's own speech on the same 12.5 Hz grid.
+    Frames with no new word carry PAD.
+    The paper also defines an EPAD token, inserted before the next word to mark the end of the padding.
+    Padding is about 65% of text-stream tokens in English conversational speech.
+  </p>
+  <p>
+    Text is the first sub-step of each frame, so that frame's audio tokens are conditioned on it
+    (derived from the sub-step order: text, Moshi audio, user audio).
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Delay</th>
+          <th>Pretraining</th>
+          <th>Fine-tuning</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Text-audio delay</td>
+          <td>Randomised from -0.6 s to +0.6 s</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Acoustic delay</td>
+          <td>2 steps</td>
+          <td>1 step</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Latency follows from the delay: 160 ms theoretical with acoustic delay 1, about 200 ms in practice.
+    The paper also gives 640 ms for acoustic delay 2.
+    The recipe: Helium text LM, then 7M h of audio transcribed with Whisper large-v3 (single stream),
+    then multi-stream post-training on diarised audio, a Fisher fine-tune (2,000 h of phone conversation),
+    and instruction tuning on more than 20k h of synthetic speech (arXiv 2410.00037).
+    <span class="tag tag--reported">Reported</span>
+  </p>
+
+  <h3 id="think-while-talking">Thinking while listening and while speaking</h3>
+  <p>
+    Moshi's text lane gives a model room to plan, but its text is the words it is about to say.
+    Several 2025 and 2026 papers use the idle or overlapping time differently: they reason during the user's turn, or they let a slower reasoner pace the speaker.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>When the model thinks</th>
+          <th>Mechanism</th>
+          <th>Reported</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chronological Thinking (arXiv 2510.05150)</td>
+          <td>While the user speaks</td>
+          <td>Replaces repeated silence-token prediction with strictly causal incremental reasoning, using only past audio. Thinking halts when the user stops, so it adds no delay</td>
+          <td>Better response quality on objective metrics and human evaluation; competitive full-duplex metrics. The abstract gives no numbers</td>
+        </tr>
+        <tr>
+          <td>FLAIR (arXiv 2603.17837)</td>
+          <td>While the user speaks</td>
+          <td>Latent thinking: each step feeds its latent output into the next. Trained with an Evidence Lower Bound objective and teacher forcing, so no reasoning annotations are needed</td>
+          <td>Competitive on speech benchmarks and full-duplex metrics; no added latency. The abstract gives no numbers</td>
+        </tr>
+        <tr>
+          <td>LTS-VoiceAgent (arXiv 2601.19952)</td>
+          <td>On meaningful prefixes of the user's speech</td>
+          <td>Cascaded, not end to end. A Dynamic Semantic Trigger picks when to think; a background Thinker keeps state and a foreground Speaker solves speculatively</td>
+          <td>Better accuracy-latency-efficiency trade-off than serial cascades on VERA, Spoken-MQA, BigBenchAudio and the authors' Pause-and-Repair benchmark</td>
+        </tr>
+        <tr>
+          <td>Mind-Paced Speaking (arXiv 2510.09592)</td>
+          <td>While speaking</td>
+          <td>A Formulation Brain reasons and sets the pace; a separate Articulation Brain speaks before the reasoning finishes. The split removes mode-switching</td>
+          <td>92.8% on Spoken-MQA and 82.5 on URO-Bench in a zero-latency configuration; underlies Step-Audio R1.1</td>
+        </tr>
+        <tr>
+          <td>KAME (arXiv 2510.02327)</td>
+          <td>In a back-end LLM, in parallel with speech</td>
+          <td>The S2S model answers at once; the LLM's text answer is injected in real time to guide the speech</td>
+          <td>Correctness approaches a cascade on speech-synthesized MT-Bench; latency on par with the S2S baseline</td>
+        </tr>
+        <tr>
+          <td>MoshiRAG (arXiv 2604.12928)</td>
+          <td>During the gap before the answer's core content</td>
+          <td>A compact duplex model flags knowledge-demanding queries and retrieves asynchronously; retrieval methods are swappable without retraining</td>
+          <td>Factuality comparable to the best released non-duplex speech LMs</td>
+        </tr>
+        <tr>
+          <td>DuplexOmni (arXiv 2606.09186)</td>
+          <td>In a pluggable thinking layer, asynchronously</td>
+          <td>An interaction layer handles streaming audio and video and speaks; the thinking layer provides reasoning and tool use</td>
+          <td>Strong results on public benchmarks; the abstract gives no numbers</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The first four rows differ in who pays for the thinking.
+    Chronological Thinking and FLAIR spend the listening window and pay nothing at the turn boundary.
+    Mind-Paced Speaking spends time while talking, so the voice must be paced by the reasoner.
+    KAME, MoshiRAG and DuplexOmni move the thinking to a second model, which keeps the duplex model small and adds a hand-off.
+    Model-by-model comparison of the tandem family:
+    <a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems#s2s-architectures">S2S architectures</a>.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Moshi keeps text and audio on one 12.5 Hz clock and pads the text stream, about 65% PAD.
+      A small depth transformer expands each 80 ms frame into 17 sub-tokens, so the big model runs only 12.5 times a second.
+      Recent work spends the listening window on causal or latent reasoning, or pairs the small duplex model with a bigger thinker."
+    </p>
+  </div>
+</section>

@@ -1,0 +1,232 @@
+<section id="speech-input">
+  <h2>Speech input for LLMs</h2>
+  <p>
+    Three ways to feed speech to an LLM: continuous encoder embeddings, discrete semantic tokens, or codec tokens.
+    Most models use the first.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 262" role="img"
+      aria-label="Three ways to feed speech to an LLM: continuous embeddings via encoder and projector at 12.5 Hz, discrete semantic tokens via single-codebook VQ, and codec tokens via an RVQ codec">
+      <defs>
+        <marker id="speech-input-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="8" y="30" width="76" height="204" rx="8"/>
+      <text class="d-text" x="46" y="132" text-anchor="middle"
+        dominant-baseline="middle">Speech</text>
+      <text class="d-text--muted" x="112" y="22" text-anchor="start"
+        dominant-baseline="middle">1  Continuous embeddings</text>
+      <text class="d-text--muted" x="112" y="102" text-anchor="start"
+        dominant-baseline="middle">2  Discrete semantic tokens</text>
+      <text class="d-text--muted" x="112" y="182" text-anchor="start"
+        dominant-baseline="middle">3  Codec tokens</text>
+      <rect class="d-box" x="112" y="30" width="140" height="44" rx="8"/>
+      <text class="d-text" x="182" y="44" text-anchor="middle"
+        dominant-baseline="middle">Speech encoder</text>
+      <text class="d-text--small" x="182" y="61" text-anchor="middle"
+        dominant-baseline="middle">ASR-pretrained</text>
+      <rect class="d-box" x="300" y="30" width="180" height="44" rx="8"/>
+      <text class="d-text" x="390" y="44" text-anchor="middle"
+        dominant-baseline="middle">Projector</text>
+      <text class="d-text--small" x="390" y="61" text-anchor="middle"
+        dominant-baseline="middle">MLP, 4x down (Voxtral)</text>
+      <rect class="d-box" x="112" y="110" width="140" height="44" rx="8"/>
+      <text class="d-text" x="182" y="124" text-anchor="middle"
+        dominant-baseline="middle">Speech encoder</text>
+      <text class="d-text--small" x="182" y="141" text-anchor="middle"
+        dominant-baseline="middle">ASR-pretrained</text>
+      <rect class="d-box" x="300" y="110" width="180" height="44" rx="8"/>
+      <text class="d-text" x="390" y="124" text-anchor="middle"
+        dominant-baseline="middle">Single-codebook VQ</text>
+      <text class="d-text--small" x="390" y="141" text-anchor="middle"
+        dominant-baseline="middle">GLM-4-Voice, 175 bps</text>
+      <rect class="d-box" x="112" y="190" width="140" height="44" rx="8"/>
+      <text class="d-text" x="182" y="204" text-anchor="middle"
+        dominant-baseline="middle">Codec encoder</text>
+      <text class="d-text--small" x="182" y="221" text-anchor="middle"
+        dominant-baseline="middle">causal</text>
+      <rect class="d-box" x="300" y="190" width="180" height="44" rx="8"/>
+      <text class="d-text" x="390" y="204" text-anchor="middle"
+        dominant-baseline="middle">RVQ, 8 codebooks</text>
+      <text class="d-text--small" x="390" y="221" text-anchor="middle"
+        dominant-baseline="middle">Mimi, distilled 1st</text>
+      <rect class="d-box d-box--accent" x="584" y="30" width="128" height="204"
+        rx="8"/>
+      <text class="d-text" x="648" y="132" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <path class="d-arrow" d="M 84 52 L 110 52"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 252 52 L 298 52"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 480 52 L 582 52"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 84 132 L 110 132"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 252 132 L 298 132"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 480 132 L 582 132"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 84 212 L 110 212"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 252 212 L 298 212"
+        marker-end="url(#speech-input-arrow)"/>
+      <path class="d-arrow" d="M 480 212 L 582 212"
+        marker-end="url(#speech-input-arrow)"/>
+      <text class="d-text--muted" x="275" y="40" text-anchor="middle"
+        dominant-baseline="middle">50 Hz</text>
+      <text class="d-text--muted" x="275" y="120" text-anchor="middle"
+        dominant-baseline="middle">50 Hz</text>
+      <text class="d-text--muted" x="275" y="200" text-anchor="middle"
+        dominant-baseline="middle">latents</text>
+      <text class="d-text--muted" x="531" y="40" text-anchor="middle"
+        dominant-baseline="middle">embeddings</text>
+      <text class="d-text--muted" x="531" y="64" text-anchor="middle"
+        dominant-baseline="middle">12.5 Hz</text>
+      <text class="d-text--muted" x="531" y="120" text-anchor="middle"
+        dominant-baseline="middle">tokens</text>
+      <text class="d-text--muted" x="531" y="144" text-anchor="middle"
+        dominant-baseline="middle">12.5 Hz</text>
+      <text class="d-text--muted" x="531" y="200" text-anchor="middle"
+        dominant-baseline="middle">codes</text>
+      <text class="d-text--muted" x="531" y="224" text-anchor="middle"
+        dominant-baseline="middle">12.5 Hz</text>
+    </svg>
+    <figcaption>Three input paths into the LLM. Most land near 12.5 Hz (Qwen3.5-Omni goes lower, at 6.25 Hz); Whisper-style encoders emit 50 Hz first.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>What it is</th>
+          <th>Used by</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Continuous embeddings</td>
+          <td>ASR-pretrained encoder, then a small projector into LLM space</td>
+          <td>
+            Voxtral (arXiv 2507.13264), Voxtral Realtime (arXiv 2602.11298),
+            Qwen3-Omni (arXiv 2509.17765), Qwen3.5-Omni (arXiv 2604.15804),
+            Granite-speech (arXiv 2505.08699), Phi-4-multimodal (arXiv 2503.01743),
+            Step-Audio 2 (arXiv 2507.16632),
+            <a href="https://huggingface.co/nvidia/canary-qwen-2.5b">Canary-Qwen</a>
+          </td>
+        </tr>
+        <tr>
+          <td>Discrete semantic tokens</td>
+          <td>Single-codebook VQ on an ASR encoder, built for AR generation</td>
+          <td>GLM-4-Voice (12.5 Hz, 175 bps; arXiv 2412.02612)</td>
+        </tr>
+        <tr>
+          <td>Codec tokens</td>
+          <td>Multi-codebook RVQ, first layer distilled toward a semantic teacher</td>
+          <td>Moshi's Mimi (12.5 Hz, 8 codebooks, WavLM-distilled first layer; arXiv 2410.00037)</td>
+        </tr>
+        <tr>
+          <td>Hybrid</td>
+          <td>Discrete and continuous summed</td>
+          <td>Kimi-Audio (12.5 Hz semantic tokens from a VQ layer in the Whisper encoder, plus continuous Whisper features downsampled to 12.5 Hz; arXiv 2504.18425)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="per-model-paths">Per-model paths</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Encoder and adapter</th>
+          <th>Rate to LLM</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Voxtral (arXiv 2507.13264)</td>
+          <td>Whisper large-v3 encoder, 30 s chunks, MLP adapter with 4x downsample</td>
+          <td>12.5 Hz</td>
+        </tr>
+        <tr>
+          <td>Voxtral Realtime (arXiv 2602.11298)</td>
+          <td>Causal encoder trained from scratch (970M, 50 Hz, 15 s sliding window), 4x MLP adapter, 3.4B decoder initialised from Ministral 3B</td>
+          <td>12.5 Hz</td>
+        </tr>
+        <tr>
+          <td>Qwen3-ASR (arXiv 2601.21337) / Qwen3-Omni (arXiv 2509.17765)</td>
+          <td>AuT encoder, 8x conv downsample, 1-8 s dynamic attention window</td>
+          <td>12.5 Hz</td>
+        </tr>
+        <tr>
+          <td>Qwen3.5-Omni (arXiv 2604.15804)</td>
+          <td>AuT trained from scratch on 40M hours of audio-text pairs, four Conv2D blocks, 16x downsample (about 160 ms per frame)</td>
+          <td>6.25 Hz</td>
+        </tr>
+        <tr>
+          <td>Granite-speech (arXiv 2505.08699)</td>
+          <td>CTC-trained Conformer plus windowed Q-Former; 100 Hz log-mel reduced 2x at the encoder input, then 5x in the Q-Former</td>
+          <td>10 Hz</td>
+        </tr>
+        <tr>
+          <td>Step-Audio 2 (arXiv 2507.16632)</td>
+          <td>Frozen encoder at 25 Hz, adaptor with 2x downsampling</td>
+          <td>12.5 Hz</td>
+        </tr>
+        <tr>
+          <td>Qwen2-Audio (arXiv 2407.10759)</td>
+          <td>Encoder initialised from Whisper-large-v3, plus a stride-2 pooling layer</td>
+          <td>25 Hz (40 ms per frame)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="why-12-5-hz">Why about 12.5 Hz is common, and where it is not</h3>
+  <p>
+    Whisper emits 50 Hz frames.
+    Voxtral notes that 30 minutes of audio at 50 Hz is a sequence of 90k tokens, which is why it adds a 4x downsampling adapter (arXiv 2507.13264).
+    Moshi's Mimi codec also runs at 12.5 Hz (arXiv 2410.00037).
+  </p>
+  <p>
+    The rate is a per-model choice and not a convergence point.
+    Qwen3.5-Omni trains its AuT encoder from scratch at 6.25 Hz, half the 12.5 Hz of Qwen3-Omni, with 16x downsampling (arXiv 2604.15804).
+    The Voxtral Realtime encoder is trained from scratch too (causal, 50 Hz, 15 s sliding window), then adds the same 4x adapter to reach 12.5 Hz (arXiv 2602.11298).
+    <span class="tag tag--inference">Inference</span>
+    Encoders trained for the purpose set their own rate, so 12.5 Hz reflects the Whisper-descended and codec-descended designs.
+  </p>
+
+  <h3 id="input-trade-offs">Trade-offs</h3>
+  <ul>
+    <li>
+      <strong>Continuous:</strong>
+      richest acoustic and paralinguistic signal, easy to train as ASR, but the output side needs a separate path.
+    </li>
+    <li>
+      <strong>Discrete:</strong>
+      one vocabulary for input and output, enables self-supervised next-token training, loses detail.
+    </li>
+    <li>
+      <strong>Codec:</strong>
+      the model hears and speaks the same tokens, but multi-codebook streams cost more per frame.
+      <span class="tag tag--inference">Inference</span>
+      This suits duplex.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Downsampling to 10-12.5 Hz is the main sequence-length lever.
+      It costs fine acoustic detail, which motivates hybrids like Kimi-Audio.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Input is mostly an ASR-pretrained encoder, a small projector and about 12.5 Hz, though encoders trained from scratch pick their own rate (6.25 Hz in Qwen3.5-Omni).
+      Discrete tokens appear when the same vocabulary must also be generated."
+    </p>
+  </div>
+</section>

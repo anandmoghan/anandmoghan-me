@@ -1,0 +1,285 @@
+<section id="measuring-conversation">
+  <h2>Measuring conversation</h2>
+  <p>
+    A voice agent can have perfect words and a perfect voice and still feel broken, because it answers too late, cuts you off, or stops talking when you say "mm-hm".
+    Conversation quality is mostly about timing, so the metrics are time differences between events.
+  </p>
+  <p>
+    Think of timing a relay race: the stopwatch starts at the starter's gun, not when the runner noticed it.
+    In conversation the gun is the moment the human actually finished their turn, which the system itself only estimates.
+    So every metric below starts its clock from a labelled ground-truth event, never from the system's own detector.
+  </p>
+
+  <h3 id="mc-how">How it works</h3>
+  <p>
+    Annotators mark gold events on a dual-channel recording: the end of a user turn, the onset of a barge-in, a backchannel.
+    The system's output is recorded on its own channel after echo cancellation (see <a href="/apps/materials/speech-to-speech/07-conversation#turn-taking">Turn-taking</a>), so its timestamps can be compared with the gold ones.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 250" role="img"
+      aria-label="Timeline with a user lane and an agent lane showing four reference points: gold end of turn, agent first audio, barge-in onset and agent stop, with time to first audio measured from the first to the second and stop latency from the third to the fourth">
+      <defs>
+        <marker id="arrow-measuring-conversation" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Lanes == -->
+      <rect class="d-box" x="20" y="30" width="230" height="44" rx="8"/>
+      <text class="d-text" x="135" y="52" text-anchor="middle"
+        dominant-baseline="middle">User turn</text>
+      <rect class="d-box d-box--accent" x="330" y="110" width="260" height="44" rx="8"/>
+      <text class="d-text" x="460" y="132" text-anchor="middle"
+        dominant-baseline="middle">Agent reply</text>
+      <rect class="d-box" x="520" y="30" width="190" height="44" rx="8"/>
+      <text class="d-text" x="615" y="52" text-anchor="middle"
+        dominant-baseline="middle">User barge-in</text>
+      <text class="d-text--muted" x="12" y="96">User</text>
+      <text class="d-text--muted" x="12" y="176">Agent</text>
+
+      <!-- == Reference points == -->
+      <path class="d-arrow d-arrow--dashed" d="M 250 24 L 250 186"/>
+      <path class="d-arrow d-arrow--dashed" d="M 330 104 L 330 186"/>
+      <path class="d-arrow d-arrow--dashed" d="M 520 24 L 520 186"/>
+      <path class="d-arrow d-arrow--dashed" d="M 590 104 L 590 186"/>
+
+      <!-- == Metrics == -->
+      <path class="d-arrow" d="M 252 176 L 328 176" marker-end="url(#arrow-measuring-conversation)"/>
+      <text class="d-text--small" x="290" y="168" text-anchor="middle">first audio</text>
+      <path class="d-arrow" d="M 522 176 L 588 176" marker-end="url(#arrow-measuring-conversation)"/>
+      <text class="d-text--small" x="555" y="168" text-anchor="middle">stop</text>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="250" y="204" text-anchor="end">gold end of turn</text>
+      <text class="d-text--muted" x="330" y="204" text-anchor="start">first audio</text>
+      <text class="d-text--muted" x="520" y="204" text-anchor="end">barge-in onset</text>
+      <text class="d-text--muted" x="590" y="204" text-anchor="start">agent stops</text>
+
+      <!-- == Time axis == -->
+      <path class="d-arrow" d="M 20 232 L 700 232" marker-end="url(#arrow-measuring-conversation)"/>
+      <text class="d-text--muted" x="360" y="244" text-anchor="middle">time</text>
+    </svg>
+    <figcaption>
+      Figure: where two latency metrics are measured.
+      Time to first audio runs from the gold end of turn (not the system's silence detector) to the agent's first audio.
+      Stop latency runs from the gold barge-in onset to the last audible agent sample, on echo-cancelled output.
+    </figcaption>
+  </figure>
+
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Definition</th>
+          <th>Reads as</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Time to first audio</td>
+          <td>Gold end of turn to the agent's first audio; report p50, p90, p95</td>
+          <td>Responsiveness</td>
+        </tr>
+        <tr>
+          <td>Floor-transfer offset</td>
+          <td>Agent onset minus gold end of turn, as a distribution against human conversation</td>
+          <td>Human timing; humans on smooth transfers start a median 151 ms before the other turn ends</td>
+        </tr>
+        <tr>
+          <td>Stop latency</td>
+          <td>Gold barge-in onset to the last audible agent sample, plus the share of agent speech after onset</td>
+          <td>How fast it yields</td>
+        </tr>
+        <tr>
+          <td>False-yield rate</td>
+          <td>Stops caused by backchannels, laughter or background speech, per conversation minute</td>
+          <td>Wrongly giving up the floor</td>
+        </tr>
+        <tr>
+          <td>Premature-takeover rate</td>
+          <td>Share of user mid-turn pauses in which the agent starts speaking</td>
+          <td>Wrongly grabbing the floor</td>
+        </tr>
+        <tr>
+          <td>Backchannel rate and placement</td>
+          <td>Rate versus humans, and the share placed shortly after a prosodic boundary</td>
+          <td>Whether "mm-hm" lands naturally</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Latency means little on its own, because any detector can be made faster by being more trigger-happy.
+    The fair way is to report it at a fixed error rate: mean latency at a 5% or 10% false-cutoff rate, or the false-cutoff rate at a fixed 300 ms or 600 ms budget.
+    One vendor end-of-turn benchmark reports 9.9% false cutoffs at 300 ms but 4.5% at 600 ms for its own detector, which shows the curve you are choosing a point on.
+    Vendor latency claims with no stated benchmark, such as a quoted end-of-turn time inside a speech-to-text API, cannot be compared with these.
+  </p>
+  <p>
+    Benchmarks come in three kinds.
+    Scripted overlap suites such as Full-Duplex-Bench test pause handling, backchannels, turn-taking and interruption.
+    Annotated dual-channel sets such as TurnBench give gold end-of-turn and interruption labels from three annotators.
+    Judge-based sets use a trained turn-event model or an LLM to label behaviour at scale, and any such judge must first be checked against human labels on a subset before its scores gate a release.
+  </p>
+
+  <h3 id="mc-capability">Beyond timing: capability, instruction following and fairer scoring</h3>
+  <p>
+    Timing says when the agent speaks, not whether the answer was good.
+    One group of benchmarks tests what the model knows and obeys; a newer group fixes how timing itself is scored.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Benchmark</th>
+          <th>What it tests</th>
+          <th>Worth knowing</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>VoiceBench</td>
+          <td>Voice assistants given real and synthetic spoken instructions that vary by speaker, environment and content</td>
+          <td>Built because earlier tests used clean speech and general knowledge only</td>
+        </tr>
+        <tr>
+          <td>MMAU</td>
+          <td>Audio understanding and reasoning over speech, sound and music: 10,000 clips, 27 skills</td>
+          <td>At release the best model scored 52.97%</td>
+        </tr>
+        <tr>
+          <td>URO-Bench</td>
+          <td>Speech-to-speech dialogue on understanding, reasoning and oral conversation, in a basic and a pro track of 20 test sets each</td>
+          <td>Open models trail their own backbone LLMs on instruction following</td>
+        </tr>
+        <tr>
+          <td>Intent-conditioned timing (TACT)</td>
+          <td>Turn-taking scored against the speaker's likely intent, over 9,728 episodes (73.2 hours)</td>
+          <td>Across 11 systems the best scores 0.47 against a human 0.86; agreement with human judgement is 0.81 against 0.46 for binary metrics</td>
+        </tr>
+        <tr>
+          <td>Implicit instruction following</td>
+          <td>Whether an agent infers floor-management behaviour from a persona (case counts in
+            <a href="/apps/materials/speech-to-speech/09-control-and-prompting#prompting-speech-llms-concept">Prompting speech LLMs</a>)</td>
+          <td>Obeying an explicit rule does not mean inferring it from a role</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Many duplex benchmarks score a reply as right only inside a fixed window, so a delayed reply or an early overlap counts as a failure.
+    The intent-conditioned approach argues the right timing depends on the speaker's latent intent, which can only be inferred from how they behave.
+    It scores with a continuous ranked probability score, a proper score that gives partial credit, weighted by timing curves fitted to human floor-transfer offsets.
+    <span class="tag tag--inference">Inference</span>
+    Report both the binary pass rate and the continuous score until you trust the new one.
+  </p>
+
+  <h3 id="mc-levers">Levers and optimisations</h3>
+  <p>
+    The levers are the system knobs these metrics expose.
+    Each one moves two metrics in opposite directions, which is why metrics are reported in pairs.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>End-of-turn threshold or silence timeout</td>
+          <td>Time to first audio versus premature takeover</td>
+          <td>Faster replies cut users off mid-thought</td>
+        </tr>
+        <tr>
+          <td>Semantic end-of-turn model instead of silence</td>
+          <td>Shifts the whole latency versus false-cutoff curve</td>
+          <td>Does not remove the trade-off; adds a model to run</td>
+        </tr>
+        <tr>
+          <td>Barge-in rule (minimum duration or words, adaptive mode)</td>
+          <td>False-yield rate versus stop latency</td>
+          <td>Stricter rules ignore backchannels but yield later to real interruptions</td>
+        </tr>
+        <tr>
+          <td>Decision cadence</td>
+          <td>Timing resolution of every event</td>
+          <td>A decision made at chunk boundaries waits half a chunk on average (<a href="/apps/materials/speech-to-speech/07-conversation#conversation-clock">Conversation clock</a>); smaller chunks cost compute</td>
+        </tr>
+        <tr>
+          <td>False-interruption recovery window</td>
+          <td>Lets the agent resume if no real words follow a stop</td>
+          <td>Resuming too eagerly talks over a real interruption</td>
+        </tr>
+        <tr>
+          <td>Intent-conditioned or continuous timing score</td>
+          <td>Stops a valid delay or overlap counting as failure</td>
+          <td>Closer to human judgement; needs intent annotations and a fitted human timing distribution</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Where these decisions live in a full system, including echo cancellation and semantic end-of-turn models, is in
+    <a href="/apps/materials/speech-to-speech/07-conversation#turn-taking">Conversation</a>, and how a streaming recogniser reports delay is in
+    <a href="/apps/materials/speech-to-speech/02-listening#streaming-latency">Listening</a>.
+    Model-by-model detail: <a href="/apps/materials/speech-lit-review/05-streaming-conversation#conversational-evaluation">the literature review</a>.
+  </p>
+
+  <h3 id="mc-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Starting the clock at the system's own detector.</strong>
+      The detector (usually voice activity detection, VAD, as introduced in <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">Listening</a>) stops on silence, and that hides the time spent deciding the user was done, so latency looks better than it is.
+    </li>
+    <li>
+      <strong>Reporting the mean.</strong>
+      A conversation is judged by its worst pauses, so report p95 and p99 under realistic concurrency.
+    </li>
+    <li>
+      <strong>Measuring stop latency without echo cancellation.</strong>
+      The microphone can pick up the agent's own voice and distort both stop latency and false yields.
+    </li>
+    <li>
+      <strong>Reading self-reported or binary numbers as truth.</strong>
+      Benchmark authors report their own systems under their own conditions, so quote them as claims, and a fixed pass-fail window punishes delayed replies that fit the speaker's intent.
+    </li>
+    <li>
+      <strong>Timing without content, or a demo as evidence.</strong>
+      A model can match human timing and still answer poorly, and a recorded conversation shows neither false-yield rate nor multi-turn behaviour.
+      The open problem, per the TurnBench authors, is that no current system matches human timing without excessive false positives.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would never report latency alone.
+      I would report time to first audio from gold end of turn at a fixed false-yield rate, stop latency after barge-in on echo-cancelled output, and false yields per minute, anchored to the human offset.
+      Judge-based metrics get validated on a human subset first."
+    </p>
+  </div>
+
+  <h3 id="measuring-conversation-sources">Sources</h3>
+  <ul>
+    <li>Neither Silence nor Overlap Is Failure: Intent-Conditioned Evaluation of Turn-Taking in Full-Duplex Spoken Dialogue Models (arXiv 2609.27372)</li>
+    <li>DuplexSpeechBench-IFEval: Evaluating Implicit Instruction Following in Full-Duplex Voice Agents (arXiv 2609.03423)</li>
+    <li>VoiceBench: Benchmarking LLM-Based Voice Assistants (arXiv 2410.17196)</li>
+    <li>MMAU: A Massive Multi-Task Audio Understanding and Reasoning Benchmark (arXiv 2410.19168)</li>
+    <li>URO-Bench: Towards Comprehensive Evaluation for End-to-End Spoken Dialogue Models (arXiv 2502.17810)</li>
+    <li>TurnBench: A Multi-Domain Benchmark for Turn-Taking Dynamics in Spoken Dialogue (arXiv 2608.25218)</li>
+    <li>Full-Duplex-Bench: A Benchmark to Evaluate Full-duplex Spoken Dialogue Models on Turn-taking Capabilities (arXiv 2503.04721)</li>
+    <li>Full-Duplex-Bench v1.5: Evaluating Overlap Handling for Full-Duplex Speech Models (arXiv 2507.23159)</li>
+    <li>Full-Duplex-Bench-v2: A Multi-Turn Evaluation Framework for Duplex Dialogue Systems with an Automated Examiner (arXiv 2510.07838)</li>
+    <li>FLEXI: Benchmarking Full-duplex Human-LLM Speech Interaction (arXiv 2509.22243)</li>
+    <li>Talking Turns: Benchmarking Audio Foundation Models on Turn-Taking Dynamics (arXiv 2503.01174)</li>
+    <li><a href="https://livekit.com/blog/solving-end-of-turn-detection">LiveKit: solving end-of-turn detection</a> (vendor benchmark, operating points)</li>
+    <li><a href="https://developers.deepgram.com/docs/flux/quickstart">Deepgram Flux quickstart</a> (vendor latency claim)</li>
+    <li><a href="https://docs.livekit.io/agents/logic/turns/tuning/">LiveKit turn-taking tuning</a> (adaptive interruption, false-interruption recovery)</li>
+  </ul>
+</section>

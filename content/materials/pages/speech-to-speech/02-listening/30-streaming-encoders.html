@@ -1,0 +1,349 @@
+<section id="streaming-encoders">
+  <h2>Streaming encoders</h2>
+  <p>
+    A bidirectional encoder is a proofreader who reads the whole page before marking any line.
+    The vector for frame 3 depends on frame 300, and every new frame can change every old output.
+    Live speech cannot work that way.
+  </p>
+  <p>
+    A streaming encoder is a live captioner.
+    It uses what it has heard, plus at most a short peek ahead, so earlier outputs stay put and can
+      be cached.
+    The whole game is restricting attention without losing accuracy.
+  </p>
+
+  <h3 id="streaming-encoders-how">How it works</h3>
+  <p>
+    Whisper as shipped does not stream, for two reasons.
+    It takes a fixed 30 s window, and streaming wrappers pad every buffer to that window, so each
+      partial result pays for 30 s.
+    And its attention is bidirectional, so every frame sees later audio.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 196" role="img"
+      aria-label="Three attention patterns for one query frame over twelve frames: full attention, chunk mask with cached past, and a block window">
+      <defs>
+        <marker id="streaming-encoders-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="150" y="12" text-anchor="start"
+        dominant-baseline="middle">frames in time order, chunks of 4</text>
+      <text class="d-text--small" x="8" y="37" text-anchor="start"
+        dominant-baseline="middle">Full attention</text>
+      <rect class="d-box d-box--muted" x="150" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="170" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="194" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="214" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="238" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="258" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="282" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="302" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="326" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="346" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--accent" x="370" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text--small" x="390" y="37" text-anchor="middle"
+        dominant-baseline="middle">q</text>
+      <rect class="d-box d-box--muted" x="414" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="434" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="458" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="478" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="502" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="522" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="546" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="566" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="590" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="610" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="634" y="24" width="40" height="26" rx="5"/>
+      <text class="d-text" x="654" y="37" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <path class="d-arrow d-arrow--dashed" d="M 324 20 L 324 54"/>
+      <path class="d-arrow d-arrow--dashed" d="M 500 20 L 500 54"/>
+      <text class="d-text--small" x="8" y="85" text-anchor="start"
+        dominant-baseline="middle">Chunk mask + cache</text>
+      <rect class="d-box d-box--muted" x="150" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="170" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="194" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="214" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="238" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="258" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="282" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="302" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="326" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="346" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--accent" x="370" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text--small" x="390" y="85" text-anchor="middle"
+        dominant-baseline="middle">q</text>
+      <rect class="d-box d-box--muted" x="414" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="434" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="458" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="478" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="502" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="522" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="546" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="566" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="590" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="610" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="634" y="72" width="40" height="26" rx="5"/>
+      <text class="d-text" x="654" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <path class="d-arrow d-arrow--dashed" d="M 324 68 L 324 102"/>
+      <path class="d-arrow d-arrow--dashed" d="M 500 68 L 500 102"/>
+      <text class="d-text--small" x="8" y="133" text-anchor="start"
+        dominant-baseline="middle">Block window</text>
+      <rect class="d-group" x="150" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="170" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="194" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="214" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="238" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="258" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="282" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="302" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="326" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="346" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--accent" x="370" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text--small" x="390" y="133" text-anchor="middle"
+        dominant-baseline="middle">q</text>
+      <rect class="d-box d-box--muted" x="414" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="434" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="458" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="478" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="502" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="522" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="546" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="566" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="590" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="610" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="634" y="120" width="40" height="26" rx="5"/>
+      <text class="d-text" x="654" y="133" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <path class="d-arrow d-arrow--dashed" d="M 324 116 L 324 150"/>
+      <path class="d-arrow d-arrow--dashed" d="M 500 116 L 500 150"/>
+      <text class="d-text--muted" x="150" y="176" text-anchor="start"
+        dominant-baseline="middle">grey: readable   outlined: hidden   accent: the query frame</text>
+    </svg>
+    <figcaption>Figure: which frames one query frame (accent) may read. Full attention reads
+      everything, so its output changes when later audio arrives. A chunk mask reads its own chunk and
+      earlier ones, so past states can be cached. A block window reads only its own
+      block.</figcaption>
+  </figure>
+  <p>
+    The fix is a mask on the attention matrix.
+    A chunk mask lets every frame read its own chunk and all earlier chunks, but never later ones.
+    Earlier chunks never change, so their work can be stored and reused.
+    In attention, each frame produces a query (what it is looking for), a key (how it can be
+      matched) and a value (what it hands over when matched), and it mixes the values of the frames
+      whose keys match its query best.
+    The KV cache stores the keys and values of finished chunks, so a new chunk computes only its own
+      and reads the rest from memory instead of re-running the whole history.
+    The price is memory for each live stream.
+    A block window is stricter still: each frame reads only its own block.
+  </p>
+  <p>
+    Five families apply this idea, at different cost.
+    The newest two start from a blank page and no longer inherit Whisper's design.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>What changes</th>
+          <th>Retraining</th>
+          <th>Reported behaviour</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Wrap the offline model</td>
+          <td>Re-run Whisper on a growing buffer; commit words once successive runs agree
+            (whisper_streaming), or steer decoding with cross-attention (Simul-Whisper)</td>
+          <td>None</td>
+          <td>whisper_streaming: 3.3 s latency</td>
+        </tr>
+        <tr>
+          <td>Causal fine-tune</td>
+          <td>Chunked causal mask in the encoder plus a KV cache. CarelessWhisper adds LoRA (the
+            <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">small trainable add-on</a>
+            that leaves the original weights fixed)</td>
+          <td>LoRA on 960 h (CarelessWhisper)</td>
+          <td>CarelessWhisper, 300 ms chunks: 0.081 s average latency against 0.426 s for a buffered
+            baseline</td>
+        </tr>
+        <tr>
+          <td>Causal tokenizer</td>
+          <td>GLM-4-Voice makes the Whisper-based encoder causal: causal convolution, block-causal
+            attention, then pooling and quantisation</td>
+          <td>Fine-tune the ASR model</td>
+          <td>12.5 Hz single-codebook tokens</td>
+        </tr>
+        <tr>
+          <td>New windowed encoder</td>
+          <td>AuT: block-wise window attention, 8x downsampling to 12.5 Hz. A dynamic window of 1 to 8 s
+            lets short chunks serve streaming and long ones serve offline from one model</td>
+          <td>From scratch (AuT: 20 million hours)</td>
+          <td>Qwen3-ASR, 1.7B: 2.69 average WER offline against 3.33 streaming; time to first token
+            as low as 92 ms for the 0.6B model</td>
+        </tr>
+        <tr>
+          <td>Native streaming encoder with a delay knob</td>
+          <td>Voxtral Realtime: causal encoder (970M parameters; rate, window and adapter as in
+            <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">The speech encoder</a>), decoder
+            conditioned on the chosen delay. Moonshine v2: sliding
+            window with 16 frames of left context and 4 of right context in the outer layers</td>
+          <td>From scratch</td>
+          <td>Voxtral Realtime, LibriSpeech clean / other WER: 2.08 / 5.54 at 480 ms and 1.96 / 4.59
+            at 960 ms, against 1.84 / 3.66 for offline Whisper. Moonshine v2 medium: 258 ms response
+            latency on an Apple M3 against 11,286 ms for Whisper Large v3</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The last family is where the field is moving.
+    Retrofitting Whisper is still useful when you already ship it, but an encoder trained to stream
+      removes the fixed window, the padding cost and most of the wrapper machinery at once.
+    Mimi, the codec in Moshi, shows the principle at its simplest: all its convolutions are causal,
+      so it streams by construction.
+  </p>
+
+  <h3 id="streaming-encoders-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chunk or window size</td>
+          <td>How much audio each step sees (40 to 300 ms in CarelessWhisper; 1 to 8 s windows in
+            AuT)</td>
+          <td>Larger chunks read more context and cost more latency. Streaming at 2 s chunks cost
+            Qwen3-ASR about 0.6 average WER against offline for the 1.7B model.</td>
+        </tr>
+        <tr>
+          <td>Causal against bidirectional</td>
+          <td>Whether a frame may read later audio</td>
+          <td>Causal outputs never change and can be cached; bidirectional sees more context per
+            frame. See <a href="#look-ahead-right-context">look-ahead</a>.</td>
+        </tr>
+        <tr>
+          <td>Wrapper, fine-tune or replace</td>
+          <td>How much you retrain</td>
+          <td>Wrappers need no training but cost latency; LoRA is cheap; a new encoder gets both
+            modes but needs a from-scratch run.</td>
+        </tr>
+        <tr>
+          <td>Delay knob, dynamic chunk training</td>
+          <td>Voxtral Realtime samples a delay from 80 to 2400 ms in training; a U2-style variant
+            samples chunk sizes of 0.1 to 1.0 s</td>
+          <td>One model serves several latency budgets, but training must cover the whole range and a
+            shorter setting costs accuracy.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="streaming-encoders-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Padding and mismatch.</strong>
+      A wrapper pays for a 30 s window on every partial and re-encodes the same audio repeatedly.
+      The U2 authors add that it leaves a train/test mismatch, because the model was trained on full
+        30 s windows and is run on partial buffers.
+    </li>
+    <li>
+      <strong>Words cut at chunk boundaries.</strong>
+      A chunk can end mid-word; Simul-Whisper adds a truncation detector for exactly this.
+    </li>
+    <li>
+      <strong>Hallucination on silence.</strong>
+      A streaming window is often mostly silence.
+      Whisper's long-form decoding skips windows above a no-speech threshold (0.6), and a VAD filter
+        in front of the model (see <a href="#speech-encoder-wrong">What a speech encoder does</a>)
+        serves the same purpose.
+    </li>
+    <li>
+      <strong>An accuracy gap.</strong>
+      Streaming is worse than offline for the same model (2.69 against 3.33 average WER for
+        Qwen3-ASR 1.7B), so budget for it.
+      Qwen-Audio-3.0-ASR shows the same shape at 400 ms of algorithmic latency: 9.24% against 8.03%
+        error on Chinese and 13.38% against 11.78% on English.
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding#streaming-whisper-encoder">Making the
+      Whisper encoder stream</a>
+    and
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding#streaming-encoders">Streaming audio encoders
+      beyond Whisper</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      Whisper streams in three ways: wrap it and pay for re-encoding, fine-tune it causal with a
+        chunk mask and an encoder cache, or replace the encoder.
+      Wrappers cost latency, causal fine-tuning gets sub-second latency, and a streaming encoder
+        trained from scratch, like AuT or Voxtral Realtime, costs a full run but serves streaming
+        and offline from one model, with the delay as a dial.
+    </p>
+  </div>
+
+  <h3 id="streaming-encoders-sources">Sources</h3>
+  <ul>
+    <li>Robust Speech Recognition via Large-Scale Weak Supervision (arXiv 2212.04356)</li>
+    <li><a href="https://huggingface.co/openai/whisper-large-v3">OpenAI Whisper large-v3 model
+      card</a></li>
+    <li>WhisperRT -- Turning Whisper into a Causal Streaming Model (arXiv 2508.12301)</li>
+    <li>Adapting Whisper for Streaming Speech Recognition via Two-Pass Decoding (arXiv 2506.12154)</li>
+    <li>Turning Whisper into Real-Time Transcription System (arXiv 2307.14743)</li>
+    <li>Simul-Whisper: Attention-Guided Streaming Whisper with Truncation Detection (arXiv 2406.10052)</li>
+    <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot (arXiv 2412.02612)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>Qwen3-ASR Technical Report (arXiv 2601.21337)</li>
+    <li>Voxtral Realtime (arXiv 2602.11298)</li>
+    <li>Moonshine v2: Ergodic Streaming Encoder ASR for Latency-Critical Speech Applications (arXiv 2602.12241)</li>
+    <li>Qwen-Audio-3.0-ASR Technical Report (arXiv 2609.07549)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li><a href="https://github.com/SYSTRAN/faster-whisper">faster-whisper README (Silero VAD
+      filter)</a></li>
+  </ul>
+</section>

@@ -1,0 +1,60 @@
+<section id="q-streaming-b">
+  <h2>Streaming conversation: training, RL rewards and evaluation</h2>
+  <ul>
+    <li>Recipe: strong text LLM, speech tokens, ASR/TTS and interleaved pretraining, spoken SFT, then DPO or RL.</li>
+    <li>The real choice is frozen LLM (Freeze-Omni, MinMo) or a mixed text corpus (Moshi, Kimi-Audio, Step-Audio 2).</li>
+    <li>DPO goes on text-token probabilities because audio-token probabilities are unstable (Moshi-Aligned, arXiv 2506.21463).</li>
+    <li>RL: Step-Audio 2 uses PPO then GRPO (arXiv 2507.16632); Qwen3-Omni uses GSPO (arXiv 2509.17765).</li>
+    <li>
+      Duplex rewards are timing events on audio: DuplexPO (arXiv 2607.07148) and Kyutai's alignment of Moshi and PersonaPlex (arXiv 2606.11167),
+      the latter adding an LLM response-quality reward against semantic degradation.
+    </li>
+    <li>Kyutai publishes its RL-tuned checkpoints (<a href="https://huggingface.co/kyutai/moshika-rl-seamless">model card</a>).</li>
+    <li>Evaluate on Full-Duplex-Bench v1 (arXiv 2503.04721), v1.5 (arXiv 2507.23159), v2 (arXiv 2510.07838) and TurnBench (arXiv 2608.25218).</li>
+    <li>Humans on smooth transfers start speaking a median 151 ms before the other turn ends (TurnBench).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Report latency at a fixed false-yield rate, measured from gold end-of-turn.
+    </li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Reward</th>
+          <th>Implementation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Intelligibility</td>
+          <td>ASR WER or CER (F5R-TTS, arXiv 2504.02407; arXiv 2509.18798)</td>
+        </tr>
+        <tr>
+          <td>Similarity</td>
+          <td>Speaker-verification similarity to the reference, paired with WER (arXiv 2504.02407)</td>
+        </tr>
+        <tr>
+          <td>Naturalness</td>
+          <td>UTMOS, DNSMOS, SCOREQ; a calibrated composite resists hacking best (arXiv 2609.13150)</td>
+        </tr>
+        <tr>
+          <td>Judge model</td>
+          <td>SpeechJudge generative reward model (arXiv 2511.07931)</td>
+        </tr>
+        <tr>
+          <td>Duplex timing</td>
+          <td>Turn, backchannel, yield and interruption rewards (arXiv 2607.07148, arXiv 2606.11167)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would run GRPO with ASR, speaker and quality rewards plus timing rewards, and never trust a single score.
+      I would report latency at a fixed false-yield rate and validate every judge against listeners."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/05-streaming-conversation">Full chapter</a></p>
+</section>

@@ -1,0 +1,103 @@
+<section id="continuous-autoregression">
+  <h2>Continuous autoregression and next-token diffusion</h2>
+  <p>
+    A smaller, newer branch drops discrete tokens.
+    An AR model predicts continuous latents, and a small diffusion or flow head samples each next frame or patch.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Design</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>MELLE (arXiv 2407.08551)</td>
+          <td>Regresses continuous mel frames; spectrogram flux loss; latent sampling replaces top-p</td>
+          <td>The authors report a 47.9% relative WER reduction over VALL-E on continuation</td>
+        </tr>
+        <tr>
+          <td>DiTAR (ICML 2025; arXiv 2502.03930)</td>
+          <td>LM over aggregated patch embeddings, bidirectional-attention diffusion transformer (LocDiT) generates each patch</td>
+          <td>Temperature maps to the noise-injection point in the reverse ODE</td>
+        </tr>
+        <tr>
+          <td>VibeVoice (arXiv 2508.19205)</td>
+          <td>LLM hidden states condition a light diffusion head predicting continuous VAE features; 7.5 Hz</td>
+          <td>The authors report 80x better compression than EnCodec at comparable performance; up to 90 min of speech in a 64K context</td>
+        </tr>
+        <tr>
+          <td>dots.tts (arXiv 2606.07080)</td>
+          <td>2B continuous autoregressive TTS in a learned AudioVAE latent space; flow-matching head conditioned on full history</td>
+          <td>The authors report first-packet latencies of 85 / 54 ms (output streaming / dual-streaming) after MeanFlow distillation</td>
+        </tr>
+        <tr>
+          <td>VoxCPM (arXiv 2509.24650)</td>
+          <td>Tokenizer-free: a text-semantic LM and a residual acoustic LM guide a local diffusion decoder, trained end to end with a diffusion objective</td>
+          <td>The authors report 1.8M h of bilingual training data for VoxCPM-0.5B</td>
+        </tr>
+        <tr>
+          <td>Continuous Audio Language Models, CALM (arXiv 2509.06926)</td>
+          <td>Large Transformer backbone; its embedding conditions a small MLP head that generates the next VAE frame by consistency modelling</td>
+          <td>Releases Pocket TTS, 100M parameters, faster than real time on a laptop CPU</td>
+        </tr>
+        <tr>
+          <td>CuteTTS (arXiv 2608.08638)</td>
+          <td>Patch-level AR over causal VAE latents; explicit speaker conditioning; bidirectional flow-matching head</td>
+          <td>Guidance-step distillation folds CFG and multiple solver steps into one student: first-audio latency down 23.3%, RTF down 40.8% vs the base model</td>
+        </tr>
+        <tr>
+          <td>VoxCPM2 (arXiv 2606.06928)</td>
+          <td>2B hierarchical diffusion-AR model on continuous latents, no external discrete tokenizer; 30 languages, trained on over 2M h</td>
+          <td>AudioVAE encodes at 16 kHz and reconstructs at 48 kHz; average WER 1.68% on the authors' internal 30-language set</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A consistency head and a distilled flow head are the same idea: a small network that produces the next frame in one step or very few.
+    CALM trains it as a consistency model; dots.tts and CuteTTS distil a flow head.
+  </p>
+
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The two lists below are design analysis, not results from the papers.
+  </p>
+  <div class="cols-2">
+    <div>
+      <h3 id="continuous-for">The case for</h3>
+      <ul>
+        <li>No quantization loss, so higher ceiling on naturalness.</li>
+        <li>Very low frame rates shorten the AR sequence (VibeVoice runs at 7.5 Hz).</li>
+      </ul>
+    </div>
+    <div>
+      <h3 id="continuous-against">The case against</h3>
+      <ul>
+        <li>Per-frame diffusion or flow cost on top of the LM step.</li>
+        <li>
+          RL is harder without discrete tokens.
+          GROW notes that trajectory-level policy-gradient RL for flow-matching TTS must track per-step likelihood ratios, which adds overhead (arXiv 2608.03215).
+          CosyVoice 3's DiffRO optimises the speech tokens directly with a differentiable reward, and targets discrete-token models (arXiv 2505.17589).
+        </li>
+        <li>Sampling control is weaker than top-p over a categorical.</li>
+        <li>
+          <span class="tag tag--inference">Inference</span>
+          Qwen3-Omni uses a codec plus a causal ConvNet decoder (arXiv 2509.17765),
+          which suggests continuous heads may stay niche for duplex products.
+        </li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout callout--say">
+    <strong>Say this in the interview:</strong>
+    <p>
+      "Continuous AR removes the quantization bottleneck,
+      but you pay in per-step sampling cost and lose easy RL.
+      For a duplex product I would start discrete and revisit."
+    </p>
+  </div>
+</section>

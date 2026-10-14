@@ -1,0 +1,59 @@
+<section id="q-streaming-a">
+  <h2>Streaming conversation: rates, Moshi and full-duplex models</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Rate</th>
+          <th>Period</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Mel frames (25 ms window, 10 ms hop; arXiv 2212.04356)</td>
+          <td>100 Hz</td>
+          <td>10 ms</td>
+        </tr>
+        <tr>
+          <td>Whisper encoder (stride 2)</td>
+          <td>50 Hz</td>
+          <td>20 ms</td>
+        </tr>
+        <tr>
+          <td>After Voxtral's 4x adapter (arXiv 2507.13264)</td>
+          <td>12.5 Hz</td>
+          <td>80 ms</td>
+        </tr>
+        <tr>
+          <td>Mimi codec frames (arXiv 2410.00037)</td>
+          <td>12.5 Hz</td>
+          <td>80 ms</td>
+        </tr>
+        <tr>
+          <td>Mimi tokens: \( 12.5 \times 8 \) (derived)</td>
+          <td>100 tokens/s</td>
+          <td>1.1 kbps (\( \times 11 \) bits)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li>Moshi runs text, its own audio and user audio on one 12.5 Hz clock: 17 streams per 80 ms frame (arXiv 2410.00037).</li>
+    <li>A 4096-dim, 32-layer temporal transformer runs once per frame; a 1024-dim, 6-layer depth transformer fills the sub-tokens.</li>
+    <li>Moshi's text stream is about 65% PAD, so it fits the audio clock; GLM-4-Voice instead interleaves 13 text : 26 speech tokens (arXiv 2412.02612).</li>
+    <li>Moshi's latency is 160 ms in theory and about 200 ms in practice; DSM applies a fixed delay per stream, 2.5 s default for ASR text (arXiv 2509.08753).</li>
+    <li>Duplex families: dual-stream (Moshi), chunked (SyncLLM, arXiv 2409.15594), flattened (OmniFlatten, arXiv 2410.17799), control head (MinMo, arXiv 2501.06282; Freeze-Omni, arXiv 2411.00774), action channel (DuplexSLA, arXiv 2605.20755).</li>
+    <li>Latency figures use different definitions and are not comparable across systems.</li>
+    <li>Tokens per second is frame rate times codebooks, and bitrate adds the bits per token: \( 12.5 \times 8 \times 11 = 1100 \) bps for Mimi (derived).</li>
+    <li>Lower output rates shorten sequences but cost intelligibility: SiTok WER is 23.0, 4.06 and 3.05 at 6.25, 12.5 and 25 Hz (arXiv 2602.06602). <a href="/apps/materials/speech-lit-review/05-streaming-conversation#timing-logic">Timing logic</a></li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Mimi is 12.5 Hz, so 80 ms a frame, 100 tokens a second and 1.1 kbps.
+      Text and both audio streams share that clock, which is why there is no explicit turn state."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/05-streaming-conversation">Full chapter</a></p>
+</section>

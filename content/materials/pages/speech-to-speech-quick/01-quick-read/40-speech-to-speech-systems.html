@@ -1,0 +1,71 @@
+<section id="q-s2s-systems">
+  <h2>Speech-to-speech systems: architectures, duplex, multilingual</h2>
+  <ul>
+    <li>Six coupling families, ordered by how tightly speech is fused into the LLM: cascaded, half-cascade, Thinker-Talker, interleaved, parallel streams, codec-free.</li>
+    <li>Speaking costs reasoning quality; causes reported are catastrophic forgetting and modality inequivalence (arXiv 2509.14930).</li>
+    <li>Mitigations: a frozen LLM (arXiv 2411.00774), cross-modal distillation from a text teacher (arXiv 2509.14930), layer-wise hidden-state alignment with RL (arXiv 2601.05543).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Half-cascade or Thinker-Talker with a frozen or lightly tuned LLM is the pragmatic route; native interleaved is the frontier.
+    </li>
+    <li>Duplex schemes: dual-stream (Moshi, arXiv 2410.00037; dGSLM, arXiv 2203.16502), time-multiplexed (OmniFlatten, arXiv 2410.17799), state head (Freeze-Omni; MinMo, arXiv 2501.06282), shared timeline (MiniCPM-o 4.5, arXiv 2604.27393), cascade-duplex (DuplexCascade, arXiv 2603.09180).</li>
+    <li>Data is the bottleneck: Fisher is about 2,000 h of two-channel telephone speech (arXiv 2410.00037); unlabelled audio scales (Kimi-Audio more than 13M h, arXiv 2504.18425).</li>
+    <li>Benchmarks: Full-Duplex-Bench (arXiv 2503.04721) and v1.5 (arXiv 2507.23159), VoiceBench (arXiv 2410.17196), URO-Bench (arXiv 2502.17810); evaluation is maturing but not comparable across papers.</li>
+    <li>Multilingual is lopsided: Qwen3-Omni has text in 119 languages, speech understanding in 19 and speech generation in 10 (arXiv 2509.17765).</li>
+    <li>Text streams serve as supervision, scaffold, alignment and capability transfer.</li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>Models</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Half-cascade</td>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625), Freeze-Omni</td>
+        </tr>
+        <tr>
+          <td>Thinker-Talker</td>
+          <td>Qwen3-Omni, Qwen3.5-Omni (arXiv 2604.15804)</td>
+        </tr>
+        <tr>
+          <td>Interleaved</td>
+          <td>GLM-4-Voice (arXiv 2412.02612), Step-Audio 2 (arXiv 2507.16632), VITA-Audio (arXiv 2505.03739)</td>
+        </tr>
+        <tr>
+          <td>Parallel streams</td>
+          <td>Moshi (Inner Monologue); Kimi-Audio (shared layers, then parallel text and audio heads)</td>
+        </tr>
+        <tr>
+          <td>Codec-free</td>
+          <td>SALMONN-omni (arXiv 2411.18138)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    The DuplexSLA authors report 98.33% backchannel accuracy on their own benchmark vs 40% or less for the closed-source baselines they tested (arXiv 2605.20755).
+    NVIDIA's PersonaPlex model card lists a smooth turn-taking rate of 0.908 and latencies of 0.170 and 0.240 on Full-Duplex-Bench, without units
+    (<a href="https://huggingface.co/nvidia/personaplex-7b-v1">model card</a>).
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Architecture is mostly solved: dual-stream or state-head.
+      The bottleneck is dual-channel conversational data with real overlap and backchannels,
+      and a benchmark everyone shares."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      No dedicated code-switching study was found in the sources used.
+      Treat it as an open question to test, not a solved capability.
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems">Full chapter</a></p>
+</section>

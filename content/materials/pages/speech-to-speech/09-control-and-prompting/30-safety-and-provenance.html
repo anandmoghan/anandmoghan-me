@@ -1,0 +1,208 @@
+<section id="safety-and-provenance">
+  <h2>Safety and provenance</h2>
+  <p>
+    A model that can speak in any voice raises two questions.
+    Did the person agree to this voice, and can anyone tell later that a machine made the clip?
+    Think of a banknote: it carries a serial number and a hidden mark, so a checker can confirm where it came from without anyone reading it aloud.
+  </p>
+  <p>
+    An audio watermark works the same way.
+    The generator writes a faint pattern into the sound, a listener cannot hear it, and a detector reads it back.
+    A conversational model adds a third question: can someone talk it into saying what it should refuse?
+    That is a spoken jailbreak.
+  </p>
+
+  <h3 id="safety-provenance-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 24 720 148" role="img"
+      aria-label="Provenance chain: a consent gate, the speech model, a watermark embedder, edits and re-encoding that may strip the mark, and a detector that reads the mark back">
+      <defs>
+        <marker id="safety-provenance-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="40" width="120" height="50" rx="8"/>
+      <text class="d-text" x="70" y="58" text-anchor="middle"
+        dominant-baseline="middle">Consent gate</text>
+      <text class="d-text--small" x="70" y="76" text-anchor="middle"
+        dominant-baseline="middle">before cloning</text>
+      <rect class="d-box d-box--accent" x="160" y="40" width="120" height="50" rx="8"/>
+      <text class="d-text" x="220" y="58" text-anchor="middle"
+        dominant-baseline="middle">Speech model</text>
+      <text class="d-text--small" x="220" y="76" text-anchor="middle"
+        dominant-baseline="middle">makes the clip</text>
+      <rect class="d-box" x="310" y="40" width="120" height="50" rx="8"/>
+      <text class="d-text" x="370" y="58" text-anchor="middle"
+        dominant-baseline="middle">Embed mark</text>
+      <text class="d-text--small" x="370" y="76" text-anchor="middle"
+        dominant-baseline="middle">hidden message</text>
+      <rect class="d-box d-box--muted" x="460" y="40" width="120" height="50" rx="8"/>
+      <text class="d-text" x="520" y="58" text-anchor="middle"
+        dominant-baseline="middle">Edits</text>
+      <text class="d-text--small" x="520" y="76" text-anchor="middle"
+        dominant-baseline="middle">codec, denoising</text>
+      <rect class="d-box" x="610" y="40" width="100" height="50" rx="8"/>
+      <text class="d-text" x="660" y="58" text-anchor="middle"
+        dominant-baseline="middle">Detector</text>
+      <text class="d-text--small" x="660" y="76" text-anchor="middle"
+        dominant-baseline="middle">reads the mark</text>
+      <path class="d-arrow" d="M 130 65 L 158 65" marker-end="url(#safety-provenance-arrow)"/>
+      <path class="d-arrow" d="M 280 65 L 308 65" marker-end="url(#safety-provenance-arrow)"/>
+      <path class="d-arrow" d="M 430 65 L 458 65" marker-end="url(#safety-provenance-arrow)"/>
+      <path class="d-arrow" d="M 580 65 L 608 65" marker-end="url(#safety-provenance-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 520 90 L 520 140"/>
+      <text class="d-text--muted" x="520" y="156" text-anchor="middle"
+        dominant-baseline="middle">the mark can be damaged or removed here</text>
+    </svg>
+    <figcaption>Figure: the provenance chain. Consent is checked before a voice is cloned, the mark is written at generation, and the detector must still read it after the clip has been edited.</figcaption>
+  </figure>
+  <p>
+    The chain has three steps.
+    First, check consent: a cloning product asks the speaker to read a randomly generated passcode or record a consent statement before the voice is created.
+    Second, mark every output: the generator embeds a short hidden message.
+    A zero-bit mark only says "a machine made this", while a multi-bit mark carries a payload (which account, which model), so a detector can tell outputs apart.
+    Third, detect later: a detector scans a suspect clip and reports whether the mark is present and what it says.
+    Some detectors also locate the marked stretch inside a longer clip.
+  </p>
+  <p>
+    Where the mark lives matters.
+    Early designs write the pattern into the waveform and train generator and detector together, so the detector is fast and tolerates everyday edits.
+    Neural codecs are a harder test: they re-synthesise speech from quantised tokens and discard whatever does not fit the structure they keep.
+    Two newer designs therefore place the mark in the codec's token space.
+    One spreads a 16-bit message across the residual quantiser layers of a speech tokenizer.
+    The other targets models that generate audio tokens one by one, where re-tokenising a waveform can change the token sequence.
+    Voice cloning is a similar test.
+    A zero-shot cloner copies a voice from a short prompt, so one method puts the mark in speaker-specific latents and the mark carries into the cloned output.
+    Its authors report detection above 95% after zero-shot synthesis, against about 50% for earlier methods.
+  </p>
+  <p>
+    Marks can be stripped.
+    A denoising model treats the mark like noise: adding a little Gaussian noise and then running speech enhancement was tested against six published watermarks, and generative enhancement was described as highly destructive to them.
+    So robustness must be tested against enhancement as well as codecs and compression.
+  </p>
+  <p>
+    Marks can also mislead detectors.
+    A deepfake detector trained on watermarked fakes and unmarked real speech learns the watermark as the cue.
+    Unmarked fakes then slip through, and marked real speech gets flagged.
+    In one controlled white-box test the equal error rate (the point where false alarms and misses are equal) rose from 16% to 75%.
+    Training with marks on both real and fake speech removes the shortcut.
+  </p>
+  <p>
+    A fingerprint offers a different route: a statistical trace a model leaves without any deliberate mark.
+    A benchmark that fine-tunes five text-to-speech architectures in 16 ways found that preference and RL post-training mostly keep the fingerprint, while some supervised fine-tuning and pre-training data changes shift it a lot.
+    A detector built on the base model can therefore lose track of a fine-tuned copy.
+  </p>
+  <p>
+    The jailbreak risk is separate from provenance.
+    A jailbreak is a request crafted to make a model do what it should refuse, and with audio it can change the meaning, the acoustic style, the signal itself or the internal representation.
+    A survey tested attacks and defences on ten open audio-language models, measuring attack success rate, refusal of harmless requests and added delay.
+    Defences traded robustness for usability.
+    Safety also varies by language: requests that mix two languages, or wrap key terms in invented word-like noise, lowered refusals, and a multilingual benchmark found weaknesses worse outside English and worse when the request was spoken.
+  </p>
+
+  <h3 id="safety-provenance-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Consent gate</td>
+          <td>Who can create a cloned voice</td>
+          <td>Blocks misuse at the source; adds friction for honest users</td>
+        </tr>
+        <tr>
+          <td>Zero-bit against multi-bit mark</td>
+          <td>Whether the mark only flags "synthetic" or also identifies the output</td>
+          <td>A payload gives traceability; it is harder to keep readable after edits</td>
+        </tr>
+        <tr>
+          <td>Mark in waveform or in codec tokens</td>
+          <td>How well the mark survives re-synthesis through a neural codec</td>
+          <td>Token-space marks survive codecs; they tie the mark to a tokenizer</td>
+        </tr>
+        <tr>
+          <td>Localised detection</td>
+          <td>Finding the marked stretch inside a longer clip</td>
+          <td>Useful for spliced audio; needs training for it</td>
+        </tr>
+        <tr>
+          <td>Mark strength</td>
+          <td>Robustness against transparency</td>
+          <td>A stronger mark is easier to detect and easier to hear (the tension is explicit in the literature)</td>
+        </tr>
+        <tr>
+          <td>Attack-aware robustness tests</td>
+          <td>Includes enhancement, codec resynthesis and overwriting in the test</td>
+          <td>Honest numbers; a longer test matrix</td>
+        </tr>
+        <tr>
+          <td>Detector training data</td>
+          <td>Marks on both real and fake speech</td>
+          <td>Removes the shortcut; needs a paired clean and marked set</td>
+        </tr>
+        <tr>
+          <td>Fingerprint re-enrolment after fine-tuning</td>
+          <td>Ability to attribute a clip to an adapted model</td>
+          <td>More enrolment audio lowered error in one test; it is per-model upkeep</td>
+        </tr>
+        <tr>
+          <td>Safety evaluation per language and per attack type</td>
+          <td>Which failures the safety score exposes</td>
+          <td>More coverage; cost and latency of defences must be measured too</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="safety-provenance-wrong">What goes wrong</h3>
+  <p>
+    The most common mistake is to treat a watermark as proof.
+    A missing mark does not mean a clip is real, because enhancement and re-synthesis can remove it.
+    Detectors have a matching failure: they learn the mark, not the fake, so watch for good scores on your own marked data and poor ones on unseen fakes.
+    Fingerprints drift too, since a fine-tuned model may no longer match the fingerprint recorded for its base.
+  </p>
+  <p>
+    On the safety side, few model releases report any multilingual analysis, and refusal rates drop in other languages and in code-switched speech.
+    Defences can also refuse too much, so track the refusal rate on harmless requests next to the attack success rate.
+  </p>
+  <p>
+    Consent is not solved by a checkbox.
+    A passcode read aloud proves a live speaker; it does not stop someone cloning a different voice elsewhere.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I treat provenance as three layers: a consent gate before cloning, a multi-bit watermark in the generator, and detectors trained on marks for both real and fake speech.
+      Marks can be stripped by speech enhancement, so I test robustness against that, and I evaluate spoken jailbreaks per language and per attack, with refusal of harmless requests on the same chart."
+    </p>
+  </div>
+
+  <h3 id="safety-and-provenance-sources">Sources</h3>
+  <ul>
+    <li>Proactive Detection of Voice Cloning with Localized Watermarking (arXiv 2401.17264)</li>
+    <li>VoiceMark: Zero-Shot Voice Cloning-Resistant Watermarking Approach Leveraging Speaker-Specific Latents (arXiv 2505.21568)</li>
+    <li>NeuMark: Neural Codec Resynthesis-Robust Audio Watermarking in the Codec Latent Space (arXiv 2609.25719)</li>
+    <li>MARC: Multi-Bit Watermarking for Autoregressive Audio Generation against Codec Attacks (arXiv 2610.11488)</li>
+    <li>The Vulnerability of Neural Audio Watermarks under Speech Enhancement (arXiv 2609.29040)</li>
+    <li>The Watermark Shortcut: How Provenance Marking Sabotages Audio Deepfake Detection (arXiv 2606.23335)</li>
+    <li>GenTraceBench: A Benchmark for Tracing Audio Deepfakes Across Pre- and Post-training Stages (arXiv 2609.21738)</li>
+    <li>Audio Jailbreaks in Large Audio-Language Models: Taxonomy, Attack-Defense Analysis, and Cost-Aware Evaluation (arXiv 2605.30031)</li>
+    <li>SpeechJBB: Probing Safety Alignment and Comprehension in Large Audio Language Models under Code-Switched Speech (arXiv 2606.06037)</li>
+    <li>RedVox: Safety and Fairness Gaps in Speech Models Across Languages (arXiv 2606.26968)</li>
+    <li><a href="https://help.synthesia.io/en/articles/8612891-how-do-i-clone-my-voice-in-synthesia">Synthesia help: clone my voice</a> (passcode consent)</li>
+    <li><a href="https://www.synthesia.io/features/ai-voice-cloning">Synthesia voice cloning page</a> (consent policy)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/06-control-and-quality#safety-provenance">Safety and provenance</a>,
+      <a href="/apps/materials/speech-lit-review/08-common-problems#speech-to-speech-problems">Speech-to-speech and duplex problems</a>
+    </li>
+  </ul>
+</section>

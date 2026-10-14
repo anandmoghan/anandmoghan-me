@@ -1,0 +1,238 @@
+<section id="tokenizers-beyond-speech">
+  <h2>Tokenizers beyond speech</h2>
+  <p>
+    Across images, video and audio, the tokenizer matters more than the generator.
+    The common design is a causal, heavily compressed latent, often regularised toward semantic features
+    <span class="tag tag--inference">Inference</span>.
+    MOSS-Audio-Tokenizer (arXiv 2602.10934) is a counterexample for audio: a Transformer-only causal codec trained end to end with no pretrained encoder and no semantic distillation, which its authors report improves predictably with scale.
+    Discrete codecs stay the default for audio LMs; continuous VAE latents stay the default for diffusion and flow.
+  </p>
+
+  <h3 id="image-video-tokenizers">Image and video tokenizers</h3>
+  <ul>
+    <li>
+      MAGVIT-v2 (arXiv 2310.05737, ICLR 2024) uses lookup-free quantisation (LFQ).
+      With this tokenizer, the authors show LLMs outperforming diffusion models on ImageNet and Kinetics, and title the paper "Tokenizer is Key to Visual Generation"
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      FSQ (arXiv 2309.15505) quantises each latent dimension to a small set of fixed values.
+      The codebook is the implicit product of those sets, so the authors report no codebook collapse and no need for commitment losses or codebook reseeding
+      <span class="tag tag--confirmed">Confirmed</span>.
+    </li>
+    <li>
+      TiTok (arXiv 2406.07550) is a 1D tokenizer.
+      It reduces a 256x256x3 image to 32 discrete tokens, with gFID 1.97 on ImageNet 256 using the same generator framework
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      The NVIDIA <a href="https://github.com/NVIDIA/Cosmos-Tokenizer">Cosmos tokenizer</a> outputs either continuous latents or discrete tokens for images and video.
+      Its README states total compression of up to 2048x (8x16x16) and running up to 12x faster than the best available tokenizers
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      Causal 3D VAEs compress time and space without peeking at future frames.
+      Wan's VAE replaces GroupNorm with RMSNorm to preserve temporal causality, which enables a feature cache (arXiv 2503.20314)
+      <span class="tag tag--confirmed">Confirmed</span>.
+    </li>
+  </ul>
+  <p>
+    FSQ in standard notation (not taken from the sources): bound each latent dimension, then round.
+  </p>
+  \[
+    \hat z_i = \operatorname{round}\!\left( \left\lfloor L_i / 2 \right\rfloor \tanh(z_i) \right),
+    \qquad |\mathcal{C}| = \prod_i L_i
+  \]
+  <p>
+    Here \( L_i \) is the number of levels in dimension \( i \), and \( |\mathcal{C}| \) is the implicit codebook size.
+  </p>
+
+  <h3 id="semantic-aligned-vaes">Semantic-aligned VAEs</h3>
+  <p>
+    A recent trend is to align the latent with, or build it directly on, vision foundation model features, then decode.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Tokenizer</th>
+          <th>Idea</th>
+          <th>Reported result</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>VA-VAE (arXiv 2501.01423)</td>
+          <td>Vision-foundation-model alignment for high-dimensional tokenizers</td>
+          <td>FID 1.35 on ImageNet 256 generation with LightningDiT</td>
+        </tr>
+        <tr>
+          <td>VFM-VAE (arXiv 2510.18457)</td>
+          <td>Frozen foundation model used directly as the tokenizer encoder, with a new decoder</td>
+          <td>gFID (w/o CFG) 2.22 in 80 epochs; 1.62 after 640 epochs</td>
+        </tr>
+        <tr>
+          <td>DINO-Tok (arXiv 2511.20565)</td>
+          <td>Continuous and discrete tokenizers on a frozen DINO encoder</td>
+          <td>ImageNet 256 rFID 0.28 (continuous) and 1.10 (discrete)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="audio-music-codecs">General audio and music codecs</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Codec</th>
+          <th>Type</th>
+          <th>Key facts</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>DAC (arXiv 2306.06546)</td>
+          <td>Discrete RVQ</td>
+          <td>One universal model for speech, environment and music; about 90x compression of 44.1 kHz audio at 8 kbps</td>
+        </tr>
+        <tr>
+          <td>Stable Audio Open AE (arXiv 2407.14358)</td>
+          <td>Continuous</td>
+          <td>156M-parameter autoencoder with a VAE bottleneck of latent size 64, for 44.1 kHz stereo audio</td>
+        </tr>
+        <tr>
+          <td>MOSS-Audio-Tokenizer (arXiv 2602.10934)</td>
+          <td>Discrete, Transformer-only</td>
+          <td>1.6B parameters trained on 3M hours of general audio; CAT is learned end to end with no pretrained encoder or semantic distillation; the authors report it outperforms prior codecs across speech, sound and music over a range of bitrates and improves predictably with scale</td>
+        </tr>
+        <tr>
+          <td>WavTokenizer (arXiv 2408.16532, ICLR 2025)</td>
+          <td>Single quantiser</td>
+          <td>One quantiser with 40 or 75 tokens per second of 24 kHz audio; evaluated on speech, audio and music (ICLR 2025)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      Best reconstruction is not best downstream.
+      The DASB benchmark (arXiv 2406.14294) reports that discrete audio representations are less robust than continuous ones, and that semantic tokens generally outperform acoustic tokens.
+    </p>
+  </div>
+
+  <h3 id="unified-and-joint-av">Unified and joint audio-visual tokenizers</h3>
+  <ul>
+    <li>
+      UniCodec (arXiv 2502.20067): one codec with a single codebook across speech, music and sound, using a partitioned domain-adaptive codebook and domain Mixture-of-Experts.
+    </li>
+    <li>MelTok (arXiv 2510.01903): a 2D mel-spectrogram tokenizer that compresses 44.1 kHz audio into a single codebook, with a token-based vocoder.</li>
+    <li>
+      EntangleCodec (arXiv 2606.02739): a unified discrete audio tokenizer with caption-aligned semantic-acoustic representations and a flow-matching diffusion decoder.
+    </li>
+    <li>
+      AVTok (arXiv 2606.30811): a 1D joint audio-video tokenizer with a shared encoder-decoder, modality-specific learnable queries and a unified codebook
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      VideoPoet (arXiv 2312.14125) is the precedent: it concatenated MAGVIT-v2 and SoundStream vocabularies into one unified vocabulary rather than learning a joint tokenizer.
+    </li>
+  </ul>
+
+  <h3 id="tokenizer-tradeoffs">Trade-offs</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>Token</th>
+          <th>Compression</th>
+          <th>LM-friendliness</th>
+          <th>Reconstruction</th>
+          <th>Examples</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>VQ / LFQ / FSQ</td>
+          <td>Discrete</td>
+          <td>Moderate to high</td>
+          <td>High (single CE)</td>
+          <td>Lower at equal rate</td>
+          <td>MAGVIT-v2, FSQ, Cosmos DV, DAC</td>
+        </tr>
+        <tr>
+          <td>1D tokens</td>
+          <td>Discrete</td>
+          <td>Very high</td>
+          <td>High, short sequences</td>
+          <td>Good for generation, weaker detail</td>
+          <td>TiTok</td>
+        </tr>
+        <tr>
+          <td>Causal VAE</td>
+          <td>Continuous</td>
+          <td>High, temporal and spatial</td>
+          <td>Needs diffusion or flow head</td>
+          <td>High</td>
+          <td>Wan VAE, Cosmos CV, Show-o2</td>
+        </tr>
+        <tr>
+          <td>Semantic-aligned VAE</td>
+          <td>Continuous</td>
+          <td>Moderate</td>
+          <td>Diffusion or flow</td>
+          <td>Strong generation FID</td>
+          <td>VA-VAE, VFM-VAE</td>
+        </tr>
+        <tr>
+          <td>Audio RVQ</td>
+          <td>Discrete</td>
+          <td>High</td>
+          <td>High for audio LMs</td>
+          <td>High at 8 kbps</td>
+          <td>DAC</td>
+        </tr>
+        <tr>
+          <td>Scaled Transformer-only audio codec</td>
+          <td>Discrete</td>
+          <td>High</td>
+          <td>High for audio LMs</td>
+          <td>Reported to improve predictably with scale</td>
+          <td>MOSS-Audio-Tokenizer</td>
+        </tr>
+        <tr>
+          <td>Audio VAE</td>
+          <td>Continuous</td>
+          <td>Moderate</td>
+          <td>Diffusion or flow</td>
+          <td>Good</td>
+          <td>Stable Audio Open</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The table is directional, not a benchmark
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+
+  <h3 id="bridge-to-speech-codecs">Bridge to speech codecs</h3>
+  <p>
+    Speech codecs (Mimi, X-Codec2, BiCodec, CosyVoice 2 FSQ tokens, dynamic-frame-rate codecs such as FlexiCodec, predictability-aware codecs such as LLM-Codec and ReLMCodec) are covered in
+    <a href="/apps/materials/speech-lit-review/03-speech-generation">chapter 03</a>, with the evaluation measures in
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#codec-evaluation">Evaluating tokenizers</a>.
+    The same logic applies there: low rate and semantic distillation help the LM, continuous latents win back fidelity.
+    <span class="tag tag--inference">Inference</span>
+    For a Voice team the new point is that audio-visual tokenizers may be converging on the same recipe as speech ones.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The tokenizer sets the ceiling more than the generator does.
+      The pattern is causal, compressed, semantically aligned latents:
+      discrete for audio LMs, continuous with a flow head for quality."
+    </p>
+  </div>
+</section>

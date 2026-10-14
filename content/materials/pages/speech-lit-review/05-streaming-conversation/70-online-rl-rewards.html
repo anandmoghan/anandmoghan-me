@@ -1,0 +1,404 @@
+<section id="online-rl-rewards">
+  <h2>Online RL and rewards for speech generation</h2>
+  <p>
+    The common pattern: the policy is a codec or discrete-token LM (sometimes flow matching), sampled in groups.
+    Rewards come from the decoded audio: ASR error for intelligibility, speaker-verification (SV) cosine for similarity, a quality or preference predictor for naturalness.
+    The main failure is reward hacking on any single optimised score.
+    Duplex timing is the newest axis, with per-axis rewards derived from VAD events.
+    The same loop now trains recognisers (an acoustic-fidelity or delay term in the reward) and voice agents (per-tool-call rewards); see
+    <a href="#bridge-asr-grpo">Bridge from GRPO on streaming ASR</a>.
+  </p>
+  <div class="callout callout--note">
+    <strong>Evidence quality</strong>
+    <p>
+      Every claim below cites a paper or an official repository or model card.
+      Kyutai publishes RL-tuned Moshi and PersonaPlex checkpoints on its Hugging Face account.
+      Numbers are the authors' own and come from different setups, so they are not comparable across rows.
+    </p>
+  </div>
+  <p>
+    The TTS-side summary (DiffRO, F5R-TTS, hacking signatures, listening gates) is in
+    <a href="/apps/materials/speech-lit-review/06-control-and-quality#post-training-eval">Post-training and evaluation for speech generation</a>.
+    This section adds reward implementations, the duplex rewards, and infrastructure.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 270" role="img"
+      aria-label="Online RL loop: policy samples a group of rollouts, which are decoded to audio and scored by ASR, speaker, quality and timing rewards, then per-group normalised advantages drive an update with a KL penalty; held-out judges score the audio but never enter the reward">
+      <defs>
+        <marker id="arrow-online-rl-rewards" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Forward path == -->
+      <rect class="d-box d-box--accent" x="10" y="84" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="106" text-anchor="middle"
+        dominant-baseline="middle">Policy</text>
+      <rect class="d-box" x="180" y="84" width="130" height="44" rx="8"/>
+      <text class="d-text" x="245" y="106" text-anchor="middle"
+        dominant-baseline="middle">G rollouts</text>
+      <rect class="d-box" x="350" y="84" width="130" height="44" rx="8"/>
+      <text class="d-text" x="415" y="106" text-anchor="middle"
+        dominant-baseline="middle">Decode to audio</text>
+      <path class="d-arrow" d="M 140 106 L 178 106" marker-end="url(#arrow-online-rl-rewards)"/>
+      <path class="d-arrow" d="M 310 106 L 348 106" marker-end="url(#arrow-online-rl-rewards)"/>
+      <path class="d-arrow" d="M 480 106 L 518 106" marker-end="url(#arrow-online-rl-rewards)"/>
+
+      <!-- == Reward models == -->
+      <rect class="d-group" x="520" y="8" width="190" height="250" rx="10"/>
+      <rect class="d-box" x="540" y="24" width="150" height="44" rx="8"/>
+      <text class="d-text" x="615" y="46" text-anchor="middle"
+        dominant-baseline="middle">ASR: WER or CER</text>
+      <rect class="d-box" x="540" y="84" width="150" height="44" rx="8"/>
+      <text class="d-text" x="615" y="106" text-anchor="middle"
+        dominant-baseline="middle">Speaker cosine</text>
+      <rect class="d-box" x="540" y="144" width="150" height="44" rx="8"/>
+      <text class="d-text" x="615" y="166" text-anchor="middle"
+        dominant-baseline="middle">Quality RM</text>
+      <rect class="d-box" x="540" y="204" width="150" height="44" rx="8"/>
+      <text class="d-text" x="615" y="226" text-anchor="middle"
+        dominant-baseline="middle">Timing (VAD events)</text>
+
+      <!-- == Update path == -->
+      <rect class="d-box" x="350" y="190" width="130" height="44" rx="8"/>
+      <text class="d-text" x="415" y="212" text-anchor="middle"
+        dominant-baseline="middle">Group advantages</text>
+      <rect class="d-box" x="180" y="190" width="130" height="44" rx="8"/>
+      <text class="d-text" x="245" y="212" text-anchor="middle"
+        dominant-baseline="middle">Update + KL</text>
+      <path class="d-arrow" d="M 518 212 L 482 212" marker-end="url(#arrow-online-rl-rewards)"/>
+      <path class="d-arrow" d="M 350 212 L 312 212" marker-end="url(#arrow-online-rl-rewards)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 180 212 L 75 212 L 75 130"
+        marker-end="url(#arrow-online-rl-rewards)"/>
+      <text class="d-text--muted" x="130" y="232" text-anchor="middle">next iteration</text>
+      <text class="d-text--muted" x="500" y="202" text-anchor="middle">scores</text>
+
+      <!-- == Held-out judges == -->
+      <rect class="d-box d-box--muted" x="340" y="8" width="150" height="44" rx="8"/>
+      <text class="d-text" x="415" y="30" text-anchor="middle"
+        dominant-baseline="middle">Held-out judges</text>
+      <path class="d-arrow d-arrow--dashed" d="M 415 84 L 415 54"
+        marker-end="url(#arrow-online-rl-rewards)"/>
+      <text class="d-text--muted" x="425" y="72">never in the reward</text>
+    </svg>
+    <figcaption>Figure: the online RL loop for speech generation. Each prompt gets a group of rollouts, decoded and scored by several reward models. Advantages are normalised within the group, and held-out judges watch for hacking.</figcaption>
+  </figure>
+
+  <!-- == Reward taxonomy == -->
+  <h3 id="reward-taxonomy">Reward taxonomy and concrete implementations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Reward</th>
+          <th>Implementation</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Intelligibility (ASR)</td>
+          <td>F5R-TTS uses ASR WER as one of two GRPO rewards (arXiv 2504.02407). GRPO for LLM-based TTS uses CER plus NLL from an off-the-shelf ASR model (arXiv 2509.18798).</td>
+          <td><span class="tag tag--confirmed">Confirmed</span></td>
+        </tr>
+        <tr>
+          <td>CosyVoice GRPO</td>
+          <td>The official <a href="https://github.com/FunAudioLLM/CosyVoice">FunAudioLLM/CosyVoice</a> README lists GRPO training support for CosyVoice 2 and an RL model of Fun-CosyVoice3-0.5B with training and inference scripts.</td>
+          <td><span class="tag tag--confirmed">Confirmed</span></td>
+        </tr>
+        <tr>
+          <td>Reward granularity</td>
+          <td>Japanese kana-level scoring cuts target-kanji reading error by ~26% under matched GRPO (arXiv 2610.07575).</td>
+          <td><span class="tag tag--confirmed">Confirmed</span></td>
+        </tr>
+        <tr>
+          <td>Speaker similarity</td>
+          <td>Speaker-verification similarity to the reference, paired with WER (F5R-TTS, arXiv 2504.02407; GROW, arXiv 2608.03215).</td>
+          <td><span class="tag tag--confirmed">Confirmed</span></td>
+        </tr>
+        <tr>
+          <td>Naturalness predictors</td>
+          <td>UTMOS, DNSMOS, SCOREQ. The authors report that optimising a single score induces reward hacking while held-out judges and listeners get worse; an equal-weighted ensemble resists hacking, and a calibrated composite performs best (arXiv 2609.13150).</td>
+          <td><span class="tag tag--reported">Reported</span></td>
+        </tr>
+        <tr>
+          <td>Subjective predictors (arXiv 2608.31035)</td>
+          <td>GRPO on codec language models with learned rewards for speaking style, naturalness, likability and arousal, plus a CER zone constraint against transcript drift. Each reward mainly lifts its own metric, so the predictors are not interchangeable; human A/B transfer is uneven; signed reward gaps predict listener choice in the pooled analysis while residual CER gaps do not. Best-of-8 reranking under the same reward gate performs about as well as GRPO perceptually, so GRPO may be better read as building reward-selected behaviour into the policy than as beating reranking.</td>
+          <td><span class="tag tag--reported">Reported</span></td>
+        </tr>
+        <tr>
+          <td>Reward-model validation</td>
+          <td>MOS-RMBench (arXiv 2510.00743) converts MOS datasets into preference tasks: scalar models are best overall, above 74% accuracy; most models do worse on synthetic than human speech; all struggle on very small MOS differences, which a MOS-aware generative reward model narrows. EmoS (arXiv 2608.09189), trained with SFT and GRPO, reaches 83.8% accuracy on the EmoSBench evaluation of emotional intelligence.</td>
+          <td><span class="tag tag--reported">Reported</span></td>
+        </tr>
+        <tr>
+          <td>SpeechJudge</td>
+          <td>Generative RM on Qwen2.5-Omni-7B: SFT on chain-of-thought rationales, then GRPO. 77.2% agreement with human pairwise preferences versus 72.7% for Bradley-Terry; the best audio-LLM judge, Gemini-2.5-Flash, is under 70% (arXiv 2511.07931). The authors say it can serve as an RL reward.</td>
+          <td><span class="tag tag--confirmed">Confirmed</span></td>
+        </tr>
+        <tr>
+          <td>GSRM</td>
+          <td>Reasoning RM for naturalness: acoustic features, then reasoning; 31k expert ratings; verifier for online RLHF (arXiv 2602.13891).</td>
+          <td><span class="tag tag--confirmed">Confirmed</span></td>
+        </tr>
+        <tr>
+          <td>AudioJudge</td>
+          <td>Audio-LLM judges show verbosity and position bias. A multi-aspect ensemble (content, quality, paralinguistics) reaches up to 0.91 Spearman with human system rankings (arXiv 2507.12705).</td>
+          <td><span class="tag tag--confirmed">Confirmed</span></td>
+        </tr>
+        <tr>
+          <td>Emotion and prosody</td>
+          <td>The official <a href="https://github.com/zai-org/GLM-TTS">zai-org/GLM-TTS</a> README describes GRPO with multiple reward functions (similarity, CER, emotion, laughter and others). Prosody has no verifiable reward: GRPO on CER and NLL gave monotone prosody, and iterative DPO on a few hundred human preference pairs fixed it on a Korean call-centre set (arXiv 2509.18531).</td>
+          <td><span class="tag tag--reported">Reported</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="duplex-rewards">Duplex timing rewards</h3>
+  <ul>
+    <li>
+      <strong>DuplexPO (arXiv 2607.07148).</strong>
+      The Factorized Conversational Dynamics Reward covers turn initiation, backchanneling, yielding and regularised participation.
+      It optimises only windows around annotated agent events, GRPO-style.
+    </li>
+    <li>
+      <strong>Kyutai multi-faceted alignment (arXiv 2606.11167).</strong>
+      <span class="tag tag--reported">Reported</span>
+      RL post-training of Moshi and PersonaPlex with one reward per axis (pause handling, turn-taking, backchanneling, user interruption) plus an LLM-based response-quality reward against semantic degradation.
+      Per the <a href="https://huggingface.co/kyutai/moshika-rl-seamless">official model card</a>, GRPO uses rule-based rewards, segments come from Meta's Seamless Interaction corpus via VAD, and evaluation uses Full-Duplex-Bench v1 and v2.
+      Checkpoints: <code>kyutai/moshika-rl-seamless</code> and <code>kyutai/personaplex-rl-seamless</code>.
+    </li>
+    <li>
+      <strong>ASPIRin (arXiv 2604.10065).</strong>
+      GRPO with a binary speaking-or-silence mapping of text tokens.
+      The authors report over 50% fewer duplicate n-grams than standard GRPO.
+    </li>
+    <li>
+      <strong>SteerDuplex (arXiv 2609.12623).</strong>
+      <span class="tag tag--reported">Reported</span>
+      A Moshi-based model with two-stage RL on hybrid rewards that combine verifiable interaction checks and judge-based semantic feedback.
+      RL raised source-clean interruption response from 72.5% to 82.5% and cut synthetic pause barge-in from 26.5% to 9%, with steering and aggregate task scores comparable or higher.
+      The reward analysis found the model gaming the reward through incomplete responses, so timing gains need a completeness check.
+    </li>
+    <li>
+      <strong>Multi-reward DPO for blockwise duplex.</strong>
+      Semantic, audio-quality and emotion-consistency rewards aggregated in one DPO objective, studied on blockwise duplex models (arXiv 2601.19063).
+    </li>
+  </ul>
+
+  <!-- == Algorithms == -->
+  <h3 id="rl-algorithms">Algorithms</h3>
+  <p>
+    GRPO dominates for codec LMs: sample a group of \( G \) rollouts per prompt, normalise rewards within the group, and keep a KL penalty to the SFT reference.
+    Standard notation for the advantage of rollout \( i \):
+  </p>
+  <p>
+    \[
+      \hat{A}_i = \frac{r_i - \operatorname{mean}(r_1,\dots,r_G)}{\operatorname{std}(r_1,\dots,r_G)}
+    \]
+  </p>
+  <p>
+    With several rewards, a common choice is to normalise each reward within the group before summing.
+    <span class="tag tag--inference">Inference</span>
+    GROW (arXiv 2608.03215) standardises its rewards within the group; I have not checked other papers.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>What it adds</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>GSPO</td>
+          <td>Qwen3-Omni Thinker post-training with rule-based and model-based rewards (arXiv 2509.17765). Speech-enhancement GSPO with DNSMOS, WER and UTMOS rewards: the composite is preferred over any single-metric variant in human evaluation (arXiv 2606.21458).</td>
+        </tr>
+        <tr>
+          <td>Flow-GRPO SDE trick</td>
+          <td>Converts the deterministic ODE into an SDE that matches the original marginals, which enables exploration for online RL; the image-domain authors report very little reward hacking (arXiv 2505.05470).</td>
+        </tr>
+        <tr>
+          <td>F5R-TTS</td>
+          <td>GRPO on flow matching with WER and SIM rewards; the authors report a 29.5% relative WER reduction and 4.6% relative SIM gain on zero-shot cloning (arXiv 2504.02407).</td>
+        </tr>
+        <tr>
+          <td>GROW</td>
+          <td>On-policy group-standardised rewards that reweight flow-matching regression. On DiTAR, average WER 2.016 to 1.558 and SIM 0.676 to 0.715 (arXiv 2608.03215).</td>
+        </tr>
+        <tr>
+          <td>FlowSE-GRPO</td>
+          <td>Speech enhancement. A single reward gives fast metric gains but degraded fidelity; a multi-metric reward balances them (arXiv 2601.16483).</td>
+        </tr>
+        <tr>
+          <td>FlowTTS-GRPO</td>
+          <td>Online RL for flow-matching TTS with a weighted multi-objective reward; improves speaker similarity and perceptual quality on CosyVoice 3.0 and F5-TTS (arXiv 2606.23190).</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- == Hacking == -->
+  <h3 id="reward-hacking-guards">Reward hacking: cases and guards</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Case</th>
+          <th>Guard</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>A single quality predictor improves its own score while held-out judges and listeners degrade (arXiv 2609.13150)</td>
+          <td>Equal-weighted or calibrated composite; held-out judges</td>
+        </tr>
+        <tr>
+          <td>A single enhancement metric degrades fidelity (FlowSE-GRPO, arXiv 2601.16483)</td>
+          <td>Multi-metric reward</td>
+        </tr>
+        <tr>
+          <td>Judge verbosity and position bias (AudioJudge, arXiv 2507.12705)</td>
+          <td>Randomise order; multi-aspect ensemble; validate on human labels</td>
+        </tr>
+        <tr>
+          <td>CER and NLL reward make prosody monotone (arXiv 2509.18531)</td>
+          <td>Iterative DPO with human preference pairs</td>
+        </tr>
+        <tr>
+          <td>Semantic drift while optimising timing</td>
+          <td>LLM-based response-quality reward (Kyutai, arXiv 2606.11167)</td>
+        </tr>
+        <tr>
+          <td>Interaction reward gamed through incomplete responses (SteerDuplex, arXiv 2609.12623)</td>
+          <td>Read timing gains next to response completeness</td>
+        </tr>
+        <tr>
+          <td>Subjective predictor gains that do not transfer to listeners (arXiv 2608.31035)</td>
+          <td>Best-of-N under the same reward as baseline; CER constraint; human A/B checks per axis</td>
+        </tr>
+        <tr>
+          <td>Judge weak on near-equal clips and on synthetic speech (arXiv 2510.00743)</td>
+          <td>Validate the reward model on close pairs from the target domain</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The guards in the right column are my pairing of cases with mitigations, except where a source is named.
+  </p>
+  <div class="callout callout--warn">
+    <strong>Trap: the train reward is not the metric</strong>
+    <p>
+      If the reward ASR is also the evaluation ASR, WER improvements may be hacking.
+      Evaluate with a second ASR, a second SV model, and a listening panel.
+    </p>
+  </div>
+
+  <!-- == Infrastructure == -->
+  <h3 id="rl-infrastructure">Infrastructure and cost</h3>
+  <p>
+    Every rollout must be decoded to a waveform, then passed through an ASR and an SV model.
+    <span class="tag tag--inference">Inference</span>
+    A SpeechJudge-style reward model dominates the cost.
+    Cheaper options are token-level rewards, cached reference embeddings and a small ASR for the reward.
+  </p>
+  <ul>
+    <li><a href="https://github.com/FunAudioLLM/CosyVoice">FunAudioLLM/CosyVoice</a>: GRPO training support and an RL model, per the README.</li>
+    <li><a href="https://github.com/zai-org/GLM-TTS">zai-org/GLM-TTS</a>: multi-reward GRPO TTS README.</li>
+    <li><a href="https://github.com/AmphionTeam/SpeechJudge">AmphionTeam/SpeechJudge</a>: the generative reward model.</li>
+    <li>Kyutai RL checkpoints: <code>kyutai/moshika-rl-seamless</code>, <code>kyutai/personaplex-rl-seamless</code>.</li>
+  </ul>
+
+  <!-- == Bridge == -->
+  <h3 id="bridge-asr-grpo">Bridge from GRPO on streaming ASR, and RL for voice agents</h3>
+  <p>
+    The same GRPO loop now has recognition and agent versions, which show how the reward changes while the machinery stays.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Paper</th>
+          <th>Task</th>
+          <th>Reward change and result</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Grounded in Sound (arXiv 2609.14455)</td>
+          <td>ASR with a 7B speech LLM</td>
+          <td>Adds an acoustic-fidelity reward from a frozen, separately pretrained wav2vec2-CTC character-level judge, used only in training. Insertion errors fall 28.3% on AMI-IHM and 22.3% on AMI-SDM; WER on AMI-SDM goes from 35.89% to 34.71%. No detectable WER difference on the other five tiers against a schedule-matched WER-GRPO baseline. Inference uses one model with greedy decoding. The authors call it a mechanism paper shown in one setup (<span class="tag tag--reported">Reported</span>)</td>
+        </tr>
+        <tr>
+          <td>Look Less, Hear Better (arXiv 2609.18333)</td>
+          <td>Streaming ASR, delayed-streams recogniser</td>
+          <td>One GRPO reward scores accuracy and emission delay (AWED, a word-level delay relative to each word's acoustic end). WER falls 30.8% relative at 80 ms structural delay and 5.7% at 480 ms; median AWED goes from 1.17 s to 1.04 s. The authors find the structural delay is a weak proxy for perceived latency (<span class="tag tag--reported">Reported</span>)</td>
+        </tr>
+        <tr>
+          <td>SpeechGym (arXiv 2608.26432)</td>
+          <td>Voice agents with tools, audio only</td>
+          <td>Two omni-modal models talk in native audio on a text agent benchmark's unchanged tasks, tools and success checks. Outcome-only GRPO gets too little signal because nearly every group fails alike; a per-turn process reward crediting each successful tool call restores it. The abstract says task success more than doubles on an independently built voice benchmark, with no exact figure (<span class="tag tag--reported">Reported</span>)</td>
+        </tr>
+        <tr>
+          <td>Qwen-Audio-3.1-Realtime (arXiv 2609.25176)</td>
+          <td>Agentic realtime voice model</td>
+          <td>GRPO in self-evolving executable environments; τ-Voice (half-duplex speech-to-text adaptation) task success 78.4% to 82.0% (<span class="tag tag--reported">Reported</span>)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--inference">
+    <strong>Inference: what transfers</strong>
+    <ul>
+      <li>Group sampling, per-group advantage normalisation, KL to a reference and clip monitoring are the same machinery.</li>
+      <li>A zero-advantage group (every rollout scores alike) is the failure SpeechGym reports; watch its fraction for any sparse reward.</li>
+      <li>WER is a reward I already know how to shape; adding an acoustic or delay term is how the ASR papers fix its blind spots.</li>
+      <li>New in TTS: rollouts need waveform decode, SV and quality rewards compete, and hacking shows up as monotone prosody rather than a bad transcript.</li>
+      <li>New in duplex: rewards are timing events on audio, not text metrics, so windows around events replace whole-sequence rollouts.</li>
+    </ul>
+  </div>
+
+  <!-- == Recipes == -->
+  <h3 id="rl-recipes">Practical recipes</h3>
+  <div class="callout callout--inference">
+    <strong>Inference: starting points</strong>
+    <ol>
+      <li>
+        <strong>Zero-shot TTS.</strong>
+        WER or CER from a fixed ASR that differs from the evaluation ASR; SV cosine with cached references; a small-weight UTMOS or DNSMOS composite; GRPO with KL; per-group normalisation per reward; a duration-ratio penalty; held-out judges (second ASR, second SV, listening panel).
+      </li>
+      <li>
+        <strong>Expressive TTS.</strong>
+        Add a reasoning RM or audio-LLM judge with a rubric, or an emotion classifier, gated by an ensemble; track F0 variance, energy and rate against human references.
+      </li>
+      <li>
+        <strong>Baseline first.</strong>
+        Run best-of-N under the same reward before training; if GRPO does not beat it perceptually (arXiv 2608.31035), RL only moves the cost from inference to training.
+      </li>
+      <li>
+        <strong>Full-duplex.</strong>
+        Per-axis timing rewards from VAD on generated audio against annotated events (DuplexPO, Kyutai); a text-level LLM-quality reward against content drift; train on windows around events.
+      </li>
+    </ol>
+  </div>
+  <p>
+    <strong>Monitor:</strong>
+    per-reward mean and variance, fraction of zero-advantage groups, held-out metrics, F0 spread, silence ratio, speaking rate, duration distribution, KL, clip fraction and end-of-sequence behaviour.
+    Stop when held-out metrics degrade even if the train reward rises, and spot-check audio.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would run GRPO with a composite of ASR error, speaker cosine and a quality model, normalised per group, with KL and held-out judges.
+      For duplex I would add per-axis timing rewards from VAD events plus a text-quality term so timing gains do not cost content.
+      Single-score rewards get hacked, so I would validate every reward against held-out judges and listeners."
+    </p>
+  </div>
+</section>

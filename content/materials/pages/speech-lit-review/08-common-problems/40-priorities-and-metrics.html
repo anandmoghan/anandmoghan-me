@@ -1,0 +1,134 @@
+<section id="priorities-and-metrics">
+  <h2>Priorities, metrics and questions</h2>
+  <p>
+    Not every failure deserves equal effort.
+    This ranking weighs how visible the failure is to a customer, how often it occurs in a voice and avatar product,
+    and how cheaply it can be measured.
+    The ranking, mitigations and metrics are my own judgement
+    <span class="tag tag--inference">Inference</span>,
+    built on the sourced problems in the previous sections.
+  </p>
+
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Problem</th>
+          <th>Mitigation</th>
+          <th>Metric</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Mispronounced names and brand terms</td>
+          <td>Respelling, project dictionary, glossary</td>
+          <td>Per-entity accuracy on a fixed name list, plus human rating</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Hallucinated or skipped words in long scripts</td>
+          <td>Monotonic alignment loss; alignment-score training</td>
+          <td>WER on a stable ASR; Viterbi alignment score</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Lip-sync on bilabials and fast speech</td>
+          <td>AV sync expert; per-phoneme checks</td>
+          <td>Human-rated sync on a phoneme-stratified set, not raw LSE-C</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Identity and voice drift</td>
+          <td>Windowed re-anchoring</td>
+          <td>Speaker and face-embedding similarity per window vs first</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>Emotion and noise leakage from a bad reference</td>
+          <td>Quality gate; denoising</td>
+          <td>emotion2vec and noise floor on output</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>Voice-face expressiveness mismatch</td>
+          <td>Emotion-conditioned motion; intensity controls</td>
+          <td>Cross-modal emotion agreement</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>Hand and gesture artefacts</td>
+          <td>Candidate reranking (Express-Eval style)</td>
+          <td>Human plausibility; hand-artefact detector rate</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>Dubbing duration mismatch and lip re-render</td>
+          <td>Duration-aware translation; retiming</td>
+          <td>Fraction outside timing budget; sync after retiming</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>Streaming latency versus quality; A/V drift</td>
+          <td>Faster renderer; seam smoothing</td>
+          <td>Time-to-first-frame; A/V offset over duration</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td>Duplex failures: barge-in misread, backchannels, multi-turn decay</td>
+          <td>Echo cancellation; turn-taking evaluation</td>
+          <td>Full-Duplex-Bench v1 and v2 interruption and multi-turn tracks</td>
+        </tr>
+        <tr>
+          <td>11</td>
+          <td>Voice misuse: unconsented clones, stripped watermarks, spoken jailbreaks</td>
+          <td>Consent gate; multi-bit watermark tested against enhancement and codecs; detectors trained with marks on real and fake</td>
+          <td>Consent-check pass rate; mark recovery after enhancement; per-language jailbreak success and benign refusal rate</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="priorities-why">Why this order</h3>
+  <ul>
+    <li>
+      Items 1 and 2 are audible on first listen and cheap to test automatically,
+      so they belong in every regression run.
+    </li>
+    <li>
+      Items 3 to 7 are the avatar-specific problems; they need human rating because the automatic metrics are weak.
+    </li>
+    <li>
+      Items 8 to 10 depend on product shape (dubbing, streaming, Video Agents) and rank higher if that product is the focus.
+    </li>
+    <li>
+      Item 11 ranks low on audible frequency but high on severity, and it is cheap to gate at creation; see
+      <a href="/apps/materials/speech-lit-review/06-control-and-quality#safety-provenance">Safety and provenance</a>.
+    </li>
+    <li>
+      Any metric that is optimised in training needs a held-out judge,
+      or reward hacking will hide regressions
+      (see <a href="/apps/materials/speech-lit-review/05-streaming-conversation#online-rl-rewards">online RL rewards</a>).
+    </li>
+  </ul>
+
+  <h3 id="priorities-questions">Questions to ask Synthesia about failure modes</h3>
+  <ol>
+    <li>Which failure modes do you track in production, and which of them have an automatic metric?</li>
+    <li>How do you evaluate lip-sync, given the known weaknesses of Sync-C, and does it differ for non-English dubbing?</li>
+    <li>What does Express-Eval catch in practice: gesture plausibility, lip-sync, or both, and how often does it change the pick?</li>
+    <li>For Express-Voice, how do you protect against emotion or noise leakage from customer reference audio?</li>
+    <li>For Video Agents, what is the p95 first-frame latency, and how do you handle barge-in and backchannels?</li>
+  </ol>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The Express-2 post publishes no failure metrics, so I would start by asking which ones you track.
+      My first three would be per-entity pronunciation, alignment-based hallucination rate,
+      and phoneme-stratified lip-sync with human raters, because papers report that Sync-C
+      correlates weakly with human judgement."
+    </p>
+  </div>
+</section>

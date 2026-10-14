@@ -1,0 +1,247 @@
+<section id="streaming-decoder">
+  <h2>Streaming the decoder</h2>
+  <p>
+    A live voice cannot wait for the whole sentence before it starts decoding.
+    The decoder must produce audio chunk by chunk as tokens arrive.
+    Anything it needs from the future is look-ahead (introduced in
+    <a href="/apps/materials/speech-to-speech/02-listening#look-ahead-right-context">Look-ahead</a>), and here it is delay the listener hears.
+  </p>
+  <p>
+    It is like a live translator at a conference: starting early is fast but risky, waiting for the next few words is safer but slower.
+  </p>
+
+  <h3 id="streaming-how">How it works</h3>
+  <p>
+    There are two ways to stream the last stage.
+    A <strong>causal</strong> decoder uses only past frames, so each frame becomes samples as soon as it exists; Mimi is causal for both encoding and decoding, with an 80 ms frame.
+    A <strong>chunked</strong> decoder, typically a flow model, renders a chunk at a time and peeks at the next chunk's tokens to keep the boundary smooth.
+    The chunk masks and look-ahead for flow decoders are explained in
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-streaming">Streaming a flow decoder</a>;
+    here only the cost matters: one block of look-ahead is one block of delay.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    The <strong>first packet</strong> arrives after the LM time to the first chunk, plus the look-ahead the decoder waits for, plus the decode time itself.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img"
+      aria-label="Chunk-wise causal decoding timeline: token chunks arrive, each is decoded with look-ahead tokens from the next chunk, and audio packets are emitted; first-packet latency runs from the start to the first packet">
+      <defs>
+        <marker id="stream-dec-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Lanes == -->
+      <rect class="d-lane" x="0" y="16" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="36" text-anchor="start"
+        dominant-baseline="middle">Tokens</text>
+      <rect class="d-lane" x="0" y="96" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="116" text-anchor="start"
+        dominant-baseline="middle">Decoder</text>
+      <rect class="d-lane" x="0" y="176" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="196" text-anchor="start"
+        dominant-baseline="middle">Audio out</text>
+
+      <!-- == Chunks == -->
+      <rect class="d-box" x="100" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="150" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 1</text>
+      <rect class="d-box" x="204" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="254" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 2</text>
+      <rect class="d-box" x="308" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="358" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 3</text>
+      <rect class="d-box" x="412" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="462" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 4</text>
+
+      <!-- == Decode steps == -->
+      <rect class="d-box d-box--accent" x="224" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="262" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 1</text>
+      <rect class="d-box" x="328" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="366" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 2</text>
+      <rect class="d-box" x="432" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="470" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 3</text>
+      <rect class="d-box" x="536" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="574" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 4</text>
+
+      <!-- == Packets == -->
+      <rect class="d-box d-box--muted" x="304" y="182" width="80" height="28" rx="8"/>
+      <text class="d-text" x="344" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 1</text>
+      <rect class="d-box d-box--muted" x="408" y="182" width="80" height="28" rx="8"/>
+      <text class="d-text" x="448" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 2</text>
+      <rect class="d-box d-box--muted" x="512" y="182" width="80" height="28" rx="8"/>
+      <text class="d-text" x="552" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 3</text>
+      <rect class="d-box d-box--muted" x="616" y="182" width="80" height="28" rx="8"/>
+      <text class="d-text" x="656" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 4</text>
+
+      <!-- == Arrows == -->
+      <path class="d-arrow" d="M 160 50 L 244 100" marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 212 50 L 270 100"
+        marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow" d="M 262 130 L 334 180" marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow" d="M 264 50 L 348 100" marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 316 50 L 374 100"
+        marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow" d="M 366 130 L 438 180" marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow" d="M 368 50 L 452 100" marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 420 50 L 478 100"
+        marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow" d="M 470 130 L 542 180" marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow" d="M 472 50 L 556 100" marker-end="url(#stream-dec-arrow)"/>
+      <path class="d-arrow" d="M 574 130 L 646 180" marker-end="url(#stream-dec-arrow)"/>
+
+      <!-- == First-packet span == -->
+      <path class="d-arrow d-arrow--dashed" d="M 100 218 L 100 254"/>
+      <path class="d-arrow d-arrow--dashed" d="M 304 218 L 304 254"/>
+      <path class="d-arrow" d="M 100 246 L 304 246"
+        marker-start="url(#stream-dec-arrow)" marker-end="url(#stream-dec-arrow)"/>
+      <text class="d-text--muted" x="202" y="236" text-anchor="middle"
+        dominant-baseline="middle">first-packet latency</text>
+      <text class="d-text--muted" x="360" y="274" text-anchor="middle"
+        dominant-baseline="middle">solid: chunk tokens; dashed: look-ahead tokens from the next chunk</text>
+    </svg>
+    <figcaption>Chunk-wise decoding: each chunk is decoded with a peek at the next, and audio streams out. The gap before the first packet is the first-packet latency.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>How it streams the decode</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Mimi (Moshi)</td>
+          <td>Causal encoder and decoder; 80 ms frames</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni</td>
+          <td>A lightweight causal convolutional network replaces block-wise diffusion</td>
+        </tr>
+        <tr>
+          <td>Qwen2.5-Omni</td>
+          <td>Codec diffusion transformer with 2 blocks of lookback and 1 block of look-ahead</td>
+        </tr>
+        <tr>
+          <td>CosyVoice 2</td>
+          <td>Chunk-aware causal flow matching serving streaming and non-streaming from one model</td>
+        </tr>
+        <tr>
+          <td>Kimi-Audio</td>
+          <td>Chunk-wise detokenizer with look-ahead (example: 1 s chunk, 4 future semantic tokens)</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice</td>
+          <td>0.8 s decoder blocks; at least 10 speech tokens are needed for the first output</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="streaming-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Causal, low-rate codec</td>
+          <td>Fewer steps per second of audio and no future context needed</td>
+          <td>The LM must produce all codebooks per frame</td>
+        </tr>
+        <tr>
+          <td>Chunk-aware training</td>
+          <td>One model serves both streaming and offline (CosyVoice 2 mixes attention masks in training)</td>
+          <td>Streaming quality can trail the offline mask</td>
+        </tr>
+        <tr>
+          <td>Look-ahead size</td>
+          <td>Smooths chunk boundaries</td>
+          <td>One block of look-ahead costs one block of delay</td>
+        </tr>
+        <tr>
+          <td>Fewer flow steps</td>
+          <td>Distillation and mean-flow decoders cut decoder time; FlashTTS reports 325 ms first-packet latency at 2 steps</td>
+          <td>Needs distillation; reported figures use different definitions</td>
+        </tr>
+        <tr>
+          <td>Chunk size</td>
+          <td>First-packet time and throughput</td>
+          <td>Decision wait averages half a chunk (<a href="/apps/materials/speech-to-speech/07-conversation#conversation-clock">Conversation clock</a>); small chunks mean more boundaries</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    First-packet numbers from different papers use different definitions and hardware, so do not compare across them.
+    As reference points: Moshi reports 160 ms theoretical and about 200 ms in practice, and Qwen3-Omni reports a 234 ms theoretical cold-start first packet.
+    The conversational side of latency is in <a href="/apps/materials/speech-to-speech/07-conversation">Conversation</a>.
+  </p>
+
+  <h3 id="streaming-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Chunk seams.</strong>
+      Clicks or prosody jumps at chunk boundaries. Streaming trades first-packet time against boundary quality.
+      Teams catch them by measuring boundary discontinuity and listening.
+      Fixes are overlap, look-ahead and crossfade.
+    </li>
+    <li>
+      <strong>Hidden look-ahead.</strong>
+      A decoder with a block of look-ahead adds that block to latency, which is easy to miss if only the LM is profiled.
+    </li>
+    <li>
+      <strong>Missing a deadline.</strong>
+      A duplex model has an 80 ms deadline each frame. A late decode is audible as a gap.
+      Measure the worst frame, not the average.
+    </li>
+    <li>
+      <strong>Quoting latency without a definition.</strong>
+      State whether it is theory, first packet, first chunk or total, plus batch size, GPU and cold start.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The decoder streams too, and its look-ahead is latency: one block of look-ahead is one block of delay.
+      A causal codec decoder like Mimi's pays none; chunked flow decoders pay a look-ahead on the first chunk.
+      I budget first-packet time per stage and watch chunk seams, which show up as clicks or prosody jumps."
+    </p>
+  </div>
+
+  <h3 id="streaming-decoder-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>Qwen2.5-Omni Technical Report (arXiv 2503.20215)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot (arXiv 2412.02612)</li>
+    <li>FlashTTS: Fast Streaming TTS with MTP Acceleration and X-pred Mean Flow Distillation (arXiv 2606.09141)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#streaming-low-latency">Streaming and low-latency generation</a>
+      and
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-decoders-budget">Streaming decoders and the latency budget</a>
+      in the literature review.
+    </li>
+  </ul>
+</section>

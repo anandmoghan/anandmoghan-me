@@ -1,0 +1,155 @@
+<section id="post-training">
+  <h2>Post-training: preference and distillation</h2>
+  <p>
+    Pretraining teaches a model to speak; post-training teaches it which replies are better.
+    A coach does not rewrite your technique; they watch two attempts and say which one was closer.
+    Preference methods work the same way, learning from pairs of responses where one is marked as better.
+  </p>
+  <p>
+    Speech adds one wrinkle.
+    A reply is both words and sound, and the two do not behave the same under preference optimisation.
+  </p>
+
+  <h3 id="post-training-how">How it works</h3>
+  <p>
+    <strong>DPO on text tokens.</strong>
+    Direct preference optimisation (DPO) trains on pairs: one reply is preferred, the other rejected.
+    The loss raises the likelihood of the preferred reply relative to the rejected one.
+    "Relative" matters: both likelihoods are compared with a frozen reference model, a copy from before DPO started.
+    The reference anchors the model, so it cannot win by drifting far from where it began.
+    The distance from the reference is measured with the KL divergence from
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#continuous-latents">Continuous latents</a>.
+  </p>
+  \[
+  \mathcal{L}_{\text{DPO}} = -\log \sigma\!\left(\beta\left[\log\frac{\pi(y_w)}{\pi_{\text{ref}}(y_w)} - \log\frac{\pi(y_l)}{\pi_{\text{ref}}(y_l)}\right]\right)
+  \]
+  <p>
+    Here \( y_w \) is the preferred reply, \( y_l \) the rejected one, \( \pi \) the model being trained, \( \pi_{\text{ref}} \) the frozen reference, and \( \beta \) a strength setting.
+    Each bracketed term says how much more likely the model has made a reply than the reference did.
+    The loss is small when the preferred reply gained more than the rejected one.
+  </p>
+  <p>
+    Note the data: DPO learns from a fixed set of pairs written before training, so it is <em>off-policy</em>.
+    An <em>on-policy</em> method such as the GRPO loop in
+    <a href="#online-rl-speech">online RL</a>
+    instead scores replies the current model has just produced.
+  </p>
+  <p>
+    <strong>Why the preference stays on the text channel.</strong>
+    The duplex base model applies a length-normalised DPO (each reply's log-likelihood divided by its length, so long replies do not win by having more tokens) to text-token probabilities only.
+    Audio-token probabilities proved unstable, and the text stream still steers the voice because the audio is conditioned on it.
+    Another recipe gives the reason: one preference label per reply is sparse, while speech generation is dense (thousands of audio tokens), and the two conflict when they share parameters.
+    It limits preference updates to the semantic channel, anchors the acoustic behaviour with supervised training, and rebalances the two signals from statistics of the model's own rollouts, since a batch with little preference signal gives unreliable gradients.
+    DPO on audio tokens is the riskier path; a speech-model Talker can still be tuned this way when pairs are ranked by objective measures such as recognition error and pause errors.
+  </p>
+  <p>
+    <strong>Preference data.</strong>
+    One duplex alignment set had about 93,000 pairs, 27% about timing and 73% about content, labelled by a strong LLM judge.
+    Content pairs can be judged from transcripts.
+    Timing pairs need timestamps, which is why a text-only judge is weak there.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    <strong>Distillation.</strong>
+    Another recipe distils a large text teacher into the speech model in two phases, with the goal of raising the speech mode to the level of the text mode.
+    Off-policy first: the student trains on outputs the teacher already wrote, like copying a worked solution.
+    Then on-policy: the student writes its own answers and training pulls its next-token probabilities toward the teacher's, again measured by KL.
+    The general teacher-student idea is in
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Flow levers</a>.
+  </p>
+  <p>
+    A reward-model RL stage follows in several recipes, covered next in
+    <a href="#online-rl-speech">online RL for speech generation</a>.
+    Metrics for judging the result are in
+    <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems">Evaluation and problems</a>.
+  </p>
+
+  <h3 id="post-training-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Which tokens carry the loss</td>
+          <td>Text tokens, audio tokens or both, with an acoustic anchor next to the preference loss</td>
+          <td>Text is stable and steers the voice; audio carries delivery and is unstable; the anchor protects delivery but the balance needs tuning</td>
+        </tr>
+        <tr>
+          <td>Length normalisation</td>
+          <td>Whether longer replies win by default</td>
+          <td>Removes a length bias; adds a hyperparameter</td>
+        </tr>
+        <tr>
+          <td>Pair mix and judge</td>
+          <td>Share of timing against content pairs, and who labels them</td>
+          <td>Timing pairs fix turn behaviour, content pairs fix answers; an LLM judge is cheap and weak on timing, humans are better and slow</td>
+        </tr>
+        <tr>
+          <td>Ranking signal for the Talker</td>
+          <td>Recognition error and pause error, instead of opinion</td>
+          <td>Objective and cheap; blind to naturalness</td>
+        </tr>
+        <tr>
+          <td>Teacher size in distillation</td>
+          <td>How strong the text target is</td>
+          <td>A bigger teacher gives a higher ceiling and a larger mismatch with the student</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Trade-offs are partly reasoning from the cited recipes.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+
+  <h3 id="post-training-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Audio-token instability.</strong>
+      DPO on audio-token likelihoods can diverge.
+      Restrict the loss to text tokens unless there is a reason not to.
+    </li>
+    <li>
+      <strong>Judge bias on timing.</strong>
+      An LLM that reads a transcript cannot see a late interruption.
+      Judge timing from timestamps or a dedicated model.
+    </li>
+    <li>
+      <strong>Teacher-student mismatch.</strong>
+      The student cannot copy a teacher whose output it cannot represent; check the speech mode against the text mode.
+    </li>
+    <li>
+      <strong>Proxy metrics and silent regressions.</strong>
+      Existing metrics are superficial proxies for conversation quality; one proposal scores semantic quality and interaction timing separately.
+      Track safety and question-answering scores before and after preference tuning.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would do DPO on the text tokens, with length normalisation and a mix of content and timing pairs, because audio-token likelihoods are unstable.
+      Timing needs timestamps, so I would not trust a text-only judge for it."
+    </p>
+  </div>
+
+  <h3 id="post-training-sources">Sources</h3>
+  <ul>
+    <li>Aligning Spoken Dialogue Models from User Interactions (arXiv 2506.21463)</li>
+    <li>Qwen2.5-Omni Technical Report (arXiv 2503.20215)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>Step-Audio 2 Technical Report (arXiv 2507.16632)</li>
+    <li>WavAlign: Enhancing Intelligence and Expressiveness in Spoken Dialogue Models via Adaptive Hybrid Post-Training (arXiv 2604.14932)</li>
+    <li>Direct Preference Optimization: Your Language Model is Secretly a Reward Model (arXiv 2305.18290)</li>
+    <li>Dual-Axis Generative Reward Model Toward Semantic and Turn-taking Robustness in Interactive Spoken Dialogue Models (arXiv 2604.14920)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#preference-rl-distill">Preference, RL and distillation</a>
+    </li>
+  </ul>
+</section>

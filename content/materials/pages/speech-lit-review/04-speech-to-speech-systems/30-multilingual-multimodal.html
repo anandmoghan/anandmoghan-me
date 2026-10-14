@@ -1,0 +1,123 @@
+<section id="multilingual-multimodal">
+  <h2>Multimodal, multilingual S2S</h2>
+  <p>
+    Multilingual S2S is lopsided: models understand far more languages than they speak.
+    Text is the bridge that makes the rest possible.
+  </p>
+
+  <h3 id="coverage-asymmetry">Coverage asymmetry</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Text</th>
+          <th>Speech understanding</th>
+          <th>Speech generation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Qwen3-Omni (arXiv 2509.17765)</td>
+          <td>119 languages</td>
+          <td>19</td>
+          <td>10</td>
+        </tr>
+        <tr>
+          <td>Omnilingual ASR (arXiv 2511.09690)</td>
+          <td>n/a</td>
+          <td>1,600+ languages (ASR only)</td>
+          <td>n/a</td>
+        </tr>
+        <tr>
+          <td>SeamlessStreaming (arXiv 2312.05187)</td>
+          <td>96 target languages in text output</td>
+          <td>101 source languages</td>
+          <td>36 target languages</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Qwen3-Omni (arXiv 2509.17765) and Qwen3.5-Omni (arXiv 2604.15804) each report speech generation in 10 languages.
+    <span class="tag tag--inference">Inference</span>
+    Generation is likely the constraint, because it needs clean TTS-grade data per language.
+  </p>
+
+  <h3 id="s2s-translation">Translation and code-switching</h3>
+  <ul>
+    <li>
+      <strong>Hibiki</strong> (arXiv 2502.03382): simultaneous speech-to-speech translation with multistream modelling.
+      It uses per-word delays from text machine translation to build aligned synthetic data.
+      The authors' model has 2.7B parameters and translates French to English (the pair they evaluate).
+    </li>
+    <li>
+      <strong>SeamlessStreaming</strong> (arXiv 2312.05187): direct streaming translation from 101 source languages into speech in 36 target languages.
+    </li>
+    <li>
+      <strong>JUST-DUB-IT</strong> (arXiv 2601.22143): the audio-visual case.
+      It adapts a foundation audio-video diffusion model with a lightweight LoRA to dub a video, generating the translated audio and synchronised facial motion together, rather than translating, retiming and re-rendering lips in separate stages.
+      The authors report better visual fidelity, lip sync and robustness than existing dubbing pipelines.
+    </li>
+    <li>
+      <strong>Synthesia Dubbing 2.0</strong> (15 July 2026): the product side.
+      The post says the translation engine "respects the original timing and length" and the lip-sync model stays "frame-accurate" through cuts and multi-speaker scenes; it publishes no metrics
+      (<a href="https://www.synthesia.io/post/introducing-dubbing-2-0">post</a>).
+    </li>
+    <li>
+      <strong>Video-to-speech</strong> (HiCoDiT, arXiv 2604.15923): the reverse direction, generating speech from a silent face.
+      A hierarchical codec diffusion transformer conditions lower RVQ levels on lip motion and identity and higher levels on facial expression for prosody.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <strong>Code-switching gap</strong>
+    <p>
+      No dedicated study was found in the sources used here.
+      Treat code-switching as an open question to test, not a solved capability.
+    </p>
+  </div>
+
+  <h3 id="text-streams">How text streams serve S2S</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Mechanism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Supervision</td>
+          <td>ASR transcripts and TTS text give cheap aligned targets for speech understanding and generation, so unpaired audio can still be used (Kimi-Audio, over 13M h, arXiv 2504.18425)</td>
+        </tr>
+        <tr>
+          <td>Scaffold</td>
+          <td>Text is generated first or alongside speech: Moshi's time-aligned Inner Monologue (arXiv 2410.00037), Thinker text before Talker (arXiv 2509.17765), Step-Audio 2 fixed-ratio interleaving (arXiv 2507.16632), ARIA alignment (arXiv 2604.15804)</td>
+        </tr>
+        <tr>
+          <td>Alignment</td>
+          <td>Per-word delays (Hibiki, arXiv 2502.03382) and delayed streams (DSM, arXiv 2509.08753) turn transcripts into time-aligned training data</td>
+        </tr>
+        <tr>
+          <td>Capability transfer</td>
+          <td>A frozen text LLM (Freeze-Omni, arXiv 2411.00774) or text-teacher distillation (arXiv 2509.14930) carries text-level multilingual knowledge into speech</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--inference">
+    <strong>Inference</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      For a multilingual product, understand broadly with a multilingual encoder, generate in a short list of languages you can evaluate with native raters, and use the text stream to hold language identity.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Understanding scales through ASR-style data; generation does not.
+      The text stream is both the supervision signal and the scaffold that lets generation borrow the LLM's multilingual ability."
+    </p>
+  </div>
+</section>

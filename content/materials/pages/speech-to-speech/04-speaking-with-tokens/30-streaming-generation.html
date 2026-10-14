@@ -1,0 +1,247 @@
+<section id="streaming-generation">
+  <h2>Streaming generation</h2>
+  <p>
+    A voice agent cannot wait for the full reply before it starts talking.
+    Streaming generation means text arrives in pieces and audio leaves in small packets, so the first sound plays while the rest is still being produced.
+  </p>
+  <p>
+    Think of a simultaneous interpreter.
+    They start speaking after hearing a few words and stay slightly behind the speaker.
+    Start too early and the intonation is guessed; start too late and the listener waits.
+  </p>
+
+  <h3 id="streaming-generation-how">How it works</h3>
+  <p>
+    There are three common ways to couple text and speech in one streaming model.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Pattern</th>
+          <th>How text and audio line up</th>
+          <th>Typical use</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Full text, then packets</td>
+          <td>All text is known; audio streams out in small packets</td>
+          <td>Sentence-level TTS with a causal codec</td>
+        </tr>
+        <tr>
+          <td>Interleaved</td>
+          <td>One sequence: N text tokens, then M speech tokens, repeating</td>
+          <td>TTS fed by another LLM's streamed output; spoken dialogue models</td>
+        </tr>
+        <tr>
+          <td>Parallel streams</td>
+          <td>Text and audio on one clock as separate streams, offset by a chosen delay</td>
+          <td>Duplex models</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 236" role="img"
+      aria-label="Time to first audio. Top lane: interleaved generation alternates a text chunk of N tokens and a speech chunk of M tokens, and audio packets begin after the first speech chunk. Bottom lane: full-text generation waits for all the text and the speech tokens before audio begins, so the first audio is later. A double-headed arrow marks time to first audio for each lane">
+      <defs>
+        <marker id="streaming-generation-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Interleaved == -->
+      <text class="d-text--muted" x="10" y="14" text-anchor="start">Interleaved</text>
+      <rect class="d-lane" x="10" y="24" width="700" height="96" rx="8"/>
+      <rect class="d-box" x="30" y="36" width="70" height="30" rx="6"/>
+      <text class="d-text--small" x="65" y="51" text-anchor="middle"
+        dominant-baseline="middle">N text</text>
+      <rect class="d-box d-box--accent" x="106" y="36" width="130" height="30" rx="6"/>
+      <text class="d-text--small" x="171" y="51" text-anchor="middle"
+        dominant-baseline="middle">M speech</text>
+      <rect class="d-box" x="242" y="36" width="70" height="30" rx="6"/>
+      <text class="d-text--small" x="277" y="51" text-anchor="middle"
+        dominant-baseline="middle">N text</text>
+      <rect class="d-box d-box--accent" x="318" y="36" width="130" height="30" rx="6"/>
+      <text class="d-text--small" x="383" y="51" text-anchor="middle"
+        dominant-baseline="middle">M speech</text>
+      <rect class="d-box" x="454" y="36" width="70" height="30" rx="6"/>
+      <text class="d-text--small" x="489" y="51" text-anchor="middle"
+        dominant-baseline="middle">N text</text>
+      <rect class="d-box d-box--accent" x="530" y="36" width="130" height="30" rx="6"/>
+      <text class="d-text--small" x="595" y="51" text-anchor="middle"
+        dominant-baseline="middle">M speech</text>
+      <rect class="d-box d-box--muted" x="236" y="76" width="90" height="26" rx="6"/>
+      <text class="d-text--small" x="281" y="89" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box d-box--muted" x="332" y="76" width="90" height="26" rx="6"/>
+      <text class="d-text--small" x="377" y="89" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box d-box--muted" x="428" y="76" width="90" height="26" rx="6"/>
+      <text class="d-text--small" x="473" y="89" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <path class="d-arrow d-arrow--dashed" d="M 30 112 L 234 112"
+        marker-start="url(#streaming-generation-arrow)"
+        marker-end="url(#streaming-generation-arrow)"/>
+      <text class="d-text--muted" x="132" y="108" text-anchor="middle">time to first audio</text>
+
+      <!-- == Full text == -->
+      <text class="d-text--muted" x="10" y="140" text-anchor="start">Full text first</text>
+      <rect class="d-lane" x="10" y="150" width="700" height="76" rx="8"/>
+      <rect class="d-box" x="30" y="162" width="150" height="30" rx="6"/>
+      <text class="d-text--small" x="105" y="177" text-anchor="middle"
+        dominant-baseline="middle">all text</text>
+      <rect class="d-box d-box--accent" x="186" y="162" width="200" height="30" rx="6"/>
+      <text class="d-text--small" x="286" y="177" text-anchor="middle"
+        dominant-baseline="middle">first speech tokens</text>
+      <rect class="d-box d-box--muted" x="392" y="162" width="90" height="30" rx="6"/>
+      <text class="d-text--small" x="437" y="177" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box d-box--muted" x="488" y="162" width="90" height="30" rx="6"/>
+      <text class="d-text--small" x="533" y="177" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <path class="d-arrow d-arrow--dashed" d="M 30 210 L 390 210"
+        marker-start="url(#streaming-generation-arrow)"
+        marker-end="url(#streaming-generation-arrow)"/>
+      <text class="d-text--muted" x="210" y="206" text-anchor="middle">time to first audio</text>
+    </svg>
+    <figcaption>
+      Schematic, not to scale: interleaving lets speech start after the first few text tokens, whereas full-text generation waits for the whole text.
+    </figcaption>
+  </figure>
+  <p>
+    <strong>Interleaving ratio.</strong>
+    A ratio such as 13 text tokens to 26 speech tokens describes the mix, not a duration.
+    Only the speech token rate turns it into seconds: at 12.5 frames per second, 26 speech tokens are about two seconds of audio (arithmetic from the stated rate).
+    Dialogue models fix the ratio so the text stays slightly ahead of the speech.
+  </p>
+  <p>
+    <strong>Text leads speech.</strong>
+    A TTS needs a little text lookahead before it commits prosody, just as a streaming ASR needs a little audio lookahead before it commits a word (see
+    <a href="/apps/materials/speech-to-speech/02-listening#look-ahead-right-context">Look-ahead</a>).
+    In delayed-streams models this is a per-stream setting: delay the text for ASR, delay the audio for TTS.
+    One model using incremental text can start speaking after only two text tokens, against five for an earlier interleaved model, with a much shorter first packet.
+  </p>
+  <p>
+    <strong>First packet.</strong>
+    With a causal codec at 12.5 Hz, a packet of 4 tokens covers 320 ms, and a small model can emit it in under 100 ms of LM time plus a few milliseconds of decoding.
+    A chunk-wise causal flow decoder also waits for a few look-ahead tokens from the next chunk before decoding each chunk.
+    Multi-token prediction (emitting about ten audio tokens per forward pass) cuts the number of passes; one system reports its first chunk dropping from 236 ms to 53 ms.
+    Compare shapes, not digits: these figures come from different hardware and definitions.
+  </p>
+
+  <h3 id="streaming-generation-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Text:speech interleave ratio and text lead</td>
+          <td>How much text the model sees before and between speech chunks, and how far text runs ahead of audio</td>
+          <td>More text or lead gives better prosody planning but a later first sound</td>
+        </tr>
+        <tr>
+          <td>Packet size</td>
+          <td>Tokens decoded per audio packet</td>
+          <td>Small first packet is fast; tiny packets raise overhead and risk seams</td>
+        </tr>
+        <tr>
+          <td>Decoder look-ahead</td>
+          <td>Future tokens the renderer may see per chunk</td>
+          <td>Hides chunk boundaries, delays the first chunk</td>
+        </tr>
+        <tr>
+          <td>Tokens per forward pass (MTP)</td>
+          <td>Number of LM passes per second of audio</td>
+          <td>Faster; needs an extra module trained to predict ahead</td>
+        </tr>
+        <tr>
+          <td>Frame rate and causal codec</td>
+          <td>AR steps per second; whether future audio is needed</td>
+          <td>Lower rate is faster; fewer codes per second of detail</td>
+        </tr>
+        <tr>
+          <td>Renderer steps (flow decoder)</td>
+          <td>Network evaluations per chunk</td>
+          <td>Fewer steps cut latency; see
+            <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Levers for flow</a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    For flow-based renderers, step distillation is the biggest latency lever; on the AR side, a lower token rate plus a causal codec is.
+    Budget first-packet latency per stage, not as one number.
+  </p>
+
+  <h3 id="streaming-generation-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Reading a ratio as a duration.</strong>
+      "13:26" says nothing about seconds until you know the token rate, and first-chunk latency is not steady-state delay.
+    </li>
+    <li>
+      <strong>Speech outruns text.</strong>
+      If the upstream LLM streams slower than the speech consumes, the model has to pause or guess.
+      <span class="tag tag--inference">Inference</span>
+      Keep a small text buffer and fill with a short filler.
+    </li>
+    <li>
+      <strong>Committing prosody too early.</strong>
+      With no text lead, intonation is guessed from too little context.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Chunk seams.</strong>
+      Clicks or prosody jumps appear at packet boundaries.
+      Mitigate with overlap, look-ahead and crossfade, and measure boundary discontinuity next to first-packet time.
+    </li>
+    <li>
+      <strong>Incomparable numbers.</strong>
+      Reported latencies use different hardware, test sets and definitions of "first packet".
+      Re-measure on your own stack.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I budget first-packet latency per stage.
+      For the LM the levers are token rate, interleave ratio and multi-token prediction; for the renderer it is look-ahead and step count.
+      A text:speech ratio only becomes a duration through the speech token rate, so I always quote both."
+    </p>
+  </div>
+  <h3 id="streaming-generation-sources">Sources</h3>
+  <ul>
+    <li>Streaming Sequence-to-Sequence Learning with Delayed Streams Modeling (arXiv 2509.08753)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot (arXiv 2412.02612)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>SyncSpeech: Efficient and Low-Latency Text-to-Speech based on Temporal Masked Transformer (arXiv 2502.11094)</li>
+    <li>Qwen3-TTS Technical Report (arXiv 2601.15621)</li>
+    <li>VITA-Audio: Fast Interleaved Cross-Modal Token Generation for Efficient Large Speech-Language Model (arXiv 2505.03739)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#streaming-low-latency">Streaming and low-latency generation</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#text-and-speech-together">Producing text and speech together</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#delay-and-interleaving">Delay and interleaving</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-asr-tts-families">Streaming ASR and TTS families</a>
+    </li>
+    <li>
+      Conversation-level timing is in
+      <a href="/apps/materials/speech-to-speech/07-conversation">Conversation</a>
+      and the full pipeline in
+      <a href="/apps/materials/speech-to-speech/11-system-design">System design</a>.
+    </li>
+  </ul>
+</section>

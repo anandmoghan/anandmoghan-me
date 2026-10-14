@@ -1,0 +1,459 @@
+<section id="codec-mechanics">
+  <h2>How a codec works</h2>
+  <p>
+    A codec is an autoencoder with a deliberately narrow, discrete middle.
+    The encoder compresses audio into one vector per frame.
+    A quantizer snaps each vector to the nearest entry of a learned codebook, like rounding to the
+      nearest note.
+    The decoder rebuilds audio from the snapped values, and the token is the index of the entry.
+  </p>
+
+  <h3 id="codec-mechanics-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 232" role="img"
+      aria-label="Codec: audio goes through an encoder and three residual quantizers, the chosen codes are summed and decoded, and losses compare the output with the input">
+      <defs>
+        <marker id="codec-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-group" x="294" y="6" width="424" height="68" rx="10"/>
+      <text class="d-text--muted" x="510" y="90" text-anchor="middle"
+        dominant-baseline="middle">residual vector quantizer</text>
+      <rect class="d-box" x="12" y="14" width="120" height="44" rx="8"/>
+      <text class="d-text" x="72" y="36" text-anchor="middle"
+        dominant-baseline="middle">Audio</text>
+      <rect class="d-box" x="156" y="14" width="120" height="44" rx="8"/>
+      <text class="d-text" x="216" y="36" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <rect class="d-box" x="300" y="14" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="36" text-anchor="middle"
+        dominant-baseline="middle">Quantizer 1</text>
+      <rect class="d-box" x="444" y="14" width="120" height="44" rx="8"/>
+      <text class="d-text" x="504" y="36" text-anchor="middle"
+        dominant-baseline="middle">Quantizer 2</text>
+      <rect class="d-box" x="588" y="14" width="120" height="44" rx="8"/>
+      <text class="d-text" x="648" y="36" text-anchor="middle"
+        dominant-baseline="middle">Quantizer 3</text>
+      <path class="d-arrow" d="M 132 36 L 154 36"
+        marker-end="url(#codec-arrow)"/>
+      <path class="d-arrow" d="M 276 36 L 298 36"
+        marker-end="url(#codec-arrow)"/>
+      <path class="d-arrow" d="M 420 36 L 442 36"
+        marker-end="url(#codec-arrow)"/>
+      <path class="d-arrow" d="M 564 36 L 586 36"
+        marker-end="url(#codec-arrow)"/>
+      <text class="d-text--small" x="284" y="24" text-anchor="middle"
+        dominant-baseline="middle">z</text>
+      <text class="d-text--small" x="431" y="24" text-anchor="middle"
+        dominant-baseline="middle">r1</text>
+      <text class="d-text--small" x="575" y="24" text-anchor="middle"
+        dominant-baseline="middle">r2</text>
+      <rect class="d-box" x="588" y="140" width="120" height="44" rx="8"/>
+      <text class="d-text" x="648" y="162" text-anchor="middle"
+        dominant-baseline="middle">Sum of codes</text>
+      <rect class="d-box" x="444" y="140" width="120" height="44" rx="8"/>
+      <text class="d-text" x="504" y="162" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+      <rect class="d-box" x="300" y="140" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="162" text-anchor="middle"
+        dominant-baseline="middle">Audio out</text>
+      <rect class="d-box" x="100" y="140" width="168" height="44" rx="8"/>
+      <text class="d-text" x="184" y="154" text-anchor="middle"
+        dominant-baseline="middle">Losses</text>
+      <text class="d-text--small" x="184" y="171" text-anchor="middle"
+        dominant-baseline="middle">reconstruction, adversarial</text>
+      <path class="d-arrow" d="M 648 58 L 648 138"
+        marker-end="url(#codec-arrow)"/>
+      <path class="d-arrow" d="M 588 162 L 566 162"
+        marker-end="url(#codec-arrow)"/>
+      <path class="d-arrow" d="M 444 162 L 422 162"
+        marker-end="url(#codec-arrow)"/>
+      <path class="d-arrow" d="M 300 162 L 270 162"
+        marker-end="url(#codec-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 72 58 L 72 162 L 98 162"
+        marker-end="url(#codec-arrow)"/>
+      <text class="d-text--small" x="638" y="118" text-anchor="end"
+        dominant-baseline="middle">codes i1, i2, i3</text>
+      <text class="d-text--muted" x="360" y="212" text-anchor="middle"
+        dominant-baseline="middle">The token stream is the sequence of code indices; the decoder never sees raw audio.</text>
+    </svg>
+    <figcaption>Figure: an RVQ codec. Each quantizer codes the residual left by the one before; the
+      decoder sums the chosen codes. Losses (dashed) compare the output with the input
+      audio.</figcaption>
+  </figure>
+  <p>
+    <strong>Vector quantization (VQ).</strong>
+    The encoder output \( z_e \) is replaced by its nearest codebook vector \( e_k \), and the code
+      is the index \( k \).
+  </p>
+  \[
+  k = \arg\min_j \lVert z_e - e_j \rVert_2
+  \]
+  <p>
+    One codebook of \( K = 2048 \) entries gives 11 bits per frame, or 137.5 bits per second at 12.5 frames per second.
+    That is too little for high-quality audio, so Mimi stacks eight such codebooks (the bitrate arithmetic is in
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#why-tokenize">Why tokenize</a>).
+  </p>
+  <p>
+    <strong>Residual vector quantization (RVQ).</strong>
+    Chain \( N_q \) quantizers, each coding what the previous ones missed.
+    The first code is coarse, and later codes add detail.
+  </p>
+  \[
+  \hat y \leftarrow 0,\quad r_0 \leftarrow y;\qquad
+  \text{for } i = 1,\dots,N_q:\;\;
+  \hat y \leftarrow \hat y + Q_i(r_{i-1}),\;\;
+  r_i \leftarrow r_{i-1} - Q_i(r_{i-1})
+  \]
+  <p>
+    Here \( y \) is the encoder's vector for one frame (the \( z \) in the figure) and \( \hat y \) is the running
+      reconstruction of it.
+    Each \( Q_i \) is its own VQ with its own codebook: it returns the nearest entry and sends that entry's
+      index as the \( i \)-th code.
+    The residual \( r_i \) is what is still unexplained after \( i \) stages, and the decoder sums what
+      every quantizer chose.
+    Keeping fewer quantizers lowers the bitrate.
+    A toy two-stage example with 2-D vectors (made-up numbers, for intuition only):
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Input</th>
+          <th>Nearest codebook entry</th>
+          <th>Running sum \( \hat y \)</th>
+          <th>Left over</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Start</td>
+          <td>\( y = (5.0,\, 3.0) \)</td>
+          <td></td>
+          <td>\( (0,\, 0) \)</td>
+          <td>\( r_0 = (5.0,\, 3.0) \)</td>
+        </tr>
+        <tr>
+          <td>\( Q_1 \)</td>
+          <td>\( r_0 \)</td>
+          <td>\( (4,\, 4) \)</td>
+          <td>\( (4.0,\, 4.0) \)</td>
+          <td>\( r_1 = (1.0,\, -1.0) \), length 1.41</td>
+        </tr>
+        <tr>
+          <td>\( Q_2 \)</td>
+          <td>\( r_1 \)</td>
+          <td>\( (1.5,\, -1.5) \)</td>
+          <td>\( (5.5,\, 2.5) \)</td>
+          <td>\( r_2 = (-0.5,\, 0.5) \), length 0.71</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Each stage shrinks the error (1.41, then 0.71), and the decoder only needs the two indices.
+    Drop stage 2 and the decoder sees \( (4, 4) \): cheaper, rougher.
+  </p>
+  <p>
+    <strong>Finite scalar quantization (FSQ).</strong>
+    Skip the learned codebook.
+    Bound each of \( d \) channels and round it to one of \( L \) integer levels.
+  </p>
+  \[
+  \hat z = \operatorname{round}\big(\lfloor L/2 \rfloor \tanh(z)\big),
+  \qquad |\mathcal{C}| = \prod_{i=1}^{d} L_i
+  \]
+  <p>
+    The \( \tanh \) squashes any real number into \( (-1, 1) \), so multiplying by \( \lfloor L/2 \rfloor \)
+      and rounding always lands on one of the \( L \) allowed integers.
+    For \( L = 5 \) the allowed values are \( -2, -1, 0, 1, 2 \): a channel value of \( z = 0.3 \) becomes
+      \( \tanh(0.3) \approx 0.29 \), then \( 2 \times 0.29 \approx 0.58 \), which rounds to 1.
+    The implicit codebook is the product of the per-channel level counts.
+    Four channels with 8, 5, 5 and 5 levels give \( 8 \times 5 \times 5 \times 5 = 1000 \) possible codes, with no table to
+      store or to collapse.
+    CosyVoice 2 uses FSQ in its speech tokenizer at 25 Hz, with a 6,561-entry implicit codebook that it reports as fully used.
+  </p>
+
+  <h3 id="codec-mechanics-training">How it is trained</h3>
+  <p>
+    An RVQ codec is trained end to end like a VQ-VAE.
+    It is not a full VAE: it has no sampled latent and no penalty toward a simple distribution, which
+      the last section of this chapter adds.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 -4 720 304" role="img"
+      aria-label="VQ-VAE: encoder output snaps to the nearest codebook vector, the decoder reconstructs,
+        gradients skip the lookup by straight-through, and codebook and commitment losses tie
+        encoder and codebook together">
+      <defs>
+        <marker id="vqvae-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Forward path == -->
+      <rect class="d-box d-box--muted" x="10" y="60" width="80" height="44" rx="8"/>
+      <text class="d-text" x="50" y="82" text-anchor="middle"
+        dominant-baseline="middle">audio <tspan font-style="italic">x</tspan></text>
+
+      <rect class="d-box" x="120" y="60" width="110" height="44" rx="8"/>
+      <text class="d-text" x="175" y="82" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+
+      <rect class="d-box d-box--accent" x="300" y="48" width="130" height="68" rx="8"/>
+      <text class="d-text" x="365" y="72" text-anchor="middle"
+        dominant-baseline="middle">Nearest code</text>
+      <text class="d-text--small" x="365" y="94" text-anchor="middle"
+        dominant-baseline="middle">argmin distance</text>
+
+      <rect class="d-box" x="500" y="60" width="110" height="44" rx="8"/>
+      <text class="d-text" x="555" y="82" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+
+      <rect class="d-box d-box--muted" x="640" y="60" width="70" height="44" rx="8"/>
+      <text class="d-text" x="675" y="82" text-anchor="middle"
+        dominant-baseline="middle">output</text>
+
+      <path class="d-arrow" d="M 90 82 L 118 82" marker-end="url(#vqvae-arrow)"/>
+      <path class="d-arrow" d="M 230 82 L 298 82" marker-end="url(#vqvae-arrow)"/>
+      <path class="d-arrow" d="M 430 82 L 498 82" marker-end="url(#vqvae-arrow)"/>
+      <path class="d-arrow" d="M 610 82 L 638 82" marker-end="url(#vqvae-arrow)"/>
+      <text class="d-text--muted" x="264" y="72" text-anchor="middle"><tspan font-style="italic">z</tspan><tspan font-style="italic" font-size="9" dy="4">e</tspan><tspan dy="-4"></tspan></text>
+      <text class="d-text--muted" x="464" y="72" text-anchor="middle"><tspan font-style="italic">z</tspan><tspan font-style="italic" font-size="9" dy="4">q</tspan><tspan dy="-4"> </tspan>= <tspan font-style="italic">e</tspan><tspan font-style="italic" font-size="9" dy="4">k</tspan><tspan dy="-4"></tspan></text>
+
+      <!-- == Codebook == -->
+      <rect class="d-group" x="300" y="150" width="130" height="62" rx="6"/>
+      <text class="d-text--muted" x="365" y="228" text-anchor="middle">codebook (K vectors)</text>
+      <rect class="d-box" x="312" y="178" width="20" height="20" rx="3"/>
+      <rect class="d-box" x="338" y="178" width="20" height="20" rx="3"/>
+      <rect class="d-box d-box--accent" x="364" y="178" width="20" height="20" rx="3"/>
+      <rect class="d-box" x="390" y="178" width="20" height="20" rx="3"/>
+      <path class="d-arrow" d="M 374 176 L 374 118" marker-end="url(#vqvae-arrow)"/>
+      <text class="d-text--small" x="384" y="140"><tspan font-style="italic">e</tspan><tspan font-style="italic" font-size="9" dy="4">k</tspan><tspan dy="-4"></tspan></text>
+
+      <!-- == Straight-through gradient == -->
+      <path class="d-arrow d-arrow--dashed" d="M 555 58 Q 365 -14 177 58"
+        marker-end="url(#vqvae-arrow)"/>
+      <text class="d-text--small" x="365" y="14" text-anchor="middle">straight-through: gradient copied past argmin</text>
+
+      <!-- == Losses == -->
+      <text class="d-text--small" x="10" y="270">Losses:</text>
+      <text class="d-text--muted" x="70" y="270">reconstruction (<tspan font-style="italic">x</tspan> vs output)</text>
+      <text class="d-text--muted" x="250" y="270">+ codebook: pull <tspan font-style="italic">e</tspan><tspan font-style="italic" font-size="9" dy="4">k</tspan><tspan dy="-4"> </tspan>toward sg[<tspan font-style="italic">z</tspan><tspan font-style="italic" font-size="9" dy="4">e</tspan><tspan dy="-4"></tspan>]</text>
+      <text class="d-text--muted" x="250" y="290">+ <tspan font-style="italic">β</tspan> · commitment: pull <tspan font-style="italic">z</tspan><tspan font-style="italic" font-size="9" dy="4">e</tspan><tspan dy="-4"> </tspan>toward sg[<tspan font-style="italic">e</tspan><tspan font-style="italic" font-size="9" dy="4">k</tspan><tspan dy="-4"></tspan>]</text>
+      <text class="d-text--muted" x="540" y="270">sg = stop-gradient</text>
+    </svg>
+    <figcaption>
+      VQ-VAE: the encoder output snaps to its nearest codebook vector; reconstruction trains encoder
+      and decoder through a straight-through gradient, while the codebook and commitment losses keep
+      the codebook and the encoder close. RVQ repeats the lookup on the residual.
+    </figcaption>
+  </figure>
+  <p>
+    The training signal has two obstacles.
+    First, the argmin has no gradient, so the <strong>straight-through</strong> trick copies the decoder's
+      gradient at the quantized vector unchanged to the encoder output.
+    Second, reconstruction never updates the codebook, because the argmin only picks a vector.
+    So two terms are added: one pulls code vectors toward encoder outputs, the other keeps encoder outputs
+      from drifting away from their codes.
+  </p>
+  \[
+  \mathcal{L} =
+  \underbrace{\lVert x - \hat{x} \rVert^2}_{\text{reconstruction}}
+  + \underbrace{\lVert \operatorname{sg}[z_e(x)] - e \rVert_2^2}_{\text{codebook}}
+  + \underbrace{\beta \lVert z_e(x) - \operatorname{sg}[e] \rVert_2^2}_{\text{commitment}}
+  \]
+  <p>
+    The original paper writes the first term as a log-likelihood to maximise; this is the same objective
+      as a quantity to minimise (derived).
+  </p>
+  <h4 id="vq-vae-notation">The notation</h4>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Meaning</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>\( x \), \( \hat{x} \)</td>
+          <td>The input audio and the decoder's reconstruction of it.</td>
+        </tr>
+        <tr>
+          <td>\( z_e(x) \)</td>
+          <td>The encoder's continuous output vector for one frame ("e" for encoder).</td>
+        </tr>
+        <tr>
+          <td>\( e \)</td>
+          <td>The codebook vector closest to \( z_e(x) \), chosen by the argmin.</td>
+        </tr>
+        <tr>
+          <td>\( z_q(x) \)</td>
+          <td>The quantized vector passed to the decoder; it equals \( e \) ("q" for quantized).</td>
+        </tr>
+        <tr>
+          <td>\( \operatorname{sg}[\cdot] \)</td>
+          <td>
+            Stop-gradient: passes the value through unchanged in the forward pass, but blocks
+            gradients in the backward pass, so whatever is inside is treated as a constant.
+          </td>
+        </tr>
+        <tr>
+          <td>\( \beta \)</td>
+          <td>Commitment weight; the paper uses 0.25 and reports results robust from 0.1 to 2.0.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <h4 id="vq-vae-why-three-terms">Why three terms are needed</h4>
+  <ul>
+    <li>
+      <strong>Reconstruction</strong> trains the decoder directly, and the encoder through the
+      straight-through copy of the gradient.
+      It cannot train the codebook, because no gradient reaches \( e \).
+    </li>
+    <li>
+      <strong>Codebook loss</strong> fixes that.
+      With \( z_e(x) \) frozen by the stop-gradient, it moves the chosen code vector \( e \) toward the
+      encoder output, so codes learn to sit where the encoder's outputs land.
+    </li>
+    <li>
+      <strong>Commitment loss</strong> is the same distance with the stop-gradient on the other side.
+      With \( e \) frozen, it pulls the encoder output toward its code, so the encoder commits to the
+      codebook instead of drifting or growing without bound.
+      \( \beta \) keeps this pull weaker than the codebook's.
+    </li>
+  </ul>
+  <p>
+    Who learns from what: the decoder from reconstruction only, the encoder from reconstruction and
+    commitment, the codebook from the codebook term only.
+    Real codecs add three refinements on top.
+    Many replace the codebook term with an <strong>exponential moving average (EMA)</strong>, where each code
+    vector becomes a running mean of the encoder outputs assigned to it.
+    <strong>Quantizer dropout</strong> uses only the first \( n_q \) quantizers for each example, with
+    \( n_q \) sampled at random, so one model serves many bitrates.
+    And a <strong>discriminator</strong>, a second network trained to tell real audio from decoded audio,
+    pushes the decoded audio toward sounding real, not just close on average.
+    The codec also matches the discriminator's internal activations (a richer, steadier signal than its final
+    verdict) and the spectrogram (see <a href="/apps/materials/speech-to-speech/01-sound-as-numbers#mel-spectrograms">Mel spectrograms</a>).
+    SoundStream weights adversarial 1, feature matching 100 and spectral reconstruction 1.
+  </p>
+
+  <h3 id="codec-mechanics-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Number and size of codebooks</td>
+          <td>Bitrate and detail. EnCodec trains for 1.5 to 24 kbps with up to 32 codebooks; Mimi
+            uses 8 of 2048 entries, SoundStream 1024 per codebook</td>
+          <td>More codebooks, better quality, more tokens for the LM. Larger codebooks risk unused entries.</td>
+        </tr>
+        <tr>
+          <td>VQ or FSQ</td>
+          <td>FSQ reports codebook usage near 100% with no auxiliary losses</td>
+          <td>FSQ removes the collapse machinery. VQ gives a learned, adaptive codebook.</td>
+        </tr>
+        <tr>
+          <td>EMA codebook</td>
+          <td>SoundStream updates codebooks by EMA (decay 0.99), starts them with k-means on the first batch
+            and replaces codes that no frame uses</td>
+          <td>Keeps codes in use; adds bookkeeping.</td>
+        </tr>
+        <tr>
+          <td>Commitment weight \( \beta \)</td>
+          <td>VQ-VAE uses 0.25 and reports little change from 0.1 to 2.0</td>
+          <td>Too low lets the encoder drift; too high holds it to its codes.</td>
+        </tr>
+        <tr>
+          <td>Quantizer dropout probability</td>
+          <td>Share of examples that use fewer quantizers (DAC: 0.5; Mimi quantizes only 50% of
+            sequences)</td>
+          <td>Dropout on every example hurt full-bandwidth quality in DAC.</td>
+        </tr>
+        <tr>
+          <td>Lookup space</td>
+          <td>DAC looks codes up in 8 or 32 dimensions and L2-normalises, so distance becomes cosine
+            similarity</td>
+          <td>Keeps codes in use without k-means initialisation or random restarts.</td>
+        </tr>
+        <tr>
+          <td>Loss mix</td>
+          <td>Mimi drops the reconstruction loss and keeps feature matching and adversarial
+            losses</td>
+          <td>Automatic scores fall (ViSQOL 1.84) but listening scores
+            rise: MUSHRA gives 81.0 against 58.8 for an EnCodec-style mix. Both are explained in
+            <a href="/apps/materials/speech-to-speech/03-tokenizers#judging-a-tokenizer">Judging a tokenizer</a>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="codec-mechanics-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Codebook collapse.</strong>
+      Many codes go unused, so the real bitrate falls below the nominal one.
+      EMA with dead-code replacement, k-means starts, low-dimensional normalised lookup and FSQ all
+        target this.
+      <span class="tag tag--inference">Inference</span>
+      Track codebook usage per codebook during training.
+    </li>
+    <li>
+      <strong>Encoder drift.</strong>
+      Without a commitment term, encoder outputs wander away from the codes they should match.
+    </li>
+    <li>
+      <strong>Chasing the wrong metric.</strong>
+      Reconstruction scores can disagree with listening tests, as in Mimi.
+    </li>
+    <li>
+      <strong>Dropout everywhere.</strong>
+      Applying quantizer dropout to every example costs full-bandwidth quality.
+    </li>
+  </ul>
+  <p>
+    Rebuilding the audio is not the only goal.
+    Why tokens should also be easy for the LM to predict is the subject of the
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#semantic-acoustic-tokens">next section</a>.
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#codec-training">How codecs are trained: VQ-VAE,
+      RVQ and continuous latents</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      An RVQ codec is a VQ-VAE-style autoencoder: the encoder output is snapped to a codebook with a
+        straight-through gradient, trained with reconstruction, commitment and adversarial losses.
+      Each quantizer codes the previous residual, and quantizer dropout makes one model serve many
+        bitrates.
+      The failure to watch is codebook collapse, which EMA with dead-code replacement or FSQ
+        addresses.
+    </p>
+  </div>
+
+  <h3 id="codec-mechanics-sources">Sources</h3>
+  <ul>
+    <li>Neural Discrete Representation Learning (arXiv 1711.00937)</li>
+    <li>SoundStream: An End-to-End Neural Audio Codec (arXiv 2107.03312)</li>
+    <li>High Fidelity Neural Audio Compression (arXiv 2210.13438)</li>
+    <li>High-Fidelity Audio Compression with Improved RVQGAN (arXiv 2306.06546)</li>
+    <li>Finite Scalar Quantization: VQ-VAE Made Simple (arXiv 2309.15505)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+  </ul>
+</section>

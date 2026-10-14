@@ -1,0 +1,4 @@
+{
+  "title": "System design",
+  "summary": "The target: a unified speech LLM (streaming ASR + expressive TTS, barge-in and backchannels) with a downstream reasoning LLM as a tool; the cascade baseline; real-time avatars; and a Synthesia-style audio-visual platform."
+}

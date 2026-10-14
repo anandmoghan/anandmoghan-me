@@ -1,0 +1,75 @@
+<section id="q-av-platform">
+  <h2>System design: audio-visual avatar platform</h2>
+  <ul>
+    <li>
+      Two products, two SLOs: batch video (render takes 3-10 minutes, <a href="https://docs.synthesia.io/docs/getting-started">API docs</a>; 1080p, 30 fps, Express-2 post)
+      and interactive agents ("typically under one second", <a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">Synthesia</a>)
+      <span class="tag tag--confirmed">Confirmed</span>.
+    </li>
+    <li>
+      Custom avatars sit behind a live consent video that must match the photo (<a href="https://docs.synthesia.io/docs/personal-avatars">personal avatars docs</a>)
+      <span class="tag tag--confirmed">Confirmed</span>.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Shared consent-gated identity and voice stores; consent is a hard pipeline stage.
+    </li>
+    <li>
+      Batch: Express-Voice, Express-Animate, Express-Eval and Express-Render, distilled to two diffusion steps
+      (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>)
+      <span class="tag tag--confirmed">Confirmed</span>.
+      Dubbing chain (ASR, MT, duration-controlled TTS) <span class="tag tag--inference">Inference</span>.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Audio-then-motion cascade in production; joint audio-video (Ovi, arXiv 2510.01284; Seedance 1.5 pro, arXiv 2512.13507) as a research track; causal few-step student for interactive.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Interactive voice: a unified speech LLM with a text LLM behind a tool call; the ASR, LLM, TTS cascade is the fallback and baseline.
+    </li>
+    <li>
+      One clock <span class="tag tag--inference">Inference</span>:
+      Ovi scales audio RoPE by 31/157 to align 31 video latent frames with 157 audio tokens (arXiv 2510.01284);
+      Qwen3-Omni assigns one temporal ID per 80 ms of audio (arXiv 2509.17765).
+    </li>
+    <li>
+      Perceiving the user: StreamingVLM keeps a fixed-size KV cache, up to 8 FPS on one H100 (arXiv 2510.09608).
+    </li>
+    <li>Cross-paper Sync-C is not comparable, so build an internal benchmark first <span class="tag tag--inference">Inference</span>.</li>
+    <li>GRPO on CER and NLL rewards collapsed prosody into monotone speech, so guard rewards against hacking (arXiv 2509.18531).</li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric <span class="tag tag--inference">Inference</span></th>
+          <th>Checks</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>WER, SIM, emotion2vec</td>
+          <td>Voice content, identity, emotion</td>
+        </tr>
+        <tr>
+          <td>Sync-C/D, CSIM, FVD</td>
+          <td>Lip sync, face identity, video quality</td>
+        </tr>
+        <tr>
+          <td>p50/p95/p99 latency</td>
+          <td>Interactive responsiveness</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Two products, one consent-gated asset base.
+      Interactive voice is a unified speech LLM with a swappable text LLM, and the cascade is the fallback.
+      I would share an absolute-time clock between voice and video and build a shared benchmark first."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/09-system-design#audio-visual-avatar-platform">Full section</a></p>
+</section>

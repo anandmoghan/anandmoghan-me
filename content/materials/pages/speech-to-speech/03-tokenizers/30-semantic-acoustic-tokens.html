@@ -1,0 +1,228 @@
+<section id="semantic-acoustic-tokens">
+  <h2>Semantic against acoustic tokens</h2>
+  <p>
+    A codec trained only to rebuild audio spends its bits on how the sound was made: the speaker,
+      the room, the noise.
+    A language model wants what was said.
+    Acoustic tokens know how it sounded; semantic tokens know what it meant.
+  </p>
+  <p>
+    Compare a photograph with a caption.
+    The photograph rebuilds the scene and is hard to reason about.
+    The caption is easy to reason about and cannot rebuild the scene.
+    Semantic distillation tries to put a bit of the caption inside the photograph.
+  </p>
+
+  <h3 id="semantic-acoustic-how">How it works</h3>
+  <p>
+    Mimi trains its first quantizer to carry phonetic content, not just sound.
+    The teacher is WavLM, a self-supervised speech model (trained on unlabelled audio, with no transcripts) that
+      produces 1024-dimensional embeddings at 50 Hz.
+    During training, the quantizer's output goes through a linear projection to 1024 dimensions, and
+      a cosine-distance loss (small when two vectors point the same way) pulls it toward WavLM's embedding for the same moment.
+    WavLM's features are average-pooled from 50 Hz to Mimi's 12.5 Hz to match.
+    The teacher sees the whole utterance while Mimi is fully causal, which is fine: the teacher is used only
+      in training, so its look-ahead never reaches inference.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 240" role="img"
+      aria-label="Mimi-style split quantizer: the encoder feeds a plain VQ distilled toward a WavLM teacher and a 7-level RVQ for acoustics, and the two outputs are summed for the decoder">
+      <defs>
+        <marker id="semantic-acoustic-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="121" width="100" height="44" rx="8"/>
+      <text class="d-text" x="60" y="143" text-anchor="middle"
+        dominant-baseline="middle">Audio</text>
+      <rect class="d-box" x="138" y="121" width="110" height="44" rx="8"/>
+      <text class="d-text" x="193" y="143" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <rect class="d-box d-box--muted" x="290" y="6" width="150" height="44" rx="8"/>
+      <text class="d-text" x="365" y="20" text-anchor="middle"
+        dominant-baseline="middle">WavLM teacher</text>
+      <text class="d-text--small" x="365" y="37" text-anchor="middle"
+        dominant-baseline="middle">training only</text>
+      <rect class="d-box d-box--accent" x="290" y="76" width="150" height="44" rx="8"/>
+      <text class="d-text" x="365" y="90" text-anchor="middle"
+        dominant-baseline="middle">Plain VQ</text>
+      <text class="d-text--small" x="365" y="107" text-anchor="middle"
+        dominant-baseline="middle">semantic code</text>
+      <rect class="d-box" x="290" y="186" width="150" height="44" rx="8"/>
+      <text class="d-text" x="365" y="200" text-anchor="middle"
+        dominant-baseline="middle">7-level RVQ</text>
+      <text class="d-text--small" x="365" y="217" text-anchor="middle"
+        dominant-baseline="middle">acoustic codes</text>
+      <rect class="d-box" x="490" y="121" width="70" height="44" rx="8"/>
+      <text class="d-text" x="525" y="143" text-anchor="middle"
+        dominant-baseline="middle">Sum</text>
+      <rect class="d-box" x="590" y="121" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="143" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+      <path class="d-arrow" d="M 110 143 L 136 143"
+        marker-end="url(#semantic-acoustic-arrow)"/>
+      <path class="d-arrow" d="M 248 143 L 268 143 L 268 98 L 288 98"
+        marker-end="url(#semantic-acoustic-arrow)"/>
+      <path class="d-arrow" d="M 248 143 L 268 143 L 268 208 L 288 208"
+        marker-end="url(#semantic-acoustic-arrow)"/>
+      <path class="d-arrow" d="M 440 98 L 525 98 L 525 119"
+        marker-end="url(#semantic-acoustic-arrow)"/>
+      <path class="d-arrow" d="M 440 208 L 525 208 L 525 167"
+        marker-end="url(#semantic-acoustic-arrow)"/>
+      <path class="d-arrow" d="M 560 143 L 588 143"
+        marker-end="url(#semantic-acoustic-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 365 50 L 365 74"
+        marker-end="url(#semantic-acoustic-arrow)"/>
+      <text class="d-text--small" x="375" y="63" text-anchor="start"
+        dominant-baseline="middle">cosine loss</text>
+    </svg>
+    <figcaption>Figure: a split RVQ in the style of Mimi. The semantic branch is pulled toward a
+      self-supervised teacher during training only; the acoustic branch codes what is left; the
+      decoder reads the sum.</figcaption>
+  </figure>
+  <p>
+    Why not simply distil into level 1 of a normal RVQ?
+    Because the two goals pull the same quantizer in opposite directions.
+    A normal RVQ expects level 1 to be the best coarse copy of the audio, and every later level codes what level 1 missed.
+    Suppose level 1 is forced to keep only phonetic content, so the word "hello" gets nearly the same code from a
+      deep voice in a quiet room and a high voice in an echoing hall.
+    The speaker's voice and the room then cannot go in level 1, so they all land in the residual.
+    Level 1 is no longer a good coarse copy of the sound, and the later levels must carry a larger and messier residual.
+    Mimi therefore runs one plain VQ for semantics in parallel with a 7-level RVQ for acoustics, and
+      sums them, so the acoustic RVQ can still start from the full signal.
+    The authors report better phonetic discriminability and a better semantic-acoustic trade-off from the split.
+  </p>
+  <p>
+    A second line of work asks for tokens that are easy to predict, not only easy to rebuild.
+    Acoustic noise in the tokens makes the next token harder to guess and raises the LM's perplexity
+      (its average surprise at the next token).
+    ReLMCodec keeps the linguistic structure of frozen self-supervised features before quantizing and limits how far
+      training can pull the features away from it; at 650 and 800 bps it reports a better predictability-against-reconstruction
+      frontier and better TTS intelligibility and speaker similarity
+      (how closely the output voice matches the reference voice;
+      <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems#measuring-speech-generation">how it is scored</a>).
+    LLM-Codec trains the codec with language-model losses directly: predicting several future tokens from each token,
+      and an audio-text contrastive loss.
+    Both suggest a codec for an LM is judged by what the LM can do with its tokens
+      (see <a href="/apps/materials/speech-to-speech/03-tokenizers#judging-a-tokenizer">Judging a tokenizer</a>).
+  </p>
+  <p>
+    Distillation is common but not required.
+    MOSS-Audio-Tokenizer is a Transformer-only causal codec (1.6B parameters, trained on 3 million hours of audio)
+      learned end to end with no pretrained encoder and no semantic distillation.
+    Its authors report that it beats earlier codecs across speech, sound and music, improves predictably with scale,
+      and supports competitive speech recognition without auxiliary encoders.
+    Whether this holds at equal bitrate against distilled codecs remains open.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    Other routes reach similar ends.
+    Instead of a self-supervised teacher, GLM-4-Voice puts a single-codebook VQ on an ASR encoder at 12.5 Hz, and
+      CosyVoice 2's tokenizer is an ASR encoder with FSQ inserted, trained to predict text.
+    BiCodec pairs semantic tokens with fixed-length global speaker tokens.
+    PINT goes furthest: it fine-tunes a self-supervised encoder so that the same words spoken by different speakers or
+      under different conditions get the same tokens, which cut speaker-probe accuracy from 93.1% to 1.2% and LM perplexity by 27 to 30%.
+    Its tokens keep frame-level timing, unlike a text transcript.
+  </p>
+
+  <h3 id="semantic-acoustic-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Semantic distillation</td>
+          <td>Pulls a quantizer toward a teacher's features</td>
+          <td>Easier LM modelling and better phonetic content, against conflict with reconstruction
+            quality.</td>
+        </tr>
+        <tr>
+          <td>Split against plain RVQ</td>
+          <td>Whether semantics sits in the first RVQ level or in a parallel branch</td>
+          <td>Moshi's authors report the listening score MUSHRA recovering from 57.8 to 64.0 with the split, at a small
+            cost in ABX (does the representation keep different phonemes apart; lower error is better). Both are explained in
+            <a href="/apps/materials/speech-to-speech/03-tokenizers#judging-a-tokenizer">Judging a tokenizer</a>.</td>
+        </tr>
+        <tr>
+          <td>Predictability losses</td>
+          <td>Future-token prediction and audio-text contrastive loss (LLM-Codec); a limit on feature drift before quantization (ReLMCodec)</td>
+          <td>Easier for the LM to predict, if tuned so reconstruction does not fall.</td>
+        </tr>
+        <tr>
+          <td>Teacher choice</td>
+          <td>WavLM (Mimi), an ASR encoder (GLM-4-Voice, CosyVoice 2), or no teacher (MOSS-Audio-Tokenizer)</td>
+          <td>Self-supervised teachers need no text; ASR teachers are supervised by text and give content-focused
+            tokens, with a separate decoder to rebuild sound. No teacher gives a simpler pipeline that scales
+            with data, against the content bias a teacher gives.</td>
+        </tr>
+        <tr>
+          <td>Speaker invariance or separate speaker tokens</td>
+          <td>PINT trains tokens to be the same across speakers; BiCodec holds global speaker information outside the per-frame tokens</td>
+          <td>Cleaner content tokens and lower LM perplexity, with the speaker supplied separately.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="semantic-acoustic-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Semantic and acoustic goals conflict.</strong>
+      Distilling into level 1 of a normal RVQ pulls it away from reconstruction, and the later
+        levels then encode its residual, speaker and room included.
+      The split design exists to fix this.
+    </li>
+    <li>
+      <strong>Best reconstruction is not best downstream.</strong>
+      The DASB benchmark (a suite that tests discrete audio tokens on recognition, understanding and generation tasks) reports that discrete audio representations are less robust than continuous
+        ones, and that semantic tokens generally outperform acoustic tokens.
+    </li>
+    <li>
+      <strong>Content without character.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Pure semantic tokens drop speaker and prosody detail, so some other path (acoustic codes,
+        speaker tokens, a flow decoder) must restore it.
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#codecs-tokenizers">Codecs and speech
+      tokenizers</a>
+    and
+    <a href="/apps/materials/speech-lit-review/07-multimodal-generation#tokenizers-beyond-speech">Tokenizers beyond
+      speech</a>.
+    How the LM predicts split codebooks:
+      <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens">Speaking with tokens</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      Acoustic tokens rebuild the sound, semantic tokens carry the content, and the LM wants the
+        content.
+      Mimi distils a self-supervised teacher into a separate plain VQ and keeps a 7-level RVQ for
+        acoustics, because distilling into level 1 of a normal RVQ conflicts with reconstruction.
+      Newer work asks for tokens the LM can predict, and shows distillation is optional once a codec is scaled up.
+    </p>
+  </div>
+
+  <h3 id="semantic-acoustic-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot (arXiv 2412.02612)</li>
+    <li>Spark-TTS: An Efficient LLM-Based Text-to-Speech Model with Single-Stream Decoupled Speech Tokens (arXiv 2503.01710)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>DASB - Discrete Audio and Speech Benchmark (arXiv 2406.14294)</li>
+    <li>ReLMCodec: Designing Predictable Speech Tokens from Pre-Quantization Phoneme Structure (arXiv 2608.08286)</li>
+    <li>LLM-Codec: Neural Audio Codec Meets Language Model Objectives (arXiv 2604.17852)</li>
+    <li>MOSS-Audio-Tokenizer: Scaling Audio Tokenizers for Future Audio Foundation Models (arXiv 2602.10934)</li>
+    <li>Content is What Remains: Invariant Speech Tokenization from Parallel Utterances (arXiv 2607.19033)</li>
+  </ul>
+</section>

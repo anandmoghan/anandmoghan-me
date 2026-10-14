@@ -1,0 +1,232 @@
+<section id="flow-levers">
+  <h2>Levers and optimisations: trading steps, guidance and size</h2>
+  <p>
+    A flow model is a compute budget.
+    Every utterance costs a number of network passes, and guidance doubles that number.
+    Each lever below either spends fewer passes or makes each pass count for more.
+  </p>
+  <p>
+    Some levers tune the sampler and need no retraining: step count, solver, step schedule and guidance.
+    Others change the model: size, target space and distillation.
+    The rest change how it is deployed: streaming masks (next section) and reward training (the section after).
+  </p>
+
+  <h3 id="flow-levers-how">How the cost adds up</h3>
+  <p>
+    Cost is NFE (the number of function evaluations, see <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-idea">The idea</a>) times passes per step times network size.
+    Guidance runs the network once with the conditions and once without, so it roughly doubles the cost.
+    <span class="tag tag--inference">Inference</span>
+    Papers differ on whether the reported NFE already counts both guidance passes, so compare across papers with care.
+  </p>
+  <p>
+    <strong>Solver.</strong>
+    Euler takes a step along the current arrow.
+    Midpoint peeks halfway along, re-reads the arrow there, and uses that one instead.
+    That costs two evaluations per step but follows curves better.
+    Voicebox's default of 16 midpoint steps is 32 evaluations; F5-TTS uses plain Euler at 16 or 32.
+  </p>
+  <p>
+    <strong>Step schedule.</strong>
+    Steps need not be evenly spaced.
+    Sway Sampling warps the time grid so more steps fall early, where the model sketches the contour of the speech.
+    It draws \( u \) uniformly from \( [0,1] \) and maps it to a time.
+  </p>
+  \[
+    t = u + s\Big(\cos\big(\tfrac{\pi}{2}u\big) - 1 + u\Big),
+    \qquad s = -1 \text{ by default}
+  \]
+  <p>
+    Negative \( s \) pushes the grid toward small \( t \).
+    With \( s=-1 \), the middle of the even grid, \( u=0.5 \), becomes \( t = 0.5 - (\cos(\tfrac{\pi}{4}) - 1 + 0.5) \approx 0.29 \), and the grid \( u = 0.25, 0.5, 0.75 \) becomes \( t \approx 0.08, 0.29, 0.62 \).
+    <span class="tag tag--inference">Inference</span>
+    These values come from applying the formula by hand; they match the sway-sampled times listed for a 4-step student in one of the sources.
+    The method needs no retraining and costs nothing at run time; a cosine time schedule in CosyVoice 2 gives the same kind of early-heavy spacing.
+  </p>
+  <p>
+    <strong>Guidance.</strong>
+    Classifier-free guidance (first met in
+    <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#car-noise-randomness">Continuous autoregression</a>)
+    runs the network with and without the conditions, then pushes the result away from the unconditional answer.
+    The scale \( w \) sets how hard.
+  </p>
+  \[
+    \hat v = v_\theta(x,t,c) + w\,\big(v_\theta(x,t,c) - v_\theta(x,t,\varnothing)\big)
+  \]
+  <p>
+    A higher \( w \) makes the output follow the text and voice more tightly.
+    Reported values run from about 0.7 to 2 across models, with different conventions, so they are not directly comparable.
+    Since guidance doubles the cost, several recent methods try to remove the second pass; they appear under distillation.
+  </p>
+
+  <h4 id="flow-levers-distillation">Distillation: a teacher trains a faster student</h4>
+  <p>
+    Distillation trains a second, faster network (the student) to reproduce the results of a slow, good network (the teacher).
+    The teacher might need 32 steps; the student is trained so that 4 steps, or even 1, give nearly the same picture.
+  </p>
+  <p>
+    Fewer steps lose quality because real paths bend
+    (<a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-idea-velocity-shapes">crossing paths</a>).
+    A 32-step teacher re-reads its arrow 32 times and corrects its course; one step must jump the whole distance along an arrow that points toward the average of many possible speech samples.
+    The result is smooth and blurry.
+    Every method below answers the same question: how to teach the student to land on one clean sample anyway.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>What the student learns</th>
+          <th>Reported example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Average velocity (mean-flow)</td>
+          <td>The average arrow over an interval, instead of the arrow at one point, so a big jump can land correctly</td>
+          <td>1 evaluation from tokens to mel and 3 from text to mel; a 2-step streaming decoder</td>
+        </tr>
+        <tr>
+          <td>Distribution matching, with metric losses</td>
+          <td>
+            The student's outputs must look to a second network like the teacher's, with a discriminator for sharpness.
+            Being fast, it can also be trained through speech-recognition and speaker-verification losses directly
+          </td>
+          <td>DMOSpeech: a 4-step student from a 128-step teacher, real-time factor 0.96 down to 0.07, better than the teacher according to its authors</td>
+        </tr>
+        <tr>
+          <td>Flow maps</td>
+          <td>A map that jumps from one noise level to another in a single evaluation, with targets built without integrating the teacher's path step by step</td>
+          <td>On Seed-TTS the 1-evaluation student has 1.80% word error rate, against 1.76% for its 32-evaluation teacher</td>
+        </tr>
+        <tr>
+          <td>No distillation at all</td>
+          <td>A few-step model trained from scratch to match the data distribution, with no teacher or adversarial network</td>
+          <td>DriftTTS, 4 evaluations on LJSpeech: 3.7% word error rate against 3.4% for Matcha-TTS; listening score 4.18 against 3.96 for Matcha-TTS and 4.22 for real speech</td>
+        </tr>
+        <tr>
+          <td>Folding guidance in</td>
+          <td>One student absorbs the conditioned and unconditioned passes (and, in one method, several solver steps); another builds a guidance objective into the model</td>
+          <td>CuteTTS cuts first-audio latency and real-time factor with comparable quality (figures in
+            <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#continuous-autoregression-concept">Continuous autoregression</a>). Unified guidance: inference nearly 3 times faster, per its abstract</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The numbers are each paper's own, on different test sets, so compare the shape of the trade-off, not the rows.
+    The student can match or beat the teacher on intelligibility, yet its output is less diverse; DMOSpeech 2 restores diversity with teacher-guided sampling, running the teacher for 14 early steps and the student for the last 2, 16 in total against 32 for the teacher alone.
+    <span class="tag tag--inference">Inference</span>
+    A likely reason is that the student learns to land on the teacher's most typical answers.
+  </p>
+
+  <h3 id="flow-levers-table">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Number of steps</td>
+          <td>Solver accuracy. High quality was reported in under 10 evaluations; defaults sit around 16 to 32</td>
+          <td>Compute scales linearly. F5-TTS reports real-time factor 0.15 at 16 and 0.31 at 32, for 10 s of speech</td>
+        </tr>
+        <tr>
+          <td>Solver and step schedule</td>
+          <td>Accuracy per step, and where the step budget is spent</td>
+          <td>Midpoint costs two evaluations per step; the schedule is free at run time. In an ablation, Sway cut word error rate from 2.84 to 2.41 and lifted speaker similarity from 0.62 to 0.66</td>
+        </tr>
+        <tr>
+          <td>Guidance strength</td>
+          <td>Adherence to text and voice</td>
+          <td>Two passes per step unless folded into the student; a high value risks over-sharpened audio</td>
+        </tr>
+        <tr>
+          <td>Distillation</td>
+          <td>Cuts steps and, for some methods, the guidance pass</td>
+          <td>Needs a teacher and a training run (one method avoids both); the student is less diverse</td>
+        </tr>
+        <tr>
+          <td>Model size and backbone</td>
+          <td>Cost per pass</td>
+          <td>One compact design reports being 3 times smaller and up to 30 times faster than a larger flow baseline</td>
+        </tr>
+        <tr>
+          <td>Target space and vocoder</td>
+          <td>What is generated and which decoder finishes the job</td>
+          <td>Mel is simple, with a vocoder at the end; a latent needs its own decoder. A stronger vocoder lowered word error rate at the same step count in one ablation, but it is a larger model (size in <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#decoders-vocoders">Decoders and vocoders</a>)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--inference">
+    <strong>Inference: where to start</strong>
+    <p>
+      For a flow decoder, step distillation is the biggest latency lever, and recent work shows a 1-evaluation student can match its 32-evaluation teacher on word error rate.
+      The cheapest quality lever is the schedule, because it is free.
+      Guidance is the one to tune last, since it both costs compute and has a sharp optimum.
+    </p>
+  </div>
+
+  <h3 id="flow-levers-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Over-smoothing at low step counts.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Speech sounds muffled or mushy.
+      Sweep NFE against word error rate, speaker similarity and real-time factor to find the knee.
+    </li>
+    <li>
+      <strong>Guidance too high.</strong>
+      <span class="tag tag--inference">Inference</span>
+      The output follows the text but sounds harsh or exaggerated, and diversity drops.
+      Sweep the scale on a held-out set and listen; do not tune it on word error rate alone.
+    </li>
+    <li>
+      <strong>Distilled students that look fine on one metric.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Check intelligibility, speaker similarity and naturalness together, and compare against the teacher.
+    </li>
+    <li>
+      <strong>Quoting latency without a definition.</strong>
+      Papers mix theoretical and measured numbers, and "first packet" means different things.
+      Measure your own system end to end.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Cost is steps times guidance passes times network size.
+      I would spend the free levers first (schedule, solver), then distil to two or three steps and fold guidance into the student, and I would sweep every change against word error rate, speaker similarity and a listening test."
+    </p>
+  </div>
+
+  <h3 id="flow-levers-sources">Sources</h3>
+  <ul>
+    <li>Flow Matching for Generative Modeling (arXiv 2210.02747)</li>
+    <li>Classifier-Free Diffusion Guidance (arXiv 2207.12598)</li>
+    <li>Voicebox: Text-Guided Multilingual Universal Speech Generation at Scale (arXiv 2306.15687)</li>
+    <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching (arXiv 2410.06885)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>ZipVoice: Fast and High-Quality Zero-Shot Text-to-Speech with Flow Matching (arXiv 2506.13053)</li>
+    <li>Mean Flows for One-step Generative Modeling (arXiv 2505.13447)</li>
+    <li>DMOSpeech: Direct Metric Optimization via Distilled Diffusion Model in Zero-Shot Speech Synthesis (arXiv 2410.11097)</li>
+    <li>DMOSpeech 2: Reinforcement Learning for Duration Prediction in Metric-Optimized Speech Synthesis (arXiv 2507.14988)</li>
+    <li>Distill Locally, Schedule Globally: Flow Maps for Few-Step Text-to-Speech (arXiv 2609.36324)</li>
+    <li>DriftTTS: Few-Step Text-to-Speech Without Distillation via Distribution-Matching Drift (arXiv 2610.03390)</li>
+    <li>CuteTTS: Efficient and High-Quality Speech Synthesis via Autoregressive Modeling of Continuous Latents (arXiv 2608.08638)</li>
+    <li>Enhancing Flow Matching with A Unified Guidance Framework for Efficient and Robust Speech Synthesis (arXiv 2607.00363)</li>
+    <li>IntMeanFlow: Few-step Speech Generation with Integral Velocity Distillation (arXiv 2510.07979)</li>
+    <li>FlashTTS: Fast Streaming TTS with MTP Acceleration and X-pred Mean Flow Distillation (arXiv 2606.09141)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#flow-tts-fidelity">flow TTS and fidelity</a> and
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#streaming-low-latency">streaming and low latency</a>
+    </li>
+  </ul>
+</section>

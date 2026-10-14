@@ -1,0 +1,213 @@
+<section id="streaming-latency">
+  <h2>Measuring and tuning streaming latency</h2>
+  <p>
+    "How fast is this recogniser?" has no single answer.
+    The delay setting tells you how long the model is built to wait, but a user feels something
+      else: how long after a word was spoken it appears on screen.
+  </p>
+  <p>
+    Think of live subtitles.
+    A viewer does not care that the subtitler works with a two-second buffer.
+    They notice that each word shows up a beat late, and some words show up much later than others.
+    Good streaming work therefore measures word by word, then trains the model against that measure.
+  </p>
+
+  <h3 id="streaming-latency-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 150" role="img"
+      aria-label="Timeline: three spoken words on one row and the moments their text appears on a second row, with the gap from the end of each word to its text marked as emission delay">
+      <defs>
+        <marker id="streaming-latency-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--small" x="8" y="35" text-anchor="start"
+        dominant-baseline="middle">Spoken</text>
+      <rect class="d-box d-box--muted" x="150" y="20" width="100" height="30" rx="6"/>
+      <text class="d-text" x="200" y="35" text-anchor="middle"
+        dominant-baseline="middle">word 1</text>
+      <rect class="d-box d-box--muted" x="270" y="20" width="110" height="30" rx="6"/>
+      <text class="d-text" x="325" y="35" text-anchor="middle"
+        dominant-baseline="middle">word 2</text>
+      <rect class="d-box d-box--muted" x="400" y="20" width="100" height="30" rx="6"/>
+      <text class="d-text" x="450" y="35" text-anchor="middle"
+        dominant-baseline="middle">word 3</text>
+      <text class="d-text--small" x="8" y="115" text-anchor="start"
+        dominant-baseline="middle">Text appears</text>
+      <rect class="d-box" x="300" y="100" width="70" height="30" rx="6"/>
+      <text class="d-text" x="335" y="115" text-anchor="middle"
+        dominant-baseline="middle">word 1</text>
+      <rect class="d-box" x="420" y="100" width="70" height="30" rx="6"/>
+      <text class="d-text" x="455" y="115" text-anchor="middle"
+        dominant-baseline="middle">word 2</text>
+      <rect class="d-box" x="600" y="100" width="70" height="30" rx="6"/>
+      <text class="d-text" x="635" y="115" text-anchor="middle"
+        dominant-baseline="middle">word 3</text>
+      <path class="d-arrow d-arrow--dashed" d="M 250 52 L 300 98"
+        marker-end="url(#streaming-latency-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 380 52 L 420 98"
+        marker-end="url(#streaming-latency-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 500 52 L 600 98"
+        marker-end="url(#streaming-latency-arrow)"/>
+      <text class="d-text--muted" x="640" y="62" text-anchor="middle"
+        dominant-baseline="middle">word 3 waited longest</text>
+    </svg>
+    <figcaption>Figure: emission delay is measured per word, from the end of the spoken word to the
+      moment its text appears. Averages hide the words that wait longest.</figcaption>
+  </figure>
+  <p>
+    <strong>Measure per word, not per model.</strong>
+    The structural delay (a setting such as "wait 6 frames") is a weak proxy for the delay a user
+      perceives.
+    A word-level emission-delay metric (AWED) measures, for each word, how long after the word ends
+      in the audio its text appears.
+    The median over words is the headline number, and the tail shows the worst words.
+  </p>
+  <p>
+    <strong>Stop forcing the model to hold back.</strong>
+    Training from fixed word alignments teaches the model to wait for the aligned time even when it
+      already knows the word.
+    Reinforcement learning removes that constraint.
+    Group relative policy optimisation (GRPO) has the model sample several transcripts for the same
+      audio, score each with a reward, and nudge the model (the policy) toward those that beat the
+      group average; the method itself is in
+    <a href="/apps/materials/speech-to-speech/08-training#rl-beyond-tts">RL beyond TTS</a>.
+    With a reward that scores accuracy and delay together, a delayed-streams recogniser post-trained
+      at a single 6-frame setting cut WER by 30.8% relative at an 80 ms structural delay and 5.7% at
+      480 ms, and lowered the median emission delay from 1.17 s to 1.04 s.
+  </p>
+  <p>
+    <strong>Penalise latency directly.</strong>
+    Another route learns when to read more audio and when to write.
+    A small policy network scores each incoming frame, and a minimum-latency loss penalises the
+      expected delay against forced-alignment boundaries.
+    On a Mandarin test the average latency fell by more than half with almost no change in error
+      (figures in <a href="/apps/materials/speech-to-speech/02-listening#streaming-asr-families">Streaming ASR families</a>).
+  </p>
+  <p>
+    <strong>Make waiting cheap.</strong>
+    Most steps in a delayed-stream model emit nothing.
+    The factorized variant predicts "wait" with its own yes/no probability and runs the vocabulary
+      softmax (the step that scores every possible token) only when the answer is "do not wait".
+    That skipped the softmax on 66.89% of LibriSpeech steps, cut memory for a batch of 32 from 65.82
+      to 24.51 GiB, and gave a slightly lower WER at 480 ms (6.17 against 6.52).
+  </p>
+
+  <h3 id="streaming-latency-turn">End of turn inside the recogniser</h3>
+  <p>
+    A voice agent also needs to know when the user has finished.
+    A silence timer is the usual answer, but it fails when a pause inside a sentence is longer than
+      the gap between turns.
+    Detectors, the audio front end and echo cancellation are covered in
+    <a href="/apps/materials/speech-to-speech/07-conversation#turn-taking">Turn-taking, backchannels and
+      barge-in</a>.
+  </p>
+  <p>
+    One recipe puts the decision inside the recogniser.
+    A LoRA adapter on a 0.6B recogniser learns to transcribe and to predict end of turn in the same
+      pass.
+    It reached 0.97 boundary recall (the share of real turn ends it caught) at a median latency of
+      0.39 s, with 0.3 false fires per minute of speech.
+    The other route is a duplex dialogue model whose ASR head sits beside its reply head, so the
+      user's words come out of the same decoding pass that decides whether to speak.
+  </p>
+  <p>
+    The lesson of the first recipe is about labels.
+    Every label used in training must be computable from the audio heard so far, because the
+      deployed model never sees the future.
+    Offline corpora often encode future audio in their labels, so a model can look excellent on them
+      and fail live.
+    The authors report a case where appending one second of silence moved a model's end-of-turn
+      recall from 0.10 to 1.00, which shows how much the evaluation setup decides the result.
+  </p>
+
+  <h3 id="streaming-latency-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Per-word delay metric</td>
+          <td>What you optimise and report: the median and tail of word emission delay</td>
+          <td>Needs word timestamps on the test audio, which costs an alignment step.</td>
+        </tr>
+        <tr>
+          <td>Latency-aware reward (GRPO)</td>
+          <td>Lets the model emit words earlier than the aligned time</td>
+          <td>Post-training stage with sampling cost; the reward weights decide the balance of
+            accuracy against delay.</td>
+        </tr>
+        <tr>
+          <td>Learned read/write policy</td>
+          <td>When to consume more audio against when to output</td>
+          <td>One more network to train; a loss weight sets the latency pressure.</td>
+        </tr>
+        <tr>
+          <td>Factorized wait</td>
+          <td>Skips the vocabulary softmax on waiting steps</td>
+          <td>A modest accuracy gain plus much lower memory; the prediction heads change, so
+            existing checkpoints do not carry over.
+            <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>End-of-turn head</td>
+          <td>Turn decisions from the recogniser, not a silence timer</td>
+          <td>Labels must be causal. False fires interrupt the user; late fires add delay.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="streaming-latency-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Reporting the setting as the latency.</strong>
+      A model set to a given delay can still show some words much later than that; quote the
+        measured delay, and its tail, because a good median can coexist with a few very late words.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Optimising speed alone.</strong>
+      Training for earlier words without an accuracy term degrades the transcript; the reward must
+        carry both.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Labels that peek ahead.</strong>
+      End-of-turn or word-boundary labels built from the full recording leak the future, and the
+        model collapses in live use.
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-asr-latency">Measuring and
+      optimising ASR latency</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      The delay setting is not the latency users feel, so I measure emission delay word by word and
+        train against it: a reward on both accuracy and delay lets the model write words as soon as
+        it knows them.
+      For turn-taking I would put end-of-turn detection in the recogniser with strictly causal
+        labels, instead of a silence timer.
+    </p>
+  </div>
+
+  <h3 id="streaming-latency-sources">Sources</h3>
+  <ul>
+    <li>Look Less, Hear Better: Jointly Rewarded GRPO for Streaming ASR (arXiv 2609.18333)</li>
+    <li>Streaming Speech Recognition with Decoder-Only Large Language Models and Latency Optimization (arXiv 2601.22779)</li>
+    <li>Factorized Delayed Streams Modeling for LLM-based Streaming ASR (arXiv 2610.04333)</li>
+    <li>The Trade-off Was in the Labels: Causal Supervision for Turn-Aware Streaming ASR (arXiv 2609.04225)</li>
+    <li>Enabling Streaming User Transcription in Full-Duplex Speech-to-Speech Models (arXiv 2609.15759)</li>
+  </ul>
+</section>

@@ -1,0 +1,69 @@
+<section id="streaming-memory-sessions">
+  <h2>Streaming inference: memory and many sessions</h2>
+  <p>
+    Memory, not compute, often sets how many duplex sessions one GPU can hold.
+    This section covers the cache, long sessions and batching.
+  </p>
+  <h3 id="kv-cache">KV-cache growth</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    This arithmetic is derived under stated assumptions: full multi-head attention, bf16 storage,
+    and only the temporal transformer counted (32 layers, model dimension 4096, from Moshi's Table 1, arXiv 2410.00037).
+    The depth transformer's cache can be discarded each frame.
+  </p>
+  \[
+  2 \times 32 \times 4096 \times 2\ \text{B} = 524{,}288\ \text{B} \approx 512\ \text{KiB per frame}
+  \]
+  <p>
+    The leading 2 is keys plus values; the trailing 2 is bytes per bf16 value.
+    At 12.5 frames per second that is 512 KiB \( \times 12.5 \approx 6.3 \) MiB per second,
+    or about 23 GB for one hour (derived).
+    Grouped-query attention would shrink it.
+  </p>
+  <p>
+    The cache grows linearly with session length and with the number of sessions.
+    <span class="tag tag--inference">Inference</span>
+    For many concurrent sessions, cache memory, not weights, sets capacity.
+  </p>
+
+  <h3 id="long-sessions">Long sessions</h3>
+  <ul>
+    <li>
+      The Moshi paper states the model follows multi-turn conversations across 5 minutes (arXiv 2410.00037).
+      Ask what happens beyond that before claiming more.
+    </li>
+    <li>
+      One windowing pattern for audio is block-local attention in Qwen2.5-Omni's streaming codec DiT:
+      2 blocks of lookback and 1 of lookahead (arXiv 2503.20215).
+    </li>
+    <li>
+      A learned pooling of the speech KV cache inside the LLM (SpeechKV) compresses speech to about text-level granularity.
+      The authors, working on speech LLMs more broadly and not a duplex model, report performance on par with or slightly better than uncompressed (relative gains of 6.6% on out-of-domain entity recognition and 2.3% on OpenASR) and at least 1.49 times decoding speedup that grows with audio length (arXiv 2607.06827).
+    </li>
+    <li>
+      A NeurIPS 2026 listing proposes acoustic-to-text KV consolidation for full-duplex models.
+      A side channel transcribes incoming speech into compact text during idle listening time; when the cache exceeds its budget, older acoustic states are evicted while the transcript and recent audio are kept.
+      It is trained with LoRA and distillation.
+      On ten-minute LongSpeech sessions with MiniCPM-o 4.5 the authors report a 64.6% smaller peak streaming KV cache than the same model without eviction, with comparable pause handling, turn-taking and interruption on Full-Duplex-Bench
+      (<a href="https://neurips.cc/virtual/2026/162439">NeurIPS listing</a>; no arXiv id found).
+      <span class="tag tag--reported">Reported</span>
+    </li>
+    <li>
+      For video, Self Forcing (arXiv 2506.08009) uses a rolling KV cache for autoregressive video extrapolation at inference.
+      It is a related pattern for unbounded streams, but it is a video model.
+    </li>
+  </ul>
+
+  <h3 id="batching-sessions">Batching many duplex sessions</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    A turn-based server pays nothing for an idle chat.
+    A duplex session is always active: it needs one frame every 80 ms, including silence.
+    Batching sessions into one GPU step helps throughput, but the whole batched step still has to finish inside 80 ms.
+    The sustainable batch size is the largest \( B \) with \( t_{\text{step}}(B) &lt; 80 \) ms.
+  </p>
+  <p>
+    DSM-TTS reports 150 ms latency at batch size 1 and about 380 ms at batch size 32 (arXiv 2509.08753, Table 6),
+    so latency figures depend on load.
+  </p>
+</section>

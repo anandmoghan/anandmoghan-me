@@ -1,0 +1,267 @@
+<section id="continuous-latents">
+  <h2>Continuous latents and the VAE</h2>
+  <p>
+    A discrete codec rounds each frame to a codebook entry.
+    A continuous tokenizer keeps the frame as a smooth vector instead.
+    It is the difference between a switch with K positions and a dial.
+  </p>
+  <p>
+    The dial loses nothing to rounding, so the ceiling on naturalness is higher.
+    But an LM cannot take a softmax over a dial, so a small diffusion or flow head must sample the
+      next vector.
+    That head is the subject of
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow">Diffusion and flow</a>.
+  </p>
+
+  <h3 id="continuous-latents-how">How it works</h3>
+  <p>
+    A variational autoencoder (VAE) learns an encoder and a decoder.
+    The true likelihood of the audio under the model cannot be computed, so training maximises a quantity that is
+      guaranteed to be no larger than it, a lower bound on the log-likelihood (the evidence lower bound, ELBO).
+    The encoder does not output a single latent; it outputs a mean \( \mu \) and a standard
+      deviation \( \sigma \) per dimension, which define a Gaussian posterior.
+    A prior, a centred Gaussian \( \mathcal{N}(0, I) \), sits opposite it.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 220" role="img"
+      aria-label="VAE tokenizer: the encoder predicts a mean and spread, a latent is sampled with noise, the decoder rebuilds audio, and a KL term ties the posterior to a prior; at generation a flow head produces the latent">
+      <defs>
+        <marker id="continuous-latents-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="70" width="100" height="44" rx="8"/>
+      <text class="d-text" x="60" y="92" text-anchor="middle"
+        dominant-baseline="middle">Audio</text>
+      <rect class="d-box" x="138" y="70" width="110" height="44" rx="8"/>
+      <text class="d-text" x="193" y="92" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <rect class="d-box" x="290" y="28" width="110" height="40" rx="8"/>
+      <text class="d-text" x="345" y="48" text-anchor="middle"
+        dominant-baseline="middle">mean</text>
+      <rect class="d-box" x="290" y="116" width="110" height="40" rx="8"/>
+      <text class="d-text" x="345" y="136" text-anchor="middle"
+        dominant-baseline="middle">spread</text>
+      <rect class="d-box d-box--accent" x="440" y="70" width="130" height="44" rx="8"/>
+      <text class="d-text" x="505" y="84" text-anchor="middle"
+        dominant-baseline="middle">Latent z</text>
+      <text class="d-text--small" x="505" y="101" text-anchor="middle"
+        dominant-baseline="middle">mean + spread x noise</text>
+      <rect class="d-box d-box--muted" x="440" y="6" width="130" height="36" rx="8"/>
+      <text class="d-text" x="505" y="24" text-anchor="middle"
+        dominant-baseline="middle">noise</text>
+      <rect class="d-box" x="610" y="70" width="100" height="44" rx="8"/>
+      <text class="d-text" x="660" y="92" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+      <rect class="d-box d-box--muted" x="290" y="172" width="110" height="40" rx="8"/>
+      <text class="d-text" x="345" y="192" text-anchor="middle"
+        dominant-baseline="middle">Prior</text>
+      <rect class="d-box d-box--muted" x="440" y="172" width="150" height="40" rx="8"/>
+      <text class="d-text" x="515" y="192" text-anchor="middle"
+        dominant-baseline="middle">LM + flow head</text>
+      <path class="d-arrow" d="M 110 92 L 136 92"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <path class="d-arrow" d="M 248 92 L 268 92 L 268 48 L 288 48"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <path class="d-arrow" d="M 248 92 L 268 92 L 268 136 L 288 136"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <path class="d-arrow" d="M 400 48 L 420 48 L 420 86 L 438 86"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <path class="d-arrow" d="M 400 136 L 420 136 L 420 100 L 438 100"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <path class="d-arrow" d="M 505 42 L 505 68"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <path class="d-arrow" d="M 570 92 L 608 92"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 345 156 L 345 170"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <text class="d-text--small" x="355" y="164" text-anchor="start"
+        dominant-baseline="middle">KL</text>
+      <path class="d-arrow d-arrow--dashed" d="M 565 172 L 565 130 L 540 130 L 540 116"
+        marker-end="url(#continuous-latents-arrow)"/>
+      <text class="d-text--small" x="575" y="150" text-anchor="start"
+        dominant-baseline="middle">at generation</text>
+    </svg>
+    <figcaption>Figure: a VAE tokenizer. Noise enters through a separate variable so gradients reach
+      the encoder. The KL term (dashed) holds the posterior near the prior. At generation time the LM
+      and its diffusion or flow head produce the latent instead.</figcaption>
+  </figure>
+  <p>
+    The loss has two parts: reconstruct the audio, and keep the posterior near the prior.
+    The KL divergence \( D_{\mathrm{KL}} \) measures how far one distribution is from another; it is zero when they match.
+  </p>
+  \[
+  \mathcal{L} = \mathbb{E}_{q(z \mid x)}\big[\log p(x \mid z)\big]
+  - D_{\mathrm{KL}}\big(q(z \mid x) \,\|\, \mathcal{N}(0, I)\big)
+  \]
+  <p>
+    With both sides Gaussian, the KL term has a closed form and needs no sampling.
+    It pulls \( \mu \) toward 0 and \( \sigma \) toward 1, which keeps the latent space smooth and bounded.
+  </p>
+  \[
+  -D_{\mathrm{KL}} = \tfrac{1}{2} \sum_j \left( 1 + \log \sigma_j^2 - \mu_j^2 - \sigma_j^2 \right)
+  \]
+  <p>
+    To train through the sampling step, the reparameterisation trick moves the randomness into a
+      noise variable.
+  </p>
+  \[
+  \epsilon \sim \mathcal{N}(0, I),
+  \qquad
+  z = \mu + \sigma \odot \epsilon
+  \]
+  <p>
+    Now \( z \) is a deterministic function of \( \mu \) and \( \sigma \), so reconstruction
+      gradients reach the encoder.
+    At generation time nothing samples from the prior: the LM's diffusion or flow head produces the
+      next latent from context, and the decoder turns it into audio.
+    The prior only shapes the latent space while the tokenizer trains.
+  </p>
+  <p>
+    Speech and audio tokenizers keep this shape and add the codec's adversarial and spectral losses.
+    VibeVoice's acoustic tokenizer is a sigma-VAE: the encoder predicts \( \mu \), and \( \sigma \) is a
+      pre-defined distribution rather than learned.
+    It is causal, downsamples 24 kHz audio by 3200x to 7.5 frames per second, and trains with DAC's
+      discriminator and loss designs.
+    Stable Audio Open's autoencoder has a VAE bottleneck of latent size 64, with the KL term down-weighted
+      by \( 10^{-4} \); a diffusion transformer trains on 1024-step latent sequences of about 47 s.
+  </p>
+
+  <h3 id="continuous-latents-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>KL weight</td>
+          <td>How hard the posterior is held to the prior (Stable Audio Open: \( 10^{-4} \))</td>
+          <td>A small weight acts as a light regulariser, not a tight bottleneck.
+            <span class="tag tag--inference">Inference</span> Too large squeezes out detail.</td>
+        </tr>
+        <tr>
+          <td>Fixed or learned \( \sigma \)</td>
+          <td>VibeVoice fixes \( \sigma \) to a pre-defined distribution</td>
+          <td>Guards against variance collapse (a learned \( \sigma \) shrinking toward zero) in autoregressive use.</td>
+        </tr>
+        <tr>
+          <td>Latent size and rate</td>
+          <td>64 dimensions in Stable Audio Open; 7.5 Hz in VibeVoice</td>
+          <td>Lower rates give shorter sequences. VibeVoice reports 80x better compression than
+            EnCodec at comparable performance.</td>
+        </tr>
+        <tr>
+          <td>Causal encoder</td>
+          <td>VibeVoice's tokenizer is causal</td>
+          <td>Required for streaming; limits the context per frame.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Choosing between the two forms is a trade-off.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Discrete codes</th>
+          <th>Continuous latents</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Fidelity</td>
+          <td>Quantization loss</td>
+          <td>No quantization loss; higher ceiling</td>
+        </tr>
+        <tr>
+          <td>LM output</td>
+          <td>Softmax over a vocabulary</td>
+          <td>Needs a regression, diffusion or flow head</td>
+        </tr>
+        <tr>
+          <td>Sampling control</td>
+          <td>Top-p over a categorical</td>
+          <td>Weaker; temperature maps to noise injection in the head</td>
+        </tr>
+        <tr>
+          <td>Reinforcement learning</td>
+          <td>Direct on tokens</td>
+          <td>Harder; the per-step probability ratios that RL needs add overhead</td>
+        </tr>
+        <tr>
+          <td>Cost per step</td>
+          <td>One LM step</td>
+          <td>LM step plus a diffusion or flow pass</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="continuous-latents-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Variance collapse.</strong>
+      A learned \( \sigma \) can shrink toward zero, so the latent acts like a fixed number instead of a
+        spread-out distribution; this is reported as a risk in autoregressive use, and VibeVoice's fixed
+        \( \sigma \) exists to prevent it.
+    </li>
+    <li>
+      <strong>Per-step cost.</strong>
+      A diffusion or flow pass on top of each LM step adds latency, which matters for duplex products.
+    </li>
+    <li>
+      <strong>Hard to align with RL.</strong>
+      A flow-matching head produces each output through many small denoising steps, so policy-gradient methods must track
+        a probability ratio at every step.
+      How this is handled is covered in
+      <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-rewards">Diffusion and flow: rewards</a>.
+    </li>
+    <li>
+      <strong>Over-regularised latents.</strong>
+      <span class="tag tag--inference">Inference</span>
+      A heavy KL weight can remove the detail the decoder needs, which is why the weights used are
+        small.
+    </li>
+  </ul>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Qwen3-Omni uses a codec plus a causal ConvNet decoder, which suggests continuous heads may stay
+      niche for duplex products.
+    For a duplex product I would start discrete and revisit.
+  </p>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#codec-training">How codecs are trained</a>
+    and
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#continuous-autoregression">Continuous
+      autoregression and next-token diffusion</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      A continuous tokenizer is the VAE version of a codec: a Gaussian latent with a small KL term,
+        which removes quantization loss but needs a diffusion or flow head and makes RL harder.
+      VibeVoice fixes sigma to avoid variance collapse and runs at 7.5 Hz.
+      For a duplex product I would start with discrete tokens and revisit.
+    </p>
+  </div>
+
+  <h3 id="continuous-latents-sources">Sources</h3>
+  <ul>
+    <li>Auto-Encoding Variational Bayes (arXiv 1312.6114)</li>
+    <li>VibeVoice Technical Report (arXiv 2508.19205)</li>
+    <li>Stable Audio Open (arXiv 2407.14358)</li>
+    <li>GROW: Group-Relative Advantage-Weighted On-Policy Reinforcement Learning of Autoregressive-Diffusion Text-to-Speech model (arXiv 2608.03215)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+  </ul>
+</section>

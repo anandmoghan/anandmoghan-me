@@ -1,0 +1,169 @@
+<section id="reward-hacking-guards">
+  <h2>Reward hacking and its guards</h2>
+  <p>
+    When a score becomes the goal, people find ways to raise it without doing the thing it measures.
+    A student who learns the marking scheme and skips the subject is the usual picture.
+    A policy under RL does this far more tirelessly, and in speech the scorers are themselves models with blind spots.
+    A model can learn sounds that please the scorer and annoy a listener.
+  </p>
+
+  <h3 id="reward-hacking-guards-how">How it works</h3>
+  <p>
+    The pattern is the same every time.
+    One optimised score rises, a held-out measure stalls or falls, and a human listener hears the damage.
+    Each guard below breaks a different link in that chain.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Hack</th>
+          <th>What you hear or see</th>
+          <th>Guard</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Single quality predictor optimised</td>
+          <td>Its score climbs while held-out judges and listeners get worse</td>
+          <td>Equal-weighted or calibrated composite; held-out judges</td>
+        </tr>
+        <tr>
+          <td>Error-rate and likelihood rewards</td>
+          <td>Lower error rates and monotone prosody</td>
+          <td>Iterative DPO with human preference pairs</td>
+        </tr>
+        <tr>
+          <td>Single enhancement metric</td>
+          <td>Fast metric gains, degraded fidelity</td>
+          <td>Multi-metric reward</td>
+        </tr>
+        <tr>
+          <td>Reward model exploited by acoustic artefacts</td>
+          <td>Spurious reward with worse perceived quality</td>
+          <td>Held-out judges and a listening panel</td>
+        </tr>
+        <tr>
+          <td>Judge verbosity and position bias</td>
+          <td>Rewards follow length or order</td>
+          <td>Randomised order; multi-aspect ensemble; validate on human labels</td>
+        </tr>
+        <tr>
+          <td>Timing optimised alone</td>
+          <td>Semantic drift in what the model says</td>
+          <td>LLM-based response-quality reward</td>
+        </tr>
+        <tr>
+          <td>Interaction reward met by stopping early</td>
+          <td>Better interruption and pause scores, replies cut short</td>
+          <td>Check response completeness next to every timing gain</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The pairing of hack and guard is my own reading except where a source is named.
+    <span class="tag tag--inference">Inference</span>
+    Evaluation in general, and what to measure beyond rewards, is in
+    <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems">Evaluation and problems</a>.
+  </p>
+  <p>
+    <strong>Monitoring.</strong>
+    Track these during every run, with the definitions from
+    <a href="/apps/materials/speech-to-speech/08-training#online-rl-speech">online RL for speech</a>
+    (KL to the reference, zero-advantage groups):
+  </p>
+  <ul>
+    <li><strong>Per-reward mean and variance:</strong> variance near zero means every rollout scores alike and the reward no longer separates them.</li>
+    <li><strong>Fraction of zero-advantage groups:</strong> a rising fraction means wasted compute.</li>
+    <li><strong>KL:</strong> a steady climb signals the policy is leaving the safe region.</li>
+    <li><strong>Clip fraction:</strong> the share of updates that hit the clipping limit on step size (see <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-rewards-why-sde">Why RL needs the SDE</a>); high values mean the policy is trying to move faster than the update allows.</li>
+    <li><strong>End-of-sequence behaviour:</strong> a policy that learns to end early or never end can be reward hacking; one duplex study found a model gaming a hybrid reward through incomplete responses.</li>
+  </ul>
+  <p>
+    Add acoustic statistics: fundamental frequency (pitch) spread, energy, speaking rate, silence ratio and the duration distribution.
+    A flat pitch spread or a shrinking duration range is an early signature of prosody collapse.
+    Stop when held-out metrics degrade even if the training reward rises, and spot-check the audio by ear.
+  </p>
+
+  <h3 id="reward-hacking-guards-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Held-out judges</td>
+          <td>A second ASR, a second speaker model and a listening panel outside the reward</td>
+          <td>Detects hacking; costs evaluation time</td>
+        </tr>
+        <tr>
+          <td>Composite reward, with a duration-ratio penalty against speech that is too fast or truncated</td>
+          <td>Spreads pressure over several scores</td>
+          <td>Resists gaming; weights need tuning</td>
+        </tr>
+        <tr>
+          <td>KL to the reference</td>
+          <td>Limits drift</td>
+          <td>Slows legitimate gains too</td>
+        </tr>
+        <tr>
+          <td>Human preference pairs</td>
+          <td>Corrects what no verifiable reward sees</td>
+          <td>A few hundred pairs per round help; labelling is slow</td>
+        </tr>
+        <tr>
+          <td>Early stopping on held-out metrics</td>
+          <td>When training ends</td>
+          <td>Safe; may leave gains unused</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="reward-hacking-guards-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Guards share blind spots with rewards.</strong>
+      A held-out judge from the same family as the reward model fails the same way.
+    </li>
+    <li>
+      <strong>Train reward treated as the metric.</strong>
+      Report held-out results from different models than the ones used in training.
+    </li>
+    <li>
+      <strong>Listening skipped, forgetting returns.</strong>
+      Automatic metrics are optimisable, so a human listening gate is the final check.
+      RL can also erode text ability; keep the strict text QA gate from earlier stages.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Every reward I optimise gets a held-out twin I never train on: a second ASR, a second speaker model, and a listening panel.
+      I watch pitch spread and speaking rate for prosody collapse, and I stop when held-out metrics fall even if the reward rises."
+    </p>
+  </div>
+
+  <h3 id="reward-hacking-guards-sources">Sources</h3>
+  <ul>
+    <li>The Limits of Reference-Free Speech Quality Metrics as Evaluators and Rewards on Modern Text-to-Speech (arXiv 2609.13150)</li>
+    <li>No Verifiable Reward for Prosody: Toward Preference-Guided Prosody Learning in TTS (arXiv 2509.18531)</li>
+    <li>FlowSE-GRPO: Training Flow Matching Speech Enhancement via Online Reinforcement Learning (arXiv 2601.16483)</li>
+    <li>RRPO: Robust Reward Policy Optimization for LLM-based Emotional TTS (arXiv 2512.04552)</li>
+    <li>AudioJudge: Understanding What Works in Large Audio Model Based Speech Evaluation (arXiv 2507.12705)</li>
+    <li>SteerDuplex: Steerable Duplex Speech Dialogue Models (arXiv 2609.12623)</li>
+    <li>Multi-Faceted Interactivity Alignment in Full-Duplex Speech Models (arXiv 2606.11167)</li>
+    <li>Post-Training Speech Enhancement Language Models with Perceptual Rewards (arXiv 2606.21458)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#reward-hacking-guards">Reward hacking: cases and guards</a>,
+      <a href="/apps/materials/speech-lit-review/06-control-and-quality#reward-hacking">Reward hacking</a>
+    </li>
+  </ul>
+</section>

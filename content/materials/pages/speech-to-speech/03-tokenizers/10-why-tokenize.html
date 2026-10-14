@@ -1,0 +1,223 @@
+<section id="why-tokenize">
+  <h2>Why tokenize audio at all</h2>
+  <p>
+    A language model predicts the next item from a finite menu.
+    Audio is the opposite: a continuous waveform with tens of thousands of numbers per second.
+    Tokenizing audio means compressing it into a short sequence of items an LM can model the way it
+      models text.
+  </p>
+  <p>
+    Think of sheet music.
+    A page of symbols is a few hundred bytes, yet a pianist can recreate the sound from it.
+    A tokenizer is sheet music learned from data, and the decoder is the pianist.
+    The signal basics are in
+    <a href="/apps/materials/speech-to-speech/01-sound-as-numbers">Sound as numbers</a>.
+  </p>
+
+  <h3 id="why-tokenize-how">How it works</h3>
+  <p>
+    The pipeline cuts the waveform into <strong>frames</strong>, short slices such as 80 ms
+      (see <a href="/apps/materials/speech-to-speech/01-sound-as-numbers#frames-hops-hz">Frames, hops and Hz</a>).
+    An encoder turns each frame into a <strong>latent</strong>, a vector of numbers that summarises the slice.
+    A quantizer then replaces the latent with the closest entry of a <strong>codebook</strong>,
+      a table of \( K \) learned vectors, and the <strong>code</strong> (the token) is that entry's row number.
+    A codec (or tokenizer) does three jobs: it sets the sequence length the LM sees, it sets the
+      ceiling on audio quality, and it decides how easy the LM's task is.
+    The first two are arithmetic.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 130" role="img"
+      aria-label="Sequence length ladder: 24,000 samples per second become 12.5 latent frames per second, then 100 codes per second with 8 codes per frame">
+      <defs>
+        <marker id="why-tokenize-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="26" y="20" width="140" height="44" rx="8"/>
+      <text class="d-text" x="96" y="34" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <text class="d-text--small" x="96" y="51" text-anchor="middle"
+        dominant-baseline="middle">24 kHz audio</text>
+      <rect class="d-box" x="202" y="20" width="140" height="44" rx="8"/>
+      <text class="d-text" x="272" y="34" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <text class="d-text--small" x="272" y="51" text-anchor="middle"
+        dominant-baseline="middle">strided convolutions</text>
+      <rect class="d-box d-box--accent" x="378" y="20" width="140" height="44" rx="8"/>
+      <text class="d-text" x="448" y="34" text-anchor="middle"
+        dominant-baseline="middle">Quantizer</text>
+      <text class="d-text--small" x="448" y="51" text-anchor="middle"
+        dominant-baseline="middle">8 codes per frame</text>
+      <rect class="d-box" x="554" y="20" width="140" height="44" rx="8"/>
+      <text class="d-text" x="624" y="34" text-anchor="middle"
+        dominant-baseline="middle">Language model</text>
+      <text class="d-text--small" x="624" y="51" text-anchor="middle"
+        dominant-baseline="middle">predicts the codes</text>
+      <path class="d-arrow" d="M 166 42 L 200 42"
+        marker-end="url(#why-tokenize-arrow)"/>
+      <path class="d-arrow" d="M 342 42 L 376 42"
+        marker-end="url(#why-tokenize-arrow)"/>
+      <path class="d-arrow" d="M 518 42 L 552 42"
+        marker-end="url(#why-tokenize-arrow)"/>
+      <text class="d-text--muted" x="96" y="84" text-anchor="middle"
+        dominant-baseline="middle">24,000 samples/s</text>
+      <text class="d-text--muted" x="272" y="84" text-anchor="middle"
+        dominant-baseline="middle">12.5 frames/s</text>
+      <text class="d-text--muted" x="448" y="84" text-anchor="middle"
+        dominant-baseline="middle">100 codes/s</text>
+      <text class="d-text--muted" x="624" y="84" text-anchor="middle"
+        dominant-baseline="middle">12.5 steps/s</text>
+      <text class="d-text--muted" x="272" y="102" text-anchor="middle"
+        dominant-baseline="middle">1,920 samples per frame (80 ms)</text>
+      <text class="d-text--muted" x="448" y="102" text-anchor="middle"
+        dominant-baseline="middle">12.5 x 8 = 100</text>
+    </svg>
+    <figcaption>Figure: the tokenizer shortens the sequence the LM must model. Numbers follow the
+      Mimi codec: 12.5 frames per second, 8 codes per frame. English text runs at about 3 to 4 tokens per second.</figcaption>
+  </figure>
+  <p>
+    Each frame becomes one code per codebook.
+    So the code rate is the frame rate times the number of codebooks, and the bitrate adds the bits per code.
+    A codebook with \( K \) entries needs \( \log_2 K \) bits to name one entry.
+  </p>
+  \[
+  \text{codes/s} = f \times Q,
+  \qquad
+  \text{bitrate} = f \times Q \times \log_2 K
+  \]
+  <p>
+    Here \( f \) is the frame rate and \( Q \) the number of codebooks.
+    Take Mimi, the codec in Moshi: \( f = 12.5 \) Hz (one frame every 80 ms), \( Q = 8 \), \( K = 2048 \).
+    A 2048-entry codebook needs 11 bits, so eight of them at 12.5 Hz cost
+      \( 12.5 \times 8 \times 11 = 1100 \) bits per second, or 1.1 kbps.
+  </p>
+  <p>
+    The LM does not take 100 steps per second.
+    Its main network takes one step per frame, 12.5 per second, and a small second network predicts that
+      frame's 8 codes one after another.
+    So the "100 per second" counts code predictions, while the expensive big-model steps number 12.5.
+    Spoken English runs at about 3 to 4 text tokens per second, so 12.5 steps per second is a few times the
+      text rate, not tens of times.
+    That is why frame rate is the first number to set.
+  </p>
+  <p>
+    Tokens come in two forms: discrete codes, covered in the next sections, and continuous latents,
+      covered in the last section.
+    In images, video and audio alike, the tokenizer sets the quality ceiling more than the generator does.
+  </p>
+
+  <h3 id="why-tokenize-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Frame rate \( f \)</td>
+          <td>LM steps per second. Mimi 12.5 Hz, CosyVoice 2 25 Hz, EnCodec 75 Hz, DAC about 86 Hz,
+            VibeVoice 7.5 Hz (continuous)</td>
+          <td>Lower rate means fewer autoregressive steps and a cheaper LM, at some cost in
+            reconstruction and intelligibility. About 12.5 Hz is the common default.</td>
+        </tr>
+        <tr>
+          <td>Fixed or dynamic rate</td>
+          <td>A fixed codec spends the same number of frames on silence and on fast speech.
+            FlexiCodec merges neighbouring frames with similar content, so the average rate can be set
+            between 3 Hz and 12.5 Hz at inference. Q-SPT replaces average pooling with learned queries
+            that attend over the frames</td>
+          <td>Fewer frames where nothing changes, at the cost of variable-length frames. Average pooling
+            treats every frame alike and throws content away; Q-SPT adds a text-prediction loss to keep it.</td>
+        </tr>
+        <tr>
+          <td>Codebooks \( Q \) and size \( K \)</td>
+          <td>Codes per frame and bits per code: Mimi 8 codebooks of 2048 entries; GLM-4-Voice and
+            WavTokenizer use a single codebook</td>
+          <td>More codebooks give more detail and more codes to model per frame. Larger codebooks carry
+            more per code and are harder to keep fully used (see the next section).</td>
+        </tr>
+        <tr>
+          <td>Bitrate</td>
+          <td>The product of the three above: Mimi 1.1 kbps, GLM-4-Voice 175 bps, ZipCodec 0.80 kbps at
+            6.25 Hz, TaDiCodec 87.5 bps</td>
+          <td>The overall budget. Ultra-low rates lean on extra machinery: TaDiCodec at 6.25 Hz
+            needs the text at decode time, and ZipCodec distils a large speech model (WavLM) during
+            training and has 842M parameters (yet runs in real time on a consumer CPU).</td>
+        </tr>
+        <tr>
+          <td>Causal against non-causal</td>
+          <td>Whether the encoder and decoder read future audio</td>
+          <td>Mimi uses only causal convolutions, with 160 ms theoretical and 200 ms practical
+            latency. Causality bounds the first-audio latency in a streaming system.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="why-tokenize-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>A quality cliff at low rate.</strong>
+      WavTokenizer scores PESQ 1.70 and UTMOS 3.60 at 40 tokens per second against 2.37 and 4.05 at 75
+        (both are automatic quality scores, explained in
+        <a href="/apps/materials/speech-to-speech/03-tokenizers#judging-a-tokenizer">Judging a tokenizer</a>).
+      A controlled ablation reproduces a cliff at 6.25 Hz, then traces it to the training setup: a fixed
+        clip duration gives too few tokens at low rates.
+      After the fix, word error rate (<a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">WER</a>, here
+        measured on the decoded audio) degrades smoothly with phonemic load down to 3.1 Hz and 1.6 Hz.
+      ZipCodec at 6.25 Hz reports better results than existing streaming codecs at comparable bitrates.
+      Treat a cliff as a warning about your training configuration before you treat it as a floor.
+    </li>
+    <li>
+      <strong>More rate is not always better.</strong>
+      Pooling X-Codec 2 from 50 Hz to 25 Hz raised UTMOSv2 on seven languages, for example Dutch
+        from 2.168 to 2.457.
+    </li>
+    <li>
+      <strong>Extra inputs hide the cost.</strong>
+      TaDiCodec reaches 6.25 Hz with WER 3.02, but removing the text input at decode causes
+        significant degradation.
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#timing-logic">Timing logic: choosing input
+      and output rates</a>
+    and <a href="/apps/materials/speech-lit-review/03-speech-generation#codecs-tokenizers">Codecs and speech
+      tokenizers</a>.
+    How an LM then predicts these codes:
+      <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens">Speaking with tokens</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      The tokenizer sets the sequence length and the quality ceiling before the LM does anything.
+      Frame rate times codebooks gives codes per second, and I default to about 12.5 Hz because the big model then takes only a few
+        steps per word; I would test lower or dynamic rates carefully, since reported
+        cliffs are partly training artifacts.
+    </p>
+  </div>
+
+  <h3 id="why-tokenize-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>WavTokenizer: an Efficient Acoustic Discrete Codec Tokenizer for Audio Language Modeling (arXiv 2408.16532)</li>
+    <li>TaDiCodec: Text-aware Diffusion Speech Tokenizer for Speech Language Modeling (arXiv 2508.16790)</li>
+    <li>Probing Low Frame Rate Degradation in Neural Audio Codecs (arXiv 2606.16969)</li>
+    <li>Improving X-Codec-2.0 for Multi-Lingual Speech: 25 Hz Latent Rate and 24 kHz Sampling (arXiv 2601.20185)</li>
+    <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot (arXiv 2412.02612)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>High-Fidelity Audio Compression with Improved RVQGAN (arXiv 2306.06546)</li>
+    <li>High Fidelity Neural Audio Compression (arXiv 2210.13438)</li>
+    <li>VibeVoice Technical Report (arXiv 2508.19205)</li>
+    <li>FlexiCodec: A Dynamic Neural Audio Codec for Low Frame Rates (arXiv 2510.00981)</li>
+    <li>Q-SPT: Learnable Query-Based Compression for Low-Frame-Rate Speech Tokenization (arXiv 2610.01492)</li>
+    <li>ZipCodec: Ultra-Low-Frame-Rate Streaming Speech Coding (arXiv 2609.11642)</li>
+  </ul>
+</section>

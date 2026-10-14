@@ -1,0 +1,92 @@
+<section id="backchannels-barge-in">
+  <h2>Backchannels, barge-in and self-voice</h2>
+  <p>
+    A good duplex agent tells a backchannel from a barge-in, and does not mistake its own voice for the user's.
+    Both are decision problems with an echo problem underneath.
+  </p>
+  <h3 id="backchannel-vs-barge-in">Backchannel against barge-in</h3>
+  <p>
+    A backchannel ("mm-hm") signals attention and leaves the floor with the speaker.
+    A barge-in takes the floor.
+    <span class="tag tag--inference">Inference</span>
+    A characteristic failure follows: the system treats a backchannel as a barge-in and stops talking.
+  </p>
+  <ul>
+    <li>
+      <span class="tag tag--reported">Reported</span>
+      DuplexSLA-Bench (arXiv 2605.20755, Table 6, context-prefill setting, authors' numbers):
+      backchannel accuracy 0.33% for gpt-realtime-1.5 with semantic VAD,
+      40.00% for gemini-3.1-flash-live, 98.33% for DuplexSLA.
+    </li>
+    <li>
+      Talking Turns (ICLR 2025, arXiv 2503.01174): in a user study, audio foundation models sometimes miss when to speak,
+      interrupt too aggressively and rarely backchannel.
+      It uses a supervised turn-event model as judge, with test benchmarks curated from Switchboard.
+    </li>
+    <li>
+      Full-Duplex-Bench v1.5 (arXiv 2507.23159) scores user interruption, user backchannel, talking to others and background speech.
+      It measures categorical behaviour, stop and response latency, and prosodic adaptation.
+    </li>
+  </ul>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Two numbers define good barge-in handling:
+    stop latency, the time from user onset to the last audible agent sample, and the false-yield rate, how often a
+    backchannel, laugh or background voice stops the agent.
+    Optimising only one of them breaks the other.
+  </p>
+  \[
+  L_{\text{stop}} = t_{\text{last audible agent sample}} - t_{\text{user onset}}
+  \]
+
+  <p>
+    The full metric proposals, with operating points, are in
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#conversational-evaluation">conversational evaluation</a>;
+    training for these behaviours is in
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#online-rl-rewards">online RL and rewards</a>.
+  </p>
+
+  <h3 id="self-voice">Self-voice and echo</h3>
+  <p>
+    A duplex model hears the speaker output it just produced, unless something removes it.
+    MinMo's duplex module still requires separate acoustic echo cancellation (AEC) and VAD modules (arXiv 2501.06282).
+    SALMONN-omni (arXiv 2411.18138) is instead described as listening to its own generated speech and background sounds while speaking,
+    and SALM-Duplex (arXiv 2505.15670) targets barge-in and turn-taking.
+  </p>
+  <p>
+    A neural AEC can be small enough for a phone.
+    One mobile design uses data augmentation for hardware and nonlinear-distortion variety, progressive learning, and a post-processing strategy with parameters tailored separately for VAD and ASR.
+    It is a small-footprint model with streaming inference, and the authors report gains in Echo Return Loss Enhancement, PESQ, VAD and ASR (arXiv 2508.07561).
+    <span class="tag tag--reported">Reported</span>
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    A model that hears its own output needs an explicit reference-signal path: the playback signal goes in as an
+    extra input, so the model or the AEC can subtract what it said from what the microphone heard.
+    Measure stop latency on echo-cancelled output, or a barge-in test passes for the wrong reason.
+  </p>
+  <h3 id="audio-front-end">Target speaker and the audio front-end</h3>
+  <p>
+    Echo is not the only unwanted sound: a second talker or a TV can also trigger a false barge-in.
+    UAF (arXiv 2604.19221) folds VAD, turn-taking detection, speaker recognition, ASR and QA into one autoregressive audio front-end LLM.
+    It takes streaming fixed-duration chunks (for example 600 ms), uses a reference audio prompt at the start to anchor the target speaker, and generates discrete tokens that encode semantic content and control signals such as interruptions.
+    The authors report leading performance across front-end tasks and better response latency and interruption accuracy in real-world scenarios; the abstract gives no benchmark numbers.
+    The hierarchical EOT model tackles the same problem from the other side: it tracks a primary speaker so that background conversation does not confound end-of-turn decisions (arXiv 2603.13379).
+    Full-Duplex-Bench-v3 adds a reminder that real speech is messy: on real human audio with disfluencies, self-correction handling was a consistent failure across systems (arXiv 2604.04847).
+  </p>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      A low stop latency alone is not good turn-taking.
+      An agent that stops at every cough scores well on stop latency and badly on false yields.
+      Report both at a stated operating point.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "A key failure is treating a backchannel as a barge-in.
+      I would report stop latency on echo-cancelled output together with false-yield rate, at one operating point."
+    </p>
+  </div>
+</section>

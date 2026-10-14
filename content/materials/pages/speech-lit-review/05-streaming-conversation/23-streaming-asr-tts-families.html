@@ -1,0 +1,608 @@
+<section id="streaming-asr-tts-families">
+  <h2>Ways to model streaming ASR and TTS in speech LLMs</h2>
+  <p>
+    Streaming ASR and streaming TTS each split into a handful of families, and each family answers two questions.
+    For ASR: what sets the latency floor, and who decides when to emit a word?
+    For TTS: does the text arrive complete or incrementally, how far does the decoder look ahead, and how many tokens come out per step?
+    Numbers are the authors' own, on different hardware and test sets, so compare shapes, not digits.
+    Background is in
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding#asr-streaming">Streaming approaches for ASR</a>,
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#streaming-low-latency">Streaming and low latency</a>,
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#text-and-speech-together">Moshi</a>
+    and <a href="/apps/materials/speech-lit-review/05-streaming-conversation#delay-and-interleaving">Delay and interleaving</a>.
+  </p>
+
+  <h3 id="streaming-asr-families">Streaming ASR families</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>Latency source</th>
+          <th>Future context</th>
+          <th>Quality trade-off</th>
+          <th>Examples</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1. Chunked encoder, LLM emits per chunk</td>
+          <td>Chunk length plus decode per chunk</td>
+          <td>Bounded by the chunk</td>
+          <td>WER 2.5 / 6.5 at 2.56 s, 2.7 / 6.7 at 1.28 s, 3.1 / 7.8 at 0.32 s</td>
+          <td>SpeechLLM-XL (arXiv 2410.03752)</td>
+        </tr>
+        <tr>
+          <td>1b. Per-embedding wait token</td>
+          <td>240 ms input frame plus 960 ms encoder right context</td>
+          <td>About 960 ms</td>
+          <td>80M model, WER 3.0 / 7.4 on LibriSpeech; RTF 0.79 greedy</td>
+          <td>Speech ReaLLM (arXiv 2406.09569)</td>
+        </tr>
+        <tr>
+          <td>2. Transducer with LLM predictor</td>
+          <td>Segment size</td>
+          <td>Depends on segment</td>
+          <td>160 ms segment: 2.47 / 6.53 against 3.65 / 8.96 for a standard RNN-T</td>
+          <td>Transducer-Llama (arXiv 2412.16464)</td>
+        </tr>
+        <tr>
+          <td>2b. Cache-aware transducer, no LLM</td>
+          <td>Chunk size</td>
+          <td>Right context in 80 ms frames</td>
+          <td>0.08 s: average WER 8.43; 0.16 s: 7.67; 0.56 s: 7.07; 1.12 s: 6.93</td>
+          <td><a href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">Nemotron Speech streaming</a> (NVIDIA model card)</td>
+        </tr>
+        <tr>
+          <td>3. Time-aligned delayed text stream</td>
+          <td>Delay: fixed (2.5 s default for DSM ASR) or chosen at inference (Voxtral Realtime, 80 to 2400 ms in training)</td>
+          <td>Supplied by the delay</td>
+          <td>DSM: 1.7 / 4.3 against 3.3 / 4.7 for streaming Parakeet-TDT-v2; delay precision about 300 ms. Voxtral Realtime: 2.08 / 5.54 at 480 ms, 1.96 / 4.59 at 960 ms. Factorized DSM, LibriSpeech at 480 ms: 6.17 against 6.52 for DSM (average of clean and other)</td>
+          <td>Kyutai DSM (arXiv 2509.08753), Voxtral Realtime (arXiv 2602.11298), Factorized DSM (arXiv 2610.04333)</td>
+        </tr>
+        <tr>
+          <td>3b. Learned read/write policy in a decoder-only LLM</td>
+          <td>Frames read before each write; a latency loss sets the pressure</td>
+          <td>Set by the policy</td>
+          <td>AISHELL-2 CER 5.5% at an average of 6 frames (40 ms each), against 5.4% at 16 frames without the latency loss; AISHELL-1 streaming 5.1% against 4.9% non-streaming</td>
+          <td>Streaming ASR with decoder-only LLMs and latency optimisation (arXiv 2601.22779)</td>
+        </tr>
+        <tr>
+          <td>3c. Chunked encoder with speaker attribution</td>
+          <td>2.0 s (15-frame) or 2.9 s (22-frame) chunks, each latent frame 133.3 ms</td>
+          <td>0.5 s (4 frames) after each chunk</td>
+          <td>7B model, 24.66 average WER/CER over five meeting-style sets (AliMeeting, AISHELL-4, AMI-SDM, AMI-IHM, MLC macro average); ASR and speaker attribution in one pass</td>
+          <td>VibeVoice-ASR-Streaming (arXiv 2609.02812)</td>
+        </tr>
+        <tr>
+          <td>3d. Streaming transcription head in a duplex model</td>
+          <td>Per-step, shares the duplex model's backbone and decoding pass</td>
+          <td>Set by the host model</td>
+          <td>10.21% average WER on the Open ASR Leaderboard inside the duplex model, 7.73% as a standalone streaming model</td>
+          <td>arXiv 2609.15759</td>
+        </tr>
+        <tr>
+          <td>4. Read/write policies on an offline model</td>
+          <td>Chunk size and policy</td>
+          <td>Some look-ahead</td>
+          <td>LocalAgreement: 3.3 s long-form latency; Simul-Whisper: 1 s chunk, 1.46% average degradation (abstract)</td>
+          <td>LocalAgreement (arXiv 2307.14743), Simul-Whisper (arXiv 2406.10052)</td>
+        </tr>
+        <tr>
+          <td>5. One encoder for streaming and offline</td>
+          <td>Attention window size</td>
+          <td>The window</td>
+          <td>1.7B offline 2.69 average against streaming 3.33</td>
+          <td>Qwen3-ASR (arXiv 2601.21337)</td>
+        </tr>
+        <tr>
+          <td>6. CTC only, no text decoder</td>
+          <td>One encoder pass; greedy decoding reads a label or blank per frame</td>
+          <td>Set by the encoder</td>
+          <td>470M parameters, 12.5 Hz output, 5.72% average WER over seven English sets; RTFx 13,715 on one H100 at batch 128 for an earlier checkpoint; the abstract claims twice the speed of the fastest competitor. No streaming mode is described in the pages I read</td>
+          <td>Granite 5.0 TurboCTC (arXiv 2609.20104)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 292" role="img"
+      aria-label="Four streaming ASR families as timelines. Chunked: audio chunks, each followed by a text burst ending in an end-of-chunk token. Wait token: per-frame outputs that are mostly wait with an occasional word. Delayed stream: the text lane is shifted right by a delay d against audio. Read/write: two successive hypotheses, the common prefix is committed and emitted">
+      <defs>
+        <marker id="streaming-families-asr-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Chunked == -->
+      <rect class="d-group" x="5" y="6" width="710" height="64" rx="8"/>
+      <text class="d-text--small" x="14" y="28">Chunked</text>
+      <text class="d-text--muted" x="14" y="46">text per chunk</text>
+      <rect class="d-box" x="170" y="14" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="227" y="25" text-anchor="middle"
+        dominant-baseline="middle">audio chunk</text>
+      <rect class="d-box" x="290" y="14" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="347" y="25" text-anchor="middle"
+        dominant-baseline="middle">audio chunk</text>
+      <rect class="d-box" x="410" y="14" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="467" y="25" text-anchor="middle"
+        dominant-baseline="middle">audio chunk</text>
+      <rect class="d-box" x="530" y="14" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="587" y="25" text-anchor="middle"
+        dominant-baseline="middle">audio chunk</text>
+      <rect class="d-box d-box--accent" x="288" y="40" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="345" y="51" text-anchor="middle"
+        dominant-baseline="middle">words + EOC</text>
+      <rect class="d-box d-box--accent" x="408" y="40" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="465" y="51" text-anchor="middle"
+        dominant-baseline="middle">words + EOC</text>
+      <rect class="d-box d-box--accent" x="528" y="40" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="585" y="51" text-anchor="middle"
+        dominant-baseline="middle">words + EOC</text>
+
+      <!-- == Wait token == -->
+      <rect class="d-group" x="5" y="76" width="710" height="64" rx="8"/>
+      <text class="d-text--small" x="14" y="98">Wait token</text>
+      <text class="d-text--muted" x="14" y="116">decision per frame</text>
+      <rect class="d-box" x="170" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="201" y="95" text-anchor="middle" dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="238" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="269" y="95" text-anchor="middle" dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="306" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="337" y="95" text-anchor="middle" dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="374" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="405" y="95" text-anchor="middle" dominant-baseline="middle">f4</text>
+      <rect class="d-box" x="442" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="473" y="95" text-anchor="middle" dominant-baseline="middle">f5</text>
+      <rect class="d-box" x="510" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="541" y="95" text-anchor="middle" dominant-baseline="middle">f6</text>
+      <rect class="d-box" x="578" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="609" y="95" text-anchor="middle" dominant-baseline="middle">f7</text>
+      <rect class="d-box" x="646" y="84" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="677" y="95" text-anchor="middle" dominant-baseline="middle">f8</text>
+      <rect class="d-box d-box--muted" x="170" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="201" y="121" text-anchor="middle" dominant-baseline="middle">wait</text>
+      <rect class="d-box d-box--muted" x="238" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="269" y="121" text-anchor="middle" dominant-baseline="middle">wait</text>
+      <rect class="d-box d-box--accent" x="306" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="337" y="121" text-anchor="middle" dominant-baseline="middle">the</text>
+      <rect class="d-box d-box--muted" x="374" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="405" y="121" text-anchor="middle" dominant-baseline="middle">wait</text>
+      <rect class="d-box d-box--accent" x="442" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="473" y="121" text-anchor="middle" dominant-baseline="middle">cat</text>
+      <rect class="d-box d-box--muted" x="510" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="541" y="121" text-anchor="middle" dominant-baseline="middle">wait</text>
+      <rect class="d-box d-box--muted" x="578" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="609" y="121" text-anchor="middle" dominant-baseline="middle">wait</text>
+      <rect class="d-box d-box--accent" x="646" y="110" width="62" height="22" rx="6"/>
+      <text class="d-text--small" x="677" y="121" text-anchor="middle" dominant-baseline="middle">sat</text>
+
+      <!-- == Delayed stream == -->
+      <rect class="d-group" x="5" y="146" width="710" height="64" rx="8"/>
+      <text class="d-text--small" x="14" y="168">Delayed stream</text>
+      <text class="d-text--muted" x="14" y="186">text lags audio</text>
+      <rect class="d-box" x="170" y="154" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="227" y="165" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="290" y="154" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="347" y="165" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="410" y="154" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="467" y="165" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="530" y="154" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="587" y="165" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box d-box--accent" x="270" y="180" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="327" y="191" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <rect class="d-box d-box--accent" x="390" y="180" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="447" y="191" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <rect class="d-box d-box--accent" x="510" y="180" width="114" height="22" rx="6"/>
+      <text class="d-text--small" x="567" y="191" text-anchor="middle"
+        dominant-baseline="middle">text</text>
+      <path class="d-arrow d-arrow--dashed" d="M 172 194 L 266 194"
+        marker-end="url(#streaming-families-asr-arrow)"/>
+      <text class="d-text--muted" x="219" y="188" text-anchor="middle">delay d</text>
+
+      <!-- == Read/write == -->
+      <rect class="d-group" x="5" y="216" width="710" height="70" rx="8"/>
+      <text class="d-text--small" x="14" y="238">Read / write</text>
+      <text class="d-text--muted" x="14" y="256">commit the agreed prefix</text>
+      <rect class="d-box" x="170" y="224" width="170" height="22" rx="6"/>
+      <text class="d-text--small" x="255" y="235" text-anchor="middle"
+        dominant-baseline="middle">update n: the cat sat</text>
+      <rect class="d-box" x="170" y="254" width="170" height="22" rx="6"/>
+      <text class="d-text--small" x="255" y="265" text-anchor="middle"
+        dominant-baseline="middle">update n+1: the cat sat on</text>
+      <rect class="d-box d-box--accent" x="390" y="239" width="140" height="22" rx="6"/>
+      <text class="d-text--small" x="460" y="250" text-anchor="middle"
+        dominant-baseline="middle">common prefix</text>
+      <rect class="d-box" x="580" y="239" width="130" height="22" rx="6"/>
+      <text class="d-text--small" x="645" y="250" text-anchor="middle"
+        dominant-baseline="middle">emit: the cat sat</text>
+      <path class="d-arrow" d="M 340 235 L 388 246"
+        marker-end="url(#streaming-families-asr-arrow)"/>
+      <path class="d-arrow" d="M 340 265 L 388 254"
+        marker-end="url(#streaming-families-asr-arrow)"/>
+      <path class="d-arrow" d="M 530 250 L 578 250"
+        marker-end="url(#streaming-families-asr-arrow)"/>
+    </svg>
+    <figcaption>
+      Four ways to decide when a word is final.
+      Chunked models emit text after each chunk (EOC is the end-of-chunk token), wait-token models decide per frame,
+      delayed-stream models shift text behind audio by a fixed d, and read/write policies commit only what successive hypotheses agree on.
+    </figcaption>
+  </figure>
+
+  <p>
+    <strong>Chunked (SpeechLLM-XL).</strong>
+    A decoder-only model reads audio in fixed chunks and emits the chunk's text followed by an end-of-chunk token.
+    Training uses CTC forced alignment and an auxiliary CTC loss weighted 0.5.
+    Chunk length is the latency dial: test clean / other WER is 2.5 / 6.5 at 2.56 s, 2.7 / 6.7 at 1.28 s and 3.1 / 7.8 at 0.32 s (arXiv 2410.03752).
+  </p>
+  <p>
+    <strong>Wait token (Speech ReaLLM).</strong>
+    An RNN-T-style blank or wait token is predicted after every input embedding, so the LLM decides per frame whether to emit.
+    Latency is the 240 ms input frame plus 960 ms of encoder right context.
+    The 80M model reaches WER 3.0 / 7.4 on LibriSpeech, with RTF 0.79 under greedy decoding (arXiv 2406.09569).
+  </p>
+  <p>
+    <strong>Transducer with an LLM predictor (Transducer-Llama).</strong>
+    The transducer keeps its streaming alignment and uses a Llama as the prediction network.
+    With 160 ms segments and a Llama3-8b predictor, WER is 2.47 / 6.53 against 3.65 / 8.96 for a standard RNN-T.
+    The paper uses a weak-to-strong LM swap and MWER fine-tuning (arXiv 2412.16464).
+  </p>
+  <p>
+    <strong>Delayed stream (Kyutai DSM).</strong>
+    Text and audio share a clock and the text is simply delayed, 2.5 s by default for ASR.
+    DSM-ASR scores 1.7 / 4.3 on LibriSpeech clean / other, against 3.3 / 4.7 for streaming Parakeet-TDT-v2, with delay precision of about 300 ms (arXiv 2509.08753).
+    This is the family from <a href="/apps/materials/speech-lit-review/05-streaming-conversation#delay-and-interleaving">Delay and interleaving</a>.
+  </p>
+  <p>
+    <strong>Delay as an input (Voxtral Realtime).</strong>
+    A model of about 4.4B parameters (970M encoder plus 3.4B decoder), trained end to end for streaming on top of the DSM framework.
+    The encoder is causal and trained from scratch (970M parameters, 50 Hz, a 750-frame, 15 s sliding window), a 4x MLP adapter brings it to 12.5 Hz, and the 3.4B decoder is initialised from Ministral 3B.
+    The delay is embedded sinusoidally and injected through Ada RMS-Norm in every Transformer block; training samples it from 80 to 2400 ms in 80 ms steps.
+    LibriSpeech clean / other WER is 2.08 / 5.54 at 480 ms and 1.96 / 4.59 at 960 ms, against 1.84 / 3.66 for offline Whisper (arXiv 2602.11298).
+  </p>
+  <p>
+    <strong>Factorized DSM.</strong>
+    Removing the word-start token from DSM keeps recognition competitive, and the factorized variant then models "wait" as its own sigmoid, separate from the distribution over the LLM vocabulary.
+    On waiting steps the vocabulary softmax is skipped: 74.70% of steps on the Corpus of Spontaneous Japanese and 66.89% on LibriSpeech.
+    On LibriSpeech at 480 ms, WER is 6.17 (3.66 / 8.68) against 6.52 (3.86 / 9.17) for DSM, and average VRAM at batch size 32 falls from 65.82 to 24.51 GiB (arXiv 2610.04333).
+  </p>
+  <p>
+    <strong>Learned read/write.</strong>
+    A lightweight decoder scores each incoming frame, and when the score crosses a threshold the buffered speech and the previous token go to the LLM, which predicts the next token (a MoChA-style policy trained jointly with the LLM and discarded at inference).
+    A minimum-latency loss with weight 0.1 penalises expected latency against HMM forced-alignment boundaries.
+    On AISHELL-2 the average latency fell from 16 to 6 frames of 40 ms (a 62.5% cut) while CER moved from 5.4% to 5.5% (arXiv 2601.22779).
+  </p>
+  <p>
+    <strong>Cache-aware transducer (Nemotron Speech streaming).</strong>
+    A 24-layer cache-aware FastConformer-RNNT of about 600M parameters; the attention context is set in 80 ms frames, giving chunk sizes of 0.08, 0.16, 0.56 and 1.12 s with average WER of 8.43, 7.67, 7.07 and 6.93.
+    The model has built-in punctuation and capitalisation, which the WER figures exclude (NVIDIA model card).
+  </p>
+  <p>
+    <strong>CTC only (Granite 5.0 TurboCTC).</strong>
+    A 470M encoder-only model of 16 Conformer blocks (hidden size 1024, 16,384 BPE units) trained with CTC loss; 100 Hz log-mel features are stacked to 50 Hz and two stride-2 blocks bring the output to 12.5 Hz.
+    Speed was measured with greedy decoding at an RTFx of 13,715 on one H100 (batch size 128), against 9,229 for the baseline; that checkpoint predates distillation and robust fine-tuning.
+    The final model averages 5.72% WER over seven public English test sets, and the abstract places it on the Open ASR speed-accuracy Pareto frontier at twice the speed of the fastest competitor (arXiv 2609.20104).
+    <span class="tag tag--inference">Inference</span>
+    It sets the speed baseline that LLM-based families trade against, since there is no autoregressive decoder to wait for.
+  </p>
+  <p>
+    <strong>Read/write policies.</strong>
+    These wrap an offline model.
+    LocalAgreement takes the longest common prefix of n = 2 successive updates over a buffer of about 30 s trimmed at sentence boundaries, at 3.3 s latency on long-form audio in the abstract (Table 3: 3.62 s at a 1.0 s minimum chunk; arXiv 2307.14743).
+    Simul-Whisper stops decoding at the end of the received audio using cross-attention, with truncation detection (arXiv 2406.10052).
+    Its abstract reports 1.46% average degradation at a 1 s chunk; Table 1 gives 2.34 for Large-v2, so I treat the abstract figure with care.
+  </p>
+  <p>
+    <strong>Unified streaming and offline (Qwen3-ASR).</strong>
+    The AuT encoder runs at 12.5 Hz with a flash-attention window of 1 to 8 s, so one model serves both modes.
+    The 1.7B model averages 2.69 offline and 3.33 streaming (2 s chunks in the evaluation); the 0.6B model reaches a time to first token as low as 92 ms with vLLM (arXiv 2601.21337).
+  </p>
+  <h3 id="streaming-asr-latency">Measuring and optimising ASR latency</h3>
+  <p>
+    A delay or chunk size is a design parameter, and papers now argue it is not the latency a user perceives.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Idea</th>
+          <th>What it does</th>
+          <th>Reported result</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Word-level emission delay (AWED) and jointly rewarded GRPO</td>
+          <td>Measures for each word how long after its acoustic end the text appears; post-trains a delayed-streams recogniser with GRPO using a reward that scores accuracy and delay together, at a single operating point of τ = 6 frames, and compares against the supervised fine-tuning start and the Voxtral Realtime backbone</td>
+          <td>30.8% relative WER reduction at an 80 ms structural delay and 5.7% at 480 ms; median AWED falls from 1.17 s to 1.04 s (arXiv 2609.18333)</td>
+        </tr>
+        <tr>
+          <td>Minimum-latency loss with a learned read/write policy</td>
+          <td>Penalises expected latency against forced-alignment boundaries</td>
+          <td>Average latency 16 to 6 frames of 40 ms; CER 5.4% to 5.5% (arXiv 2601.22779)</td>
+        </tr>
+        <tr>
+          <td>Factorized wait</td>
+          <td>Skips the vocabulary softmax on waiting steps</td>
+          <td>Softmax skipped on 74.70% (CSJ) and 66.89% (LibriSpeech) of steps; VRAM at batch 32 on LibriSpeech 65.82 to 24.51 GiB; WER 6.17 against 6.52 (arXiv 2610.04333)</td>
+        </tr>
+        <tr>
+          <td>Multi-token prediction</td>
+          <td>Proposes six tokens per step and keeps the verified prefix</td>
+          <td>5.0 of 6 accepted; RTF 0.0053 on 30 s clips, against 0.0094 for Qwen3-ASR-1.7B in the same setup (arXiv 2607.29279)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The GRPO paper's argument is that alignment-based supervision, as used in delayed streams modeling, forces the model to hold back words it could already emit, so rewarding earlier output recovers latency without architecture changes (arXiv 2609.18333).
+  </p>
+
+  <h4 id="streaming-asr-eot">End of turn inside the recogniser</h4>
+  <p>
+    Silence timeouts fail because pauses inside a turn can be longer than the gaps between turns.
+    One open recipe trains a small LoRA adapter on Qwen3-ASR-0.6B, in hours on one GPU, to transcribe, detect end of turn, handle dictation and use context.
+    On a deployment-matched benchmark it reaches 0.97 boundary recall at 0.39 s median latency with 0.3 false fires per speech-minute, and the result replicates on a fresh test set (arXiv 2609.04225).
+    The paper's rule is that every streaming-decision label must be computable from input up to the decision point; offline corpora break this by encoding future audio.
+    Appending one second of silence raised a supposedly broken model's end-of-turn recall from 0.10 to 1.00.
+    For context biasing, an always-matching prefix caused 40% intrusion, and counterfactual examples that disagreed with the audio cut it to 0.8% while keeping most of a +28.9 percentage point entity-recall gain (arXiv 2609.04225).
+  </p>
+  <p>
+    The other route attaches a streaming ASR head to a duplex model (family 3d), so the user's words come from the same pass that decides whether the agent speaks (arXiv 2609.15759).
+  </p>
+
+  <h4 id="streaming-asr-production">Production features</h4>
+  <p>
+    VibeVoice-ASR-Streaming returns speaker-attributed text in one autoregressive pass, with no separate diarization stage (arXiv 2609.02812).
+    Hotword and entity handling are covered in
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding#asr-production-features">Production features</a>.
+  </p>
+
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    One family is not covered because I found no primary source:
+    CTC partials with LLM correction.
+    Learned read/write agents are now covered by arXiv 2601.22779 above.
+  </p>
+
+  <h3 id="streaming-tts-families">Streaming TTS families</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>Latency source</th>
+          <th>Text input</th>
+          <th>Key knob</th>
+          <th>Examples</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1. Full text, AR codec LM plus causal decoder</td>
+          <td>LM time to first packet plus decode</td>
+          <td>Complete (sentence)</td>
+          <td>Packet of 4 tokens = 320 ms</td>
+          <td>Qwen3-TTS (arXiv 2601.15621), Llasa (arXiv 2502.04128)</td>
+        </tr>
+        <tr>
+          <td>2. Incremental text, interleaved</td>
+          <td>Text tokens needed before the first speech</td>
+          <td>Arrives incrementally</td>
+          <td>Ratio N : M</td>
+          <td>CosyVoice 2 (arXiv 2412.10117), SyncSpeech (arXiv 2502.11094), SpeakStream (arXiv 2505.19206)</td>
+        </tr>
+        <tr>
+          <td>3. AR LM plus chunk-wise causal flow</td>
+          <td>Flow chunk plus look-ahead</td>
+          <td>Either</td>
+          <td>Chunk size, look-ahead</td>
+          <td>CosyVoice 2, Kimi-Audio (arXiv 2504.18425)</td>
+        </tr>
+        <tr>
+          <td>4. Multi-token prediction</td>
+          <td>Forward passes per audio token</td>
+          <td>Model dependent</td>
+          <td>Tokens per pass, audio delay</td>
+          <td>VITA-Audio (arXiv 2505.03739)</td>
+        </tr>
+        <tr>
+          <td>5. Fixed text : speech ratio in dialogue</td>
+          <td>First text chunk plus first speech chunk</td>
+          <td>From the model's own reply</td>
+          <td>Ratio, block size</td>
+          <td>GLM-4-Voice, MinMo, OmniFlatten, LLaMA-Omni 2</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 252" role="img"
+      aria-label="Three streaming TTS families as timelines. Full text: all text is known first, then audio packets stream out. Interleaved: text chunks and speech chunks alternate in a fixed ratio N to M. Chunk-wise flow: speech token chunks feed a flow model that waits for look-ahead tokens from the next chunk, then emits audio chunks">
+      <defs>
+        <marker id="streaming-families-tts-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Full text == -->
+      <rect class="d-group" x="5" y="6" width="710" height="64" rx="8"/>
+      <text class="d-text--small" x="14" y="28">Full text</text>
+      <text class="d-text--muted" x="14" y="46">text first, then audio</text>
+      <rect class="d-box" x="170" y="14" width="200" height="22" rx="6"/>
+      <text class="d-text--small" x="270" y="25" text-anchor="middle"
+        dominant-baseline="middle">all text known</text>
+      <rect class="d-box d-box--accent" x="290" y="40" width="72" height="22" rx="6"/>
+      <text class="d-text--small" x="326" y="51" text-anchor="middle"
+        dominant-baseline="middle">packet</text>
+      <rect class="d-box d-box--accent" x="370" y="40" width="72" height="22" rx="6"/>
+      <text class="d-text--small" x="406" y="51" text-anchor="middle"
+        dominant-baseline="middle">packet</text>
+      <rect class="d-box d-box--accent" x="450" y="40" width="72" height="22" rx="6"/>
+      <text class="d-text--small" x="486" y="51" text-anchor="middle"
+        dominant-baseline="middle">packet</text>
+      <rect class="d-box d-box--accent" x="530" y="40" width="72" height="22" rx="6"/>
+      <text class="d-text--small" x="566" y="51" text-anchor="middle"
+        dominant-baseline="middle">packet</text>
+      <path class="d-arrow" d="M 230 36 L 230 51 L 288 51"
+        marker-end="url(#streaming-families-tts-arrow)"/>
+
+      <!-- == Interleaved == -->
+      <rect class="d-group" x="5" y="76" width="710" height="64" rx="8"/>
+      <text class="d-text--small" x="14" y="98">Interleaved N : M</text>
+      <text class="d-text--muted" x="14" y="116">text chunk, speech chunk</text>
+      <rect class="d-box" x="170" y="84" width="42" height="22" rx="6"/>
+      <text class="d-text--small" x="191" y="95" text-anchor="middle"
+        dominant-baseline="middle">N text</text>
+      <rect class="d-box" x="332" y="84" width="42" height="22" rx="6"/>
+      <text class="d-text--small" x="353" y="95" text-anchor="middle"
+        dominant-baseline="middle">N text</text>
+      <rect class="d-box" x="494" y="84" width="42" height="22" rx="6"/>
+      <text class="d-text--small" x="515" y="95" text-anchor="middle"
+        dominant-baseline="middle">N text</text>
+      <rect class="d-box d-box--accent" x="214" y="110" width="116" height="22" rx="6"/>
+      <text class="d-text--small" x="272" y="121" text-anchor="middle"
+        dominant-baseline="middle">M speech</text>
+      <rect class="d-box d-box--accent" x="376" y="110" width="116" height="22" rx="6"/>
+      <text class="d-text--small" x="434" y="121" text-anchor="middle"
+        dominant-baseline="middle">M speech</text>
+      <rect class="d-box d-box--accent" x="538" y="110" width="116" height="22" rx="6"/>
+      <text class="d-text--small" x="596" y="121" text-anchor="middle"
+        dominant-baseline="middle">M speech</text>
+
+      <!-- == Chunk-wise flow == -->
+      <rect class="d-group" x="5" y="146" width="710" height="100" rx="8"/>
+      <text class="d-text--small" x="14" y="168">Chunk-wise flow</text>
+      <text class="d-text--muted" x="14" y="186">look-ahead before decode</text>
+      <rect class="d-box" x="170" y="154" width="106" height="22" rx="6"/>
+      <text class="d-text--small" x="223" y="165" text-anchor="middle"
+        dominant-baseline="middle">tokens c1</text>
+      <rect class="d-box" x="280" y="154" width="106" height="22" rx="6"/>
+      <text class="d-text--small" x="333" y="165" text-anchor="middle"
+        dominant-baseline="middle">tokens c2</text>
+      <rect class="d-box" x="390" y="154" width="106" height="22" rx="6"/>
+      <text class="d-text--small" x="443" y="165" text-anchor="middle"
+        dominant-baseline="middle">tokens c3</text>
+      <rect class="d-box" x="500" y="154" width="106" height="22" rx="6"/>
+      <text class="d-text--small" x="553" y="165" text-anchor="middle"
+        dominant-baseline="middle">tokens c4</text>
+      <rect class="d-box d-box--accent" x="312" y="182" width="106" height="22" rx="6"/>
+      <text class="d-text--small" x="365" y="193" text-anchor="middle"
+        dominant-baseline="middle">flow c1</text>
+      <rect class="d-box d-box--accent" x="422" y="182" width="106" height="22" rx="6"/>
+      <text class="d-text--small" x="475" y="193" text-anchor="middle"
+        dominant-baseline="middle">flow c2</text>
+      <rect class="d-box d-box--accent" x="532" y="182" width="106" height="22" rx="6"/>
+      <text class="d-text--small" x="585" y="193" text-anchor="middle"
+        dominant-baseline="middle">flow c3</text>
+      <path class="d-arrow d-arrow--dashed" d="M 296 176 L 296 193 L 310 193"
+        marker-end="url(#streaming-families-tts-arrow)"/>
+      <text class="d-text--muted" x="172" y="198">first n tokens of c2</text>
+      <rect class="d-box" x="420" y="212" width="100" height="22" rx="6"/>
+      <text class="d-text--small" x="470" y="223" text-anchor="middle"
+        dominant-baseline="middle">audio c1</text>
+      <rect class="d-box" x="530" y="212" width="100" height="22" rx="6"/>
+      <text class="d-text--small" x="580" y="223" text-anchor="middle"
+        dominant-baseline="middle">audio c2</text>
+      <rect class="d-box" x="640" y="212" width="70" height="22" rx="6"/>
+      <text class="d-text--small" x="675" y="223" text-anchor="middle"
+        dominant-baseline="middle">audio c3</text>
+      <path class="d-arrow" d="M 365 204 L 365 223 L 418 223"
+        marker-end="url(#streaming-families-tts-arrow)"/>
+    </svg>
+    <figcaption>
+      What differs is when speech may start.
+      Full-text models wait for all the text but stream audio in small packets,
+      interleaved models alternate N text and M speech tokens so speech can start early,
+      and chunk-wise flow waits for a few look-ahead tokens before decoding each chunk.
+    </figcaption>
+  </figure>
+
+  <p>
+    <strong>1. Full text, causal decoder (Qwen3-TTS).</strong>
+    The tokenizer runs at 12.5 Hz and is causal with no look-ahead, so a packet of 4 tokens covers 320 ms.
+    For the 0.6B model, time to first packet is 93 ms for the LM plus 4 ms of decode, 97 ms in total; the 1.7B model takes 101 ms (Table 2; arXiv 2601.15621).
+    The Sesame CSM README documents a single generate call that returns a complete clip and no streaming mode (<a href="https://github.com/SesameAILabs/csm">github.com/SesameAILabs/csm</a>).
+  </p>
+  <p>
+    <strong>2. Incremental text, interleaved.</strong>
+    CosyVoice 2 streaming mixes text and speech tokens at N = 5 to M = 15 (arXiv 2412.10117).
+    SyncSpeech starts speaking after 2 text tokens, where CosyVoice 2 needs 5; its first packet takes 0.06 s against 0.22 s for CosyVoice 2 on LibriSpeech test-clean (arXiv 2502.11094).
+    SpeakStream emits each word's speech after the word, using forced-aligned boundaries, at about 30 ms TTS latency (arXiv 2505.19206).
+    This family fits a TTS that consumes another LLM's streamed output.
+  </p>
+  <p>
+    <strong>3. AR LM plus chunk-wise causal flow.</strong>
+    CosyVoice 2 trains one flow-matching model under four masks: full-causal, chunk-M, chunk-2M and non-causal.
+    Each mask sets how much future context a chunk sees (arXiv 2412.10117).
+    The paper gives latency formulas, not a measured first packet.
+    Kimi-Audio cuts audio into chunks of about 1 s and appends the next n semantic tokens (for example 4) from the following chunk before decoding.
+    This is training-free and delays the first chunk by n tokens (arXiv 2504.18425, section 2.4).
+  </p>
+  <p>
+    <strong>4. Multi-token prediction (VITA-Audio).</strong>
+    The MCTP module predicts about 10 audio tokens per forward pass.
+    The audio token delay is 0, against 1 for Moshi and 13 for GLM-4-Voice (Table 1).
+    The streaming first chunk drops from 236 ms to 53 ms (Table 9; arXiv 2505.03739).
+  </p>
+  <p>
+    <strong>5. Fixed ratio in dialogue models.</strong>
+    GLM-4-Voice interleaves 13 text : 26 speech tokens in 0.8 s blocks (arXiv 2412.02612).
+    MinMo uses 5 semantic : 15 speech tokens, with about 600 ms end to end (arXiv 2501.06282).
+    OmniFlatten uses 2 : 10 and reports 193 ms against Moshi at 553 ms (arXiv 2410.17799).
+    LLaMA-Omni 2 reads R = 3 and writes W = 10 tokens; its first speech chunk takes about 583 ms on 7B, the sum of LLM, TTS, flow and vocoder time (arXiv 2505.02625).
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    A sixth family, non-autoregressive or flow models run chunk by chunk, is not covered because I found no primary streaming paper for F5 or ZipVoice.
+  </p>
+
+  <h3 id="streaming-families-choose">How to choose</h3>
+  <div class="callout callout--inference">
+    <strong>Design rules (labelled opinion, derived from the sources above)</strong>
+    <ul>
+      <li>Text is complete before speech starts: use a full-text AR codec LM with a causal decoder (Qwen3-TTS reaches 97 ms).</li>
+      <li>Text arrives token by token from another LLM: use an interleaved ratio model (CosyVoice 2, SyncSpeech).</li>
+      <li>ASR needs partials at a fixed, acceptable delay: use a DSM-style delayed stream, ideally with the delay as a runtime input (Voxtral Realtime). SpeechLLM-XL gives the WER-versus-chunk curve if you prefer chunks.</li>
+      <li>Speed matters more than a language model at decode time: a CTC-only encoder (TurboCTC) is the baseline; multi-token prediction narrows the gap for LLM decoders.</li>
+      <li>Turn-taking matters: measure emission delay per word and consider end-of-turn detection inside the recogniser, with labels computable from past audio only.</li>
+      <li>You already run Whisper: use Simul-Whisper for no retraining, or LocalAgreement for simplicity at the cost of more WER at the same latency.</li>
+    </ul>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    This maps onto the
+    <a href="/apps/materials/speech-lit-review/09-system-design#unified-speech-llm">unified speech LLM</a> design.
+    The listen head is a delayed-stream or chunked ASR.
+    The speak head is incremental-text interleaved TTS, consuming the tokens that the downstream reasoning LLM streams out.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Streaming ASR comes in a few families: chunks with an end-of-chunk token, a per-frame wait token, a delayed text stream (now with the delay as an input), a learned read/write policy, a CTC-only encoder, or a read/write wrapper on top of Whisper.
+      Streaming TTS depends on whether text arrives complete or token by token, so I would use interleaved text and speech for a speak head fed by another LLM.
+      For listening I would take a delayed stream or chunked ASR, because chunk length or delay is the one dial that trades WER for latency, and I would measure latency per word since the setting is not what users feel."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      The sources contradict themselves in places.
+      DSM-TTS appears with 1.28 s in one place and 1.6 s in another.
+      Simul-Whisper's abstract and its Table 1 disagree, and MinMo's abstract (about 100 ms speech to text) differs from section 4.5 (95 and 150 ms).
+      Numbers from different hardware and test sets are not comparable.
+    </p>
+  </div>
+</section>

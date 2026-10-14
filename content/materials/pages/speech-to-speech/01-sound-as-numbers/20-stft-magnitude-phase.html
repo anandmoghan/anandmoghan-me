@@ -1,0 +1,208 @@
+<section id="stft-phase">
+  <h2>STFT: magnitude and phase</h2>
+  <p>
+    A raw waveform hides what a speech model cares about: which frequencies (pitches) are present, and when.
+    The short-time Fourier transform (STFT) makes that visible.
+    It slides a short window along the signal and, at each position, asks how much of each frequency is in the window.
+  </p>
+  <p>
+    Think of listening to a song through a keyhole that shows only a quarter of a second at a time, and writing down a chord for each peek.
+    For every frequency, each peek yields two numbers: how strong it is (magnitude) and where it is in its cycle (phase).
+  </p>
+
+  <h3 id="stft-how">How it works</h3>
+  <ol>
+    <li>
+      Cut the waveform into overlapping windows.
+      Whisper uses a 25 ms window and a 10 ms hop at 16 kHz, which is 400 samples per window and a new window every 160 samples.
+    </li>
+    <li>Multiply each window by a smooth taper, so its edges do not create false frequencies.</li>
+    <li>Run a fast Fourier transform (FFT) on each window. The result is one complex number per frequency bin.</li>
+    <li>Split each complex number into magnitude (its length) and phase (its angle).</li>
+  </ol>
+  <p>
+    Magnitude says how much energy sits at a frequency in that frame.
+    Phase says where each component is in its cycle, which fixes how the components line up in time.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 170" role="img"
+      aria-label="STFT pipeline: waveform is cut into overlapping windows, each window goes through an FFT to give a complex spectrum, which splits into magnitude and phase. Magnitude continues to the model; phase is usually dropped, and a vocoder or decoder supplies it again at synthesis">
+      <defs>
+        <marker id="stft-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Blocks == -->
+      <rect class="d-box" x="10" y="30" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="52" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <rect class="d-box" x="170" y="30" width="120" height="44" rx="8"/>
+      <text class="d-text" x="230" y="44" text-anchor="middle"
+        dominant-baseline="middle">Windows</text>
+      <text class="d-text--small" x="230" y="61" text-anchor="middle"
+        dominant-baseline="middle">overlapping</text>
+      <rect class="d-box d-box--accent" x="330" y="30" width="120" height="44" rx="8"/>
+      <text class="d-text" x="390" y="44" text-anchor="middle"
+        dominant-baseline="middle">FFT</text>
+      <text class="d-text--small" x="390" y="61" text-anchor="middle"
+        dominant-baseline="middle">per window</text>
+      <rect class="d-box" x="590" y="10" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="32" text-anchor="middle"
+        dominant-baseline="middle">Magnitude</text>
+      <rect class="d-box d-box--muted" x="590" y="90" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="112" text-anchor="middle"
+        dominant-baseline="middle">Phase</text>
+
+      <!-- == Arrows == -->
+      <path class="d-arrow" d="M 130 52 L 168 52" marker-end="url(#stft-arrow)"/>
+      <path class="d-arrow" d="M 290 52 L 328 52" marker-end="url(#stft-arrow)"/>
+      <path class="d-arrow" d="M 450 52 L 520 52 L 520 32 L 588 32"
+        marker-end="url(#stft-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 450 52 L 520 52 L 520 112 L 588 112"
+        marker-end="url(#stft-arrow)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="149" y="20" text-anchor="middle">400 samples</text>
+      <text class="d-text--muted" x="309" y="20" text-anchor="middle">taper</text>
+      <text class="d-text--muted" x="520" y="76" text-anchor="middle">complex</text>
+      <text class="d-text--muted" x="650" y="76" text-anchor="middle">kept for the model</text>
+      <text class="d-text--muted" x="650" y="152" text-anchor="middle">dropped, rebuilt later</text>
+    </svg>
+    <figcaption>The STFT turns each window into a complex spectrum. Models usually keep the magnitude and let a decoder rebuild the phase.</figcaption>
+  </figure>
+
+  <h3 id="stft-reversible">Is the STFT reversible?</h3>
+  <p>It depends on what you keep.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>What you keep</th>
+          <th>Reversible?</th>
+          <th>How audio comes back</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Complex STFT (magnitude and phase)</td>
+          <td>Yes, if the window and hop overlap correctly</td>
+          <td>Inverse FFT per frame, then overlap-add</td>
+        </tr>
+        <tr>
+          <td>Magnitude only</td>
+          <td>No: many signals share one magnitude</td>
+          <td>Phase retrieval, such as Griffin-Lim, or a neural vocoder</td>
+        </tr>
+        <tr>
+          <td>Mel spectrogram</td>
+          <td>No, and lossier: the mel filterbank also merges frequency bins</td>
+          <td>Neural vocoder (HiFi-GAN, BigVGAN, Vocos)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="stft-phase-adds">What phase adds</h3>
+  <p>
+    Phase is what makes a sound sharp and consistent.
+    A plosive such as "p" is sharp because many components peak at the same instant;
+    keep the magnitude and scramble the phase, and that energy smears across the frame.
+    Overlapping frames must also agree on phase for overlap-add to rebuild a clean signal, and inconsistent phase is what phase retrieval has to repair.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    The research record is mixed.
+    Early work argues that phase carries much of a signal's structure.
+    Later listening tests find that for speech-length windows the phase spectrum can contribute to intelligibility comparably to magnitude, when the window is chosen well.
+    Yet speech recognisers fed MFCC features did much worse on phase-only input.
+    So phase matters for what people hear, and matters less for classic recognition front ends.
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Models avoid predicting phase directly because it wraps every \( 2\pi \) and looks noisy from frame to frame.
+    Most systems model magnitude or mel and let a vocoder or codec decoder supply consistent phase.
+    Vocos is the exception: it generates the spectral coefficients itself.
+  </p>
+
+  <h3 id="stft-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Window length (such as 25 ms)</td>
+          <td>Long windows resolve frequencies finely; short windows locate events in time</td>
+          <td>You cannot have both; speech settles on tens of milliseconds <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Hop (such as 10 ms)</td>
+          <td>Feature frame rate (100 Hz for a 10 ms hop) and overlap between windows</td>
+          <td>Smaller hop means more frames and more compute; too little overlap breaks overlap-add</td>
+        </tr>
+        <tr>
+          <td>Keep complex vs magnitude only</td>
+          <td>Whether inversion is exact</td>
+          <td>Complex values are hard to model; magnitude-only needs phase retrieval later</td>
+        </tr>
+        <tr>
+          <td>Phase retrieval method</td>
+          <td>Griffin-Lim iterates between a phase estimate and a consistent STFT; Fast Griffin-Lim speeds it up</td>
+          <td>Slower and more artefact-prone than learned vocoders</td>
+        </tr>
+        <tr>
+          <td>Let a vocoder generate the signal</td>
+          <td>HiFi-GAN and BigVGAN generate the waveform; Vocos generates spectral coefficients and inverts them</td>
+          <td>Needs training; Vocos reports an order-of-magnitude speed-up over time-domain GAN vocoders at matching quality</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    How vocoders recover phase is the subject of
+    <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform">Tokens to waveform</a>.
+  </p>
+
+  <h3 id="stft-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Phase artefacts.</strong>
+      Griffin-Lim output sounds smeared or reverberant, because the recovered phase is only approximately consistent.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Window and hop that do not overlap properly.</strong>
+      The inverse STFT then cannot reconstruct the signal exactly.
+    </li>
+    <li>
+      <strong>Treating the magnitude spectrogram as the whole signal.</strong>
+      Different waveforms share one magnitude, so a model that outputs only magnitude leaves a design question (who supplies phase) unanswered.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The STFT gives a complex number per time-frequency cell: magnitude says how much, phase says where in the cycle.
+      Keep both and it inverts exactly. Keep magnitude or mel and you have thrown phase away, so something downstream has to invent a consistent one: Griffin-Lim classically, a neural vocoder or codec decoder today."
+    </p>
+  </div>
+
+  <h3 id="stft-phase-sources">Sources</h3>
+  <ul>
+    <li>Robust Speech Recognition via Large-Scale Weak Supervision (arXiv 2212.04356)</li>
+    <li>D. Griffin and J. Lim, "Signal estimation from modified short-time Fourier transform", IEEE TASSP, 1984</li>
+    <li>N. Perraudin, P. Balazs and P. Søndergaard, "A fast Griffin-Lim algorithm", IEEE WASPAA, 2013</li>
+    <li>A. Oppenheim and J. Lim, "The Importance of Phase in Signals", Proc. IEEE 69(5), 1981</li>
+    <li>K. Paliwal and L. Alsteris, short-time phase spectrum and intelligibility, Eurospeech 2003 and Speech Communication 2005</li>
+    <li>L. Alsteris and K. Paliwal, phase-only recognition with an MFCC front end, Interspeech 2004 and 2005</li>
+    <li>HiFi-GAN (arXiv 2010.05646); BigVGAN (arXiv 2206.04658); Vocos (arXiv 2306.00814)</li>
+    <li>Model-by-model detail: <a href="/apps/materials/speech-lit-review/03-speech-generation#tokens-to-waveform">From tokens to waveform</a> in the literature review.</li>
+  </ul>
+</section>

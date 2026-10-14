@@ -1,0 +1,60 @@
+<section id="q-foundations">
+  <h2>Foundations: the S2S design space</h2>
+  <ul>
+    <li>Every S2S system answers five questions: input rep, output rep, text/speech coupling, duplex scheme, acoustic renderer.</li>
+    <li>Core tension: speech encoders emit 50 Hz frames (Whisper in Voxtral; arXiv 2507.13264) while text is far sparser.</li>
+    <li>Each choice tries to give the LLM a text-like-cost sequence without losing prosody, speaker identity or timing.</li>
+    <li>If the backbone sees embeddings and emits tokens for a separate renderer, the LLM can be swapped, frozen or lightly tuned (Freeze-Omni freezes it; arXiv 2411.00774).</li>
+    <li>Open problem: keeping text-level intelligence once the model must speak.</li>
+    <li>URO-Bench reports that open-source spoken dialogue models lag their backbone LLMs on instruction following and suffer catastrophic forgetting (arXiv 2502.17810).</li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Decision</th>
+          <th>Common pick <span class="tag tag--inference">Inference</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Input representation</td>
+          <td>Continuous embeddings from an ASR-pretrained encoder at about 12.5 Hz</td>
+        </tr>
+        <tr>
+          <td>Output representation</td>
+          <td>Semantic or codec tokens, rarely continuous</td>
+        </tr>
+        <tr>
+          <td>Text/speech coupling</td>
+          <td>Text-first or interleaved</td>
+        </tr>
+        <tr>
+          <td>Streaming/duplex scheme</td>
+          <td>Chunked, with a duplex layer on top</td>
+        </tr>
+        <tr>
+          <td>Acoustic renderer</td>
+          <td>AR LM for content, flow or ConvNet for acoustics</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I split any S2S system into five choices: input rep, output rep, text coupling,
+      duplex scheme and renderer.
+      Most new models differ in one or two of them, not all five."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Three traps to avoid out loud</strong>
+    <ul>
+      <li>MiniMax-Speech introduces a "Flow-VAE" (arXiv 2505.07916). Do not read the name as flow matching.</li>
+      <li>Qwen3-Omni's waveform decoder is a lightweight causal ConvNet over a multi-codebook codec, not a DiT or flow model (arXiv 2509.17765).</li>
+      <li>MaskGCT is mask-and-predict in both stages (arXiv 2409.00750). Do not call it flow matching.</li>
+    </ul>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/01-foundations">Full chapter</a></p>
+</section>

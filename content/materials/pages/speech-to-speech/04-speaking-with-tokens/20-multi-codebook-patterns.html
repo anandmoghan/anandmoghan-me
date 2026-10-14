@@ -1,0 +1,325 @@
+<section id="multi-codebook-patterns">
+  <h2>The multi-codebook problem and token patterns</h2>
+  <p>
+    A codec frame is not one token but a stack of \( K \) codes, one per residual codebook (see
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#codec-mechanics">How a codec works</a>).
+    The first code carries the coarse content; each later one adds finer detail.
+    A language model that predicts one token per step must now decide how to walk through a grid of \( T \) frames by \( K \) codebooks.
+  </p>
+  <p>
+    Think of describing a photo: you can list every pixel in order, give the outline of every region first and the detail later, or sketch all regions at once and accept some blur.
+    Each choice trades sequence length (and so latency) against how much each code can depend on the others.
+  </p>
+
+  <h3 id="multi-codebook-patterns-how">How it works</h3>
+  <p>
+    A pattern is a partition of the (frame, codebook) grid into steps; the model predicts all positions in one step in parallel.
+    Two reference patterns, for frame \( t \) and codebook \( k \):
+  </p>
+  \[
+    \text{parallel: } P_s = \{(s, k)\},
+    \qquad
+    \text{delay: } P_s = \{(s - k + 1,\, k) : s - k \ge 0\}
+  \]
+  <p>
+    Parallel predicts every codebook of one frame in the same step.
+    Delay shifts codebook \( k \) by \( k - 1 \) steps, so one step covers a diagonal of the grid.
+    Each code then sees the lower codebooks of its own frame as context, at a cost of only \( K - 1 \) extra steps of start-up.
+  </p>
+  <p>
+    A small example makes this concrete.
+    With \( T = 3 \) frames and \( K = 3 \) codebooks, written (frame, codebook), step 1 predicts (1, 1).
+    Step 2 predicts (2, 1) and (1, 2); step 3 predicts (3, 1), (2, 2) and (1, 3); steps 4 and 5 finish with (3, 2) and (2, 3), then (3, 3).
+    That is \( T + K - 1 = 5 \) steps instead of 9 for flattening, and when frame 2 gets its codebook 2 at step 3, codebook 1 of frame 2 was already predicted at step 2, so the finer code sees the coarser one.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 216" role="img"
+      aria-label="Delay pattern grid: four codebook rows against seven step columns. Row k starts k minus 1 steps later, so cells form a diagonal band. The column for step 4 is outlined: it predicts codebook 1 of frame 4, codebook 2 of frame 3, codebook 3 of frame 2 and codebook 4 of frame 1">
+      <rect class="d-group" x="294" y="24" width="56" height="162" rx="8"/>
+      <text class="d-text--muted" x="102" y="12" text-anchor="end">step s</text>
+      <text class="d-text--muted" x="154" y="12" text-anchor="middle">1</text>
+      <text class="d-text--muted" x="210" y="12" text-anchor="middle">2</text>
+      <text class="d-text--muted" x="266" y="12" text-anchor="middle">3</text>
+      <text class="d-text--muted" x="322" y="12" text-anchor="middle">4</text>
+      <text class="d-text--muted" x="378" y="12" text-anchor="middle">5</text>
+      <text class="d-text--muted" x="434" y="12" text-anchor="middle">6</text>
+      <text class="d-text--muted" x="490" y="12" text-anchor="middle">7</text>
+
+      <text class="d-text" x="102" y="46" text-anchor="end"
+        dominant-baseline="middle">codebook 1</text>
+      <text class="d-text" x="102" y="86" text-anchor="end"
+        dominant-baseline="middle">codebook 2</text>
+      <text class="d-text" x="102" y="126" text-anchor="end"
+        dominant-baseline="middle">codebook 3</text>
+      <text class="d-text" x="102" y="166" text-anchor="end"
+        dominant-baseline="middle">codebook 4</text>
+
+      <!-- == codebook 1: steps 1 to 4 == -->
+      <rect class="d-box" x="130" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="154" y="47" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="186" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="210" y="47" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="242" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="266" y="47" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="298" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="47" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <!-- == codebook 2: steps 2 to 5 == -->
+      <rect class="d-box" x="186" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="210" y="87" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="242" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="266" y="87" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="298" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="87" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="354" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="378" y="87" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <!-- == codebook 3: steps 3 to 6 == -->
+      <rect class="d-box" x="242" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="266" y="127" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="298" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="127" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="354" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="378" y="127" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="410" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="434" y="127" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <!-- == codebook 4: steps 4 to 7 == -->
+      <rect class="d-box" x="298" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="167" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="354" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="378" y="167" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="410" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="434" y="167" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="466" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="490" y="167" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <text class="d-text--muted" x="540" y="60" text-anchor="start">one step predicts one</text>
+      <text class="d-text--muted" x="540" y="78" text-anchor="start">diagonal (outlined: s = 4)</text>
+      <text class="d-text--muted" x="540" y="108" text-anchor="start">cell fk = frame k</text>
+      <text class="d-text--muted" x="130" y="204" text-anchor="start">T = 4 frames, K = 4 codebooks, 7 steps</text>
+    </svg>
+    <figcaption>
+      The delay pattern for four frames and four codebooks.
+      Each row is shifted one step more than the row above, so one step covers a diagonal of the grid.
+    </figcaption>
+  </figure>
+  <p>
+    The other families split the work differently.
+    Flattening lists every code in order, which is exact but \( K \) times longer.
+    Coarse-then-fine predicts the first codebook autoregressively, then fills the rest with a non-autoregressive model, one pass per codebook.
+    A depth transformer keeps the big model at one step per frame and lets a small model walk down that frame's codebooks, one code at a time, feeding each back before the next.
+    Multi-token prediction (MTP) has the same goal but is one pass: a light module reads the backbone state and emits all the residual codes of the frame together.
+    That is faster, at the price that the residual codes cannot condition on each other.
+  </p>
+  <p>
+    Masked parallel decoding fills all positions together in a few refinement passes.
+    A mask is a blank placeholder token; the model predicts a code and a confidence for every blank, keeps the most confident predictions, re-blanks the rest, and repeats with the kept codes as context.
+    The next section covers a hybrid: generate in blocks left to right, but fill each block this way
+    (<a href="#block-diffusion-lms">Block diffusion language models</a>).
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 230" role="img"
+      aria-label="Temporal and depth transformers: the temporal model takes one step per frame, the depth model predicts the codebooks of that frame one after another, and the frame is fed back">
+      <defs>
+        <marker id="multi-codebook-patterns-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="30" width="110" height="44" rx="8"/>
+      <text class="d-text" x="65" y="44" text-anchor="middle"
+        dominant-baseline="middle">Past frames</text>
+      <text class="d-text--small" x="65" y="61" text-anchor="middle"
+        dominant-baseline="middle">codes</text>
+      <rect class="d-box d-box--accent" x="180" y="30" width="160" height="44"
+        rx="8"/>
+      <text class="d-text" x="260" y="44" text-anchor="middle"
+        dominant-baseline="middle">Temporal model</text>
+      <text class="d-text--small" x="260" y="61" text-anchor="middle"
+        dominant-baseline="middle">one step per frame</text>
+      <rect class="d-box" x="400" y="30" width="160" height="44" rx="8"/>
+      <text class="d-text" x="480" y="44" text-anchor="middle"
+        dominant-baseline="middle">Depth model</text>
+      <text class="d-text--small" x="480" y="61" text-anchor="middle"
+        dominant-baseline="middle">small, per codebook</text>
+      <path class="d-arrow" d="M 120 52 L 178 52"
+        marker-end="url(#multi-codebook-patterns-arrow)"/>
+      <text class="d-text--muted" x="149" y="42" text-anchor="middle"
+        dominant-baseline="middle">codes</text>
+      <path class="d-arrow" d="M 340 52 L 398 52"
+        marker-end="url(#multi-codebook-patterns-arrow)"/>
+      <text class="d-text--muted" x="369" y="42" text-anchor="middle"
+        dominant-baseline="middle">state</text>
+      <rect class="d-box" x="400" y="110" width="56" height="36" rx="8"/>
+      <text class="d-text" x="428" y="128" text-anchor="middle"
+        dominant-baseline="middle">c1</text>
+      <rect class="d-box" x="480" y="110" width="56" height="36" rx="8"/>
+      <text class="d-text" x="508" y="128" text-anchor="middle"
+        dominant-baseline="middle">c2</text>
+      <rect class="d-box" x="560" y="110" width="70" height="36" rx="8"/>
+      <text class="d-text" x="595" y="128" text-anchor="middle"
+        dominant-baseline="middle">... cK</text>
+      <path class="d-arrow" d="M 428 74 L 428 108"
+        marker-end="url(#multi-codebook-patterns-arrow)"/>
+      <path class="d-arrow" d="M 456 128 L 478 128"
+        marker-end="url(#multi-codebook-patterns-arrow)"/>
+      <path class="d-arrow" d="M 536 128 L 558 128"
+        marker-end="url(#multi-codebook-patterns-arrow)"/>
+      <text class="d-text--muted" x="470" y="166" text-anchor="middle"
+        dominant-baseline="middle">codebooks of frame t, one by one</text>
+      <path class="d-arrow d-arrow--dashed"
+        d="M 595 148 L 595 192 L 65 192 L 65 76"
+        marker-end="url(#multi-codebook-patterns-arrow)"/>
+      <text class="d-text--muted" x="330" y="182" text-anchor="middle"
+        dominant-baseline="middle">frame t codes become input for step t+1</text>
+    </svg>
+    <figcaption>
+      Depth-transformer split: the temporal model advances once per frame; a small depth model fills in that frame's codebooks.
+    </figcaption>
+  </figure>
+
+  <h3 id="multi-codebook-patterns-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Pattern</th>
+          <th>Steps for \( T \) frames</th>
+          <th>What it captures</th>
+          <th>Trade-off</th>
+          <th>Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Flattening</td>
+          <td>\( T K \)</td>
+          <td>Exact dependence between every code</td>
+          <td>Best quality in the music ablation, but \( K \) times the steps and latency</td>
+          <td>MusicGen ablation</td>
+        </tr>
+        <tr>
+          <td>Parallel</td>
+          <td>\( T \)</td>
+          <td>Ignores dependence within a frame</td>
+          <td>Fastest, clearly worse quality</td>
+          <td>EnCodec's entropy model</td>
+        </tr>
+        <tr>
+          <td>Delay</td>
+          <td>\( T + K - 1 \)</td>
+          <td>Lower codebooks are seen first</td>
+          <td>Close to flattening quality at near-parallel cost</td>
+          <td>MusicGen</td>
+        </tr>
+        <tr>
+          <td>Coarse then fine (AR + NAR)</td>
+          <td>One AR pass, then one NAR pass per remaining codebook</td>
+          <td>Codebook 1 sequential; the rest conditioned on earlier levels</td>
+          <td>Needs all of codebook 1 first, so it is hard to stream</td>
+          <td>VALL-E</td>
+        </tr>
+        <tr>
+          <td>Depth transformer</td>
+          <td>\( T \) big steps, up to \( K \) small ones each</td>
+          <td>Each code sees earlier codes of its frame</td>
+          <td>Big model stays at the frame rate; the small model runs \( K \) times per frame</td>
+          <td>Moshi, Sesame CSM</td>
+        </tr>
+        <tr>
+          <td>Codebook 0 plus MTP (one pass)</td>
+          <td>One backbone step per frame</td>
+          <td>Linear head for codebook 0, light module for residuals</td>
+          <td>Cheap and streaming-friendly; residuals do not see each other</td>
+          <td>Qwen3-Omni</td>
+        </tr>
+        <tr>
+          <td>Masked parallel</td>
+          <td>A few passes per level</td>
+          <td>Coarse to fine, bidirectional context</td>
+          <td>Very fast for whole clips (30 s of audio in 0.5 s on a TPU-v4 is reported) but not streaming; block diffusion fixes that</td>
+          <td>SoundStorm</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    In the music ablation, flattening scored best, delay was close behind, and parallel was clearly worse; the ordering, not the exact numbers, transfers to speech.
+    In a speech model, delaying the acoustic codes against the first (semantic) code by one or two steps greatly improved quality, because the big temporal model can then see the semantic code before predicting acoustics.
+  </p>
+  <p>
+    The cost split is large.
+    With 8 codebooks at 12.5 Hz, a flat sequence would be 100 steps per second of audio.
+    A depth split keeps the large model at 12.5 steps per second and runs only the small one 8 or more times per step.
+  </p>
+
+  <h3 id="multi-codebook-patterns-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Parallel decoding blurs.</strong>
+      Predicting all codebooks of a frame independently loses their dependence, which shows up as lower quality.
+    </li>
+    <li>
+      <strong>Start-up latency and no streaming.</strong>
+      Delay-style patterns add \( K - 1 \) steps before the first frame is complete.
+      Coarse-then-fine needs all of codebook 1 first, and masked parallel models fill a whole sequence, so both suit offline TTS better than live dialogue.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Inner-loop error.</strong>
+      An early wrong residual code feeds the later ones in the same frame.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Blaming the wrong part.</strong>
+      A metallic or buzzy timbre that survives every sampling setting points at the tokenizer, not the LM.
+      Test codec artefacts with reconstruction scores and listening; see
+      <a href="/apps/materials/speech-to-speech/03-tokenizers#judging-a-tokenizer">Judging a tokenizer</a>.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "With K codebooks per frame, flattening is the best factorisation but K times longer.
+      The delay pattern gets close in T plus K minus 1 steps.
+      For streaming speech I would predict codebook 0 per frame with the big model and let a small depth or multi-token head handle the residuals."
+    </p>
+  </div>
+  <h3 id="multi-codebook-patterns-sources">Sources</h3>
+  <ul>
+    <li>Simple and Controllable Music Generation (MusicGen; arXiv 2306.05284)</li>
+    <li>Neural Codec Language Models are Zero-Shot Text to Speech Synthesizers (VALL-E; arXiv 2301.02111)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>SoundStorm: Efficient Parallel Audio Generation (arXiv 2305.09636)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>High Fidelity Neural Audio Compression (EnCodec; arXiv 2210.13438)</li>
+    <li>
+      <a href="https://www.sesame.com/research/crossing_the_uncanny_valley_of_voice">Sesame: Crossing the uncanny valley of voice</a>
+      (CSM)
+    </li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#rvq-token-patterns">Training an LM on RVQ tokens</a>,
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#multi-codebook">Multi-codebook handling</a>,
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#block-diffusion-lms">Diffusion language models and block diffusion</a>
+    </li>
+  </ul>
+</section>

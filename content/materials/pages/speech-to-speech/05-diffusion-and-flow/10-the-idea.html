@@ -1,0 +1,330 @@
+<section id="flow-idea">
+  <h2>The idea: learning to turn noise into speech</h2>
+  <p>
+    Picture a sculptor with a rough block of stone who only ever answers one question: which way do I chip next?
+    Diffusion and flow models generate speech the same way.
+    They start from random noise, a mel spectrogram of pure static
+    (<a href="/apps/materials/speech-to-speech/01-sound-as-numbers#mel-how">energy per pitch band over time</a>),
+    and nudge it again and again until it looks like real speech.
+  </p>
+  <p>
+    The model learns the nudge by playing a game on real recordings.
+    Blend a known amount of noise into a clean recording and ask the network to undo it.
+    Repeat that millions of times at every noise level and the network learns what speech looks like from any starting fuzz.
+    Nobody labels anything; the noise you added is the answer key.
+  </p>
+  <p>
+    Diffusion and flow matching are two ways of setting up that game.
+    Diffusion asks "what noise was added?".
+    Flow matching asks "which direction is the speech from here?".
+    Flow matching is the more common choice for the acoustic stage of recent TTS, so it gets most of this chapter.
+    A newer family, diffusion language models, denoises blocks of discrete audio tokens instead
+    (<a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#block-diffusion-lms">block diffusion</a>).
+  </p>
+
+  <h3 id="flow-idea-how">How it works</h3>
+  <p>
+    <strong>Diffusion: predict the noise.</strong>
+    Corrupt a clean sample \( x_{\text{data}} \) with Gaussian noise \( \epsilon \).
+    A noise schedule \( \bar\alpha_t \) decides how much signal survives at step \( t \).
+    The network \( \epsilon_\theta \) sees the corrupted sample and the step, and guesses the noise.
+  </p>
+  \[
+    x_t = \sqrt{\bar\alpha_t}\,x_{\text{data}} + \sqrt{1-\bar\alpha_t}\,\epsilon,
+    \qquad
+    \mathcal{L} = \mathbb{E}\,\big\|\epsilon - \epsilon_\theta(x_t, t)\big\|^2
+  \]
+  <p>
+    Generation runs the denoiser backwards from pure noise, removing a little noise at each step.
+  </p>
+  <p>
+    <strong>Flow matching: predict the direction.</strong>
+    Draw a straight line from a noise sample \( x_0 \) to a real data sample \( x_1 \) and pick a point \( x_t \) a fraction \( t \) of the way along it.
+    The direction of travel is the same everywhere on the line: \( x_1 - x_0 \).
+    The network \( v_\theta \) learns to output that direction, called the velocity.
+  </p>
+  \[
+    x_t = (1-t)\,x_0 + t\,x_1,
+    \qquad
+    \mathcal{L} = \mathbb{E}\,\big\|v_\theta(x_t, t) - (x_1 - x_0)\big\|^2
+  \]
+  <p>
+    Training is plain regression onto a known target.
+    The path is fixed and the target is the same at every point on it, so there is far less to tune than in noise prediction.
+    That simplicity is a big part of why flow matching spread so quickly.
+  </p>
+
+  <h4 id="flow-idea-velocity-shapes">Velocity, shapes and stopping</h4>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>What it is</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>\( x_0 \)</td>
+          <td>Pure Gaussian noise, a tensor with the same shape as the output (for example frames × mel bins).</td>
+        </tr>
+        <tr>
+          <td>\( x_1 \)</td>
+          <td>The real speech in the same representation: the true mel spectrogram or latents.</td>
+        </tr>
+        <tr>
+          <td>\( x_t \)</td>
+          <td>The point a fraction \( t \) of the way from noise to speech; pure noise at 0, real speech at 1.</td>
+        </tr>
+        <tr>
+          <td>\( x_1 - x_0 \)</td>
+          <td>
+            The velocity: a tensor of the same shape saying how to change every number in the noise to reach the speech.
+          </td>
+        </tr>
+        <tr>
+          <td>\( v_\theta(x_t, t) \)</td>
+          <td>The network's prediction of that velocity from only where it is and when; it never sees \( x_1 \) at inference.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>Sampling: follow the arrows.</strong>
+    After training, the network is a map of arrows: at any point and time it says where to move.
+    Inference does not add the velocity to the noise in one jump.
+    It walks along the arrows in \( N \) small steps of size \( \Delta t = 1/N \), asking the network again from each new point.
+    A numerical solver (the simplest is Euler) does exactly this.
+  </p>
+  \[
+    \frac{\mathrm{d}x}{\mathrm{d}t} = v_\theta(x, t)
+    \qquad\Rightarrow\qquad
+    x_{t+\Delta t} \approx x_t + \Delta t\; v_\theta(x_t, t)
+  \]
+  <p>
+    Each step is one forward pass, called a function evaluation; the count is the NFE.
+    The number of steps is therefore the main dial between speed and quality.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 172" role="img"
+      aria-label="From noise to data: a curved diffusion-style path takes many small steps, a straighter flow path takes a few large steps">
+      <defs>
+        <marker id="flow-idea-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Endpoints == -->
+      <rect class="d-box" x="10" y="90" width="110" height="44" rx="8"/>
+      <text class="d-text" x="65" y="112" text-anchor="middle"
+        dominant-baseline="middle">Noise</text>
+      <rect class="d-box d-box--accent" x="600" y="90" width="110" height="44" rx="8"/>
+      <text class="d-text" x="655" y="112" text-anchor="middle"
+        dominant-baseline="middle">Speech mel</text>
+
+      <!-- == Paths == -->
+      <path class="d-arrow" d="M 120 112 L 598 112"
+        marker-end="url(#flow-idea-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 120 112 Q 360 -30 598 112"
+        marker-end="url(#flow-idea-arrow)"/>
+
+      <!-- == Step markers: few on the straight path, many on the curve == -->
+      <rect class="d-box d-box--muted" x="234" y="107" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="354" y="107" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="474" y="107" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="175" y="76" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="235" y="54" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="295" y="40" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="355" y="36" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="414" y="40" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="474" y="54" width="10" height="10" rx="3"/>
+      <rect class="d-box d-box--muted" x="533" y="76" width="10" height="10" rx="3"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="360" y="14" text-anchor="middle"
+        dominant-baseline="middle">curved path: many small steps</text>
+      <text class="d-text--muted" x="360" y="150" text-anchor="middle"
+        dominant-baseline="middle">straighter path: few large steps</text>
+    </svg>
+    <figcaption>
+      Schematic of sampling. Each square is one solver step.
+      A straight path can be crossed in a few large steps; a curved path needs many small ones.
+    </figcaption>
+  </figure>
+
+  <p>
+    Straight paths are why few steps can work.
+    On a straight line the arrow never changes, so even one big step lands in the right place.
+    On a curve the arrow keeps turning, so long steps overshoot and the solver must take many short ones.
+    Flow matching trains toward straight paths, and its authors report that these sample faster than diffusion paths.
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Real paths still bend, because the network sees only the current point, not which noise sample it started from.
+    Many noise and speech pairs pass through the same \( x_t \), each pulling its own way, and the network can only answer with the average.
+    The figure shows two pairs whose straight lines cross.
+    Small steps re-read the arrow often enough to find their way to one speech sample; a single big step follows the averaged arrow and lands between the two, which sounds like a blur.
+    This is why one step fails and why few-step distillation exists to straighten the paths.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 222" role="img"
+      aria-label="Two noise samples each have a straight line to their own speech sample. The lines cross in the middle. At the crossing the network sees the same input for both and learns the average direction, which points straight ahead between the two speech samples, so one big step lands on a blur between them">
+      <defs>
+        <marker id="flow-idea-cross-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Endpoints == -->
+      <rect class="d-box" x="10" y="30" width="100" height="28" rx="8"/>
+      <text class="d-text" x="60" y="44" text-anchor="middle"
+        dominant-baseline="middle">noise 1</text>
+      <rect class="d-box" x="10" y="162" width="100" height="28" rx="8"/>
+      <text class="d-text" x="60" y="176" text-anchor="middle"
+        dominant-baseline="middle">noise 2</text>
+      <rect class="d-box d-box--accent" x="610" y="162" width="100" height="28" rx="8"/>
+      <text class="d-text" x="660" y="176" text-anchor="middle"
+        dominant-baseline="middle">speech 1</text>
+      <rect class="d-box d-box--accent" x="610" y="30" width="100" height="28" rx="8"/>
+      <text class="d-text" x="660" y="44" text-anchor="middle"
+        dominant-baseline="middle">speech 2</text>
+      <rect class="d-box d-box--muted" x="610" y="96" width="100" height="28" rx="8"/>
+      <text class="d-text" x="660" y="110" text-anchor="middle"
+        dominant-baseline="middle">blur</text>
+
+      <!-- == The two ideal straight paths, crossing in the middle == -->
+      <path class="d-arrow d-arrow--dashed" d="M 110 44 L 608 176"
+        marker-end="url(#flow-idea-cross-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 110 176 L 608 44"
+        marker-end="url(#flow-idea-cross-arrow)"/>
+
+      <!-- == The averaged arrow the network can actually learn there == -->
+      <path class="d-arrow" d="M 300 110 L 604 110"
+        marker-end="url(#flow-idea-cross-arrow)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="360" y="14" text-anchor="middle"
+        dominant-baseline="middle">same input, two different right answers</text>
+      <text class="d-text--small" x="600" y="96" text-anchor="end"
+        dominant-baseline="middle">learned average: straight on</text>
+      <text class="d-text--muted" x="360" y="208" text-anchor="middle"
+        dominant-baseline="middle">dashed: each pair's own straight line; solid: the one arrow the network can learn at the crossing</text>
+    </svg>
+    <figcaption>
+      Why paths bend. Where two straight lines cross, the network sees one input and must give one answer, the average of both directions.
+      A single big step follows that average and lands between the speech samples.
+    </figcaption>
+  </figure>
+
+  <p>
+    Two stopping rules are fixed before sampling starts.
+    Sampling ends when \( t \) reaches 1, after a step count chosen in advance; published speech systems use about 10 to 32.
+    The output length is also fixed in advance, because the size of the noise tensor is the duration; it comes from a duration estimate rather than a stop token.
+    Some papers put data at 0 and noise at 1 and run time the other way.
+  </p>
+
+  <h4 id="flow-idea-schedule-weighting">Schedule and loss weighting</h4>
+  <p>
+    A diffusion model trains on many noise levels at once, from "almost clean" to "almost pure noise".
+    Two design choices decide how that goes.
+    The <strong>noise schedule</strong> is the sequence \( \bar\alpha_t \) above, close to 1 at the start (mostly signal) and close to 0 at the end (mostly noise).
+    It sets which noise levels the model sees often in training and how the sampler spreads its work.
+    The original model used a linear schedule over 1,000 steps; a cosine schedule, which fades the signal more gently, is a common later choice and is what one continuous-latent speech head uses.
+  </p>
+  <p>
+    <strong>Loss weighting</strong> says how much each noise level counts in the total loss.
+    Predicting noise is easy at some levels and hard at others, so a plain average lets some dominate.
+    Later work treats each level as a separate task and reweights by the signal-to-noise ratio, reporting about 3.4 times faster convergence than earlier weightings.
+  </p>
+  <p>
+    Flow matching removes most of this: the straight path fixes the schedule and the velocity target has a stable scale everywhere.
+    What remains is which times to sample in training.
+    A large rectified-flow study improved results by biasing sampling toward the perceptually relevant middle of the path instead of sampling uniformly.
+    At inference, some speech models also bend the step spacing (sway-style schedules in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Levers</a>).
+  </p>
+
+  <h3 id="flow-idea-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Prediction target (noise or velocity)</td>
+          <td>What the network regresses onto</td>
+          <td>Noise prediction needs a tuned schedule and per-level weighting; velocity regression mostly needs only a choice of training times</td>
+        </tr>
+        <tr>
+          <td>Path shape</td>
+          <td>How curved the route from noise to speech is</td>
+          <td>Straighter paths allow fewer steps; learned paths are never perfectly straight</td>
+        </tr>
+        <tr>
+          <td>Number of steps</td>
+          <td>How finely the solver follows the arrows</td>
+          <td>Compute grows linearly with steps; too few and the output degrades</td>
+        </tr>
+        <tr>
+          <td>Guidance</td>
+          <td>How hard the output is pushed toward the conditions (text, voice)</td>
+          <td>Doubles the compute per step; too strong hurts quality</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">levers section</a> turns each into concrete settings.
+  </p>
+
+  <h3 id="flow-idea-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Too few steps.</strong>
+      <span class="tag tag--inference">Inference</span>
+      The solver cuts corners and the output turns blurry: muffled consonants, flat prosody.
+      Teams sweep the step count and plot word error rate (<a href="/apps/materials/speech-to-speech/02-listening">WER</a>) and speaker similarity against speed.
+      One or two steps from a standard flow model is rarely good enough without distillation.
+    </li>
+    <li>
+      <strong>Calling everything "flow".</strong>
+      A model with "flow" in a component name is not necessarily flow matching.
+      One commercial TTS uses a "Flow-VAE" that is a VAE variant, one codec-token model generates by mask-and-predict, and a third pairs an autoregressive token model with a plain causal convolutional decoder.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Flow matching trains a network to point from noise toward speech, as plain regression on a straight-line velocity.
+      Sampling follows those arrows with an ODE solver, and straighter paths are why you can get away with few steps."
+    </p>
+  </div>
+
+  <h3 id="flow-idea-sources">Sources</h3>
+  <ul>
+    <li>Denoising Diffusion Probabilistic Models (arXiv 2006.11239)</li>
+    <li>Flow Matching for Generative Modeling (arXiv 2210.02747)</li>
+    <li>Improved Denoising Diffusion Probabilistic Models (arXiv 2102.09672)</li>
+    <li>Efficient Diffusion Training via Min-SNR Weighting Strategy (arXiv 2303.09556)</li>
+    <li>Scaling Rectified Flow Transformers for High-Resolution Image Synthesis (arXiv 2403.03206)</li>
+    <li>Autoregressive Image Generation without Vector Quantization (arXiv 2406.11838)</li>
+    <li>MiniMax-Speech: Intrinsic Zero-Shot Text-to-Speech with a Learnable Speaker Encoder (arXiv 2505.07916)</li>
+    <li>MaskGCT: Zero-Shot Text-to-Speech with Masked Generative Codec Transformer (arXiv 2409.00750)</li>
+    <li>DLLM-TTS: Block Discrete Diffusion Language Model for Text-to-Speech Synthesis (arXiv 2608.00011)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#diffusion-and-flow">Diffusion and flow matching for speech</a> and
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#block-diffusion-lms">diffusion language models</a>
+    </li>
+  </ul>
+</section>

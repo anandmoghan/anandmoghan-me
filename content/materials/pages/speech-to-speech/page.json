@@ -1,0 +1,18 @@
+{
+  "title": "Speech-to-speech: how it works",
+  "description": "Concept-first explainer of modern speech and speech-to-speech modelling: each chapter builds intuition, explains the mechanism, and covers the levers, optimisations and failure modes, with sources listed per section.",
+  "order": 0,
+  "chapters": [
+    "01-sound-as-numbers",
+    "02-listening",
+    "03-tokenizers",
+    "04-speaking-with-tokens",
+    "05-diffusion-and-flow",
+    "06-tokens-to-waveform",
+    "07-conversation",
+    "08-training",
+    "09-control-and-prompting",
+    "10-evaluation-and-problems",
+    "11-system-design"
+  ]
+}

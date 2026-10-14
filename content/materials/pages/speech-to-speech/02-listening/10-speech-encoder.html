@@ -1,0 +1,259 @@
+<section id="speech-encoder">
+  <h2>What a speech encoder does</h2>
+  <p>
+    A speech LLM cannot read a waveform.
+    One second of 16 kHz audio is 16,000 numbers, and almost none of them say anything about words.
+    The speech encoder is the ear: it turns audio into a short sequence of vectors, one per small
+      slice of time, that capture what is said and how.
+  </p>
+  <p>
+    Think of a stenographer.
+    They do not write down air pressure; they keep a compact record that preserves the content.
+    The encoder makes that record, and an adapter after it shortens the record again until the LLM
+      can afford to read it.
+  </p>
+
+  <h3 id="speech-encoder-how">How it works</h3>
+  <p>
+    Four stages turn audio into LLM input, and each one shortens the sequence.
+  </p>
+  <ol>
+    <li>
+      <strong>Log-mel features.</strong>
+      The audio is cut into overlapping 25 ms windows, one starting every 10 ms, and each window
+        becomes a list of 80 numbers describing how much energy sits at each pitch band, on a scale
+        that follows human hearing.
+      The result is 100 frames per second.
+      The construction is explained in
+      <a href="/apps/materials/speech-to-speech/01-sound-as-numbers#mel-spectrograms">Mel spectrograms</a>.
+    </li>
+    <li>
+      <strong>Convolutional stem.</strong>
+      A convolution slides one small filter along the frames, like a short magnifying glass that
+        reads three neighbouring frames and writes one summary per position.
+      Stride is the step size of the slide; a stride of 2 moves two frames at a time, so the rate
+        halves to one vector per 20 ms (50 Hz).
+    </li>
+    <li>
+      <strong>Transformer encoder.</strong>
+      Self-attention lets each frame look at the other frames and mix in the ones that help, so each
+        output vector carries context and not just its own 20 ms.
+      The vowel in "pen" against "pin" is hard to judge alone, but the neighbouring consonants and
+        the rest of the word make it clear.
+    </li>
+    <li>
+      <strong>Adapter (projector).</strong>
+      The vectors are pooled or strided down again, typically to 25, 12.5 or 10 Hz, and multiplied by
+        a learned matrix so each has exactly as many numbers as one LLM token embedding.
+      That lets the LLM treat an audio vector like a word.
+    </li>
+  </ol>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 125" role="img"
+      aria-label="Audio pipeline: waveform, log-mel, encoder, adapter, LLM, with the frame rate at each stage">
+      <defs>
+        <marker id="speech-encoder-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="12" y="20" width="120" height="44" rx="8"/>
+      <text class="d-text" x="72" y="34" text-anchor="middle"
+        dominant-baseline="middle">Audio</text>
+      <text class="d-text--small" x="72" y="51" text-anchor="middle"
+        dominant-baseline="middle">16 kHz</text>
+      <rect class="d-box" x="156" y="20" width="120" height="44" rx="8"/>
+      <text class="d-text" x="216" y="34" text-anchor="middle"
+        dominant-baseline="middle">Log-mel</text>
+      <text class="d-text--small" x="216" y="51" text-anchor="middle"
+        dominant-baseline="middle">80 channels</text>
+      <rect class="d-box d-box--accent" x="300" y="20" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="34" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <text class="d-text--small" x="360" y="51" text-anchor="middle"
+        dominant-baseline="middle">attention layers</text>
+      <rect class="d-box" x="444" y="20" width="120" height="44" rx="8"/>
+      <text class="d-text" x="504" y="34" text-anchor="middle"
+        dominant-baseline="middle">Adapter</text>
+      <text class="d-text--small" x="504" y="51" text-anchor="middle"
+        dominant-baseline="middle">pool + project</text>
+      <rect class="d-box" x="588" y="20" width="120" height="44" rx="8"/>
+      <text class="d-text" x="648" y="34" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <text class="d-text--small" x="648" y="51" text-anchor="middle"
+        dominant-baseline="middle">reads text-like rate</text>
+      <path class="d-arrow" d="M 132 42 L 154 42"
+        marker-end="url(#speech-encoder-arrow)"/>
+      <path class="d-arrow" d="M 276 42 L 298 42"
+        marker-end="url(#speech-encoder-arrow)"/>
+      <path class="d-arrow" d="M 420 42 L 442 42"
+        marker-end="url(#speech-encoder-arrow)"/>
+      <path class="d-arrow" d="M 564 42 L 586 42"
+        marker-end="url(#speech-encoder-arrow)"/>
+      <text class="d-text--muted" x="72" y="84" text-anchor="middle"
+        dominant-baseline="middle">16,000 samples/s</text>
+      <text class="d-text--muted" x="216" y="84" text-anchor="middle"
+        dominant-baseline="middle">100 frames/s</text>
+      <text class="d-text--muted" x="216" y="102" text-anchor="middle"
+        dominant-baseline="middle">10 ms hop</text>
+      <text class="d-text--muted" x="360" y="84" text-anchor="middle"
+        dominant-baseline="middle">50 vectors/s</text>
+      <text class="d-text--muted" x="360" y="102" text-anchor="middle"
+        dominant-baseline="middle">20 ms each</text>
+      <text class="d-text--muted" x="504" y="84" text-anchor="middle"
+        dominant-baseline="middle">12.5 vectors/s</text>
+      <text class="d-text--muted" x="504" y="102" text-anchor="middle"
+        dominant-baseline="middle">80 ms each</text>
+      <text class="d-text--muted" x="648" y="84" text-anchor="middle"
+        dominant-baseline="middle">few positions per second</text>
+    </svg>
+    <figcaption>Figure: the listening front end. Each stage shortens the sequence; the adapter lands
+      near 12.5 vectors per second.</figcaption>
+  </figure>
+  <p>
+    Shortening matters because the LLM pays for every position.
+    The rate is the inverse of the frame duration, and the lengths follow directly.
+  </p>
+  \[
+  \text{rate (Hz)} = \frac{1000}{\text{ms per frame}},
+  \qquad
+  1800\,\text{s} \times 50\,\text{Hz} = 90{,}000,
+  \qquad
+  1800\,\text{s} \times 12.5\,\text{Hz} = 22{,}500
+  \]
+  <p>
+    So thirty minutes of audio is 22,500 positions at 12.5 Hz; the comparison with 50 Hz and the frame rates are developed in
+    <a href="/apps/materials/speech-to-speech/01-sound-as-numbers#frames-hops-hz">Frames, hops and Hz</a>.
+    Most input paths pair an encoder pretrained on automatic speech recognition (ASR, speech to text)
+      with a small adapter and a rate near 12.5 Hz.
+    The rate is a design choice and not a law: Qwen3.5-Omni trained its audio encoder from scratch
+      and runs it at 6.25 Hz, one vector per 160 ms.
+    Discrete tokens appear on the input side only when the same vocabulary must also be generated;
+      see <a href="/apps/materials/speech-to-speech/03-tokenizers">Tokenizers and codecs</a>.
+  </p>
+
+  <h3 id="speech-encoder-whisper">The Whisper recipe, as the canonical example</h3>
+  <p>
+    Whisper is the encoder many speech LLMs start from, and its recipe is the template newer
+      encoders copy or depart from.
+    It is an encoder-decoder Transformer trained on 680,000 hours of weakly supervised audio, with
+      task tokens (language, transcribe or translate, timestamps) that steer one decoder across ASR,
+      translation and language ID.
+    Its encoder takes a fixed 30 s window: 3,000 log-mel frames, halved by the stem to 1,500, with
+      short audio padded up.
+  </p>
+  <p>
+    Speech LLMs keep the encoder, drop the decoder and add an adapter; Voxtral, for example, uses a
+      4x adapter to bring 50 Hz down to 12.5 Hz.
+    The newest streaming systems no longer start from Whisper at all.
+    Voxtral Realtime trains a causal encoder from scratch (50 Hz, sliding attention window of 15 s)
+      and then applies the same 4x adapter.
+    <a href="#streaming-encoders">Streaming encoders</a> covers how these work.
+  </p>
+  <div class="callout callout--note">
+    <strong>Reading the error numbers in this chapter</strong>
+    <p>
+      Word error rate (WER) counts the words a transcript gets wrong (substitutions, deletions and
+        insertions) divided by the number of words in the reference.
+      Lower is better.
+      If the reference is "the cat sat on the mat" (6 words) and the model writes "the cat sat on
+        mat today", one word is deleted and one inserted, so WER is 2 / 6, about 33%.
+      Clean read speech scores a few percent; noisy or conversational speech scores higher.
+    </p>
+  </div>
+
+  <h3 id="speech-encoder-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Downsampling rate</td>
+          <td>Positions per second the LLM reads (10 to 25 Hz is the common range; 6.25 Hz at the
+            low end)</td>
+          <td>Fewer positions and a cheaper LLM, but less fine acoustic detail. Some systems keep a
+            50 Hz continuous path next to 12.5 Hz tokens to win detail back.</td>
+        </tr>
+        <tr>
+          <td>Adapter type</td>
+          <td>How frames merge: strided MLP (Voxtral), stride-2 pooling (Qwen2-Audio), windowed
+            Q-Former (Granite-speech)</td>
+          <td>Stride and pooling keep temporal order and are simple. A Q-Former (a small set of
+            learned queries that pick what to keep from the frames) adapts to the content, at the
+            cost of another component to train.</td>
+        </tr>
+        <tr>
+          <td>Encoder pretraining</td>
+          <td>ASR-pretrained encoder against one trained from scratch</td>
+          <td>ASR pretraining gives text-aligned features cheaply. Qwen3.5-Omni and Voxtral Realtime
+            trained their own for a streaming-friendly design; each costs a full training run.</td>
+        </tr>
+        <tr>
+          <td>Frozen LLM</td>
+          <td>Canary-Qwen trains encoder, projection and LoRA with the LLM frozen. LoRA adds small
+            trainable low-rank matrices beside the frozen weights, so only a tiny share of the model
+            is updated.</td>
+          <td>Guards against forgetting text skills, which training the LLM along with the encoder
+            can erode.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="speech-encoder-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Padding cost.</strong>
+      A two-second turn still costs a 30 s encoder pass when the window is fixed, and a fixed window
+        with bidirectional attention rules out live use as shipped.
+    </li>
+    <li>
+      <strong>Hallucination on silence.</strong>
+      The Whisper model card warns that predictions may include text that was not spoken, and that
+        the model is prone to repetition.
+      A study that masked parts of the audio found that most of Whisper-small's inserted words were
+        repetition loops, while decoders built on an explicit LLM inserted far fewer.
+      Teams add voice activity detection (VAD, a small model that marks which stretches contain
+        speech) before the model and measure hallucination on their own silence and noise clips.
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding#speech-input">Speech input for LLMs</a>
+    and <a href="/apps/materials/speech-lit-review/02-speech-understanding#whisper">Whisper and the Whisper
+      encoder</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      The encoder turns 100 Hz log-mel frames into vectors, and an adapter pools them to about 12.5
+        Hz so the LLM sees a short sequence.
+      Whisper's recipe is the template (large weakly supervised data, a convolutional stem, a
+        Transformer), but its fixed 30 s bidirectional window is wrong for live use, so the newest
+        streaming models train a causal encoder from scratch.
+    </p>
+  </div>
+
+  <h3 id="speech-encoder-sources">Sources</h3>
+  <ul>
+    <li>Robust Speech Recognition via Large-Scale Weak Supervision (arXiv 2212.04356)</li>
+    <li><a href="https://huggingface.co/openai/whisper-large-v3">OpenAI Whisper large-v3 model
+      card</a></li>
+    <li>Voxtral (arXiv 2507.13264)</li>
+    <li>Voxtral Realtime (arXiv 2602.11298)</li>
+    <li>Qwen3.5-Omni Technical Report (arXiv 2604.15804)</li>
+    <li>Do LLM Decoders Listen Fairly? Benchmarking How Language Model Priors Shape Bias in Speech Recognition (arXiv 2604.21276)</li>
+    <li>Qwen2-Audio Technical Report (arXiv 2407.10759)</li>
+    <li>Granite-speech: open-source speech-aware LLMs with strong English ASR capabilities (arXiv 2505.08699)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li><a href="https://huggingface.co/nvidia/canary-qwen-2.5b">NVIDIA Canary-Qwen model
+      card</a></li>
+  </ul>
+</section>

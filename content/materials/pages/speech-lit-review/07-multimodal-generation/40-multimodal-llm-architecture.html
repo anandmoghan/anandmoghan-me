@@ -1,0 +1,247 @@
+<section id="multimodal-llm-architecture">
+  <h2>Multimodal LLM architecture</h2>
+  <p>
+    Open multimodal LLMs (Qwen3-VL, InternVL3.5, Llama 4) share one template:
+    a vision encoder, a token-reducing connector, and a decoder LLM with multimodal positional encoding.
+    The differences are in positional encoding, visual token count and MoE.
+    Each claim below is cited to the model's technical report, its arXiv paper or Meta's own post.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 160" role="img"
+      aria-label="Multimodal LLM template: image or video passes through a vision encoder and a connector that reduces tokens, then into a decoder LLM together with text tokens">
+      <defs>
+        <marker id="arrow-mllm-template" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="5" y="30" width="100" height="44" rx="8"/>
+      <text class="d-text" x="55" y="52" text-anchor="middle" dominant-baseline="middle">Image, video</text>
+      <rect class="d-box" x="160" y="30" width="110" height="44" rx="8"/>
+      <text class="d-text" x="215" y="52" text-anchor="middle" dominant-baseline="middle">Vision encoder</text>
+      <rect class="d-box" x="325" y="30" width="110" height="44" rx="8"/>
+      <text class="d-text" x="380" y="52" text-anchor="middle" dominant-baseline="middle">Connector</text>
+      <rect class="d-box d-box--accent" x="490" y="30" width="110" height="44" rx="8"/>
+      <text class="d-text" x="545" y="52" text-anchor="middle" dominant-baseline="middle">Decoder LLM</text>
+      <rect class="d-box" x="655" y="30" width="60" height="44" rx="8"/>
+      <text class="d-text" x="685" y="52" text-anchor="middle" dominant-baseline="middle">Text</text>
+      <path class="d-arrow" d="M 105 52 L 158 52" marker-end="url(#arrow-mllm-template)"/>
+      <path class="d-arrow" d="M 270 52 L 323 52" marker-end="url(#arrow-mllm-template)"/>
+      <path class="d-arrow" d="M 435 52 L 488 52" marker-end="url(#arrow-mllm-template)"/>
+      <path class="d-arrow" d="M 600 52 L 653 52" marker-end="url(#arrow-mllm-template)"/>
+      <text class="d-text--muted" x="132" y="44" text-anchor="middle">pixels</text>
+      <text class="d-text--muted" x="297" y="44" text-anchor="middle">features</text>
+      <text class="d-text--muted" x="462" y="44" text-anchor="middle">fewer</text>
+      <text class="d-text--muted" x="462" y="68" text-anchor="middle">tokens</text>
+      <text class="d-text--muted" x="627" y="44" text-anchor="middle">reply</text>
+      <rect class="d-box" x="490" y="100" width="110" height="36" rx="8"/>
+      <text class="d-text" x="545" y="118" text-anchor="middle" dominant-baseline="middle">Text tokens</text>
+      <path class="d-arrow" d="M 545 100 L 545 76" marker-end="url(#arrow-mllm-template)"/>
+      <text class="d-text--small" x="5" y="104">Multimodal positional encoding</text>
+      <text class="d-text--small" x="5" y="122">is applied inside the LLM.</text>
+    </svg>
+    <figcaption>Figure: the shared template. The connector cuts the visual token count before the LLM; positional encoding differs between models.</figcaption>
+  </figure>
+
+  <h3 id="mllm-template">Encoder, connector, LLM</h3>
+  <ul>
+    <li>
+      Qwen3-VL uses DeepStack to integrate multi-level ViT features, plus an enhanced interleaved MRoPE and explicit text timestamps for video.
+      It has dense 2B/4B/8B/32B and MoE 30B-A3B and 235B-A22B variants, with native 256K context (arXiv 2511.21631)
+      <span class="tag tag--confirmed">Confirmed</span>.
+    </li>
+    <li>
+      Its vision encoder is SigLIP-2, a two-layer MLP merger compresses visual features into tokens, and DeepStack routes visual tokens from several ViT layers into corresponding LLM layers through lightweight residual connections (arXiv 2511.21631)
+      <span class="tag tag--confirmed">Confirmed</span>.
+    </li>
+    <li>
+      InternVL3.5 compresses 1024 visual tokens per image patch to 256 with a pixel shuffle module.
+      Its Visual Resolution Router (ViR) dynamically adjusts the resolution of visual tokens (arXiv 2508.18265)
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      Llama 4 uses a MetaCLIP-based vision encoder trained separately in conjunction with a frozen Llama, with MoE
+      (Scout: 17B active, 16 experts, 109B total; Maverick: 17B active, 128 experts, 400B total;
+      <a href="https://ai.meta.com/blog/llama-4-multimodal-intelligence/">Meta's Llama 4 post</a>)
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+  </ul>
+
+  <h3 id="positional-encoding">Positional encoding</h3>
+  <p>
+    Video is handled as time-indexed positions.
+    That one choice enables audio-video sync and streaming
+    <span class="tag tag--inference">Inference</span>.
+  </p>
+  <ul>
+    <li>
+      Qwen3-Omni's TM-RoPE splits rotary dimensions into temporal, height and width (24/20/20 angles).
+      Audio gets one temporal ID per 80 ms.
+      Video frame IDs are adjusted to real timestamps (arXiv 2509.17765 section 2.3)
+      <span class="tag tag--confirmed">Confirmed</span>.
+    </li>
+  </ul>
+
+  <h3 id="early-vs-late-fusion">Early vs late fusion</h3>
+  <p>
+    Meta describes Llama 4 as using early fusion to integrate text and vision tokens into a unified model backbone
+    (<a href="https://ai.meta.com/blog/llama-4-multimodal-intelligence/">Meta's Llama 4 post</a>)
+    <span class="tag tag--reported">Reported</span>.
+  </p>
+  <div class="callout callout--warn">
+    <strong>Source conflict</strong>
+    <p>
+      The Qwen3-Omni paper (arXiv 2509.17765) is inconsistent on the Talker.
+      Section 2.1 says the Talker no longer consumes the Thinker's high-level text representations; the Figure 2 caption says it receives high-level representations directly from the Thinker.
+      Do not state either version as settled.
+    </p>
+  </div>
+
+  <h3 id="omni-time-alignment">Omni models and time alignment</h3>
+  <p>
+    Qwen3-Omni is a Thinker-Talker MoE (arXiv 2509.17765).
+    The AuT audio encoder runs at a 12.5 Hz token rate.
+    The Talker generates one codec frame per step, an MTP module produces the residual codebooks, and a lightweight causal ConvNet (Code2Wav) renders the waveform
+    <span class="tag tag--confirmed">Confirmed</span>.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 236" role="img"
+      aria-label="Qwen3-Omni Thinker and Talker: audio and video get time-aligned position IDs into the Thinker, which produces text; the Talker predicts codec frames, an MTP module fills residual codebooks and Code2Wav renders the waveform">
+      <defs>
+        <marker id="arrow-mllm-omni" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="20" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="34" text-anchor="middle" dominant-baseline="middle">Audio</text>
+      <text class="d-text--muted" x="75" y="51" text-anchor="middle" dominant-baseline="middle">AuT, 12.5 Hz</text>
+      <rect class="d-box" x="10" y="100" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="114" text-anchor="middle" dominant-baseline="middle">Video</text>
+      <text class="d-text--muted" x="75" y="131" text-anchor="middle" dominant-baseline="middle">real timestamps</text>
+      <rect class="d-box d-box--accent" x="220" y="20" width="140" height="130" rx="8"/>
+      <text class="d-text" x="290" y="77" text-anchor="middle" dominant-baseline="middle">Thinker</text>
+      <text class="d-text--muted" x="290" y="94" text-anchor="middle" dominant-baseline="middle">MoE LLM</text>
+      <path class="d-arrow" d="M 140 42 L 218 42" marker-end="url(#arrow-mllm-omni)"/>
+      <text class="d-text--muted" x="179" y="34" text-anchor="middle">80 ms ID</text>
+      <path class="d-arrow" d="M 140 122 L 218 122" marker-end="url(#arrow-mllm-omni)"/>
+      <text class="d-text--muted" x="179" y="114" text-anchor="middle">time ID</text>
+      <rect class="d-box" x="450" y="20" width="130" height="44" rx="8"/>
+      <text class="d-text" x="515" y="42" text-anchor="middle" dominant-baseline="middle">Text</text>
+      <path class="d-arrow" d="M 360 42 L 448 42" marker-end="url(#arrow-mllm-omni)"/>
+      <rect class="d-box" x="450" y="96" width="130" height="44" rx="8"/>
+      <text class="d-text" x="515" y="110" text-anchor="middle" dominant-baseline="middle">Talker</text>
+      <text class="d-text--muted" x="515" y="127" text-anchor="middle" dominant-baseline="middle">1 codec frame/step</text>
+      <path class="d-arrow d-arrow--dashed" d="M 360 118 L 448 118" marker-end="url(#arrow-mllm-omni)"/>
+      <text class="d-text--muted" x="404" y="110" text-anchor="middle">conditioning</text>
+      <text class="d-text--muted" x="404" y="134" text-anchor="middle">(disputed)</text>
+      <rect class="d-box" x="450" y="176" width="130" height="44" rx="8"/>
+      <text class="d-text" x="515" y="190" text-anchor="middle" dominant-baseline="middle">MTP</text>
+      <text class="d-text--muted" x="515" y="207" text-anchor="middle" dominant-baseline="middle">residual codebooks</text>
+      <path class="d-arrow" d="M 515 140 L 515 174" marker-end="url(#arrow-mllm-omni)"/>
+      <rect class="d-box" x="220" y="176" width="140" height="44" rx="8"/>
+      <text class="d-text" x="290" y="190" text-anchor="middle" dominant-baseline="middle">Code2Wav</text>
+      <text class="d-text--muted" x="290" y="207" text-anchor="middle" dominant-baseline="middle">causal ConvNet</text>
+      <path class="d-arrow" d="M 450 198 L 362 198" marker-end="url(#arrow-mllm-omni)"/>
+      <rect class="d-box" x="10" y="176" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="198" text-anchor="middle" dominant-baseline="middle">Waveform</text>
+      <path class="d-arrow" d="M 220 198 L 142 198" marker-end="url(#arrow-mllm-omni)"/>
+    </svg>
+    <figcaption>Figure: Qwen3-Omni. Audio and video IDs come from absolute time. The paper is inconsistent on how the Talker is conditioned (see the source conflict below).</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Aspect</th>
+          <th>Qwen2.5-Omni (arXiv 2503.20215)</th>
+          <th>Qwen3-Omni (arXiv 2509.17765)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Audio-video alignment</td>
+          <td>Interleaved in fixed 2 s chunks</td>
+          <td>Absolute-time position IDs</td>
+        </tr>
+        <tr>
+          <td>Streaming input length</td>
+          <td>Not stated</td>
+          <td>Arbitrary duration, per the authors</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Qwen3-Omni's theoretical first-packet latency in cold-start settings is 234 ms for audio and 547 ms for video.
+    At 4 concurrency, Table 2 gives 728 ms and 1517 ms
+    <span class="tag tag--confirmed">Confirmed</span>.
+    These are theoretical figures, not end-to-end measurements.
+  </p>
+
+  <h3 id="training-and-rl">Training and RL</h3>
+  <ul>
+    <li>
+      InternVL3.5 uses Cascade RL: offline RL for stable convergence, then online RL for refined alignment (arXiv 2508.18265)
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      A study of R1-like training for vision-language models reports that SFT before RL can undermine RL by inducing imitated "pseudo reasoning paths".
+      Its GRPO variant with a mixed perception and cognition reward fostered more adaptive reasoning (arXiv 2504.11468)
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+  </ul>
+
+  <h3 id="streaming-video">Streaming video understanding</h3>
+  <p>
+    StreamingVLM (arXiv 2510.09608) keeps a fixed-size KV cache of attention sinks, recent vision tokens and recent text tokens.
+    It uses contiguous RoPE.
+    It runs at up to 8 FPS on one H100 on a Qwen2.5-VL-7B base
+    <span class="tag tag--confirmed">Confirmed</span>.
+    Authors report a 66.18% win rate against GPT-4o mini on Inf-Streams-Eval and +4.30 on LongVideoBench
+    <span class="tag tag--reported">Reported</span>.
+    Related: ReKV (arXiv 2503.00540) stores video KV caches in RAM and disk and retrieves only the query-relevant ones.
+  </p>
+
+  <h3 id="mllm-evaluation">Evaluation caveat</h3>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      Quote benchmark numbers only from each model's own report, with the benchmark version, because third-party leaderboards may use different settings.
+    </p>
+  </div>
+
+  <h3 id="avatar-perception">What an avatar that perceives the user needs</h3>
+  <div class="callout callout--inference">
+    <strong>Inference</strong>
+    <ul>
+      <li>A streaming encoder with a fixed KV cache, as in StreamingVLM.</li>
+      <li>Audio and video timestamps on one common clock, as in absolute-time IDs.</li>
+      <li>An explicit latency budget; Qwen3-Omni suggests sub-second first packets are feasible, cold start only.</li>
+      <li>Emotion perception needs separate cited work; none was found here. Evaluating whether a model uses the video at all is now possible: VideoFDB (arXiv 2605.30256) reports that models often ignore the video stream and fall back to generic captioning.</li>
+      <li>
+        A split between a fast interaction layer and a slower thinking layer: DuplexOmni (arXiv 2606.09186) handles streaming audio and video in an asynchronous interaction layer, with a pluggable thinking layer for reasoning and tool use.
+        The abstract gives no numbers.
+      </li>
+    </ul>
+    <p>
+      Qwen3-Omni's Talker is the closest published example of conditioning generation on multimodal understanding features.
+    </p>
+  </div>
+  <p>
+    Speech-LLM design, the audio half of this stack, is in
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding">chapter 02</a>
+    and <a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems">chapter 04</a>.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The template has converged: encoder, connector, LLM.
+      The real choices are time-aligned positions and a streaming KV budget,
+      which is what lets an avatar perceive the user live."
+    </p>
+  </div>
+</section>

@@ -1,0 +1,205 @@
+<section id="high-fidelity">
+  <h2>Getting high fidelity out</h2>
+  <p>
+    Fidelity is set at the last stages, and several independent knobs control it.
+    Think of a photo: resolution, compression level, sharpening and the quality of the print all matter, and fixing one does not fix the others.
+    For audio the knobs are sample rate, bitrate, training losses, vocoder choice and any post-processing.
+  </p>
+
+  <h3 id="fidelity-how">How it works</h3>
+  <p>
+    Each knob limits the output at a different place, so the weakest one wins.
+  </p>
+  <ul>
+    <li>
+      <strong>Sample rate</strong> sets the top of the frequency band.
+      Most systems here use 24 kHz mels or audio (F5-TTS, CosyVoice 2, Mimi); DAC targets 44.1 kHz.
+    </li>
+    <li>
+      <strong>Codec bitrate</strong> sets how much of the signal the tokens can carry.
+      DAC's quality score (ViSQOL, defined in <a href="/apps/materials/speech-to-speech/03-tokenizers#judging-a-tokenizer">Judging a tokenizer</a>) rises from 3.76 at 1.78 kbps to 4.18 at 8 kbps.
+    </li>
+    <li>
+      <strong>Training losses</strong> set what "close" means.
+      Reconstruction losses reward matching the reference; adversarial and feature-matching losses reward sounding real.
+    </li>
+    <li>
+      <strong>Vocoder</strong> sets how well mel becomes waveform, as the <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#decoders-vocoders">previous section</a> covers.
+    </li>
+    <li>
+      <strong>Post-processing</strong> such as super-resolution can widen the band afterwards.
+      Some models fold this into the decoder: VoxCPM2's AudioVAE encodes 16 kHz audio and reconstructs 48 kHz, with no separate model.
+    </li>
+  </ul>
+  <p>
+    The losses matter more than they look.
+    Mimi trained with only adversarial and feature-matching losses had worse objective scores but sounded better to listeners (the MUSHRA numbers are in
+    <a href="/apps/materials/speech-to-speech/03-tokenizers#codec-mechanics">Codec mechanics</a>).
+    Objective reconstruction scores and listener preference can disagree.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 150" role="img"
+      aria-label="Fidelity stack from tokens to ears: bitrate limits what the tokens carry, the decoder or vocoder rebuilds the waveform, sample rate sets the band, and optional super-resolution widens it; losses shape the decoder during training">
+      <defs>
+        <marker id="fidelity-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Blocks == -->
+      <rect class="d-box" x="10" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="54" text-anchor="middle"
+        dominant-baseline="middle">Tokens or mel</text>
+      <text class="d-text--small" x="75" y="71" text-anchor="middle"
+        dominant-baseline="middle">bitrate, bins</text>
+      <rect class="d-box d-box--accent" x="200" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="265" y="54" text-anchor="middle"
+        dominant-baseline="middle">Decoder / vocoder</text>
+      <text class="d-text--small" x="265" y="71" text-anchor="middle"
+        dominant-baseline="middle">design, losses</text>
+      <rect class="d-box" x="390" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="455" y="54" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <text class="d-text--small" x="455" y="71" text-anchor="middle"
+        dominant-baseline="middle">sample rate</text>
+      <rect class="d-box d-box--muted" x="580" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="645" y="54" text-anchor="middle"
+        dominant-baseline="middle">Super-resolution</text>
+      <text class="d-text--small" x="645" y="71" text-anchor="middle"
+        dominant-baseline="middle">optional</text>
+
+      <!-- == Arrows == -->
+      <path class="d-arrow" d="M 140 62 L 198 62" marker-end="url(#fidelity-arrow)"/>
+      <path class="d-arrow" d="M 330 62 L 388 62" marker-end="url(#fidelity-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 520 62 L 578 62"
+        marker-end="url(#fidelity-arrow)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="360" y="120" text-anchor="middle">each box caps quality on its own; the weakest one wins</text>
+    </svg>
+    <figcaption>Fidelity is capped at several independent points between tokens and ears.</figcaption>
+  </figure>
+  <h3 id="fidelity-levers-table">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Full-band sample rate and data (44.1 kHz)</td>
+          <td>Content above the band limit of the training data</td>
+          <td>More samples to decode; needs genuinely full-band training sources</td>
+        </tr>
+        <tr>
+          <td>More codebooks, higher bitrate</td>
+          <td>Reconstruction error (DAC ViSQOL 3.76 to 4.18 from 1.78 to 8 kbps)</td>
+          <td>Longer token sequences for an autoregressive LM <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Quantiser dropout (DAC applies it with probability 0.5)</td>
+          <td>One codec serves several bitrates without losing full-bandwidth quality</td>
+          <td>Naive dropout on every example hurt quality</td>
+        </tr>
+        <tr>
+          <td>Adversarial and feature-matching losses</td>
+          <td>Perceived quality at low bitrate</td>
+          <td>Objective reconstruction metrics can get worse</td>
+        </tr>
+        <tr>
+          <td>Stronger vocoder (BigVGAN)</td>
+          <td>Quality and generalisation to unseen speakers and conditions</td>
+          <td>Larger model (size in <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#decoders-vocoders">Decoders and vocoders</a>)</td>
+        </tr>
+        <tr>
+          <td>Mel resolution matched to the vocoder (100 bins, hop 256 at 24 kHz)</td>
+          <td>Detail available to the vocoder <span class="tag tag--inference">Inference</span></td>
+          <td>More frames for the flow model <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>More ODE steps; Sway Sampling (flow models)</td>
+          <td>WER and speaker similarity (F5-TTS figures in
+            <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Levers</a>)</td>
+          <td>Steps scale compute linearly; Sway Sampling costs nothing</td>
+        </tr>
+        <tr>
+          <td>Asymmetric codec (low rate in, high rate out)</td>
+          <td>The model works at 16 kHz and the decoder reconstructs 48 kHz (VoxCPM2)</td>
+          <td>Cheaper modelling, but the high band is learned from data, not carried by the latent <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Audio super-resolution (AudioSR)</td>
+          <td>Upsamples input of 2 to 16 kHz bandwidth to 48 kHz; Moshi uses it to lift 8 kHz Fisher audio to 24 kHz</td>
+          <td>An extra diffusion model. It invents plausible high frequencies; it does not recover them <span class="tag tag--inference">Inference</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Few-step decoding (Flow2GAN) is covered in
+    <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#decoders-vocoders">Codec decoders and vocoders</a>.
+    The flow-model knobs (ODE steps, Sway Sampling, guidance) are introduced in
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Diffusion and flow: levers</a>.
+  </p>
+
+  <h3 id="fidelity-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Metallic or buzzy timbre.</strong>
+      This typically points at the tokenizer or decoder (too few codebooks, weak decoder), not the LM; the sampling-setting test is in
+      <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#multi-codebook-patterns">Multi-codebook patterns</a>.
+      <span class="tag tag--inference">Inference</span>
+      Catch it with codec reconstruction scores and listening tests.
+    </li>
+    <li>
+      <strong>Band-limited data, wide-band model.</strong>
+      DAC's authors warn that models trained on data whose true sampling rate is lower than its nominal rate often fail to reconstruct content above that true rate.
+      Upsampling hides the gap but does not fill it.
+    </li>
+    <li>
+      <strong>High rate, wrong model.</strong>
+      Stable Audio Open generates 44.1 kHz stereo yet its authors state it cannot produce intelligible speech.
+    </li>
+    <li>
+      <strong>Metrics that mislead.</strong>
+      UTMOS predicts naturalness, not fidelity to a reference. F5-TTS scores 3.72 against a ground truth of 3.53 on one test set, but 3.89 against 4.09 on another.
+      Report a listening test or ViSQOL alongside it.
+    </li>
+    <li>
+      <strong>Fixing the wrong knob.</strong>
+      Raising the sample rate cannot repair a low-bitrate tokenizer, and a bigger vocoder cannot restore bandwidth the data never had.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Fidelity is capped in several places: bandwidth of the training data and sample rate, codec bitrate, the losses used to train the decoder, and the vocoder.
+      Adversarial losses can sound better while scoring worse on reconstruction metrics, so I always include a listening test.
+      A buzzy timbre that survives every sampling setting is a tokenizer or decoder problem."
+    </p>
+  </div>
+
+  <h3 id="high-fidelity-sources">Sources</h3>
+  <ul>
+    <li>High-Fidelity Audio Compression with Improved RVQGAN (arXiv 2306.06546)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>BigVGAN (arXiv 2206.04658); HiFi-GAN (arXiv 2010.05646)</li>
+    <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching (arXiv 2410.06885)</li>
+    <li>VoxCPM2 Technical Report (arXiv 2606.06928)</li>
+    <li>AudioSR: Versatile Audio Super-resolution at Scale (arXiv 2309.07314)</li>
+    <li>Stable Audio Open (arXiv 2407.14358)</li>
+    <li>UTMOS: UTokyo-SaruLab System for VoiceMOS Challenge 2022 (arXiv 2204.02152)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#flow-tts-fidelity">Flow-matching TTS and fidelity</a>
+      and
+      <a href="/apps/materials/speech-lit-review/08-common-problems#speech-generation-problems">speech generation problems</a>
+      in the literature review.
+    </li>
+  </ul>
+</section>

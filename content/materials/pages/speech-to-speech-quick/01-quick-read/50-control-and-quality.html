@@ -1,0 +1,74 @@
+<section id="q-control-quality">
+  <h2>Control and quality: steering, post-training, evaluation</h2>
+  <ul>
+    <li>Five control channels, usually combined: reference clip, natural-language instruction, inline tags, duration targets, style guidance at sampling time.</li>
+    <li>IndexTTS2 takes timbre from one prompt and emotional tone from a style prompt, so they can come from different speakers, and offers explicit-token-count duration control (arXiv 2506.21619).</li>
+    <li>The IndexTTS2 authors motivate exact durations by video dubbing; <span class="tag tag--inference">Inference</span> this is the hook for avatar sync.</li>
+    <li>Inline tags: ElevenLabs bracket tags such as <code>[whispers]</code>, less reliable for deliveries the voice was not trained on (<a href="https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices">ElevenLabs docs</a>).</li>
+    <li>Post-training uses WER and speaker-similarity rewards: DiffRO scores codec tokens with no waveform in the loop (arXiv 2505.17589), F5R-TTS applies GRPO to flow outputs (arXiv 2504.02407), GROW does on-policy RL on the flow-matching objective (arXiv 2608.03215).</li>
+    <li>The recurring failure is reward hacking: GRPO on CER and NLL rewards collapsed prosody into monotone speech; iterative DPO with a few hundred human preference pairs per round fixed it (arXiv 2509.18531).</li>
+    <li>RRPO reports that DiffRO-style reward models can be exploited with acoustic artifacts (arXiv 2512.04552).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Always pair automatic rewards with a naturalness term and listening tests.
+    </li>
+    <li>
+      Synthesia Express-2 (4 Sep 2025) pairs Express-Voice with Express-Video; the blind-test result is a company claim with no scores
+      (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Synthesia post</a>)
+      <span class="tag tag--reported">Reported</span>.
+    </li>
+    <li>
+      Speech LLMs take several prompts at once: persona text and a voice clip (PersonaPlex hybrid system prompt, arXiv 2602.06053), a style instruction (gpt-4o-mini-tts <code>instructions</code>), inline tags, numeric parameters, and the user's audio.
+      <a href="/apps/materials/speech-lit-review/06-control-and-quality#prompting-speech-llms">Prompting speech LLMs</a>
+    </li>
+    <li>
+      Instruction following is the weak spot: the best of six full-duplex systems reaches only 64.4% adherence on turn-taking instructions (Instruct-FD, arXiv 2607.20460).
+    </li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>WER</td>
+          <td><a href="https://github.com/BytedanceSpeech/seed-tts-eval">Seed-TTS-eval</a>: Whisper-large-v3 (English), Paraformer-zh (Mandarin)</td>
+        </tr>
+        <tr>
+          <td>SIM</td>
+          <td>Seed-TTS-eval uses WavLM-large fine-tuned for speaker verification; other benchmarks may differ, so quote the variant</td>
+        </tr>
+        <tr>
+          <td>UTMOS</td>
+          <td>Predicted MOS, a naturalness check alongside WER and SIM</td>
+        </tr>
+        <tr>
+          <td>emotion2vec</td>
+          <td>Emotion similarity (arXiv 2312.15185)</td>
+        </tr>
+        <tr>
+          <td>Human listening</td>
+          <td>Needed because automatic metrics are optimisable</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would use WER and SIM rewards plus an emotion or naturalness term,
+      watch for monotone prosody as a hacking signature, and gate releases on human listening tests."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Gap</strong>
+    <p>
+      In-context cloning internals, speaker embeddings and timbre/prosody/content disentanglement were not researched beyond IndexTTS2 and Express-Voice.
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/06-control-and-quality">Full chapter</a></p>
+</section>

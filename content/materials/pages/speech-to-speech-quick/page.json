@@ -1,0 +1,8 @@
+{
+  "title": "Speech-to-speech: quick read",
+  "description": "Condensed one-page version of the speech-to-speech literature review: key ideas, models and interview lines per chapter.",
+  "order": 1,
+  "chapters": [
+    "01-quick-read"
+  ]
+}

@@ -1,0 +1,112 @@
+<section id="safety-provenance">
+  <h2>Safety and provenance: watermarks, detectors and fingerprints</h2>
+  <p>
+    Voice cloning needs three controls: a consent step before a voice is created, a mark in every output, and a way to detect or trace a suspect clip.
+    The 2024 to 2026 literature covers the second and third, and it also shows how each can fail.
+    Marks get stripped by ordinary audio processing, detectors learn the mark instead of the fake, and fingerprints drift when a model is fine-tuned.
+  </p>
+  <div class="callout callout--note">
+    <strong>Evidence quality</strong>
+    <p>
+      Numbers below come from the paper abstracts, as the authors report them.
+      Full-text tables were not checked.
+    </p>
+  </div>
+
+  <h3 id="sp-watermark-methods">Watermarking methods</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Where the mark sits</th>
+          <th>Reported</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AudioSeal (arXiv 2401.17264)</td>
+          <td>Waveform. Generator and detector are trained jointly with a localisation loss, plus a perceptual loss inspired by auditory masking</td>
+          <td>Localised detection of AI-generated speech down to the sample level; single-pass detector up to two orders of magnitude faster than existing models; robust to real-world manipulations</td>
+        </tr>
+        <tr>
+          <td>VoiceMark (arXiv 2505.21568)</td>
+          <td>Speaker-specific latents, so the mark survives zero-shot cloning; voice-cloning-simulated augmentations and a VAD-based loss add robustness</td>
+          <td>Over 95% detection accuracy after zero-shot synthesis, against about 50% for existing methods</td>
+        </tr>
+        <tr>
+          <td>NeuMark (arXiv 2609.25719)</td>
+          <td>SpeechTokenizer acoustic tokens: cross-attention spreads a 16-bit message across the residual vector quantiser layers</td>
+          <td>Better robustness to neural-codec resynthesis; supports detection and message recovery; the paper analyses a tension between transparency (measured on the reconstruction) and robustness (measured on the original)</td>
+        </tr>
+        <tr>
+          <td>MARC (arXiv 2610.11488)</td>
+          <td>Codec-aware token-cluster space for autoregressive audio generators; a multi-bit payload is embedded by scheduling clusters, then decoded on retokenised audio</td>
+          <td>Average bit extraction accuracy of 97.3% on unmodified watermarked audio (speech, dialogue and music); survives diverse codec attacks and resists overwriting</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    The MARC authors frame the gap that motivates it: codec processing can change the token sequence recovered from a waveform, and most earlier schemes are zero-bit.
+    A zero-bit mark confirms a watermark is present but cannot identify an individual output.
+    <span class="tag tag--inference">Inference</span>
+    For a product that needs to say which account made a clip, a multi-bit payload is the requirement, and the codec path is the test.
+  </p>
+
+  <h3 id="sp-watermark-attacks">Attacks that strip marks</h3>
+  <p>
+    A study of speech enhancement as an attack (arXiv 2609.29040) adds Gaussian noise and then runs a discriminative or generative enhancement model, as a black-box removal attempt.
+    It tests six watermarks: AudioSeal, WavMark, SilentCipher, Timbre, Perth and AlignMark.
+    The authors report that it outperforms existing neural resynthesis attacks and that generative enhancement, which rebuilds the harmonic regions of speech while denoising, is highly destructive to watermarks.
+    <span class="tag tag--reported">Reported</span>
+    The abstract gives no per-method rates.
+    Its recommendation is that robustness evaluations include speech enhancement.
+  </p>
+
+  <h3 id="sp-watermark-shortcut">The watermark shortcut in deepfake detectors</h3>
+  <p>
+    The Watermark Shortcut (arXiv 2606.23335) examines detectors trained when only synthetic speech carries a mark.
+    The detector learns the mark as the cue for "fake", with three consequences: weaker performance on unseen data, marked fakes escaping once the mark is removed, and genuine recordings flagged once they are marked.
+    In a controlled white-box experiment the equal error rate rises from 16% to 75%.
+    A black-box test of a commercial API also showed that marking real speech made it look fake.
+    <span class="tag tag--reported">Reported</span>
+    Training with marks on both real and synthetic speech removes the shortcut, and the authors release a paired clean and marked dataset (WASP).
+  </p>
+
+  <h3 id="sp-tracing">Tracing a clip across training stages</h3>
+  <p>
+    GenTraceBench (arXiv 2609.21738) asks whether a deepfake fingerprint still works after a TTS model is adapted.
+    It covers five TTS architectures, 16 pre- and post-training variants and 49,728 utterances generated from fixed texts and speaker prompts.
+    The setup trains on the foundation model and tests on the adapted one, over binary detection, closed-set attribution and open-set verification with three forensic backbones.
+    <span class="tag tag--reported">Reported</span>
+    DPO and GRPO mostly preserve the fingerprint, while some SFT and pre-training data changes cause substantial drift.
+    In W2V-BERT verification, multi-shot enrolment lowers the equal error rate for the SFT condition from 44.4% to 11.0%, and the SingNet-only condition stays at or above 45%.
+    This is the safety-side counterpart of the post-training recipes in
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#preference-rl-distill">Preference, RL and distillation</a>.
+  </p>
+
+  <h3 id="sp-consent">Consent</h3>
+  <p>
+    Synthesia has the voice speaker read a randomly generated passcode when cloning
+    (<a href="https://help.synthesia.io/en/articles/8612891-how-do-i-clone-my-voice-in-synthesia">help article</a>)
+    <span class="tag tag--confirmed">Confirmed</span>
+    and states that it strictly prohibits cloning voices without explicit consent
+    (<a href="https://www.synthesia.io/features/ai-voice-cloning">voice cloning page</a>).
+  </p>
+
+  <h3 id="sp-spoken-safety">Spoken-model safety</h3>
+  <p>
+    Jailbreaks and multilingual safety gaps for speech-to-speech models are in
+    <a href="/apps/materials/speech-lit-review/08-common-problems#s2s-jailbreaks">Speech-to-speech and duplex problems</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would gate cloning on consent, write a multi-bit mark into every output and test it against codec resynthesis and speech enhancement.
+      I would train deepfake detectors with marks on both real and fake speech so they do not learn the mark as the cue."
+    </p>
+  </div>
+</section>

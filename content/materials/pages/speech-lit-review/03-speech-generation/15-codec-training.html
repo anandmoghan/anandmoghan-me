@@ -1,0 +1,524 @@
+<section id="codec-training">
+  <h2>How codecs are trained: VQ-VAE, RVQ and continuous latents</h2>
+  <p>
+    An RVQ codec is a VQ-VAE-family autoencoder: encoder, discrete bottleneck, decoder, trained end to end.
+    It is not a VAE.
+    The VQ-VAE paper does view its model as a VAE with a deterministic posterior and a uniform prior, which makes the KL term a constant (\( \log K \)) that is dropped from training (arXiv 1711.00937).
+    So no KL loss and no sampling appear in an RVQ codec.
+    Continuous-latent tokenizers are the VAE counterpart: they keep a Gaussian bottleneck and a KL term instead of a codebook.
+    What these tokenizers produce is described in <a href="/apps/materials/speech-lit-review/03-speech-generation#codecs-tokenizers">Codecs and speech tokenizers</a>.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 316" role="img"
+      aria-label="Top row, RVQ codec: encoder gives a frame vector z, quantizer q1 quantizes it, the residual goes to q2, then q3 to qN, the chosen codes are summed and decoded, with codebook and commitment loss at the quantizers and reconstruction, adversarial and feature matching loss at the decoder. Bottom row, continuous VAE tokenizer: encoder gives mu and sigma, a latent z is sampled with noise, the decoder reconstructs, with a KL loss on mu and sigma and a reconstruction loss at the decoder">
+      <defs>
+        <marker id="codec-training-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == RVQ row == -->
+      <rect class="d-group" x="2" y="4" width="716" height="146" rx="8"/>
+      <text class="d-text--muted" x="12" y="19" text-anchor="start"
+        dominant-baseline="middle">RVQ autoencoder (VQ-VAE family): discrete bottleneck</text>
+      <text class="d-text--muted" x="317" y="44" text-anchor="middle"
+        dominant-baseline="middle">codebook + commitment (or EMA)</text>
+      <text class="d-text--muted" x="708" y="32" text-anchor="end"
+        dominant-baseline="middle">reconstruction + adversarial</text>
+      <text class="d-text--muted" x="708" y="46" text-anchor="end"
+        dominant-baseline="middle">+ feature matching</text>
+
+      <rect class="d-box" x="10" y="58" width="100" height="44" rx="8"/>
+      <text class="d-text" x="60" y="80" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <rect class="d-box" x="146" y="58" width="90" height="44" rx="8"/>
+      <text class="d-text" x="191" y="80" text-anchor="middle"
+        dominant-baseline="middle">q1</text>
+      <rect class="d-box" x="272" y="58" width="90" height="44" rx="8"/>
+      <text class="d-text" x="317" y="80" text-anchor="middle"
+        dominant-baseline="middle">q2</text>
+      <rect class="d-box" x="398" y="58" width="100" height="44" rx="8"/>
+      <text class="d-text" x="448" y="80" text-anchor="middle"
+        dominant-baseline="middle">q3 ... qN</text>
+      <rect class="d-box" x="534" y="58" width="40" height="44" rx="8"/>
+      <text class="d-text" x="554" y="80" text-anchor="middle"
+        dominant-baseline="middle">Σ</text>
+      <rect class="d-box" x="610" y="58" width="100" height="44" rx="8"/>
+      <text class="d-text" x="660" y="80" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+
+      <path class="d-arrow" d="M 110 80 L 144 80" marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow" d="M 236 80 L 270 80" marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow" d="M 362 80 L 396 80" marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow" d="M 498 80 L 532 80" marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow" d="M 574 80 L 608 80" marker-end="url(#codec-training-arrow)"/>
+      <text class="d-text--muted" x="127" y="70" text-anchor="middle">z</text>
+      <text class="d-text--muted" x="253" y="70" text-anchor="middle">r1</text>
+      <text class="d-text--muted" x="379" y="70" text-anchor="middle">r2</text>
+      <text class="d-text--muted" x="515" y="70" text-anchor="middle">r3</text>
+      <text class="d-text--muted" x="60" y="118" text-anchor="middle">frame vector z</text>
+
+      <path class="d-arrow d-arrow--dashed" d="M 191 102 L 191 126 L 554 126 L 554 104"
+        marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 317 102 L 317 126"/>
+      <path class="d-arrow d-arrow--dashed" d="M 448 102 L 448 126"/>
+      <text class="d-text--muted" x="372" y="140" text-anchor="middle">chosen codes summed</text>
+
+      <!-- == Continuous row == -->
+      <rect class="d-group" x="2" y="162" width="716" height="146" rx="8"/>
+      <text class="d-text--muted" x="12" y="177" text-anchor="start"
+        dominant-baseline="middle">Continuous VAE tokenizer: sampled Gaussian latent</text>
+      <text class="d-text--muted" x="220" y="203" text-anchor="middle">KL term</text>
+      <text class="d-text--muted" x="410" y="188" text-anchor="middle">ε ~ N(0, I)</text>
+      <text class="d-text--muted" x="590" y="203" text-anchor="middle">reconstruction (+ adversarial)</text>
+
+      <rect class="d-box" x="10" y="216" width="100" height="44" rx="8"/>
+      <text class="d-text" x="60" y="238" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <rect class="d-box" x="160" y="216" width="120" height="44" rx="8"/>
+      <text class="d-text" x="220" y="238" text-anchor="middle"
+        dominant-baseline="middle">μ, σ</text>
+      <rect class="d-box" x="340" y="216" width="140" height="44" rx="8"/>
+      <text class="d-text" x="410" y="230" text-anchor="middle"
+        dominant-baseline="middle">sample z</text>
+      <text class="d-text--small" x="410" y="247" text-anchor="middle"
+        dominant-baseline="middle">z = μ + σ ⊙ ε</text>
+      <rect class="d-box" x="540" y="216" width="100" height="44" rx="8"/>
+      <text class="d-text" x="590" y="238" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+
+      <path class="d-arrow" d="M 110 238 L 158 238" marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow" d="M 280 238 L 338 238" marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow" d="M 480 238 L 538 238" marker-end="url(#codec-training-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 410 194 L 410 214"
+        marker-end="url(#codec-training-arrow)"/>
+      <text class="d-text--muted" x="509" y="230" text-anchor="middle">z</text>
+      <text class="d-text--muted" x="360" y="290" text-anchor="middle">no codebook; gradients reach the encoder through the reparameterised sample</text>
+    </svg>
+    <figcaption>
+      Top: an RVQ codec, where each quantizer codes the residual (r1, r2, ...) left by the one before.
+      Bottom: a continuous VAE tokenizer, with a sampled latent in place of codes.
+    </figcaption>
+  </figure>
+
+  <h3 id="vq-vae-training">VQ-VAE: the base recipe</h3>
+  <p>
+    The encoder output \( z_e(x) \) is replaced by its nearest codebook vector \( e_k \), with \( k = \arg\min_j \lVert z_e(x) - e_j \rVert_2 \), and the decoder reads \( z_q(x) = e_k \) (arXiv 1711.00937).
+    The argmin has no gradient, so the decoder's gradient at \( z_q \) is copied unchanged to \( z_e \) (a straight-through estimator).
+    Reconstruction therefore never updates the codebook, so two extra terms are added.
+    The codebook loss pulls code vectors toward encoder outputs, and the commitment loss keeps encoder outputs from drifting away from their codes.
+  </p>
+  \[
+    \mathcal{L} = \log p\big(x \mid z_q(x)\big)
+    + \lVert \operatorname{sg}[z_e(x)] - e \rVert_2^2
+    + \beta \lVert z_e(x) - \operatorname{sg}[e] \rVert_2^2
+  \]
+  <p>
+    Source: VQ-VAE, Eq. 3 (arXiv 1711.00937).
+    Here \( \operatorname{sg} \) is the stop-gradient operator, identity in the forward pass and zero partial derivatives in the backward pass.
+    The decoder trains on the first term only, the encoder on the first and third, and the codebook on the second.
+    The paper uses \( \beta = 0.25 \) and reports little change for \( \beta \) from 0.1 to 2.0.
+    Its appendix describes an EMA update for the codebook instead of the second term (decay \( \gamma = 0.99 \)), but states the main experiments did not use it (arXiv 1711.00937).
+    <span class="tag tag--inference">Inference</span>
+    The first term is a log-likelihood to maximise; in a codec it becomes a reconstruction error to minimise.
+  </p>
+
+  <h3 id="rvq-training">RVQ: SoundStream, EnCodec, DAC</h3>
+  <p>
+    Residual vector quantization chains \( N_q \) quantizers, each coding what the previous ones missed (SoundStream, Algorithm 1; arXiv 2107.03312).
+  </p>
+  \[
+    \hat y \leftarrow 0,\quad r_0 \leftarrow y;\qquad
+    \text{for } i = 1,\dots,N_q:\;\;
+    \hat y \leftarrow \hat y + Q_i(r_{i-1}),\;\;
+    r_i \leftarrow r_{i-1} - Q_i(r_{i-1})
+  \]
+  <p>
+    SoundStream (arXiv 2107.03312) trains this end to end with the following recipe.
+  </p>
+  <ul>
+    <li>
+      Quantizer dropout: for each example, sample \( n_q \) uniformly in \( [1, N_q] \) and use only the first \( n_q \) quantizers.
+      One model then serves many bitrates.
+    </li>
+    <li>
+      Codebooks use EMA updates (following VQ-VAE-2) with k-means initialisation on the first batch.
+      A code with no assigned frames for several batches is replaced by a random frame from the batch.
+      The EMA decay is 0.99, and codes whose EMA falls below 2 are replaced.
+    </li>
+    <li>
+      Generator loss: adversarial, feature matching and multi-scale spectral reconstruction, with \( \lambda_{adv} = 1 \), \( \lambda_{feat} = 100 \), \( \lambda_{rec} = 1 \).
+      Its generator loss (Eq. 6) lists no commitment term.
+    </li>
+    <li>
+      Streamable by design: all convolutions are causal, and the encoder strides (2, 4, 5, 8) give one embedding per 320 samples.
+      With \( N_q = 8 \), each codebook has 1024 entries.
+    </li>
+  </ul>
+  <p>
+    EnCodec keeps the recipe and changes the training signal (arXiv 2210.13438).
+  </p>
+  <ul>
+    <li>
+      It adds a commitment loss \( \sum_c \lVert z_c - q_c(z_c) \rVert_2^2 \) over the residual steps, with gradient only into the quantizer input.
+    </li>
+    <li>
+      It uses a multi-scale STFT discriminator with five window lengths (2048 to 128).
+    </li>
+    <li>
+      A loss balancer rescales each loss's gradient with respect to the output \( \hat x \).
+      With weights \( \lambda_i \), reference norm \( R \) and the EMA \( \langle \lVert g_i \rVert_2 \rangle_\beta \) of each gradient norm, it backpropagates the following.
+      The commitment loss is excluded.
+    </li>
+  </ul>
+  \[
+    \tilde g_i = R \, \frac{\lambda_i}{\sum_j \lambda_j} \cdot \frac{g_i}{\langle \lVert g_i \rVert_2 \rangle_\beta},
+    \qquad g_i = \frac{\partial \ell_i}{\partial \hat x}
+  \]
+  <p>
+    Source: EnCodec, Eq. 5 (arXiv 2210.13438), with \( R = 1 \) and \( \beta = 0.999 \).
+    At 24 kHz EnCodec produces 75 latent steps per second.
+    It uses up to 32 codebooks of 1024 entries, and trains for 1.5, 3, 6, 12 and 24 kbps by picking a multiple of 4 codebooks per batch (arXiv 2210.13438).
+  </p>
+  <p>
+    DAC (arXiv 2306.06546) targets codebook collapse, where many codes go unused.
+    It does code lookup in a low-dimensional space (8 or 32 dimensions) while the code embedding stays 1024-dimensional.
+    It L2-normalises encoder outputs and codes, so distance becomes cosine similarity.
+    With this it trains on plain VQ-VAE codebook and commitment losses (weights 1.0 and 0.25), without k-means initialisation or random restarts.
+    The authors found that applying quantizer dropout to every example hurts full-bandwidth quality, and apply it with probability \( p = 0.5 \) instead.
+    Other weights are 15.0 for the multi-scale mel loss, 2.0 for feature matching and 1.0 for adversarial, with no loss balancer.
+    Reported setup: 44.1 kHz audio at 8 kbps, 86 Hz frame rate, 9 codebooks (arXiv 2306.06546).
+  </p>
+
+  <h3 id="fsq">FSQ: a codebook-free alternative</h3>
+  <p>
+    Finite scalar quantization bounds each of \( d \) channels and rounds it to one of \( L \) integer levels (arXiv 2309.15505).
+  </p>
+  \[
+    \hat z = \operatorname{round}\!\big(\lfloor L/2 \rfloor \tanh(z)\big),
+    \qquad |\mathcal{C}| = \prod_{i=1}^{d} L_i
+  \]
+  <p>
+    Source: FSQ, Sec. 3 (arXiv 2309.15505).
+    The implicit codebook is the product of the per-channel level sets.
+    Gradients pass through the rounding with a straight-through estimator, implemented as \( x + \operatorname{sg}(\operatorname{round}(x) - x) \).
+    The reconstruction loss alone pushes information across bins, so there is no codebook loss, no commitment loss and no EMA.
+    The authors report codebook usage near 100% for most models, without auxiliary losses (arXiv 2309.15505).
+    CosyVoice 2 swaps VQ for FSQ in its speech tokenizer, which works at 25 Hz (arXiv 2412.10117).
+    That tokenizer is an ASR encoder with FSQ inserted (SenseVoice-Large), trained to predict text, so it is supervised rather than a reconstruction autoencoder.
+    The authors report that the FSQ tokenizer fully uses its codebook (arXiv 2412.10117).
+  </p>
+
+  <h3 id="mimi-training">Mimi: adversarial-only training</h3>
+  <p>
+    Mimi uses 8 quantizers with 2048 entries at 12.5 Hz, 1.1 kbps, with quantizer dropout for bitrate scalability (arXiv 2410.00037).
+    It applies quantization to only 50% of training sequences and passes unquantized embeddings to the decoder otherwise.
+    It also drops the reconstruction loss and keeps only the feature-matching and discriminator losses.
+    The authors report that this lowers objective scores (VisQOL 1.84) but sounds better: MUSHRA 81.0 against 58.8 for the EnCodec-style mix of reconstruction and adversarial losses (arXiv 2410.00037).
+    The semantic distillation loss and the split RVQ are covered in
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#semantic-distillation">What "first codebook distilled from WavLM" means</a>.
+  </p>
+
+  <h3 id="predictable-tokens">Training for predictable tokens</h3>
+  <p>
+    Reconstruction-trained codecs are not optimised for the language model that reads their tokens.
+    LLM-Codec (arXiv 2604.17852) argues the mismatch injects acoustically driven uncertainty into the discrete token space and raises LM perplexity.
+    It keeps both codec and LLM architectures unchanged and adds two LM-facing objectives:
+    future-token prediction with Medusa-style multi-step heads, and audio-text alignment through a memory-bank contrastive loss.
+    A differentiable Gumbel bridge carries gradients from these objectives back to the codec encoder.
+    Token LMs trained on it reach 61.6% on SALMon speech coherence, 12.1 points above AUV, and the authors report a 5.0% better speech Mel distance on Codec-SUPERB-tiny, so fidelity and predictability can improve together.
+  </p>
+  <p>
+    ReLMCodec (arXiv 2608.08286) reaches the same goal from the quantizer input.
+    A controlled analysis finds that clearer phoneme structure before code assignment goes with tokens that are easier to predict, but that phoneme structure alone does not give high-fidelity reconstruction.
+    The codec keeps the linguistic organisation of frozen self-supervised features at the quantizer input, limits the drift reconstruction causes (Pre-quantization Anchor-Preserving Adaptation), and uses a training-only WavLM-Large layer 24 teacher to reduce phoneme-level token fragmentation.
+    At 650 and 800 bps it reports a better single-stream predictability-reconstruction frontier and gains in TTS intelligibility and speaker similarity.
+  </p>
+  <p>
+    JHCodec (arXiv 2603.05887) changes what the decoder must produce: a self-supervised representation reconstruction loss makes the decoder output reconstruct distilled self-supervised features.
+    The authors report faster convergence (competitive after 300k steps on one H200) and the best WER and CER on LibriSpeech test-clean among the codecs evaluated, with zero lookahead.
+    <span class="tag tag--inference">Inference</span>
+    These losses sit beside, not in place of, the reconstruction and adversarial terms above.
+  </p>
+
+  <h3 id="continuous-latent-training">Continuous latents: the VAE side</h3>
+  <p>
+    A VAE learns an encoder \( q_\phi(z \mid x) \) and a decoder \( p_\theta(x \mid z) \) by maximising a variational lower bound (arXiv 1312.6114).
+  </p>
+  \[
+    \mathcal{L}(\theta, \phi; x) =
+    -D_{\mathrm{KL}}\big(q_\phi(z \mid x) \,\|\, p_\theta(z)\big)
+    + \mathbb{E}_{q_\phi(z \mid x)}\big[\log p_\theta(x \mid z)\big]
+  \]
+  <p>
+    Source: Kingma and Welling, Eq. 3 (arXiv 1312.6114).
+    The reparameterisation trick draws \( z = \mu + \sigma \epsilon \) with \( \epsilon \sim \mathcal{N}(0, I) \), which makes the sample differentiable.
+    The KL term regularises the posterior toward the prior.
+    Speech and audio tokenizers keep this shape and add the codec's adversarial and spectral losses.
+  </p>
+  <h3 id="vae-prior-reparam">Prior, posterior and the reparameterisation trick</h3>
+  <ul>
+    <li>
+      Prior: in the paper's Gaussian example, the prior over latents is a centred isotropic Gaussian,
+      \( p(z) = \mathcal{N}(0, I) \) (arXiv 1312.6114).
+    </li>
+    <li>
+      Posterior: the encoder outputs a mean and standard deviation per latent dimension, so
+      \( q_\phi(z \mid x) = \mathcal{N}(\mu, \sigma^2 I) \) (arXiv 1312.6114).
+    </li>
+    <li>
+      With both Gaussian, the KL term has a closed form and needs no sampling (Eq. 10, arXiv 1312.6114):
+    </li>
+  </ul>
+  \[
+    -D_{\mathrm{KL}} = \tfrac{1}{2} \sum_{j} \left( 1 + \log \sigma_j^2 - \mu_j^2 - \sigma_j^2 \right)
+  \]
+  <p>
+    Sampling is made differentiable by moving the randomness into a parameter-free noise variable
+    (Section 2.4, arXiv 1312.6114):
+  </p>
+  \[
+    \epsilon \sim \mathcal{N}(0, I), \qquad z = \mu + \sigma \odot \epsilon
+  \]
+  <p>
+    Now \( z \) is a deterministic function of \( \mu \) and \( \sigma \), with
+    \( \partial z / \partial \mu = 1 \) and \( \partial z / \partial \sigma = \epsilon \) (derived),
+    so reconstruction gradients flow back into the encoder.
+    The KL pulls \( \mu \) toward 0 and \( \sigma \) toward 1, keeping the latent space smooth and bounded.
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    At generation time nothing samples from \( \mathcal{N}(0, I) \): the LM's diffusion or flow head
+    generates the next latent from context, and the decoder turns it into audio.
+    The learned generator replaces the simple prior; the prior only shapes the latent space during
+    tokenizer training.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Tokenizer</th>
+          <th>What the paper states</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>VibeVoice acoustic tokenizer (arXiv 2508.19205)</td>
+          <td>
+            σ-VAE variant from LatentLM, chosen against variance collapse in autoregressive use.
+            The encoder predicts the mean \( \mu \); \( \sigma \) is a pre-defined distribution, not learned.
+            Causal encoder, 3200x downsampling of 24 kHz audio, 7.5 frames per second.
+            Training objective follows DAC, including its discriminator and loss designs.
+          </td>
+        </tr>
+        <tr>
+          <td>Stable Audio Open autoencoder (arXiv 2407.14358)</td>
+          <td>
+            VAE bottleneck with latent size 64; 156M parameters.
+            Losses: multi-resolution STFT reconstruction, adversarial with feature matching (5 discriminators as in EnCodec), and a KL term down-weighted by \( 10^{-4} \).
+            A DiT trains on latent sequences of length 1024, about 47 s.
+          </td>
+        </tr>
+        <tr>
+          <td>DiTTo-TTS Mel-VAE (arXiv 2406.11427)</td>
+          <td>
+            Mel-spectrogram autoencoder with a 10.76 Hz latent, 7 to 8 times more compression than EnCodec.
+            It is trained with an RVQ inside, but the diffusion model targets the latent before quantization.
+            The authors find quantization matters for training the autoencoder and is irrelevant to the diffusion model.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The small KL weight in Stable Audio Open suggests the KL acts as a light regulariser, not a tight bottleneck.
+    The paper does not say this.
+  </p>
+  <p>
+    Why go continuous: MELLE argues that vector quantization, designed for compression, sacrifices fidelity compared with continuous representations (arXiv 2407.08551).
+    MELLE itself regresses mel frames with a variational latent sampling module, and leaves VAE latents for future work (arXiv 2407.08551).
+    The cost is a generation head that handles continuous targets, as described in
+    <a href="/apps/materials/speech-lit-review/03-speech-generation#continuous-autoregression">Continuous autoregression</a>,
+    and harder RL, covered in
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#online-rl-rewards">Online RL rewards</a>.
+  </p>
+
+  <h3 id="tokenizer-comparison">Comparison</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Tokenizer</th>
+          <th>Bottleneck</th>
+          <th>Quantizer</th>
+          <th>Key losses</th>
+          <th>Rate</th>
+          <th>Used by</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SoundStream (arXiv 2107.03312)</td>
+          <td>Discrete</td>
+          <td>RVQ, 1024 entries, EMA codebooks, quantizer dropout</td>
+          <td>Adversarial, feature matching, spectral reconstruction</td>
+          <td>320 samples per frame at 24 kHz</td>
+          <td>SoundStorm (arXiv 2305.09636)</td>
+        </tr>
+        <tr>
+          <td>EnCodec (arXiv 2210.13438)</td>
+          <td>Discrete</td>
+          <td>RVQ, up to 32 x 1024, EMA</td>
+          <td>Time and mel reconstruction, MS-STFT adversarial, feature matching, commitment, balancer</td>
+          <td>75 Hz at 24 kHz</td>
+          <td>VALL-E (arXiv 2301.02111); MusicGen at 32 kHz, 50 Hz (arXiv 2306.05284)</td>
+        </tr>
+        <tr>
+          <td>DAC (arXiv 2306.06546)</td>
+          <td>Discrete</td>
+          <td>RVQ, factorised L2-normalised lookup, dropout \( p = 0.5 \)</td>
+          <td>Multi-scale mel, adversarial, feature matching, codebook, commitment</td>
+          <td>86 Hz, 9 codebooks, 8 kbps</td>
+          <td>Loss design reused by VibeVoice (arXiv 2508.19205)</td>
+        </tr>
+        <tr>
+          <td>Mimi (arXiv 2410.00037)</td>
+          <td>Discrete</td>
+          <td>Split RVQ, 8 x 2048, dropout, quantization on 50% of sequences</td>
+          <td>Feature matching, adversarial, WavLM distillation (no reconstruction loss)</td>
+          <td>12.5 Hz, 1.1 kbps</td>
+          <td>Moshi (arXiv 2410.00037)</td>
+        </tr>
+        <tr>
+          <td>CosyVoice 2 tokenizer (arXiv 2412.10117)</td>
+          <td>Discrete</td>
+          <td>FSQ, no codebook</td>
+          <td>ASR objective (supervised)</td>
+          <td>25 Hz</td>
+          <td>CosyVoice 2</td>
+        </tr>
+        <tr>
+          <td>ReLMCodec (arXiv 2608.08286)</td>
+          <td>Discrete</td>
+          <td>Single codebook, drift limited before quantization</td>
+          <td>Reconstruction plus a training-only WavLM-Large teacher</td>
+          <td>650 and 800 bps</td>
+          <td>TTS evaluation in the paper</td>
+        </tr>
+        <tr>
+          <td>LLM-Codec (arXiv 2604.17852)</td>
+          <td>Discrete</td>
+          <td>Unchanged codec; Gumbel bridge to the encoder</td>
+          <td>Codec losses plus future-token prediction and audio-text contrastive loss</td>
+          <td>Not given in the abstract</td>
+          <td>Token LMs evaluated on SALMon</td>
+        </tr>
+        <tr>
+          <td>MOSS-Audio-Tokenizer (arXiv 2602.10934)</td>
+          <td>Discrete</td>
+          <td>Transformer-only causal codec (CAT), 1.6B parameters</td>
+          <td>End to end, no pretrained encoder, no semantic distillation</td>
+          <td>Not given in the abstract</td>
+          <td>Speech, sound and music; autoregressive TTS</td>
+        </tr>
+        <tr>
+          <td>ZipCodec (arXiv 2609.11642)</td>
+          <td>Discrete</td>
+          <td>Scalar spherical quantizer</td>
+          <td>Large-scale WavLM distillation, latency-aware decoder</td>
+          <td>6.25 Hz, 0.80 kbps</td>
+          <td>Streaming speech coding</td>
+        </tr>
+        <tr>
+          <td>VibeVoice acoustic (arXiv 2508.19205)</td>
+          <td>Continuous</td>
+          <td>σ-VAE with fixed \( \sigma \)</td>
+          <td>DAC-style losses</td>
+          <td>7.5 Hz</td>
+          <td>VibeVoice</td>
+        </tr>
+        <tr>
+          <td>Stable Audio Open AE (arXiv 2407.14358)</td>
+          <td>Continuous</td>
+          <td>VAE, 64-dim latent</td>
+          <td>STFT reconstruction, adversarial, feature matching, KL (weight \( 10^{-4} \))</td>
+          <td>1024 steps for about 47 s</td>
+          <td>Stable Audio Open DiT</td>
+        </tr>
+        <tr>
+          <td>Mel-VAE (arXiv 2406.11427)</td>
+          <td>Continuous target (RVQ inside the autoencoder)</td>
+          <td>Pre-quantization latent</td>
+          <td>Not covered here</td>
+          <td>10.76 Hz</td>
+          <td>DiTTo-TTS</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="codec-evaluation">Evaluating tokenizers</h3>
+  <p>
+    Three questions are easy to confuse: does the codec rebuild the audio, can an LM predict its tokens, and are the tokens useful downstream.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Measures used in this review</th>
+          <th>What they are</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Reconstruction</td>
+          <td>PESQ, ViSQOL, UTMOS, Mel distance, MUSHRA, WER of an ASR on decoded audio</td>
+          <td>PESQ and ViSQOL compare decoded audio with the original; UTMOS predicts a mean opinion score; MUSHRA is a listening test with a hidden reference; WER measures intelligibility.</td>
+        </tr>
+        <tr>
+          <td>LM-predictability</td>
+          <td>Perplexity of a decoder-only transformer trained on the tokens; codebook index stability; SALMon coherence</td>
+          <td>Perplexity is the model's average surprise at the next token; SALMon tests whether a token LM prefers coherent speech.</td>
+        </tr>
+        <tr>
+          <td>Downstream</td>
+          <td>Probe tasks, ABX, recognition and TTS quality (DASB, arXiv 2406.14294)</td>
+          <td>ABX tests whether the representation separates phonemes; probes train a small classifier on frozen tokens.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    AudioCodecBench (arXiv 2509.02349) evaluates along four axes: audio reconstruction, codebook ID stability, decoder-only-transformer perplexity and probe tasks.
+    It also defines semantic and acoustic tokens, and the authors report that the measures correlate.
+    A related study, "Language-Statistical Analysis of Neural Audio Codec Tokens Across Architectures, Corpora, and Noise Conditions" (arXiv 2608.31037), covers 13 codecs.
+    LLM-Codec and ReLMCodec above evaluate with the predictability side (SALMon, perplexity, predictability-against-reconstruction frontier) as well as reconstruction.
+  </p>
+
+  <h3 id="entropy-coded-rate">Nominal against entropy-coded rate</h3>
+  <p>
+    The nominal bitrate \( f \times Q \times \log_2 K \) assumes every code is equally likely.
+    "Benchmarking Neural Speech Compression from a Rate-Distortion Perspective" (arXiv 2606.11631) notes that many neural speech codecs use preset-rate discrete symbols, or apply entropy coding only after the symbols are generated, which separates representation learning from probability modelling.
+    Its ECC codec pairs scalar quantization with a learned entropy model (hyperprior side information, channel-wise context modelling, latent residual prediction) and an "entropy skip" that omits highly predictable residual symbols.
+    It reports average BD-rate reductions of 39.9% on ViSQOL and 76.3% on PESQ over two test sets.
+    <span class="tag tag--inference">Inference</span>
+    A comparison at equal nominal bitrate between a fixed-rate codec and an entropy-coded one is therefore not like for like; compare at equal entropy-coded rate.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "An RVQ codec is a VQ-VAE-style autoencoder with a discrete bottleneck, trained with reconstruction, adversarial and commitment losses.
+      A continuous tokenizer is the VAE version: a Gaussian latent with a KL term, which removes quantization loss but needs a diffusion or flow head.
+      I evaluate on reconstruction, LM-predictability and downstream use together, because reconstruction-best tokens are not LM-best."
+    </p>
+  </div>
+  <p>
+    How an LM then models the codebooks is in
+    <a href="#rvq-token-patterns">Training an LM on RVQ tokens</a>.
+  </p>
+</section>

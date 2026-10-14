@@ -1,0 +1,204 @@
+<section id="thinking-while-talking">
+  <h2>Thinking while talking</h2>
+  <p>
+    A good listener starts forming an answer before you finish the sentence.
+    A good speaker plans the next clause while saying the current one.
+    A basic voice pipeline does neither: it waits for the user to stop, then thinks, then speaks, so every second of reasoning is a second of silence.
+  </p>
+  <p>
+    Duplex models open three ways to hide that reasoning time.
+    The model can think while the user is still speaking, think while it is speaking, or hand the hard thinking to a larger partner model and keep talking in the meantime.
+    All three use time that was already being spent on something else.
+  </p>
+
+  <h3 id="thinking-while-talking-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 270" role="img"
+      aria-label="Four lanes on one timeline: the user speaks, the model reasons
+        during the user's turn, a larger side model works in parallel, and the
+        agent's answer starts just after the user stops with text from the side
+        model flowing in">
+      <defs>
+        <marker id="think-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <!-- == Lanes == -->
+      <rect class="d-lane" x="100" y="40" width="610" height="40" rx="6"/>
+      <rect class="d-lane" x="100" y="96" width="610" height="40" rx="6"/>
+      <rect class="d-lane" x="100" y="152" width="610" height="40" rx="6"/>
+      <rect class="d-lane" x="100" y="208" width="610" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="60" text-anchor="start"
+        dominant-baseline="middle">user audio</text>
+      <text class="d-text--small" x="8" y="116" text-anchor="start"
+        dominant-baseline="middle">fast model</text>
+      <text class="d-text--small" x="8" y="172" text-anchor="start"
+        dominant-baseline="middle">larger model</text>
+      <text class="d-text--small" x="8" y="228" text-anchor="start"
+        dominant-baseline="middle">agent speech</text>
+      <!-- == User turn boundary == -->
+      <path class="d-arrow d-arrow--dashed" d="M 340 34 L 340 250"/>
+      <text class="d-text--muted" x="340" y="22" text-anchor="middle"
+        dominant-baseline="middle">user stops</text>
+      <!-- == Boxes == -->
+      <rect class="d-box d-box--muted" x="120" y="44" width="210" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="225" y="60" text-anchor="middle"
+        dominant-baseline="middle">user speaks</text>
+      <rect class="d-box d-box--accent" x="130" y="100" width="200"
+        height="32" rx="8"/>
+      <text class="d-text--small" x="230" y="116" text-anchor="middle"
+        dominant-baseline="middle">reasons on past audio</text>
+      <rect class="d-box d-box--muted" x="220" y="156" width="270" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="355" y="172" text-anchor="middle"
+        dominant-baseline="middle">works in parallel</text>
+      <rect class="d-box" x="350" y="212" width="350" height="32" rx="8"/>
+      <text class="d-text--small" x="525" y="228" text-anchor="middle"
+        dominant-baseline="middle">answer starts at once, then absorbs new text</text>
+      <!-- == Hand-off == -->
+      <path class="d-arrow d-arrow--dashed" d="M 490 188 L 490 210"
+        marker-end="url(#think-arrow)"/>
+      <text class="d-text--muted" x="500" y="200" text-anchor="start"
+        dominant-baseline="middle">text injected</text>
+    </svg>
+    <figcaption>Figure: three places to hide reasoning time. The fast model
+      reasons inside the user's turn, a larger model works beside it, and the
+      answer begins right after the user stops while the larger model's text
+      keeps arriving. Placement is schematic.</figcaption>
+  </figure>
+  <p>
+    <strong>Thinking while listening.</strong>
+    A duplex model that is not talking is usually idle: for every frame of the user's turn it just predicts "silence" for its own output.
+    Chronological thinking replaces that idle output with reasoning that is strictly causal, meaning it updates its working answer from the audio heard so far and never peeks ahead.
+    When the user stops, the model stops thinking and starts speaking at once, so the reasoning adds no delay.
+  </p>
+  <p>
+    The reasoning need not be in words.
+    One approach feeds the hidden vector the model just produced back in as the next input, so a chain of silent thoughts builds up during the user's turn.
+    Training uses an objective that learns these thoughts from ordinary dialogue, so nobody writes reasoning examples.
+    <span class="tag tag--inference">Inference</span>
+    The cost is that the reasoning leaves no readable trace to inspect.
+    A cascade of separate models can do the same: a trigger decides when the partial speech forms a meaningful prefix, and a background thinker keeps a running state while a foreground speaker tries a speculative answer.
+  </p>
+  <p>
+    <strong>Thinking while speaking.</strong>
+    Chain-of-thought reasoning is too slow to finish before a real-time reply.
+    The dual-brain idea splits the jobs: a reasoning component works out the answer and sets the pace, and a separate speaking component voices it without waiting for the whole chain to finish.
+    Keeping them separate avoids the model switching between "thinking mode" and "talking mode", which can disturb the reasoning.
+    Reported results are close to models that finish their reasoning before speaking, at much lower latency.
+  </p>
+  <p>
+    <strong>Fast talker, slow thinker.</strong>
+    A tandem keeps a compact duplex model in charge of the floor and lets a larger model or a retriever work alongside it.
+    The compact model starts answering immediately, and the larger model's text arrives while the sentence is under way and is injected into what the compact model says.
+    It works because of a natural gap: the first words of an answer take time to say, and the facts need not be ready until the core of the answer arrives.
+    The speech model stays small and the knowledge is borrowed, which is a different answer to the intelligence gap from freezing a large LLM.
+    A variant splits the work into an interaction layer for streaming audio and video and a swappable thinking layer for reasoning and tools.
+  </p>
+
+  <h3 id="thinking-while-talking-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Where the thinking happens</td>
+          <td>Listening window, speaking window or a second model</td>
+          <td>Listening costs no delay but works from a partial question; speaking needs pacing; a second model adds an interface</td>
+        </tr>
+        <tr>
+          <td>Reasoning form</td>
+          <td>Words against hidden vectors</td>
+          <td>Hidden vectors need no reasoning labels; words can be read and debugged</td>
+        </tr>
+        <tr>
+          <td>Trigger rule</td>
+          <td>When a cascade starts to think</td>
+          <td>Fixed chunks or silence splits break meaning; speculative answers waste work when they must be rolled back</td>
+        </tr>
+        <tr>
+          <td>Pacing the voice</td>
+          <td>How far the speaker may run ahead of the reasoner</td>
+          <td>More lead lowers latency; the voice may commit to words before the answer is settled <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Size of the fast model</td>
+          <td>How much knowledge the front end must hold</td>
+          <td>Small keeps real-time inference cheap; it leaves knowledge to the partner</td>
+        </tr>
+        <tr>
+          <td>Retrieval or reasoner choice</td>
+          <td>Which partner supplies the facts</td>
+          <td>One system lets the retrieval method change without retraining the front end; the answer is only as fast as the slowest partner</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Most of the papers behind this section report quality gains without a head-to-head latency comparison, and several abstracts give no numbers at all, so treat the ranking of these ideas as open.
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/05-streaming-conversation#think-while-talking">Thinking while listening and while speaking</a>
+    and <a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems#s2s-architectures">S2S architectures</a>.
+    The tool-calling side is in
+    <a href="/apps/materials/speech-to-speech/07-conversation#tools-while-talking">Using tools while talking</a>.
+  </p>
+
+  <h3 id="thinking-while-talking-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Answering from a half-heard question.</strong>
+      Thinking during the user's turn works from partial audio; a late "actually, I meant..." can invalidate the reasoning.
+      Teams test with natural pauses and self-corrections.
+    </li>
+    <li>
+      <strong>Speaking before knowing.</strong>
+      A voice that runs ahead of the reasoner can commit to a wrong opening it must then contradict.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Dead air while the partner is slow.</strong>
+      A tandem is only as good as its slow side; measure the time from the end of the user's turn to the first useful fact, not only to the first sound.
+    </li>
+    <li>
+      <strong>Lost audio detail across the hand-off.</strong>
+      If only text crosses to the larger model, tone and hesitation are lost.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Unfair comparisons.</strong>
+      These papers use different benchmarks (spoken maths, speech-synthesised multi-turn QA, factuality sets), so their numbers do not compare.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "A duplex model wastes the user's whole turn predicting silence, so recent work spends it on causal or hidden-state reasoning that stops at turn end and adds no delay.
+      The other option is a tandem: a small duplex model keeps the floor and a bigger model or retriever feeds it text while it talks.
+      The open question is that the papers use different benchmarks, so I would test on my own use case."
+    </p>
+  </div>
+
+  <h3 id="thinking-while-talking-sources">Sources</h3>
+  <ul>
+    <li>Chronological Thinking in Full-Duplex Spoken Dialogue Language Models (arXiv 2510.05150)</li>
+    <li>The Silent Thought: Modeling Internal Cognition in Full-Duplex Spoken Dialogue Models via Latent Reasoning (arXiv 2603.17837)</li>
+    <li>LTS-VoiceAgent: A Listen-Think-Speak Framework for Efficient Streaming Voice Interaction via Semantic Triggering and Incremental Reasoning (arXiv 2601.19952)</li>
+    <li>Mind-Paced Speaking: A Dual-Brain Approach to Real-Time Reasoning in Spoken Language Models (arXiv 2510.09592)</li>
+    <li>KAME: Tandem Architecture for Enhancing Knowledge in Real-Time Speech-to-Speech Conversational AI (arXiv 2510.02327)</li>
+    <li>MoshiRAG: Asynchronous Knowledge Retrieval for Full-Duplex Speech Language Models (arXiv 2604.12928)</li>
+    <li>DuplexOmni: Real-Time Listening, Seeing, Thinking, and Speaking for Full-Duplex Interaction (arXiv 2606.09186)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#think-while-talking">Thinking while listening and while speaking</a>,
+      <a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems#s2s-architectures">S2S architectures</a>
+    </li>
+  </ul>
+</section>

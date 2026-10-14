@@ -1,0 +1,668 @@
+<section id="audio-visual-avatar-platform">
+  <h2>ML system design: an audio-visual avatar platform (Synthesia-style)</h2>
+  <div class="callout callout--inference">
+    <strong>Inference</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      Design choices and targets below are my opinion unless tagged
+      <span class="tag tag--confirmed">Confirmed</span> or
+      <span class="tag tag--reported">Reported</span>.
+      Latency figures marked as targets are illustrative and have no source.
+      The target voice model is in <em>a unified speech LLM with a downstream reasoning LLM</em>;
+      the cascade baseline is in <em>Baseline: a streaming ASR → LLM → TTS voice agent</em>;
+      the renderer and the two voice paths are in <em>a real-time avatar that talks back</em>.
+      This section adds the platform around them: two products, shared assets, data, training,
+      evaluation, serving and safety.
+    </p>
+  </div>
+
+  <h3 id="avp-requirements">Requirements</h3>
+  <p>
+    One platform serves two products with different service levels.
+    Batch video turns a script into a 1080p, 30 fps video in minutes, and dubs it into 30+ languages.
+    Video Agents hold two-way conversations; Synthesia describes real dialogue as "typically under one second".
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Id</th>
+          <th>Requirement</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>F1</td>
+          <td>Stock and custom avatars (photo or video) behind a live consent gate</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://docs.synthesia.io/docs/personal-avatars">personal avatars docs</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>F2</td>
+          <td>Voice cloning from a short reference, accent and emotion preserved</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>F3</td>
+          <td>Lip-synced dubbing into 30+ languages</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/post/synthesia-3-0-the-next-era-of-video">Synthesia 3.0 post</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>F4</td>
+          <td>Async video API with webhooks or polling; render takes 3-10 minutes</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://docs.synthesia.io/docs/getting-started">API docs</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>Q1</td>
+          <td>1080p, 30 fps, no duration limit</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>Q2</td>
+          <td>Interactive dialogue "typically under one second"</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">Synthesia, 2 Jul 2026</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>S1</td>
+          <td>Moderation at creation, EU AI Act Art. 50 labelling, ISO 42001</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/ai-governance">AI governance page</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>Q3</td>
+          <td>Avatars that listen (Level 2) and see (Level 3), not only talk (Level 1); Synthesia says all current interactive-avatar systems on the market are Level 1</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/post/three-levels-of-interactive-video-agents">Synthesia, 2 Jul 2026</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>F5</td>
+          <td>Interactive Avatar API: the avatar is layered over a LiveKit agent with bring-your-own LLM, speech-to-text and optional text-to-speech; no latency figures published</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/post/interactive-avatar-api-real-time-avatars">Interactive Avatar API post</a>, 15 Jul 2026)
+          </td>
+        </tr>
+        <tr>
+          <td>F6</td>
+          <td>Express-3 replaces Express-2 with a claim of rendering up to twice as fast, no baseline or method stated</td>
+          <td>
+            <span class="tag tag--confirmed">Confirmed</span>
+            (<a href="https://www.synthesia.io/updates/express-3">Express-3 update</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>I1</td>
+          <td>Identity and consent enforced as a hard pipeline stage, not a UI check</td>
+          <td><span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>I2</td>
+          <td>Separate SLOs: minutes for batch, sub-second first frame for interactive</td>
+          <td><span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>I3</td>
+          <td>Turn-taking and listening cues (nodding, attention) are their own model problem</td>
+          <td><span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>I4</td>
+          <td>Lip-sync error and identity targets come from an internal benchmark</td>
+          <td><span class="tag tag--inference">Inference</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    I would ask for cost per minute and rate limits in the interview.
+    For comparison, Tavus claims less than one second between utterances for its conversational video interface
+    (<a href="https://www.tavus.io/blog/introducing-the-worlds-fastest-conversational-video-interface-for-developers">Tavus blog</a>,
+    a vendor's own claim).
+    <span class="tag tag--reported">Reported</span>
+  </p>
+
+  <h3 id="avp-architecture">High-level architecture</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 490" role="img"
+      aria-label="Platform: a consent gate guards the identity and voice stores that all pipelines read. Batch pipeline: script, TTS, audio-to-motion, motion scoring, renderer, QA and moderation, delivery. Dubbing pipeline: video, ASR, MT, cloned-voice TTS, lip-sync re-render, QA and moderation, delivery">
+      <defs>
+        <marker id="arrow-avp-batch" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-group" x="24" y="0" width="686" height="102" rx="10"/>
+      <text class="d-text--small" x="38" y="20">Shared assets (read by every pipeline, dashed)</text>
+      <rect class="d-box" x="34" y="34" width="124" height="44" rx="8"/>
+      <text class="d-text" x="96" y="48" text-anchor="middle" dominant-baseline="middle">Identity store</text>
+      <text class="d-text--muted" x="96" y="65" text-anchor="middle" dominant-baseline="middle">avatars</text>
+      <rect class="d-box d-box--accent" x="214" y="34" width="300" height="44" rx="8"/>
+      <text class="d-text" x="364" y="48" text-anchor="middle" dominant-baseline="middle">Consent gate</text>
+      <text class="d-text--muted" x="364" y="65" text-anchor="middle" dominant-baseline="middle">live consent video; person must match photo</text>
+      <rect class="d-box" x="574" y="34" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="56" text-anchor="middle" dominant-baseline="middle">Voice store</text>
+      <path class="d-arrow" d="M 214 56 L 160 56" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 514 56 L 572 56" marker-end="url(#arrow-avp-batch)"/>
+      <rect class="d-group" x="24" y="118" width="686" height="170" rx="10"/>
+      <text class="d-text--small" x="38" y="138">Batch (minutes)</text>
+      <rect class="d-box" x="34" y="150" width="124" height="44" rx="8"/>
+      <text class="d-text" x="96" y="172" text-anchor="middle" dominant-baseline="middle">Script / LLM</text>
+      <rect class="d-box" x="214" y="150" width="124" height="44" rx="8"/>
+      <text class="d-text" x="276" y="164" text-anchor="middle" dominant-baseline="middle">TTS</text>
+      <text class="d-text--muted" x="276" y="181" text-anchor="middle" dominant-baseline="middle">AR + codec</text>
+      <rect class="d-box" x="394" y="150" width="124" height="44" rx="8"/>
+      <text class="d-text" x="456" y="172" text-anchor="middle" dominant-baseline="middle">Audio-to-motion</text>
+      <rect class="d-box" x="574" y="150" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="172" text-anchor="middle" dominant-baseline="middle">Motion scoring</text>
+      <rect class="d-box" x="574" y="230" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="244" text-anchor="middle" dominant-baseline="middle">Renderer</text>
+      <text class="d-text--muted" x="636" y="261" text-anchor="middle" dominant-baseline="middle">few-step DiT</text>
+      <rect class="d-box" x="394" y="230" width="124" height="44" rx="8"/>
+      <text class="d-text" x="456" y="252" text-anchor="middle" dominant-baseline="middle">QA + moderation</text>
+      <rect class="d-box" x="214" y="230" width="124" height="44" rx="8"/>
+      <text class="d-text" x="276" y="244" text-anchor="middle" dominant-baseline="middle">Delivery</text>
+      <text class="d-text--muted" x="276" y="261" text-anchor="middle" dominant-baseline="middle">webhook</text>
+      <path class="d-arrow" d="M 158 172 L 212 172" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 338 172 L 392 172" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 518 172 L 572 172" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 636 194 L 636 228" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 574 252 L 520 252" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 394 252 L 340 252" marker-end="url(#arrow-avp-batch)"/>
+      <rect class="d-group" x="24" y="308" width="686" height="170" rx="10"/>
+      <text class="d-text--small" x="38" y="328">Dubbing (minutes)</text>
+      <rect class="d-box" x="34" y="340" width="124" height="44" rx="8"/>
+      <text class="d-text" x="96" y="362" text-anchor="middle" dominant-baseline="middle">Video</text>
+      <rect class="d-box" x="214" y="340" width="124" height="44" rx="8"/>
+      <text class="d-text" x="276" y="362" text-anchor="middle" dominant-baseline="middle">ASR</text>
+      <rect class="d-box" x="394" y="340" width="124" height="44" rx="8"/>
+      <text class="d-text" x="456" y="362" text-anchor="middle" dominant-baseline="middle">MT</text>
+      <rect class="d-box" x="574" y="340" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="354" text-anchor="middle" dominant-baseline="middle">Cloned TTS</text>
+      <text class="d-text--muted" x="636" y="371" text-anchor="middle" dominant-baseline="middle">duration control</text>
+      <rect class="d-box" x="574" y="420" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="434" text-anchor="middle" dominant-baseline="middle">Lip-sync</text>
+      <text class="d-text--muted" x="636" y="451" text-anchor="middle" dominant-baseline="middle">re-render</text>
+      <rect class="d-box" x="394" y="420" width="124" height="44" rx="8"/>
+      <text class="d-text" x="456" y="442" text-anchor="middle" dominant-baseline="middle">QA + moderation</text>
+      <rect class="d-box" x="214" y="420" width="124" height="44" rx="8"/>
+      <text class="d-text" x="276" y="442" text-anchor="middle" dominant-baseline="middle">Delivery</text>
+      <path class="d-arrow" d="M 158 362 L 212 362" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 338 362 L 392 362" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 518 362 L 572 362" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 636 384 L 636 418" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 574 442 L 520 442" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow" d="M 394 442 L 340 442" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 24 56 L 10 56 L 10 204 L 22 204" marker-end="url(#arrow-avp-batch)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 10 204 L 10 394 L 22 394" marker-end="url(#arrow-avp-batch)"/>
+    </svg>
+    <figcaption>Figure: shared assets and the two minutes-scale pipelines. The consent gate is a hard stage in front of the stores; both pipelines end in QA and moderation before delivery.
+      Stage names follow Express-Voice, Express-Animate, Express-Eval and Express-Render.
+      <span class="tag tag--inference">Inference</span> (layout is a design sketch).</figcaption>
+  </figure>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 262" role="img"
+      aria-label="Interactive pipeline: mic and camera over WebRTC, streaming encoder, unified speech LLM with a downstream text LLM behind a tool call, codec decoder, causal few-step renderer, WebRTC to client; a dashed action path from the speech LLM tells the renderer about yield and listening state; a dashed cascade fallback of ASR, LLM and TTS feeds the renderer">
+      <defs>
+        <marker id="arrow-avp-interactive" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-group" x="24" y="0" width="686" height="262" rx="10"/>
+      <text class="d-text--small" x="38" y="20">Interactive (sub-second)</text>
+      <rect class="d-box" x="34" y="32" width="124" height="44" rx="8"/>
+      <text class="d-text" x="96" y="46" text-anchor="middle" dominant-baseline="middle">Mic + cam</text>
+      <text class="d-text--muted" x="96" y="63" text-anchor="middle" dominant-baseline="middle">WebRTC</text>
+      <rect class="d-box" x="214" y="32" width="124" height="44" rx="8"/>
+      <text class="d-text" x="276" y="46" text-anchor="middle" dominant-baseline="middle">Encoder</text>
+      <text class="d-text--muted" x="276" y="63" text-anchor="middle" dominant-baseline="middle">causal, audio + video</text>
+      <rect class="d-box d-box--accent" x="394" y="32" width="124" height="44" rx="8"/>
+      <text class="d-text" x="456" y="46" text-anchor="middle" dominant-baseline="middle">Speech LLM</text>
+      <text class="d-text--muted" x="456" y="63" text-anchor="middle" dominant-baseline="middle">listen + speak</text>
+      <rect class="d-box" x="574" y="32" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="46" text-anchor="middle" dominant-baseline="middle">Text LLM</text>
+      <text class="d-text--muted" x="636" y="63" text-anchor="middle" dominant-baseline="middle">tool call, tools</text>
+      <rect class="d-box" x="574" y="112" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="126" text-anchor="middle" dominant-baseline="middle">Codec decoder</text>
+      <text class="d-text--muted" x="636" y="143" text-anchor="middle" dominant-baseline="middle">causal</text>
+      <rect class="d-box" x="394" y="112" width="124" height="44" rx="8"/>
+      <text class="d-text" x="456" y="126" text-anchor="middle" dominant-baseline="middle">Causal renderer</text>
+      <text class="d-text--muted" x="456" y="143" text-anchor="middle" dominant-baseline="middle">few-step</text>
+      <rect class="d-box" x="214" y="112" width="124" height="44" rx="8"/>
+      <text class="d-text" x="276" y="134" text-anchor="middle" dominant-baseline="middle">WebRTC</text>
+      <rect class="d-box" x="34" y="112" width="124" height="44" rx="8"/>
+      <text class="d-text" x="96" y="134" text-anchor="middle" dominant-baseline="middle">Client</text>
+      <path class="d-arrow" d="M 158 54 L 212 54" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow" d="M 338 54 L 392 54" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow" d="M 518 46 L 572 46" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow" d="M 572 62 L 520 62" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow" d="M 518 70 L 540 70 L 540 100 L 600 100 L 600 110" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow" d="M 574 134 L 520 134" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow" d="M 394 134 L 340 134" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow" d="M 214 134 L 160 134" marker-end="url(#arrow-avp-interactive)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 440 76 L 440 110" marker-end="url(#arrow-avp-interactive)"/>
+      <text class="d-text--muted" x="432" y="98" text-anchor="end">yield, listening state</text>
+      <rect class="d-box d-box--muted" x="574" y="206" width="124" height="44" rx="8"/>
+      <text class="d-text" x="636" y="220" text-anchor="middle" dominant-baseline="middle">Cascade fallback</text>
+      <text class="d-text--muted" x="636" y="237" text-anchor="middle" dominant-baseline="middle">ASR → LLM → TTS</text>
+      <path class="d-arrow d-arrow--dashed" d="M 636 206 L 636 158" marker-end="url(#arrow-avp-interactive)"/>
+    </svg>
+    <figcaption>Figure: the interactive pipeline. The speech LLM hands content to the text LLM through a tool call and speaks the reply; its action channel drives yield and listening cues in the renderer. Dashed: the cascade is the launch fallback.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      <strong>Batch.</strong>
+      Express-Voice is in-context cloning without fine-tuning, two transformers of about 800M parameters each
+      conditioned on reference audio.
+      Express-Animate makes motion, Express-Eval scores audio-motion agreement,
+      and Express-Render synthesises frames, distilled to two diffusion steps.
+      <span class="tag tag--confirmed">Confirmed</span>
+      Using Eval to select among motion candidates is my reading of its role.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Dubbing.</strong>
+      The chain is ASR, MT, cloned-voice TTS, lip-sync re-render.
+      The TTS needs duration control so the translated line fits the original shot.
+      <span class="tag tag--inference">Inference</span>
+      Synthesia's Dubbing 2.0 post (15 July 2026) says the translation engine "respects the original timing and length" and gives no metrics
+      (<a href="https://www.synthesia.io/post/introducing-dubbing-2-0">post</a>).
+      <span class="tag tag--confirmed">Confirmed</span>
+      The research alternative is joint generation: JUST-DUB-IT (arXiv 2601.22143) adapts an audio-video diffusion model with a LoRA to write the translated audio and the facial motion together.
+      <span class="tag tag--reported">Reported</span>
+    </li>
+    <li>
+      <strong>Interactive.</strong>
+      The voice is a unified speech LLM with a downstream text LLM, driving a causal renderer;
+      the cascade is the launch fallback and baseline, and native full-duplex is the research track.
+      <span class="tag tag--inference">Inference</span>
+      Perceiving the user needs a streaming encoder with a fixed-size KV cache
+      (StreamingVLM reuses attention-sink states, a short window of recent vision tokens and a long window of recent text tokens;
+      up to 8 FPS on one H100)
+      (arXiv 2510.09608) or an omni model such as Qwen3-Omni (arXiv 2509.17765).
+      <span class="tag tag--confirmed">Confirmed</span>
+    </li>
+  </ul>
+
+  <h3 id="avp-models">Model choices and alternatives</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Decision</th>
+          <th>Option A</th>
+          <th>Option B</th>
+          <th>My pick <span class="tag tag--inference">Inference</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Interactive voice</td>
+          <td>
+            Unified speech LLM (listen and speak heads) with a text LLM behind a tool call.
+            Learned turn-taking and shared voice; one extra LLM hop and two models to serve.
+          </td>
+          <td>
+            Independent ASR, LLM and TTS.
+            Easy to build and attribute; heuristic turn-taking and paralinguistics lost at the text boundary.
+          </td>
+          <td>A as the target; B as launch fallback and baseline</td>
+        </tr>
+        <tr>
+          <td>Audio and video generation</td>
+          <td>
+            Cascade: TTS, then animate, then render.
+            Voice control and data reuse are strong; audio and motion can disagree.
+          </td>
+          <td>
+            Joint generation (Ovi, arXiv 2510.01284; LTX-2, arXiv 2601.03233; MOVA, arXiv 2602.08794; Seedance 1.5 pro, arXiv 2512.13507).
+            Sync comes from the backbone; audio quality is open and voice cloning control is weaker.
+            For streaming, joint teachers are now distilled into students (Hallo-Live from Ovi, arXiv 2604.23632; Omni-LiveAvatar from LTX-2, arXiv 2608.13602).
+          </td>
+          <td>Audio-then-motion cascade in production; joint as a research track, since voice identity is the product</td>
+        </tr>
+        <tr>
+          <td>Renderer</td>
+          <td>
+            Bidirectional DiT distilled to few steps.
+            Used for batch (Express-Render, two steps).
+          </td>
+          <td>
+            Causal AR video diffusion (Self Forcing, CausVid, LiveTalk).
+            Streams; a strictly unidirectional student can give rigid full-body dynamics (arXiv 2512.23379),
+            and multimodal conditioning causes flicker and black frames in Self Forcing (arXiv 2512.23576).
+          </td>
+          <td>A for batch, B for interactive, sharing the backbone where possible</td>
+        </tr>
+        <tr>
+          <td>Speech tokens</td>
+          <td>
+            Low-rate discrete codec: short sequences, near text rate, lower reconstruction quality.
+          </td>
+          <td>
+            Continuous latents: no quantization loss, but a regression or diffusion head is needed.
+          </td>
+          <td>Discrete AR content model plus a flow or codec decoder for fidelity</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The option descriptions are my summary
+    <span class="tag tag--inference">Inference</span>.
+    Facts behind the table:
+    Ovi uses twin DiT towers with blockwise cross-modal fusion (arXiv 2510.01284);
+    CausVid distils a bidirectional model into a 4-step causal generator at about 9.4 FPS with 1.3 s initial latency (arXiv 2412.07772);
+    Self Forcing reaches 17 FPS and sub-second latency on one H100 (arXiv 2506.08009).
+    Real-time numbers are author-reported on their own hardware and not comparable.
+    <span class="tag tag--confirmed">Confirmed</span>
+    Codec trade-offs are in <em>Codecs and speech tokenizers</em>.
+  </p>
+  <h3 id="avp-timeline">One timeline for voice and video</h3>
+  <p>
+    The two teams need a shared clock, or sync becomes a post-hoc patch.
+    Ovi scales audio RoPE frequencies by 31/157 so 31 video latent frames align with 157 audio tokens (arXiv 2510.01284).
+    Qwen3-Omni instead assigns absolute-time IDs (one temporal ID per 80 ms of audio)
+    and adjusts video frame IDs to real timestamps, which allows streaming inputs of arbitrary duration (arXiv 2509.17765).
+    <span class="tag tag--confirmed">Confirmed</span>
+    <span class="tag tag--inference">Inference</span>
+    I would use absolute-time positions across every model, so a TTS chunk, a motion chunk
+    and a rendered block all carry the same timestamps.
+    The audio stays the clock, as in the real-time avatar section.
+    A speech LLM on an 80 ms frame clock gives the voice side of that timeline for free.
+  </p>
+  <p>
+    A stronger form is a shared token stream.
+    Meta's research avatar has the voice model emit speech tokens that carry content and delivery; the same stream feeds the audio decoder and the avatar model, which keeps voice, lips and expression synchronised
+    (<a href="https://research.meta.ai/blog/bringing-your-muse-to-life">Meta, 23 Sep 2026</a>).
+    <span class="tag tag--reported">Reported</span>
+    <span class="tag tag--inference">Inference</span>
+    That bears on a design with a text LLM behind a tool call: the renderer would read the speak head's semantic and prosodic tokens and state, not only a waveform, while the text LLM stays swappable.
+    Wan-Streamer takes the opposite end: one Transformer over text, speech and video with 160 ms units (arXiv 2606.25041).
+  </p>
+
+  <h3 id="avp-data">Data</h3>
+  <ul>
+    <li>
+      <strong>Capture studio against webcam or photo.</strong>
+      Synthesia supports personal avatars from a single photo and an optional voice sample
+      (<a href="https://docs.synthesia.io/docs/personal-avatars">personal avatars docs</a>).
+      <span class="tag tag--confirmed">Confirmed</span>
+      <span class="tag tag--inference">Inference</span>
+      Studio capture gives clean, controlled full-body data for the premium tier and for training.
+      Webcam and photo give scale and diversity but noisy lighting and audio; tier them by capture quality.
+    </li>
+    <li>
+      <strong>Curation.</strong>
+      Ovi filters clips with SyncNet (absolute offset at most 3, confidence above 1.5, mean volume at least -60 dB)
+      and uses MLLM captions (arXiv 2510.01284).
+      <span class="tag tag--confirmed">Confirmed</span>
+    </li>
+    <li>
+      <strong>Multilingual speech.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Dubbing needs paired speech across 30+ languages with accent labels and speaker identity;
+      emotion2vec tags give emotion coverage.
+      Long-tail languages need synthetic or licensed data.
+    </li>
+    <li>
+      <strong>Consent provenance.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Every training clip carries a consent record and licence scope.
+      A person who withdraws consent must be removable from the training set and from future retrains.
+    </li>
+  </ul>
+
+  <h3 id="avp-training">Training stages</h3>
+  <ol>
+    <li>
+      <strong>Pretrain backbones.</strong>
+      Start from an open video DiT (Wan is an open suite of video foundation models, arXiv 2503.20314;
+      Ovi initialises its video tower from Wan2.2 5B, arXiv 2510.01284) and a speech AR model with a codec.
+      <span class="tag tag--confirmed">Confirmed</span>
+    </li>
+    <li>
+      <strong>Audio-conditioning finetune.</strong>
+      Add audio conditioning for lip and motion; FantasyTalking adds a second, frame-level lip-refinement stage (arXiv 2504.04842).
+      <span class="tag tag--confirmed">Confirmed</span>
+    </li>
+    <li>
+      <strong>Distillation.</strong>
+      Reduce to few steps for batch; build a causal student for interactive,
+      with autoregressive rollouts in training to close the train-test gap (Self Forcing, arXiv 2506.08009).
+      <span class="tag tag--confirmed">Confirmed</span>
+    </li>
+    <li>
+      <strong>Preference optimisation.</strong>
+      FantasyTalking2 trains a reward model (Talking-Critic), curates a 410K-pair preference dataset and optimises with TLPO (arXiv 2508.11255).
+      <span class="tag tag--confirmed">Confirmed</span>
+      For voice, use the RL recipes from the control-and-quality chapter: WER and SIM rewards plus
+      an emotion term, and add per-axis timing rewards for the speech LLM's action channel.
+    </li>
+  </ol>
+  <div class="callout callout--warn">
+    <strong>Trap: reward hacking</strong>
+    <p>
+      Automatic rewards get gamed; GRPO on CER and NLL rewards collapsed prosody into monotone speech (arXiv 2509.18531).
+      <span class="tag tag--confirmed">Confirmed</span>
+      <span class="tag tag--inference">Inference</span>
+      Guard with multi-metric rewards, a naturalness term, held-out human panels,
+      and a check on motion diversity (a lip-sync reward alone can freeze the head).
+    </p>
+  </div>
+
+  <h3 id="avp-evaluation">Evaluation</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>What to measure <span class="tag tag--inference">Inference</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Offline, voice</td>
+          <td>WER, speaker similarity (SIM; quote the variant), emotion2vec, UTMOS</td>
+        </tr>
+        <tr>
+          <td>Offline, video</td>
+          <td>Sync-C and Sync-D (SyncNet), CSIM (ArcFace identity), FVD</td>
+        </tr>
+        <tr>
+          <td>Human</td>
+          <td>Preference studies and native-speaker panels (Express-Voice used 100 evaluators, 17 accents)</td>
+        </tr>
+        <tr>
+          <td>Online, interactive</td>
+          <td>
+            Latency p50/p95/p99, interruption handling (Full-Duplex-Bench),
+            completion and engagement <span class="tag tag--inference">Inference</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Papers report Sync-C under different protocols, so I treat cross-paper numbers as not comparable
+    <span class="tag tag--inference">Inference</span>.
+    Build one internal benchmark with fixed identities, languages and scripts, run by both the
+    Voice and video teams, and pin metric variants.
+  </p>
+
+  <h3 id="avp-serving">Serving and cost</h3>
+  <ul>
+    <li>
+      <strong>Pools.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Separate GPU pools for the speech LLM, text LLM, motion and render; cascade pools only as failover capacity.
+      Interactive gets reserved capacity with a hard concurrency cap;
+      batch fills the gaps from a queue and can be pre-empted or delayed.
+    </li>
+    <li>
+      <strong>Caching.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Cache identity features and voice conditioning per avatar, so repeat renders skip the encoders.
+    </li>
+    <li>
+      <strong>Steps against quality.</strong>
+      Express-Render uses two diffusion steps, and Render-Turbo is described as coming later
+      (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Express-2 post</a>).
+      <span class="tag tag--confirmed">Confirmed</span>
+      <span class="tag tag--inference">Inference</span>
+      Treat step count as a per-tier knob: fewer steps for previews and interactive, more for final export.
+    </li>
+    <li>
+      <strong>Evaluations per chunk and sessions per GPU.</strong>
+      Meta reports a teacher needing 120 model evaluations per video chunk against 2 for the distilled student (60x), and 12 concurrent real-time sessions on one GB200 after four-bit quantisation-aware training gave 8x capacity over the two-step BF16 baseline
+      (<a href="https://research.meta.ai/blog/bringing-your-muse-to-life">Meta</a>).
+      <span class="tag tag--reported">Reported</span>
+      <span class="tag tag--inference">Inference</span>
+      Cost per session-minute is GPU cost divided by concurrent sessions; track it per tier next to the latency percentiles.
+    </li>
+    <li>
+      <strong>Autoscaling.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Scale batch on queue depth and interactive on session count, with warm pools because model load is slow.
+    </li>
+  </ul>
+  <details>
+    <summary>Illustrative interactive budget (Inference only)</summary>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th>Target <span class="tag tag--inference">Inference</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Transport and input framing</td>
+            <td>Under 100 ms</td>
+          </tr>
+          <tr>
+            <td>Speech LLM to first audio (filler or reply)</td>
+            <td>200-300 ms</td>
+          </tr>
+          <tr>
+            <td>First video block</td>
+            <td>150-250 ms</td>
+          </tr>
+          <tr>
+            <td><strong>Total</strong></td>
+            <td>Under 1 s; about 430-650 ms by summing</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      These are the speech LLM path targets from the real-time avatar section, not measurements;
+      the cascade fallback adds LLM first token (200-300 ms) and TTS first chunk (100-200 ms).
+      No cost-per-minute figure is sourced; Meta's sessions-per-GPU figure above is the closest public anchor.
+      Network time is a separate line: Wan-Streamer includes 350 ms of it in a 550 ms total (arXiv 2606.25041).
+    </p>
+  </details>
+
+  <h3 id="avp-safety">Safety</h3>
+  <ul>
+    <li>
+      <strong>Consent gate.</strong>
+      Synthesia requires a live consent video (uploads not accepted) and the person must match the photo
+      (<a href="https://docs.synthesia.io/docs/personal-avatars">personal avatars docs</a>).
+      <span class="tag tag--confirmed">Confirmed</span>
+      <span class="tag tag--inference">Inference</span>
+      Bind the voice store to the same verified identity, so a cloned voice cannot be used without it.
+    </li>
+    <li>
+      <strong>Moderation at creation.</strong>
+      Synthesia says it moderates content at the point of creation and lists a Content Integrity Policy
+      (<a href="https://www.synthesia.io/ai-governance">AI governance page</a>).
+      <span class="tag tag--confirmed">Confirmed</span>
+      <span class="tag tag--inference">Inference</span>
+      Screen the script before generation and the output before delivery.
+    </li>
+    <li>
+      <strong>Labelling and provenance.</strong>
+      The governance page states EU AI Act Article 50 labelling and lists Content Authenticity Initiative engagement.
+      <span class="tag tag--confirmed">Confirmed</span>
+      The page does not mention C2PA or watermarking.
+      For comparison, Meta's research avatar embeds an invisible Video Seal watermark in generated video with no added latency, and Google's Gemini 3.8 Audio card does not mention watermarking for Live Avatar.
+    </li>
+    <li>
+      <strong>Voice-clone abuse.</strong>
+      Synthesia states that it strictly prohibits cloning voices without explicit consent
+      (<a href="https://www.synthesia.io/features/ai-voice-cloning">voice cloning page</a>).
+      <span class="tag tag--confirmed">Confirmed</span>
+      <span class="tag tag--inference">Inference</span>
+      Add speaker verification of the reference against the consenting person,
+      and rate limits on cloning and on interactive agents.
+    </li>
+  </ul>
+
+  <h3 id="avp-first-90">Risks and what I would do first</h3>
+  <ul>
+    <li>
+      <strong>Risks.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Audio and video teams drift on clocks and metrics;
+      distilled causal renderers degrade under audio conditioning;
+      action-channel data with real overlap is scarce;
+      tags the text LLM cannot use;
+      reward models get gamed.
+    </li>
+    <li>
+      <strong>Days 1-30.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Learn the current Voice stack and its failures.
+      Build the shared benchmark and metric pins with the video team, including latency percentiles,
+      and put the cascade on it as the baseline.
+    </li>
+    <li>
+      <strong>Days 31-60.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Stand up the unified speech LLM path: listen head with tags and end-of-turn, tool call to the text LLM,
+      speak head with fillers, absolute-time chunks and listening cues, scored on the benchmark.
+      Ship the cascade as launch fallback behind the same gates.
+    </li>
+    <li>
+      <strong>Days 61-90.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Train the first in-house version on the shared timeline, add timing and voice rewards with hacking guards,
+      gate it against the cascade, and start the native full-duplex research track.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I see two products with two SLOs on one set of consent-gated identity and voice assets.
+      Interactive voice is a unified speech LLM that owns listening, turn-taking and speaking,
+      with a swappable text LLM behind a tool call; the cascade is the launch fallback and baseline.
+      I would share an absolute-time clock between voice and video and build one internal benchmark first,
+      because published sync numbers do not compare."
+    </p>
+  </div>
+</section>

@@ -1,0 +1,169 @@
+<section id="steering-voice-tone">
+  <h2>Steering voice, tone and emotion</h2>
+  <p>
+    Five control channels, usually combined: a reference clip, a natural-language instruction, inline tags, duration targets, and style guidance at sampling time.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 256" role="img"
+      aria-label="TTS conditioning: text, reference audio, instruction or tags and a duration target all feed a token language model, whose speech tokens go to a decoder that outputs audio">
+      <defs>
+      <marker id="arrow-steering" viewBox="0 0 10 10" refX="9" refY="5"
+        markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+      </marker>
+      </defs>
+    <rect class="d-box" x="10" y="15" width="150" height="44" rx="8"/>
+    <text class="d-text" x="85" y="37" text-anchor="middle"
+      dominant-baseline="middle">Text</text>
+    <path class="d-arrow" d="M 160 37 L 278 37" marker-end="url(#arrow-steering)"/>
+    <text class="d-text--muted" x="219" y="29" text-anchor="middle">content</text>
+    <rect class="d-box" x="10" y="75" width="150" height="44" rx="8"/>
+    <text class="d-text" x="85" y="97" text-anchor="middle"
+      dominant-baseline="middle">Reference audio</text>
+    <path class="d-arrow" d="M 160 97 L 278 97" marker-end="url(#arrow-steering)"/>
+    <text class="d-text--muted" x="219" y="89" text-anchor="middle">speaker, timbre</text>
+    <rect class="d-box" x="10" y="135" width="150" height="44" rx="8"/>
+    <text class="d-text" x="85" y="157" text-anchor="middle"
+      dominant-baseline="middle">NL instruction, tags</text>
+    <path class="d-arrow" d="M 160 157 L 278 157" marker-end="url(#arrow-steering)"/>
+    <text class="d-text--muted" x="219" y="149" text-anchor="middle">style, emotion</text>
+    <rect class="d-box" x="10" y="195" width="150" height="44" rx="8"/>
+    <text class="d-text" x="85" y="217" text-anchor="middle"
+      dominant-baseline="middle">Duration target</text>
+    <path class="d-arrow" d="M 160 217 L 278 217" marker-end="url(#arrow-steering)"/>
+    <text class="d-text--muted" x="219" y="209" text-anchor="middle">exact timing</text>
+    <rect class="d-box d-box--accent" x="280" y="15" width="150" height="226" rx="8"/>
+    <text class="d-text" x="355" y="115" text-anchor="middle"
+      dominant-baseline="middle">Token LM</text>
+    <text class="d-text--muted" x="355" y="137" text-anchor="middle">conditioned on all four</text>
+    <rect class="d-box" x="500" y="106" width="120" height="44" rx="8"/>
+    <text class="d-text" x="560" y="128" text-anchor="middle"
+      dominant-baseline="middle">Decoder</text>
+    <path class="d-arrow" d="M 430 128 L 498 128" marker-end="url(#arrow-steering)"/>
+    <text class="d-text--muted" x="464" y="118" text-anchor="middle">tokens</text>
+    <path class="d-arrow" d="M 620 128 L 700 128" marker-end="url(#arrow-steering)"/>
+    <text class="d-text--muted" x="660" y="118" text-anchor="middle">audio</text>
+    </svg>
+    <figcaption>Figure: each control channel enters the token language model as a separate condition; the decoder turns the resulting tokens into audio.</figcaption>
+  </figure>
+
+  <h3 id="control-channels">Control channels</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Channel</th>
+          <th>Examples</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>In-context cloning</td>
+          <td>Synthesia Express-Voice</td>
+          <td>
+            Synthesia describes a two-stage transformer with autoregressive and non-autoregressive parts (about 800M parameters each), operating on graphemes with Descript's RVQ tokenizer.
+            It is conditioned on reference audio, with no fixed speaker embedding
+            (<a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Synthesia Express-2 post</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>NL instructions</td>
+          <td>CosyVoice 3, Parler-TTS, IndexTTS2, Hume Octave, gpt-4o-mini-tts, Qwen-Audio-3.0-TTS</td>
+          <td>
+            CosyVoice 3 prepends a natural-language description and an <code>&lt;endofprompt&gt;</code> token to the text; instruction-following data grew from 1,500 to 5,000 hours (arXiv 2505.17589).
+            Parler-TTS reads gender, speaking rate, pitch and reverberation from the text description, with no reference audio; Parler-TTS Large is 2.3B parameters
+            (<a href="https://github.com/huggingface/parler-tts">Parler-TTS README</a>).
+            Hume Octave 1 takes a natural-language <code>description</code> and a separate <code>speed</code> multiplier from 0.5 to 2.0
+            (<a href="https://dev.hume.ai/docs/text-to-speech-tts/acting-instructions">Hume docs</a>).
+            OpenAI's <a href="https://developers.openai.com/api/docs/guides/text-to-speech">TTS guide</a> shows an <code>instructions</code> field on gpt-4o-mini-tts.
+            Qwen-Audio-3.0-TTS offers free-style instructions and inline tags (arXiv 2607.23938)
+          </td>
+        </tr>
+        <tr>
+          <td>Inline tags</td>
+          <td>ElevenLabs audio tags, CosyVoice 3, Qwen-Audio-3.0-TTS</td>
+          <td>
+            ElevenLabs lists bracket tags such as <code>[whispers]</code>; its docs say a tag for a delivery the voice was not trained on may be less reliable
+            (<a href="https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices">ElevenLabs docs</a>).
+            CosyVoice 3 supports vocal bursts between text tokens and feature tags such as <code>[laughter]</code> and <code>[breath]</code> (arXiv 2505.17589)
+          </td>
+        </tr>
+        <tr>
+          <td>Duration control</td>
+          <td>IndexTTS2 (arXiv 2506.21619)</td>
+          <td>Explicit token count for exact timing, or free mode that keeps prompt prosody</td>
+        </tr>
+        <tr>
+          <td>Style guidance</td>
+          <td>CFG on the style or text condition</td>
+          <td><span class="tag tag--inference">Inference</span> Reuses the CFG term from the flow-matching material in chapter 03 (Speech generation), with a style-only unconditional branch</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="disentanglement">Disentanglement</h3>
+  <p>
+    IndexTTS2 separates emotion from timbre: timbre comes from one prompt and emotional tone from a style prompt, so the two can come from different speakers (arXiv 2506.21619).
+    Its text-based emotion control comes from fine-tuning Qwen3.
+    The authors report better word error rate, speaker similarity and emotional fidelity than other zero-shot TTS models.
+    Step-Audio-EditX takes a different route: large-margin synthetic data instead of representation-level disentanglement (arXiv 2511.03601).
+  </p>
+  <p>
+    In CosyVoice's own tests, the instruct model raised the share of generated speech that an emotion2vec classifier labelled sad, angry, surprised and disgusted, compared with the base model (arXiv 2407.05407, Table 10).
+  </p>
+
+  <h3 id="style-planning">Style planning and non-verbal control</h3>
+  <p>
+    Speech-Rewarded Style Planning (arXiv 2610.11461) trains a text style planner through a frozen downstream TTS.
+    The planner reads dialogue history and the response text, writes candidate style instructions, and is optimised with GRPO.
+    The reward is the teacher-forced likelihood of the target speech tokens.
+    The authors find that speech-text alignment only weakly predicts downstream acoustic similarity among candidate instructions for the same utterance, so a caption faithful to the audio can still fail to steer a given synthesiser.
+    On an English subset of the ISCSLP 2026 CoT-TTS corpus it improves style and emotion similarity and lowers mel-cepstral distortion against a base LLM and target-audio-informed captioning baselines
+    <span class="tag tag--reported">Reported</span>.
+  </p>
+  <p>
+    NVAlign (arXiv 2609.31892) targets non-verbal vocalisation tags in continuous autoregressive flow-matching TTS.
+    It fine-tunes a TTS model and an NVV-aware recogniser on NVV-annotated speech, then freezes the recogniser as the reward.
+    A gradient surrogate passes the reward back through the flow-matching sampler to update the autoregressive backbone and the flow head, with fidelity penalties and reference-velocity regularisation to protect speaker similarity and quality.
+    On NVV-SuperBench and in listening tests it improves tag-following over SFT and Flow-GRPO baselines; the abstract gives no numbers
+    <span class="tag tag--reported">Reported</span>.
+    This is the post-training answer to the tag-reliability pitfall noted in
+    <a href="/apps/materials/speech-lit-review/06-control-and-quality#prompting-pitfalls">prompting pitfalls</a>.
+  </p>
+
+  <h3 id="duration-lip-sync">Duration control and lip-sync</h3>
+  <p>
+    The IndexTTS2 authors motivate exact durations by video dubbing, where speech must match a video block length (arXiv 2506.21619).
+    <span class="tag tag--inference">Inference</span>
+    This is the hook for avatar sync.
+  </p>
+
+  <h3 id="steering-eval">Evaluation</h3>
+  <p>
+    emotion2vec (arXiv 2312.15185) is a self-supervised speech-emotion representation, usable as the basis for emotion similarity.
+    Synthesia reports measuring Express-Voice with WavLM for speaker similarity and emotion2vec for emotional similarity.
+  </p>
+
+  <h3 id="synthesia-context">Synthesia context</h3>
+  <p>
+    Synthesia's Express-2 (4 Sep 2025) pairs Express-Voice with Express-Video.
+    The post reports a blind test with 100 native English-speaking evaluators across 17 accents, in which Express-Voice rated highest for matching the original speaker's identity, rhythm and accent
+    (<span class="tag tag--reported">Reported</span> company claim).
+    The post gives no scores.
+  </p>
+  <div class="callout callout--note">
+    <strong>Gap</strong>
+    <p>
+      In-context cloning internals, speaker embeddings and timbre/prosody/content disentanglement were not researched beyond IndexTTS2 and Express-Voice.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would combine a reference clip for identity, an NL or tag channel for emotion, and a duration mode for sync, with emotion kept disentangled from timbre so style transfers across speakers."
+    </p>
+  </div>
+</section>

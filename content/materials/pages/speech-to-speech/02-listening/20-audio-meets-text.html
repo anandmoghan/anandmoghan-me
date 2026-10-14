@@ -1,0 +1,393 @@
+<section id="audio-meets-text">
+  <h2>How audio meets text inside an LLM</h2>
+  <p>
+    An LLM reads one sequence of positions.
+    In a speech LLM, some positions hold audio vectors and some hold text tokens.
+    The layout of those positions decides when text can come out, whether the model can stream, and
+      what alignment data training needs.
+  </p>
+  <p>
+    Picture three transcriptionists.
+    One listens to the whole recording, then types (prefix).
+    One types after every few seconds of audio and signals the end of each batch
+      (chunk-interleaved).
+    One has a metronome and, on every tick, writes either nothing or a few words (per-frame blank).
+    Models differ mainly in which of these habits they copy.
+  </p>
+
+  <h3 id="audio-meets-text-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 312" role="img"
+      aria-label="Four layouts as rows of positions: prefix, chunk-interleaved with end-of-chunk tokens, per-frame blank, and summed time-aligned streams">
+      <defs>
+        <marker id="audio-meets-text-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="8" y="10" text-anchor="start"
+        dominant-baseline="middle">1  Prefix: all audio first, then a prompt, then text</text>
+      <rect class="d-box d-box--muted" x="8" y="20" width="44" height="30" rx="6"/>
+      <text class="d-text" x="30" y="35" text-anchor="middle"
+        dominant-baseline="middle">e1</text>
+      <rect class="d-box d-box--muted" x="58" y="20" width="44" height="30" rx="6"/>
+      <text class="d-text" x="80" y="35" text-anchor="middle"
+        dominant-baseline="middle">e2</text>
+      <text class="d-text--muted" x="120" y="35" text-anchor="middle"
+        dominant-baseline="middle">...</text>
+      <rect class="d-box d-box--muted" x="138" y="20" width="44" height="30" rx="6"/>
+      <text class="d-text" x="160" y="35" text-anchor="middle"
+        dominant-baseline="middle">eT</text>
+      <rect class="d-group" x="188" y="20" width="64" height="30" rx="6"/>
+      <text class="d-text--small" x="220" y="35" text-anchor="middle"
+        dominant-baseline="middle">prompt</text>
+      <rect class="d-box" x="258" y="20" width="44" height="30" rx="6"/>
+      <text class="d-text" x="280" y="35" text-anchor="middle"
+        dominant-baseline="middle">y1</text>
+      <rect class="d-box" x="308" y="20" width="44" height="30" rx="6"/>
+      <text class="d-text" x="330" y="35" text-anchor="middle"
+        dominant-baseline="middle">y2</text>
+      <rect class="d-box" x="358" y="20" width="44" height="30" rx="6"/>
+      <text class="d-text" x="380" y="35" text-anchor="middle"
+        dominant-baseline="middle">y3</text>
+      <text class="d-text--muted" x="8" y="70" text-anchor="start"
+        dominant-baseline="middle">2  Chunk-interleaved: audio chunk, its text, end-of-chunk token</text>
+      <rect class="d-box d-box--muted" x="8" y="80" width="86" height="30" rx="6"/>
+      <text class="d-text" x="51" y="95" text-anchor="middle"
+        dominant-baseline="middle">audio c1</text>
+      <rect class="d-box" x="100" y="80" width="70" height="30" rx="6"/>
+      <text class="d-text" x="135" y="95" text-anchor="middle"
+        dominant-baseline="middle">text c1</text>
+      <rect class="d-group" x="176" y="80" width="40" height="30" rx="6"/>
+      <text class="d-text--small" x="196" y="95" text-anchor="middle"
+        dominant-baseline="middle">EOC</text>
+      <rect class="d-box d-box--muted" x="222" y="80" width="86" height="30" rx="6"/>
+      <text class="d-text" x="265" y="95" text-anchor="middle"
+        dominant-baseline="middle">audio c2</text>
+      <rect class="d-box" x="314" y="80" width="70" height="30" rx="6"/>
+      <text class="d-text" x="349" y="95" text-anchor="middle"
+        dominant-baseline="middle">text c2</text>
+      <rect class="d-group" x="390" y="80" width="40" height="30" rx="6"/>
+      <text class="d-text--small" x="410" y="95" text-anchor="middle"
+        dominant-baseline="middle">EOC</text>
+      <rect class="d-box d-box--muted" x="436" y="80" width="86" height="30" rx="6"/>
+      <text class="d-text" x="479" y="95" text-anchor="middle"
+        dominant-baseline="middle">audio c3</text>
+      <text class="d-text--muted" x="540" y="95" text-anchor="middle"
+        dominant-baseline="middle">...</text>
+      <text class="d-text--muted" x="8" y="130" text-anchor="start"
+        dominant-baseline="middle">3  Per-frame blank: after each frame, some words or BLANK</text>
+      <rect class="d-box d-box--muted" x="8" y="140" width="44" height="30" rx="6"/>
+      <text class="d-text" x="30" y="155" text-anchor="middle"
+        dominant-baseline="middle">e1</text>
+      <rect class="d-group" x="58" y="140" width="60" height="30" rx="6"/>
+      <text class="d-text--small" x="88" y="155" text-anchor="middle"
+        dominant-baseline="middle">BLANK</text>
+      <rect class="d-box d-box--muted" x="124" y="140" width="44" height="30" rx="6"/>
+      <text class="d-text" x="146" y="155" text-anchor="middle"
+        dominant-baseline="middle">e2</text>
+      <rect class="d-box" x="174" y="140" width="44" height="30" rx="6"/>
+      <text class="d-text" x="196" y="155" text-anchor="middle"
+        dominant-baseline="middle">w</text>
+      <rect class="d-box" x="224" y="140" width="44" height="30" rx="6"/>
+      <text class="d-text" x="246" y="155" text-anchor="middle"
+        dominant-baseline="middle">w</text>
+      <rect class="d-group" x="274" y="140" width="60" height="30" rx="6"/>
+      <text class="d-text--small" x="304" y="155" text-anchor="middle"
+        dominant-baseline="middle">BLANK</text>
+      <rect class="d-box d-box--muted" x="340" y="140" width="44" height="30" rx="6"/>
+      <text class="d-text" x="362" y="155" text-anchor="middle"
+        dominant-baseline="middle">e3</text>
+      <rect class="d-group" x="390" y="140" width="60" height="30" rx="6"/>
+      <text class="d-text--small" x="420" y="155" text-anchor="middle"
+        dominant-baseline="middle">BLANK</text>
+      <rect class="d-box d-box--muted" x="456" y="140" width="44" height="30" rx="6"/>
+      <text class="d-text" x="478" y="155" text-anchor="middle"
+        dominant-baseline="middle">e4</text>
+      <rect class="d-box" x="506" y="140" width="44" height="30" rx="6"/>
+      <text class="d-text" x="528" y="155" text-anchor="middle"
+        dominant-baseline="middle">w</text>
+      <rect class="d-group" x="556" y="140" width="60" height="30" rx="6"/>
+      <text class="d-text--small" x="586" y="155" text-anchor="middle"
+        dominant-baseline="middle">BLANK</text>
+      <text class="d-text--muted" x="8" y="190" text-anchor="start"
+        dominant-baseline="middle">4  Summed streams: one slot per step in each stream, added into one vector</text>
+      <rect class="d-box d-box--muted" x="8" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="30" y="215" text-anchor="middle"
+        dominant-baseline="middle">a1</text>
+      <rect class="d-box d-box--muted" x="58" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="80" y="215" text-anchor="middle"
+        dominant-baseline="middle">a2</text>
+      <rect class="d-box d-box--muted" x="108" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="130" y="215" text-anchor="middle"
+        dominant-baseline="middle">a3</text>
+      <rect class="d-box d-box--muted" x="158" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="180" y="215" text-anchor="middle"
+        dominant-baseline="middle">a4</text>
+      <rect class="d-box d-box--muted" x="208" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="230" y="215" text-anchor="middle"
+        dominant-baseline="middle">a5</text>
+      <rect class="d-box d-box--muted" x="258" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="280" y="215" text-anchor="middle"
+        dominant-baseline="middle">a6</text>
+      <rect class="d-box d-box--muted" x="308" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="330" y="215" text-anchor="middle"
+        dominant-baseline="middle">a7</text>
+      <rect class="d-box d-box--muted" x="358" y="200" width="44" height="30" rx="6"/>
+      <text class="d-text" x="380" y="215" text-anchor="middle"
+        dominant-baseline="middle">a8</text>
+      <rect class="d-group" x="8" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text--small" x="30" y="251" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-group" x="58" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text--small" x="80" y="251" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-group" x="108" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text--small" x="130" y="251" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="158" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text" x="180" y="251" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-group" x="208" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text--small" x="230" y="251" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-group" x="258" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text--small" x="280" y="251" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="308" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text" x="330" y="251" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-group" x="358" y="236" width="44" height="30" rx="6"/>
+      <text class="d-text--small" x="380" y="251" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <text class="d-text--muted" x="414" y="215" text-anchor="start"
+        dominant-baseline="middle">audio stream</text>
+      <text class="d-text--muted" x="414" y="251" text-anchor="start"
+        dominant-baseline="middle">text stream</text>
+      <text class="d-text--muted" x="8" y="292" text-anchor="start"
+        dominant-baseline="middle">In Moshi and DSM one step is 80 ms; the text stream is mostly PAD.</text>
+    </svg>
+    <figcaption>Figure: sequence layouts as rows of positions, time left to right. Grey boxes are
+      audio, plain boxes are text, outlined boxes are special tokens.</figcaption>
+  </figure>
+  <p>
+    Two ideas from classic speech recognition recur below.
+    Connectionist temporal classification (CTC) is a loss in which the model outputs, at every audio
+      frame, either a label (a letter or word piece) or a blank meaning "nothing new here".
+    Collapse repeated labels, drop the blanks, and the text is left.
+    Because every frame carries a label or a blank, a CTC model can say which frame each word fell
+      in; run on audio whose transcript is known (forced alignment), it yields word timings, and
+      several layouts below get their training targets this way.
+  </p>
+  <p>
+    A transducer is the second idea: an ASR model with an audio encoder, a prediction network that
+      reads the text written so far, and a joint network.
+    The joint network combines the current audio vector with the current text-history vector and
+      scores every possible next token plus blank, where blank means "not yet, give me the next
+      audio frame".
+  </p>
+  <p>Six layouts cover the field.</p>
+  <ol>
+    <li>
+      <strong>Prefix (soft prompt).</strong>
+      Projected audio comes first, then a task prompt, then text is generated.
+      Text starts only after all audio is in, so this does not stream, but it needs no alignment.
+      Qwen2-Audio and Voxtral work this way.
+    </li>
+    <li>
+      <strong>Chunk-interleaved.</strong>
+      Each audio chunk is followed by that chunk's text and an end-of-chunk token (EOC).
+      SpeechLLM-XL uses 1.28 s chunks.
+      Training needs each token's end time, from reference alignments or CTC forced alignment.
+    </li>
+    <li>
+      <strong>Per-frame blank (wait token).</strong>
+      After each audio embedding (every 240 ms in Speech ReaLLM) the model emits words until it
+        emits BLANK, so a frame can yield zero, one or several words.
+      Targets come from an external CTC "alignment teacher", a separate model whose frame-level
+        timings say where each word belongs.
+    </li>
+    <li>
+      <strong>Transducer with an LLM predictor.</strong>
+      Audio does not enter the LLM input at all; the LLM plays the prediction network.
+      Transducer-Llama scores the non-blank choice by combining the acoustic and language scores:
+    </li>
+  </ol>
+  \[
+  P_{nb} = (1 - P_b)\,\operatorname{softmax}\big(\log P_{ac} + \log P_{ilm}\big)
+  \]
+  <p>
+    Here \( P_b \) is the blank probability, \( P_{ac} \) the acoustic score and \( P_{ilm} \) the
+      internal language-model score, which the LLM replaces after transducer training.
+    A token wins only if the audio and the language model both like it; adding logs is the same as
+      multiplying probabilities without the tiny numbers a long product produces.
+    The softmax renormalises the sum to 1, and \( 1 - P_b \) reserves the share left once blank has
+      taken its part.
+    If the audio sounds equally like "their" and "there" but the text so far is "over", the language
+      score tips the choice to "there".
+    The LLM stays frozen apart from new embedding and output layers for the ASR vocabulary.
+  </p>
+  <ol start="5">
+    <li>
+      <strong>Summed time-aligned streams.</strong>
+      Every stream gets its own embedding table, and at each step the embeddings are added into one
+        vector.
+      The text stream holds words with PAD between them; PAD is about 65% of the text tokens in
+        English conversation in Moshi.
+      For ASR, DSM delays the text stream, 2.5 s by default, and Voxtral Realtime feeds the delay to
+        the decoder as an input so one model can run at several delays.
+      A duplex dialogue model can also transcribe the user this way, with a lightweight ASR head
+        beside the agent's text head on the same backbone.
+        See <a href="/apps/materials/speech-to-speech/07-conversation">Conversation</a>.
+    </li>
+    <li>
+      <strong>Hybrid continuous plus discrete input.</strong>
+      Kimi-Audio adds downsampled continuous Whisper features to the embedding of a discrete
+        semantic token at each 12.5 Hz step.
+      It changes the audio input, not the text layout.
+    </li>
+  </ol>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Layout</th>
+          <th>When text is emitted</th>
+          <th>Streams?</th>
+          <th>Alignment needed</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1. Prefix</td>
+          <td>After all audio and a prompt</td>
+          <td>No</td>
+          <td>None</td>
+        </tr>
+        <tr>
+          <td>2. Chunk-interleaved</td>
+          <td>After each chunk, closed by EOC</td>
+          <td>Yes</td>
+          <td>Token end times (references or CTC forced alignment)</td>
+        </tr>
+        <tr>
+          <td>3. Per-frame blank</td>
+          <td>After each frame: words, then BLANK</td>
+          <td>Yes</td>
+          <td>Fixed alignments from an external CTC teacher</td>
+        </tr>
+        <tr>
+          <td>4. Transducer, LLM predictor</td>
+          <td>When the joint network picks a non-blank token</td>
+          <td>Yes (160 ms segments)</td>
+          <td>Transducer loss; no external aligner stated</td>
+        </tr>
+        <tr>
+          <td>5. Summed streams</td>
+          <td>One text slot per step, mostly PAD; ASR text lags by a delay</td>
+          <td>Yes</td>
+          <td>Word timestamps place words on the grid</td>
+        </tr>
+        <tr>
+          <td>6. Hybrid input</td>
+          <td>Not a text layout</td>
+          <td>Set by the host model</td>
+          <td>None</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="audio-meets-text-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Layout</td>
+          <td>When text can appear</td>
+          <td>Prefix is simplest but waits for the whole utterance. Streaming layouts need aligned
+            training data.</td>
+        </tr>
+        <tr>
+          <td>Alignment source</td>
+          <td>Reference timestamps, CTC forced alignment, external CTC teacher</td>
+          <td>Extra pipeline. <span class="tag tag--inference">Inference</span> Bad alignments
+            become bad training targets.</td>
+        </tr>
+        <tr>
+          <td>Hybrid input</td>
+          <td>Continuous features plus semantic tokens per step</td>
+          <td>Recovers detail lost by pooling, at the cost of a more complex input path.</td>
+        </tr>
+        <tr>
+          <td>Waiting-step cost</td>
+          <td>A factorized variant of DSM predicts "wait" with a separate yes/no probability</td>
+          <td>Skips the full vocabulary softmax on the many steps where the model stays quiet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Chunk length, right context and text delay are the latency dials of these layouts; their numbers
+      are in <a href="#streaming-asr-families">Streaming ASR families</a>.
+  </p>
+
+  <h3 id="audio-meets-text-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Silence dominates.</strong>
+      With PAD at about 65% of text tokens, the model must learn to stay quiet most steps, and in
+        Speech ReaLLM the response after an embedding is often empty.
+      A full vocabulary softmax on every one of those steps is waste.
+    </li>
+    <li>
+      <strong>Weak alignment.</strong>
+      Chunk and frame layouts inherit the errors of the aligner that built their targets, and a word
+        that straddles a chunk boundary lands in one chunk or the other.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>No partials from a prefix model.</strong>
+      An agent that must start thinking while the user speaks needs a streaming layout.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding#audio-text-in-llm">How encoder audio and ASR
+      text meet inside the LLM</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      Audio and text share one sequence, and the layout sets latency: a prefix waits for the whole
+        utterance, while streaming models interleave chunks with an end-of-chunk token, emit a blank
+        per frame, run a transducer, or sum time-aligned streams.
+      The cost is alignment, so for a voice agent I would pick chunk interleaving or time-aligned
+        streams to get text while the user is still speaking.
+    </p>
+  </div>
+
+  <h3 id="audio-meets-text-sources">Sources</h3>
+  <ul>
+    <li>Qwen2-Audio Technical Report (arXiv 2407.10759)</li>
+    <li>Voxtral (arXiv 2507.13264)</li>
+    <li>Efficient Streaming LLM for Speech Recognition (arXiv 2410.03752)</li>
+    <li>Speech ReaLLM -- Real-time Streaming Speech Recognition with Multimodal LLMs by Teaching the Flow of Time (arXiv 2406.09569)</li>
+    <li>Transducer-Llama: Integrating LLMs into Streamable Transducer-based Speech Recognition (arXiv 2412.16464)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Streaming Sequence-to-Sequence Learning with Delayed Streams Modeling (arXiv 2509.08753)</li>
+    <li>Kimi-Audio Technical Report (arXiv 2504.18425)</li>
+    <li>Voxtral Realtime (arXiv 2602.11298)</li>
+    <li>Factorized Delayed Streams Modeling for LLM-based Streaming ASR (arXiv 2610.04333)</li>
+    <li>Enabling Streaming User Transcription in Full-Duplex Speech-to-Speech Models (arXiv 2609.15759)</li>
+  </ul>
+</section>

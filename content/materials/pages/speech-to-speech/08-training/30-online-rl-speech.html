@@ -1,0 +1,285 @@
+<section id="online-rl-speech">
+  <h2>Online RL for speech generation</h2>
+  <p>
+    Imagine a singer practising with scorers listening from the next room.
+    One counts wrong words, one checks the voice still sounds like the singer, one rates how pleasant it is.
+    The singer tries a phrase eight times, sees which tries scored best, and shifts toward them.
+    Online RL for speech is this loop, with models as the scorers.
+  </p>
+  <p>
+    The machinery is the GRPO loop from
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-rewards">Aligning a flow model with rewards</a>:
+    sample a group of rollouts per prompt, score each, compare within the group, update with a KL penalty to the reference.
+    This section covers what is specific to speech.
+    The policy is usually a codec or discrete-token language model, sometimes a flow-matching model, and rewards come from the decoded audio, not from the tokens.
+    That one fact drives most of the engineering cost.
+  </p>
+
+  <h3 id="online-rl-speech-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img"
+      aria-label="Online RL loop for speech: the policy samples a group of
+        rollouts, they are decoded to audio, scored by recognition, speaker,
+        quality and timing rewards, normalised within the group and used for an
+        update with a KL penalty; held-out judges score the audio but never enter
+        the reward">
+      <defs>
+        <marker id="rl-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box d-box--accent" x="10" y="30" width="120" height="44"
+        rx="8"/>
+      <text class="d-text" x="70.0" y="52.0" text-anchor="middle"
+        dominant-baseline="middle">Policy</text>
+      <rect class="d-box" x="180" y="30" width="130" height="44" rx="8"/>
+      <text class="d-text" x="245.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">G rollouts</text>
+      <text class="d-text--small" x="245.0" y="61.0" text-anchor="middle"
+        dominant-baseline="middle">per prompt</text>
+      <rect class="d-box" x="350" y="30" width="130" height="44" rx="8"/>
+      <text class="d-text" x="415.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">Decode</text>
+      <text class="d-text--small" x="415.0" y="61.0" text-anchor="middle"
+        dominant-baseline="middle">tokens to audio</text>
+      <rect class="d-box d-box--muted" x="520" y="30" width="190" height="44"
+        rx="8"/>
+      <text class="d-text" x="615.0" y="44.0" text-anchor="middle"
+        dominant-baseline="middle">Held-out judges</text>
+      <text class="d-text--small" x="615.0" y="61.0" text-anchor="middle"
+        dominant-baseline="middle">never in the reward</text>
+      <path class="d-arrow" d="M 130 52 L 178 52" marker-end="url(#rl-arrow)"/>
+      <path class="d-arrow" d="M 310 52 L 348 52" marker-end="url(#rl-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 480 52 L 518 52"
+        marker-end="url(#rl-arrow)"/>
+      <text class="d-text--muted" x="499" y="42" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <path class="d-arrow" d="M 415 74 L 415 104"/>
+      <path class="d-arrow" d="M 259 104 L 649 104"/>
+      <path class="d-arrow" d="M 259 104 L 259 122" marker-end="url(#rl-arrow)"/>
+      <rect class="d-box" x="200" y="124" width="118" height="44" rx="8"/>
+      <text class="d-text--small" x="259.0" y="146.0" text-anchor="middle"
+        dominant-baseline="middle">ASR error</text>
+      <path class="d-arrow" d="M 259 168 L 259 182"/>
+      <path class="d-arrow" d="M 389 104 L 389 122" marker-end="url(#rl-arrow)"/>
+      <rect class="d-box" x="330" y="124" width="118" height="44" rx="8"/>
+      <text class="d-text--small" x="389.0" y="146.0" text-anchor="middle"
+        dominant-baseline="middle">Speaker match</text>
+      <path class="d-arrow" d="M 389 168 L 389 182"/>
+      <path class="d-arrow" d="M 519 104 L 519 122" marker-end="url(#rl-arrow)"/>
+      <rect class="d-box" x="460" y="124" width="118" height="44" rx="8"/>
+      <text class="d-text--small" x="519.0" y="146.0" text-anchor="middle"
+        dominant-baseline="middle">Quality model</text>
+      <path class="d-arrow" d="M 519 168 L 519 182"/>
+      <path class="d-arrow" d="M 649 104 L 649 122" marker-end="url(#rl-arrow)"/>
+      <rect class="d-box" x="590" y="124" width="118" height="44" rx="8"/>
+      <text class="d-text--small" x="649.0" y="146.0" text-anchor="middle"
+        dominant-baseline="middle">Timing events</text>
+      <path class="d-arrow" d="M 649 168 L 649 182"/>
+      <path class="d-arrow" d="M 259 182 L 649 182"/>
+      <path class="d-arrow" d="M 285 182 L 285 196" marker-end="url(#rl-arrow)"/>
+      <rect class="d-box" x="200" y="198" width="170" height="44" rx="8"/>
+      <text class="d-text" x="285.0" y="220.0" text-anchor="middle"
+        dominant-baseline="middle">Normalise in group</text>
+      <rect class="d-box" x="400" y="198" width="170" height="44" rx="8"/>
+      <text class="d-text" x="485.0" y="220.0" text-anchor="middle"
+        dominant-baseline="middle">Update + KL penalty</text>
+      <path class="d-arrow" d="M 370 220 L 398 220" marker-end="url(#rl-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 485 242 L 485 266 L 70 266 L 70
+        76" marker-end="url(#rl-arrow)"/>
+      <text class="d-text--muted" x="280" y="278" text-anchor="middle"
+        dominant-baseline="middle">updated policy samples the next group</text>
+    </svg>
+    <figcaption>Figure: the online RL loop. Each prompt gets a group of rollouts,
+      decoded to audio and scored by several reward models. Advantages are
+      normalised within the group. Held-out judges watch for hacking and never
+      feed the reward.</figcaption>
+  </figure>
+  <p>
+    <strong>Decoding rollouts to audio.</strong>
+    Each rollout becomes a waveform, then goes through a recognition model and a speaker model, so the reward is a function of sound.
+    Decoding and reward-model calls dominate cost.
+    Cheaper options are rewards on codec tokens, cached reference embeddings and a small recogniser for the reward.
+    <span class="tag tag--inference">Inference</span>
+    Larger groups give a better within-group baseline and cost proportionally more decoding.
+    When every rollout in a group scores alike, the advantage is zero and the update is empty.
+  </p>
+  <p>
+    <strong>The reward stack.</strong>
+    A common stack combines several signals, each normalised within the group before they are summed.
+    Quality metrics themselves (MOS, speaker similarity, judges) are defined in
+    <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems#measuring-speech-generation">Measuring speech generation</a>.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Reward</th>
+          <th>How it is computed</th>
+          <th>What it protects</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Intelligibility</td>
+          <td>Character or word error from an off-the-shelf ASR on the decoded audio</td>
+          <td>Words come out right</td>
+        </tr>
+        <tr>
+          <td>Speaker similarity</td>
+          <td>Cosine similarity of speaker embeddings against the reference voice</td>
+          <td>The voice stays the same</td>
+        </tr>
+        <tr>
+          <td>Quality predictors</td>
+          <td>Learned naturalness scores</td>
+          <td>Audio sounds clean and natural</td>
+        </tr>
+        <tr>
+          <td>Reward models and audio-LLM judges</td>
+          <td>A generative reward model with a written rationale, or a large audio model that rates or compares clips</td>
+          <td>Naturalness, expressiveness and paralinguistics where no formula exists, with biases</td>
+        </tr>
+        <tr>
+          <td>Timing rewards (duplex)</td>
+          <td>Voice-activity events on generated audio against annotated agent events</td>
+          <td>Turn initiation, backchannels, yielding, participation</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>Timing rewards for duplex.</strong>
+    Per-axis rewards cover pause handling, turn-taking, backchanneling and user interruption.
+    Training uses windows around annotated agent events instead of whole conversations.
+    A text-quality reward is added so timing gains do not cost content.
+  </p>
+  <p>
+    <strong>Validate the reward model first.</strong>
+    A reward model is a judge you must test like any model.
+    Audio-LLM judges show verbosity and position bias, and the best judge in one study agreed with human pairwise preference under 70% of the time.
+    On a benchmark that turns mean-opinion-score data into pairwise "which sounds better" tests, simple scalar models scored best, above 74% accuracy, but did worse on synthetic than on human speech and struggled when two clips differed little.
+    Randomise clip order, ensemble several aspects, and check the judge against human labels on the audio you will generate, including close pairs.
+  </p>
+  <p>
+    <strong>Flow models.</strong>
+    A flow model's ODE sampler is deterministic, so it gives neither varied rollouts nor a per-step probability.
+    Flow-GRPO therefore converts the sampler to an SDE; GROW skips the conversion and reweights the flow-matching loss by group advantage.
+    Both are worked through in
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-rewards-why-sde">Why RL needs the SDE</a>.
+  </p>
+  <p>
+    <strong>Best-of-N as the baseline.</strong>
+    Best-of-N needs no training: sample N candidates, score them, return the top one.
+    A study of codec language models trained with GRPO on learned scores for speaking style, naturalness, likability and arousal, plus a character-error limit against transcript drift, found that each reward mainly lifted its own metric.
+    Human A/B tests showed uneven transfer, and best-of-8 reranking matched GRPO perceptually.
+    So run best-of-N with the same reward first; if RL cannot beat it, you are paying training cost only to save inference cost.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+
+  <h3 id="online-rl-speech-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Reward weights</td>
+          <td>Balance between accuracy, voice, quality and timing</td>
+          <td>Weight accuracy too high and prosody flattens; too low and words slip</td>
+        </tr>
+        <tr>
+          <td>KL strength</td>
+          <td>How far the policy may drift</td>
+          <td>High KL is safe and slow; low KL is fast and open to hacking</td>
+        </tr>
+        <tr>
+          <td>Reward granularity</td>
+          <td>Per phone, per character or per utterance</td>
+          <td>Finer scoring helps languages with ambiguous readings; one report cut Japanese reading error with kana-level scoring</td>
+        </tr>
+        <tr>
+          <td>Best-of-N as baseline</td>
+          <td>Whether RL is needed at all</td>
+          <td>Costs N times the inference compute but no training; RL pays once and then samples once</td>
+        </tr>
+        <tr>
+          <td>Judge choice and validation</td>
+          <td>Which model scores quality, and how far it is trusted on close pairs</td>
+          <td>Learned judges capture naturalness, add cost and can be exploited; validation needs human-labelled pairs from your domain</td>
+        </tr>
+        <tr>
+          <td>Event windows for duplex</td>
+          <td>Which part of a conversation is rolled out</td>
+          <td>Focuses reward on timing events; loses long-range context</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Trade-offs are engineering reasoning from the cited reports.
+    <span class="tag tag--inference">Inference</span>
+    From text GRPO you keep group sampling, advantage normalisation, KL and clip monitoring.
+    What is new is decoding to audio, competing rewards, and hacking that shows up as flat prosody, not a bad transcript.
+    The same loop trains recognition and voice agents; see <a href="/apps/materials/speech-to-speech/08-training#rl-beyond-tts">RL beyond speech generation</a>.
+  </p>
+
+  <h3 id="online-rl-speech-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Prosody collapse under error-rate rewards.</strong>
+      Optimising character error alone made speech monotone, and adding speaker similarity destabilised training in the same study.
+      The fix there was iterative DPO (see <a href="/apps/materials/speech-to-speech/08-training#post-training">post-training</a>) on a few hundred human preference pairs per round.
+    </li>
+    <li>
+      <strong>Semantic drift.</strong>
+      Optimising timing can degrade what the model says; keep a response-quality reward.
+    </li>
+    <li>
+      <strong>Reward equals evaluation.</strong>
+      If the training ASR is also the test ASR, WER gains can be hacking.
+      Judge bias and reward exploitation more broadly are in
+      <a href="/apps/materials/speech-to-speech/08-training#reward-hacking-guards">Reward hacking and its guards</a>.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would run GRPO with a composite of recognition error, speaker similarity and a quality model, normalised per group, with KL to the reference.
+      For duplex I would add per-axis timing rewards from voice-activity events plus a text-quality term.
+      Single-score rewards get hacked, so I validate every reward against held-out judges and listeners."
+    </p>
+  </div>
+
+  <h3 id="online-rl-speech-sources">Sources</h3>
+  <ul>
+    <li>F5R-TTS: Improving Flow-Matching based Text-to-Speech with Group Relative Policy Optimization (arXiv 2504.02407)</li>
+    <li>Group Relative Policy Optimization for Text-to-Speech with Large Language Models (arXiv 2509.18798)</li>
+    <li>No Verifiable Reward for Prosody: Toward Preference-Guided Prosody Learning in TTS (arXiv 2509.18531)</li>
+    <li>GROW: Group-Relative Advantage-Weighted On-Policy Reinforcement Learning of Autoregressive-Diffusion Text-to-Speech model (arXiv 2608.03215)</li>
+    <li>Flow-GRPO: Training Flow Matching Models via Online RL (arXiv 2505.05470)</li>
+    <li>FlowTTS-GRPO: Online Reinforcement Learning with Multi-Objective Reward Optimization for Flow-Matching Based Text-to-Speech (arXiv 2606.23190)</li>
+    <li>FlowSE-GRPO: Training Flow Matching Speech Enhancement via Online Reinforcement Learning (arXiv 2601.16483)</li>
+    <li>When Does Predictor-Based RL Align with Human Perception? A Study of Subjective Rewards in Codec-Based Speech Language Models (arXiv 2608.31035)</li>
+    <li>From Scores to Preferences: Redefining MOS Benchmarking for Speech Quality Reward Modeling (arXiv 2510.00743)</li>
+    <li>SpeechJudge: Towards Human-Level Judgment for Speech Naturalness (arXiv 2511.07931)</li>
+    <li>GSRM: Generative Speech Reward Model for Speech RLHF (arXiv 2602.13891)</li>
+    <li>AudioJudge: Understanding What Works in Large Audio Model Based Speech Evaluation (arXiv 2507.12705)</li>
+    <li>Pronunciation-Oriented Reinforcement Learning for Japanese Text-to-Speech with Kana-Domain ASR Rewards (arXiv 2610.07575)</li>
+    <li>Decoupling Conversational Dynamics in Full-Duplex Spoken Models through Reinforcement Learning (arXiv 2607.07148)</li>
+    <li>Multi-faceted alignment of Moshi and PersonaPlex (arXiv 2606.11167); <a href="https://huggingface.co/kyutai/moshika-rl-seamless">model card</a></li>
+    <li>ASPIRin: Action Space Projection for Interactivity-Optimized Reinforcement Learning in Full-Duplex Speech Language Models (arXiv 2604.10065)</li>
+    <li><a href="https://github.com/FunAudioLLM/CosyVoice">FunAudioLLM/CosyVoice</a> and <a href="https://github.com/zai-org/GLM-TTS">zai-org/GLM-TTS</a> READMEs</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#online-rl-rewards">Online RL and rewards for speech generation</a>,
+      <a href="/apps/materials/speech-lit-review/06-control-and-quality#post-training-eval">Post-training and evaluation for speech generation</a>
+    </li>
+  </ul>
+</section>

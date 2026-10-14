@@ -1,0 +1,202 @@
+<section id="tools-while-talking">
+  <h2>Using tools while talking</h2>
+  <p>
+    A voice agent that books a table, checks an order or searches the web must call a tool in the middle of a conversation.
+    A tool call is often the slowest step in the whole reply, and silence on a phone line feels long.
+    The question is how to keep the conversation alive while the tool runs.
+  </p>
+  <p>
+    Three tricks recur.
+    Give the model a separate output channel for tool calls, so it can call a tool and keep talking.
+    Guess the tool query before the user finishes the sentence.
+    Run the tool in the background and let the voice cover the wait.
+  </p>
+
+  <h3 id="tools-while-talking-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 220" role="img"
+      aria-label="Three lanes on one timeline: the user speaks, a tool call
+        starts before the user stops and runs into the answer, and the agent
+        speaks opening words and then an answer that uses the tool result">
+      <defs>
+        <marker id="tools-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <!-- == Lanes == -->
+      <rect class="d-lane" x="100" y="40" width="610" height="40" rx="6"/>
+      <rect class="d-lane" x="100" y="96" width="610" height="40" rx="6"/>
+      <rect class="d-lane" x="100" y="152" width="610" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="60" text-anchor="start"
+        dominant-baseline="middle">user audio</text>
+      <text class="d-text--small" x="8" y="116" text-anchor="start"
+        dominant-baseline="middle">tool call</text>
+      <text class="d-text--small" x="8" y="172" text-anchor="start"
+        dominant-baseline="middle">agent speech</text>
+      <!-- == User turn boundary == -->
+      <path class="d-arrow d-arrow--dashed" d="M 340 34 L 340 196"/>
+      <text class="d-text--muted" x="340" y="22" text-anchor="middle"
+        dominant-baseline="middle">user stops</text>
+      <!-- == Boxes == -->
+      <rect class="d-box d-box--muted" x="120" y="44" width="210" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="225" y="60" text-anchor="middle"
+        dominant-baseline="middle">user speaks</text>
+      <rect class="d-box d-box--accent" x="240" y="100" width="190" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="335" y="116" text-anchor="middle"
+        dominant-baseline="middle">tool runs, query guessed</text>
+      <rect class="d-box d-box--muted" x="350" y="156" width="110" height="32"
+        rx="8"/>
+      <text class="d-text--small" x="405" y="172" text-anchor="middle"
+        dominant-baseline="middle">opening words</text>
+      <rect class="d-box" x="470" y="156" width="230" height="32" rx="8"/>
+      <text class="d-text--small" x="585" y="172" text-anchor="middle"
+        dominant-baseline="middle">answer with the result</text>
+      <!-- == Result hand-off == -->
+      <path class="d-arrow d-arrow--dashed" d="M 430 116 L 530 116 L 530 154"
+        marker-end="url(#tools-arrow)"/>
+      <text class="d-text--muted" x="480" y="108" text-anchor="middle"
+        dominant-baseline="middle">result</text>
+    </svg>
+    <figcaption>Figure: hiding tool latency. The query is guessed while the
+      user is still speaking, the tool runs into the start of the reply, and the
+      opening words cover the wait until the result can be used. Placement is
+      schematic.</figcaption>
+  </figure>
+  <p>
+    <strong>A parallel call channel.</strong>
+    A voice model normally writes one text stream for what it says.
+    One open model adds a second output stream that carries structured function calls, in parallel with the agent text.
+    The same model listens, transcribes, reasons, calls tools and speaks inside one streaming system, so a call does not have to wait for the sentence to end.
+  </p>
+  <p>
+    <strong>Calling before the user finishes.</strong>
+    Normal tool use waits for the full question.
+    Streaming retrieval instead teaches the model when to issue a tool call during ongoing speech, and how to speak a summary that mixes the audio question with the text result.
+    The tool query is predicted while the user is still talking, so the result is ready earlier.
+    The authors report both better answer accuracy and a 20% lower tool-use latency on a spoken version of a retrieval benchmark.
+  </p>
+  <p>
+    <strong>Covering the wait.</strong>
+    This is the tandem idea from
+    <a href="/apps/materials/speech-to-speech/07-conversation#thinking-while-talking">Thinking while talking</a>
+    applied to tools: the opening words of a reply cost nothing extra, and the result is only needed when the sentence reaches it.
+    <span class="tag tag--inference">Inference</span>
+    For a booking or a payment, the agent should confirm before acting; speculative queries suit read-only lookups.
+  </p>
+  <p>
+    <strong>What commercial APIs expose.</strong>
+    Google's Gemini 3.8 Live model page makes asynchronous (non-blocking) function calling the default, keeps blocking as an option, and lists scheduling modes named silent, when-idle and interrupted for how a result is delivered.
+    OpenAI's gpt-realtime-2 page lists function calling alongside a configurable reasoning effort, and warns that higher effort can increase latency.
+  </p>
+  <p>
+    <strong>Measuring it.</strong>
+    Full-Duplex-Bench-v3 tests tool use under real speech: human recordings annotated for five disfluency categories, with tasks that chain several API calls.
+    It compares six systems on accuracy, latency and turn-taking, and the headline is the trade-off.
+    One commercial system was fastest at 4.25 s but took its turn only 78.0% of the time.
+    The cascade had a perfect turn-taking rate and the highest latency at 10.12 s.
+    One system led on first-try accuracy at 0.600, and it was not the fastest.
+    The other conversation benchmarks are in
+    <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems#measuring-conversation">Measuring conversation</a>.
+  </p>
+
+  <h3 id="tools-while-talking-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Call channel</td>
+          <td>Whether a call can be emitted while the model speaks</td>
+          <td>Lets the voice continue; adds an output stream to train and a structured format to get right</td>
+        </tr>
+        <tr>
+          <td>Speculative query</td>
+          <td>Tool starts before the user finishes</td>
+          <td>Hides latency; a wrong guess wastes a call, so suit it to read-only lookups <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Blocking against non-blocking calls</td>
+          <td>Whether the model waits for the result</td>
+          <td>Non-blocking keeps the conversation alive; the model must handle results that arrive mid-sentence</td>
+        </tr>
+        <tr>
+          <td>Result scheduling</td>
+          <td>How a late result is delivered (one vendor lists silent, when-idle and interrupted modes)</td>
+          <td>Interrupting is prompt and can cut the user off; waiting for idle can feel late <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Reasoning effort</td>
+          <td>How long the model thinks before acting</td>
+          <td>Higher effort can raise accuracy and, per the vendor, increases latency and output tokens</td>
+        </tr>
+        <tr>
+          <td>Retrieval method</td>
+          <td>Which source supplies the facts</td>
+          <td>Swappable in one system without retraining; the slowest source sets the wait</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The levers are the vendors' and authors' own settings; apart from the reported 20% latency cut and the benchmark results, the trade-offs are design reasoning, not ablations.
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems#duplex-tools">Tool calls from a speech model</a>
+    and <a href="/apps/materials/speech-lit-review/05-streaming-conversation#tools-in-stream">Tool calls inside the budget</a>.
+    The wider latency budget is in
+    <a href="/apps/materials/speech-to-speech/07-conversation#streaming-inference">Streaming inference engineering</a>.
+  </p>
+
+  <h3 id="tools-while-talking-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Wrong tool, right voice.</strong>
+      The open model above reports 82.5% tool-selection F1 on a tool-use benchmark, and says argument accuracy and end-to-end execution remain areas for improvement.
+      Choosing a tool and filling in its arguments are different skills.
+    </li>
+    <li>
+      <strong>Real speech is messy.</strong>
+      Across all systems in the benchmark, handling self-corrections and multi-step reasoning in hard scenarios were the most consistent failures.
+      A speculative query launched before a self-correction would be wrong. <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Demo, not evaluation.</strong>
+      Ask for tool accuracy, first-try pass rate and turn-take rate on messy audio, not a recorded success.
+    </li>
+    <li>
+      <strong>Unverified numbers.</strong>
+      The gains reported for streaming retrieval and tandem retrieval come from the authors' own benchmarks.
+      I found no source that compares them head to head.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Tool latency is the longest step in a voice agent, so I overlap it with something else: guess the query while the user is speaking, run the call non-blocking, and let the opening words cover the wait.
+      I would evaluate on messy real audio, because the failures there are self-corrections and chained calls, and I would report first-try accuracy next to turn-taking and latency."
+    </p>
+  </div>
+
+  <h3 id="tools-while-talking-sources">Sources</h3>
+  <ul>
+    <li>NemotronLabs VoiceChat: An Open Full-duplex Speech-to-Speech Model with Tool Calling Capabilities (arXiv 2609.21967)</li>
+    <li>Stream RAG: Instant and Accurate Spoken Dialogue Systems with Streaming Tool Usage (arXiv 2510.02044)</li>
+    <li>MoshiRAG: Asynchronous Knowledge Retrieval for Full-Duplex Speech Language Models (arXiv 2604.12928)</li>
+    <li>Full-Duplex-Bench-v3: Benchmarking Tool Use for Full-Duplex Voice Agents Under Real-World Disfluency (arXiv 2604.04847)</li>
+    <li><a href="https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live">Gemini 3.8 Live model page</a></li>
+    <li><a href="https://developers.openai.com/api/docs/models/gpt-realtime-2">OpenAI gpt-realtime-2 model page</a></li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/04-speech-to-speech-systems#duplex-tools">Tool calls from a speech model</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#tools-in-stream">Tool calls inside the budget</a>
+    </li>
+  </ul>
+</section>

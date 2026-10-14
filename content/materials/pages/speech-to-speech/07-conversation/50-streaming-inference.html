@@ -1,0 +1,175 @@
+<section id="streaming-inference">
+  <h2>Streaming inference engineering</h2>
+  <p>
+    A chat model answers a request and goes idle.
+    A duplex voice model is a live loop: it must produce a frame every 80 ms for as long as the session lasts, even when nobody is talking.
+    That changes what you optimise.
+    The mean speed matters less than the worst frame, and memory per session matters more than weights.
+  </p>
+
+  <h3 id="streaming-inference-how">How it works</h3>
+  <p>
+    <strong>KV growth.</strong>
+    The KV cache from
+    <a href="/apps/materials/speech-to-speech/02-listening#streaming-encoders">Streaming encoders</a>
+    stores a key and a value for every earlier position and layer, so each new frame appends to it.
+    For the temporal transformer of the canonical model (32 layers, width 4096, full attention, bf16 storage), one frame costs:
+  </p>
+  \[
+  2 \times 32 \times 4096 \times 2\ \text{B} = 524{,}288\ \text{B} \approx 512\ \text{KiB}
+  \]
+  <p>
+    The first 2 is keys plus values and the last 2 is bytes per value, because bf16 is a 16-bit format that stores each value in 2 bytes.
+    At 12.5 frames per second that is about 6.3 MiB per second, or about 23 GB for one hour.
+    The small expansion transformer's cache can be dropped every frame.
+    Grouped-query attention (GQA), which lets several attention heads share one set of keys and values, would shrink the figure.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    <strong>Session length.</strong>
+    The cache grows linearly with time and with the number of sessions, so for many concurrent calls cache memory, not weights, sets capacity.
+    The base model's paper states multi-turn behaviour over 5 minutes, so test past the reported context before promising more.
+    Windowed attention is one fix: a streaming audio decoder uses 2 blocks of look-back and 1 of look-ahead.
+    Windows forget the oldest audio, though, and newer ideas shrink the cache without forgetting.
+    One proposal lets a side channel turn the speech it has already heard into a short text transcript during idle listening time, then evicts the old audio entries while keeping the transcript and the most recent audio.
+    The authors report a peak cache 64.6% smaller on ten-minute sessions with comparable turn-taking and interruption behaviour.
+    A separate result pools the cache entries of speech tokens to roughly text-level granularity and reports decoding at least 1.49 times faster, with quality on par with the uncompressed model.
+    Both treat audio cache entries as more redundant than text.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    <strong>Batching sessions.</strong>
+    A duplex session is always active, including in silence.
+    Batching sessions into one GPU step raises throughput, but the whole batched step must still finish inside the frame slot.
+    The sustainable batch is the largest \( B \) with
+  </p>
+  \[
+  t_{\text{step}}(B) &lt; 80\ \text{ms}
+  \]
+  <p>
+    Latency depends on load: one TTS model reports 150 ms at batch size 1 and about 380 ms at batch size 32.
+  </p>
+  <p>
+    <strong>Chunk size and the first packet.</strong>
+    The chunk is the granularity after the stream starts, and the first packet (see <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-streaming">Streaming a flow decoder</a>) is the time until the first playable audio; they are different numbers.
+    A chunked decoder needs a few tokens before it can emit anything, and any look-ahead it uses is added latency.
+    A fully causal decoder pays none.
+    Tool calls and the network are the other big items in a reply's delay; see
+    <a href="/apps/materials/speech-to-speech/07-conversation#tools-while-talking">Using tools while talking</a>
+    and, for the full latency budget,
+    <a href="/apps/materials/speech-to-speech/11-system-design#latency-and-baseline">Latency and the baseline</a>.
+  </p>
+
+  <h3 id="streaming-inference-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chunk size</td>
+          <td>Per-step cost against decision wait</td>
+          <td>Shorter chunks cut the \( c/2 \) wait and pay the step cost more often; one ablation found 1.0 s better than 0.2 s or 0.1 s</td>
+        </tr>
+        <tr>
+          <td>Look-ahead in the decoder</td>
+          <td>Quality of chunk joins</td>
+          <td>Each block of look-ahead adds one block of delay</td>
+        </tr>
+        <tr>
+          <td>Predict several frames per wake</td>
+          <td>How often the backbone runs</td>
+          <td>One system reports about 1.5x deployment speed-up; the model must predict the future user too</td>
+        </tr>
+        <tr>
+          <td>Several audio tokens per pass</td>
+          <td>Decoding steps per second of speech</td>
+          <td>One system reports a 3 to 5x speed-up at 7B; an extra module to train</td>
+        </tr>
+        <tr>
+          <td>Quantisation</td>
+          <td>Compute per frame</td>
+          <td>One model reports RTF from 0.21 (INT4) to 0.27 (FP16) on a single GPU</td>
+        </tr>
+        <tr>
+          <td>Attention windowing or GQA</td>
+          <td>Cache growth</td>
+          <td>Bounds memory per session; early context can fade</td>
+        </tr>
+        <tr>
+          <td>Cache compression or text consolidation</td>
+          <td>How much of the audio cache is kept</td>
+          <td>One method reports a 64.6% smaller peak cache on ten-minute sessions; older audio is kept only as text and its fine detail is lost</td>
+        </tr>
+        <tr>
+          <td>Batch size</td>
+          <td>Throughput against tail latency</td>
+          <td>Bigger batches serve more calls and push the step toward its deadline</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Quoted speed-ups are the authors' own, on different hardware and definitions; they are examples, not a ranking.
+    The measurement side is in
+    <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems">Evaluation and problems</a>.
+  </p>
+
+  <h3 id="streaming-inference-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Latency spikes.</strong>
+      The mean looks fine and the 99th percentile frame is late, so the conversation stalls.
+      Budget the tail.
+    </li>
+    <li>
+      <strong>Context loss.</strong>
+      In a long session early turns fade, or a window drops an instruction.
+      Test recall at turn \( N \), and watch GPU memory per hour.
+    </li>
+    <li>
+      <strong>Cold-start numbers.</strong>
+      A first-packet figure at concurrency 1 will not hold at batch 32.
+      State batch size, hardware and whether the run was cold.
+    </li>
+    <li>
+      <strong>Chunk joins.</strong>
+      Short chunks lack information per window and degrade quality.
+      Smaller is not automatically better.
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "A duplex model has an 80 ms deadline every frame, silent or not.
+      So I budget the worst frame, the KV cache per session and the decision wait, and I quote latency with its definition and load.
+      Cache memory usually limits concurrency before compute does."
+    </p>
+  </div>
+
+  <h3 id="streaming-inference-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Streaming Sequence-to-Sequence Learning with Delayed Streams Modeling (arXiv 2509.08753)</li>
+    <li>MiniCPM-o 4.5: Towards Real-Time Full-Duplex Omni-Modal Interaction (arXiv 2604.27393)</li>
+    <li>DiffuPlex: Accelerating Full-Duplex Spoken Dialog Models via Rolling Masked Diffusion (arXiv 2610.12214)</li>
+    <li>VITA-Audio: Fast Interleaved Cross-Modal Token Generation for Efficient Large Speech-Language Model (arXiv 2505.03739)</li>
+    <li>Compress the Cache, Not the Speech Embedding: KV Compression for Efficient Speech LLMs (arXiv 2607.06827)</li>
+    <li><a href="https://neurips.cc/virtual/2026/162439">Acoustic-to-Text KV Consolidation for Efficient Long-Running Full-Duplex Speech Models</a> (NeurIPS 2026 listing; no arXiv id found)</li>
+    <li>Qwen2.5-Omni Technical Report (arXiv 2503.20215)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>LLaMA-Omni2: LLM-based Real-time Spoken Chatbot with Autoregressive Streaming Speech Synthesis (arXiv 2505.02625)</li>
+    <li>GLM-4-Voice: Towards Intelligent and Human-Like End-to-End Spoken Chatbot (arXiv 2412.02612)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-inference">Streaming inference: deadlines and first packets</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-memory-sessions">memory and many sessions</a>,
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#streaming-decoders-budget">Streaming decoders and the latency budget</a>
+    </li>
+  </ul>
+</section>

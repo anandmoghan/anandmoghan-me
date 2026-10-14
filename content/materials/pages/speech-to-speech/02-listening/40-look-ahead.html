@@ -1,0 +1,530 @@
+<section id="look-ahead-right-context">
+  <h2>Look-ahead and right context</h2>
+  <p>
+    To decide what a sound was, it often helps to hear what follows it.
+    Look-ahead, also called right context, is how much future audio the encoder may see before it
+      commits to the output for the current frame.
+  </p>
+  <p>
+    Zero look-ahead means each output depends only on the past, so it leaves as soon as its frame
+      arrives.
+    N frames of look-ahead means each output waits for N more frames.
+    That helps resolve ambiguous sounds and word boundaries, and it adds latency.
+    Look-ahead is the dial between a fast guess and a settled answer.
+  </p>
+
+  <h3 id="look-ahead-how">How it works</h3>
+  <p>
+    Configurations are often named by look-ahead in encoder frames, such as "0LA" or "12LA".
+    <span class="tag tag--inference">Inference</span>
+    What 12 frames costs depends on the frame duration after downsampling: 480 ms at 40 ms per frame
+      (4x subsampling of a 10 ms hop) and 960 ms at 80 ms per frame (8x).
+    It also depends on how look-ahead is built.
+    In regular look-ahead every self-attention layer peeks M frames ahead, and the reach compounds
+      with depth.
+    In chunk-aware look-ahead the input is cut into chunks of C frames; each frame sees its whole
+      chunk plus earlier chunks held in the KV cache from
+    <a href="#streaming-encoders">Streaming encoders</a>,
+      but never the next chunk.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 236" role="img"
+      aria-label="Look-ahead compounding through layers in regular look-ahead, against a chunk of frames with cached left context in chunk-aware look-ahead">
+      <defs>
+        <marker id="look-ahead-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="8" y="10" text-anchor="start"
+        dominant-baseline="middle">Regular: one frame of look-ahead per layer</text>
+      <text class="d-text--small" x="8" y="33" text-anchor="start"
+        dominant-baseline="middle">output</text>
+      <rect class="d-group" x="150" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="165" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="184" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="199" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="218" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="233" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="252" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="267" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--accent" x="286" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="301" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="320" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="335" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="354" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="369" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="388" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="403" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="422" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="437" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="456" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="471" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="490" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="505" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="524" y="22" width="30" height="22" rx="5"/>
+      <text class="d-text" x="539" y="33" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <text class="d-text--small" x="8" y="59" text-anchor="start"
+        dominant-baseline="middle">layer 3</text>
+      <rect class="d-group" x="150" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="165" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="184" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="199" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="218" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="233" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="252" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="267" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="286" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="301" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="320" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="335" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="354" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="369" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="388" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="403" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="422" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="437" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="456" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="471" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="490" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="505" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="524" y="48" width="30" height="22" rx="5"/>
+      <text class="d-text" x="539" y="59" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <text class="d-text--small" x="8" y="85" text-anchor="start"
+        dominant-baseline="middle">layer 2</text>
+      <rect class="d-group" x="150" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="165" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="184" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="199" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="218" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="233" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="252" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="267" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="286" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="301" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="320" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="335" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="354" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="369" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="388" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="403" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="422" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="437" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="456" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="471" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="490" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="505" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="524" y="74" width="30" height="22" rx="5"/>
+      <text class="d-text" x="539" y="85" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <text class="d-text--small" x="8" y="111" text-anchor="start"
+        dominant-baseline="middle">input</text>
+      <rect class="d-group" x="150" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="165" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="184" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="199" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="218" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="233" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="252" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="267" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="286" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="301" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="320" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="335" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="354" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="369" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="388" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="403" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="422" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="437" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="456" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="471" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="490" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="505" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="524" y="100" width="30" height="22" rx="5"/>
+      <text class="d-text" x="539" y="111" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <text class="d-text--small" x="564" y="111" text-anchor="start"
+        dominant-baseline="middle">reach: 3 frames</text>
+      <text class="d-text--muted" x="8" y="140" text-anchor="start"
+        dominant-baseline="middle">Chunk-aware: chunks of 4 frames, earlier chunks cached</text>
+      <text class="d-text--small" x="8" y="163" text-anchor="start"
+        dominant-baseline="middle">first in chunk</text>
+      <rect class="d-box d-box--muted" x="150" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="165" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="184" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="199" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="218" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="233" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="252" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="267" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--accent" x="286" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="301" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="320" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="335" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="354" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="369" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="388" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="403" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="422" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="437" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="456" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="471" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="490" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="505" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="524" y="152" width="30" height="22" rx="5"/>
+      <text class="d-text" x="539" y="163" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <path class="d-arrow d-arrow--dashed" d="M 284 149 L 284 177"/>
+      <path class="d-arrow d-arrow--dashed" d="M 420 149 L 420 177"/>
+      <text class="d-text--small" x="8" y="193" text-anchor="start"
+        dominant-baseline="middle">last in chunk</text>
+      <rect class="d-box d-box--muted" x="150" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="165" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="184" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="199" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="218" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="233" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="252" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="267" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="286" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="301" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="320" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="335" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--muted" x="354" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="369" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-box d-box--accent" x="388" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="403" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="422" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="437" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="456" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="471" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="490" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="505" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <rect class="d-group" x="524" y="182" width="30" height="22" rx="5"/>
+      <text class="d-text" x="539" y="193" text-anchor="middle"
+        dominant-baseline="middle"></text>
+      <path class="d-arrow d-arrow--dashed" d="M 284 179 L 284 207"/>
+      <path class="d-arrow d-arrow--dashed" d="M 420 179 L 420 207"/>
+      <text class="d-text--small" x="564" y="163" text-anchor="start"
+        dominant-baseline="middle">look-ahead 3</text>
+      <text class="d-text--small" x="564" y="193" text-anchor="start"
+        dominant-baseline="middle">look-ahead 0</text>
+      <text class="d-text--muted" x="150" y="222" text-anchor="start"
+        dominant-baseline="middle">grey: readable   outlined: hidden   accent: the query frame</text>
+    </svg>
+    <figcaption>Figure: top, regular look-ahead of one frame per layer; the reach of one output
+      frame grows with depth. Bottom, chunk-aware look-ahead: a frame sees its whole chunk plus cached
+      earlier chunks, so the first frame of a chunk waits three frames and the last waits
+      none.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Regular</th>
+          <th>Chunk-aware</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Effective look-ahead</td>
+          <td>M frames times the number of layers</td>
+          <td>From C - 1 frames (first in chunk) down to 0 (last)</td>
+        </tr>
+        <tr>
+          <td>Example from the paper</td>
+          <td>17 layers, one frame each, 80 ms per frame: 17 &times; 80 ms = 1,360 ms</td>
+          <td>Average latency is half the look-ahead size</td>
+        </tr>
+        <tr>
+          <td>RNN-T word error rate at 1,360 ms</td>
+          <td>7.1%</td>
+          <td>6.3%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    So the same label is cheap or expensive depending on whether it means 12 frames once per chunk
+      or 12 frames per layer.
+  </p>
+  <p>
+    The latency and accuracy curve below is measured on LibriSpeech test-other with a hybrid model
+      and chunk-aware look-ahead.
+    A hybrid model shares one encoder between two heads: an RNN-T head (the transducer from
+    <a href="#audio-meets-text">How audio meets text</a>)
+      and a CTC head.
+    The table reports both as word error rate (WER, lower is better).
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Look-ahead</th>
+          <th>RNN-T WER (%)</th>
+          <th>CTC WER (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>0 ms</td>
+          <td>9.5</td>
+          <td>10.6</td>
+        </tr>
+        <tr>
+          <td>40 ms</td>
+          <td>9.0</td>
+          <td>10.1</td>
+        </tr>
+        <tr>
+          <td>240 ms</td>
+          <td>7.8</td>
+          <td>8.8</td>
+        </tr>
+        <tr>
+          <td>520 ms</td>
+          <td>7.5</td>
+          <td>8.4</td>
+        </tr>
+        <tr>
+          <td>1,360 ms</td>
+          <td>6.3</td>
+          <td>7.1</td>
+        </tr>
+        <tr>
+          <td>Offline (full context)</td>
+          <td>5.0</td>
+          <td>5.7</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Most of the gain arrives within a few hundred milliseconds.
+    Zero look-ahead gives a WER about 50% higher than 1,360 ms (9.5 against 6.3, RNN-T): about one
+      word in ten is wrong, against about one in sixteen.
+    For contrast, buffered streaming without a cache reaches only 11.3% WER at 2,000 ms, worse than
+      cache-aware streaming with zero look-ahead.
+  </p>
+
+  <h3 id="look-ahead-native">Look-ahead in encoders built to stream</h3>
+  <p>
+    The cache-aware FastConformer retrofits look-ahead onto a standard design.
+    Newer encoders put the dial in the architecture or the training recipe.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Where the look-ahead sits</th>
+          <th>Reported setting and accuracy</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moonshine v2</td>
+          <td>Sliding window of 16 frames of left context; 4 frames of right context in the first two
+            and last two layers, none in the middle ones (20 ms frames)</td>
+          <td>80 ms look-ahead. The medium model averages 6.65 WER on the Open ASR set.</td>
+        </tr>
+        <tr>
+          <td>Voxtral Realtime</td>
+          <td>A chosen delay between audio and text, trained over 80 to 2400 ms and fed to the
+            decoder</td>
+          <td>LibriSpeech WER at 480 ms and 960 ms (figures in
+            <a href="/apps/materials/speech-to-speech/02-listening#streaming-encoders">Streaming encoders</a>)</td>
+        </tr>
+        <tr>
+          <td>Nemotron Speech streaming</td>
+          <td>Cache-aware encoder with a right-context setting measured in 80 ms frames</td>
+          <td>Chunks of 0.08, 0.16, 0.56 and 1.12 s give average WER 8.43, 7.67, 7.07 and 6.93</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The curve has the same shape everywhere: the first few hundred milliseconds buy most of the
+      accuracy, and the last second buys little.
+    What changed is that a single model can now be run at any point on the curve.
+  </p>
+
+  <h3 id="look-ahead-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Look-ahead amount</td>
+          <td>Future frames visible per output</td>
+          <td>More look-ahead lowers WER (9.5 down to 6.3 across the table) and adds latency.</td>
+        </tr>
+        <tr>
+          <td>Regular or chunk-aware</td>
+          <td>Whether reach compounds with depth</td>
+          <td>Chunk-aware gave 6.3% against 7.1% at the same 1,360 ms. It needs chunked training and
+            a cache.</td>
+        </tr>
+        <tr>
+          <td>Which layers see ahead</td>
+          <td>Right context only in some layers (Moonshine v2: the first two and last two)</td>
+          <td>Keeps the total look-ahead small, but the placement must be tuned.
+            <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Multi-look-ahead or trained-in delay</td>
+          <td>One model trained on several settings, or conditioned on a delay (Voxtral Realtime)</td>
+          <td>Picks latency at inference time at the cost of a wider training range. RNN-T WER at 40,
+            240 and 520 ms was 6.2, 5.5 and 5.2 for the multi model against 6.4, 5.9 and 5.4 for
+            single models.</td>
+        </tr>
+        <tr>
+          <td>Frame duration</td>
+          <td>Milliseconds per frame, set by downsampling</td>
+          <td>Coarser frames make each look-ahead frame costlier in time (12 frames: 480 ms against
+            960 ms).</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Zero look-ahead suits barge-in detection, end-of-turn signals and the fastest partials, where
+      reacting early matters more than a perfect word.
+    A larger setting suits final transcripts handed to the reasoning LLM, and a multi-look-ahead
+      encoder serves both from one model.
+    NVIDIA lists a cache-aware streaming FastConformer-RNN-T with 80 to 160 ms latency for
+      end-of-utterance detection; see
+    <a href="#streaming-latency-turn">End of turn inside the recogniser</a>.
+  </p>
+
+  <h3 id="look-ahead-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Compounding look-ahead.</strong>
+      One frame per layer across 17 layers at 80 ms per frame is 1,360 ms, far more than the 80 ms
+        the setting looks like.
+    </li>
+    <li>
+      <strong>Quoting the wrong latency.</strong>
+      Chunk-aware look-ahead varies across a chunk, so the average is half the maximum.
+      State which one you mean.
+    </li>
+    <li>
+      <strong>Too little right context.</strong>
+      Word boundaries and ambiguous sounds are the first to suffer.
+    </li>
+    <li>
+      <strong>Cache-free streaming.</strong>
+      Recomputing overlapping buffers is both slower and less accurate than a cache-aware encoder at
+        the same latency, as the 11.3% against 9.5% comparison shows.
+    </li>
+  </ul>
+  <p>
+    Model-by-model detail:
+    <a href="/apps/materials/speech-lit-review/02-speech-understanding#look-ahead">Look-ahead in streaming
+      encoders</a>.
+    Where frame rate and latency meet generation:
+      <a href="/apps/materials/speech-to-speech/07-conversation">Conversation</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      Look-ahead is the future audio the encoder waits for before committing a frame, so it trades
+        latency for accuracy.
+      In NVIDIA's cache-aware FastConformer, RNN-T WER goes from 9.5% at zero look-ahead to 6.3% at
+        1,360 ms, and chunk-aware look-ahead beats per-layer look-ahead at the same latency because it
+        does not compound with depth.
+      I would train one encoder with several look-aheads, using zero for turn-taking and a larger
+        one for final transcripts.
+    </p>
+  </div>
+
+  <h3 id="look-ahead-sources">Sources</h3>
+  <ul>
+    <li>Stateful Conformer with Cache-based Inference for Streaming Automatic Speech Recognition (arXiv 2312.17279)</li>
+    <li>Moonshine v2: Ergodic Streaming Encoder ASR for Latency-Critical Speech Applications (arXiv 2602.12241)</li>
+    <li>Voxtral Realtime (arXiv 2602.11298)</li>
+    <li><a href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">NVIDIA
+      nemotron-speech-streaming-en-0.6b model card</a></li>
+    <li><a href="https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1">NVIDIA
+      parakeet_realtime_eou_120m-v1 model card</a></li>
+  </ul>
+</section>

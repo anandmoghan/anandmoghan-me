@@ -1,0 +1,4 @@
+{
+  "title": "Speech-to-speech systems",
+  "summary": "Architectures that put an LLM between speech in and speech out, full-duplex conversation, and multilingual coverage."
+}

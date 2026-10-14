@@ -1,0 +1,271 @@
+<section id="target-design">
+  <h2>The target design: a speech LLM that listens and speaks</h2>
+  <p>
+    The idea is a division of labour.
+    One speech model owns everything that touches audio: hearing the user, deciding when to talk, and speaking.
+    A separate text LLM owns content, and the speech model reaches it the way an agent calls a tool.
+  </p>
+  <p>
+    Think of a receptionist and an expert on the phone.
+    The receptionist hears tone, knows when you have finished, says "one moment" while checking, and murmurs "mm-hm" while you explain.
+    The expert never hears your voice; they get a short note and send back words.
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The overall design is my opinion.
+    The component ideas have precedents, listed in the sources.
+  </p>
+
+  <h3 id="td-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 310" role="img"
+      aria-label="Unified speech LLM architecture: microphone with echo cancellation goes through a causal encoder into the listen head of one speech LLM backbone. The listen head sends a tool call with transcript, tags and turn state to a downstream text LLM. The text LLM streams text back to the speak head, which drives a codec decoder, the avatar renderer and the client. A dashed path inside the speech LLM produces fillers and backchannels directly, and a dashed barge-in path returns the played text and heard text to the text LLM">
+      <defs>
+        <marker id="arrow-target-design" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Unified speech LLM == -->
+      <rect class="d-group" x="284" y="8" width="216" height="178" rx="10"/>
+      <text class="d-text--small" x="296" y="26">One backbone: listen + speak</text>
+      <rect class="d-box d-box--accent" x="300" y="40" width="176" height="44" rx="8"/>
+      <text class="d-text" x="388" y="54" text-anchor="middle" dominant-baseline="middle">Listen head</text>
+      <text class="d-text--muted" x="388" y="71" text-anchor="middle" dominant-baseline="middle">text + tags + action</text>
+      <rect class="d-box" x="300" y="126" width="176" height="44" rx="8"/>
+      <text class="d-text" x="388" y="140" text-anchor="middle" dominant-baseline="middle">Speak head</text>
+      <text class="d-text--muted" x="388" y="157" text-anchor="middle" dominant-baseline="middle">TTS with style control</text>
+
+      <!-- == Input side == -->
+      <rect class="d-box" x="4" y="40" width="116" height="44" rx="8"/>
+      <text class="d-text" x="62" y="54" text-anchor="middle" dominant-baseline="middle">Mic + AEC</text>
+      <text class="d-text--muted" x="62" y="71" text-anchor="middle" dominant-baseline="middle">playback ref in</text>
+      <rect class="d-box" x="144" y="40" width="112" height="44" rx="8"/>
+      <text class="d-text" x="200" y="54" text-anchor="middle" dominant-baseline="middle">Causal encoder</text>
+      <text class="d-text--muted" x="200" y="71" text-anchor="middle" dominant-baseline="middle">12.5 Hz</text>
+      <path class="d-arrow" d="M 120 62 L 142 62" marker-end="url(#arrow-target-design)"/>
+      <path class="d-arrow" d="M 256 62 L 298 62" marker-end="url(#arrow-target-design)"/>
+
+      <!-- == Downstream LLM == -->
+      <rect class="d-box" x="606" y="40" width="110" height="124" rx="8"/>
+      <text class="d-text" x="661" y="76" text-anchor="middle" dominant-baseline="middle">Downstream</text>
+      <text class="d-text" x="661" y="93" text-anchor="middle" dominant-baseline="middle">text LLM</text>
+      <text class="d-text--muted" x="661" y="114" text-anchor="middle" dominant-baseline="middle">tools, RAG</text>
+      <text class="d-text--muted" x="661" y="131" text-anchor="middle" dominant-baseline="middle">grounded in text</text>
+      <path class="d-arrow" d="M 476 62 L 604 62" marker-end="url(#arrow-target-design)"/>
+      <text class="d-text--muted" x="552" y="54" text-anchor="middle">tool call</text>
+      <text class="d-text--muted" x="552" y="77" text-anchor="middle">transcript, tags,</text>
+      <text class="d-text--muted" x="552" y="90" text-anchor="middle">turn state</text>
+      <path class="d-arrow" d="M 604 148 L 478 148" marker-end="url(#arrow-target-design)"/>
+      <text class="d-text--muted" x="552" y="140" text-anchor="middle">text stream</text>
+      <text class="d-text--muted" x="552" y="163" text-anchor="middle">+ style cues</text>
+
+      <!-- == Dashed paths == -->
+      <path class="d-arrow d-arrow--dashed" d="M 388 84 L 388 124" marker-end="url(#arrow-target-design)"/>
+      <text class="d-text--muted" x="396" y="108">filler, backchannel</text>
+      <path class="d-arrow d-arrow--dashed" d="M 420 170 L 420 200 L 661 200 L 661 166"
+        marker-end="url(#arrow-target-design)"/>
+      <text class="d-text--muted" x="560" y="216" text-anchor="middle">barge-in: played text, heard text</text>
+
+      <!-- == Output side == -->
+      <rect class="d-box" x="144" y="126" width="112" height="44" rx="8"/>
+      <text class="d-text" x="200" y="140" text-anchor="middle" dominant-baseline="middle">Codec decoder</text>
+      <text class="d-text--muted" x="200" y="157" text-anchor="middle" dominant-baseline="middle">causal, 80 ms</text>
+      <rect class="d-box" x="4" y="126" width="116" height="44" rx="8"/>
+      <text class="d-text" x="62" y="140" text-anchor="middle" dominant-baseline="middle">Avatar renderer</text>
+      <text class="d-text--muted" x="62" y="157" text-anchor="middle" dominant-baseline="middle">causal, few-step</text>
+      <rect class="d-box" x="4" y="250" width="116" height="44" rx="8"/>
+      <text class="d-text" x="62" y="264" text-anchor="middle" dominant-baseline="middle">Client</text>
+      <text class="d-text--muted" x="62" y="281" text-anchor="middle" dominant-baseline="middle">A/V playout</text>
+      <path class="d-arrow" d="M 300 148 L 258 148" marker-end="url(#arrow-target-design)"/>
+      <path class="d-arrow" d="M 144 148 L 122 148" marker-end="url(#arrow-target-design)"/>
+      <path class="d-arrow" d="M 62 170 L 62 248" marker-end="url(#arrow-target-design)"/>
+      <text class="d-text--muted" x="70" y="214">video</text>
+      <path class="d-arrow" d="M 200 170 L 200 272 L 122 272" marker-end="url(#arrow-target-design)"/>
+      <text class="d-text--muted" x="208" y="232">agent audio</text>
+    </svg>
+    <figcaption>
+      Figure: the target architecture.
+      One speech backbone has a listen head and a speak head; the text LLM sits behind a tool call.
+      Dashed: the speech LLM produces fillers and backchannels itself, and a barge-in sends the played and heard text back to the text LLM.
+      AEC (echo cancellation) removes the agent's own playback from the microphone signal.
+    </figcaption>
+  </figure>
+
+  <p>
+    The listen head works first.
+    A causal streaming encoder at 12.5 frames per second feeds a backbone initialised from a text LLM.
+    Each frame the head emits streaming text (revisable partials and stable finals), paralinguistic tags (emotion, rate, language, confidence) and one action token that says what to do with the floor.
+    It keeps ingesting the user stream while the agent speaks.
+    The streaming parts are taught in <a href="/apps/materials/speech-to-speech/02-listening#streaming-encoders">Streaming encoders</a>.
+  </p>
+  <p>
+    When the head decides the user is done, it makes the tool call: the stable transcript, the tags, the turn state (end-of-turn confidence, whether it interrupted a reply) and a pointer to what was actually played last.
+    As in a cascade, start on the end-of-turn candidate and cancel if the user resumes.
+    The downstream text LLM is any model with tools and retrieval.
+    It streams text back with style cues such as emotion and pace, and because it never touches audio it can be swapped without retraining the speech model.
+    Tool latency is covered in <a href="/apps/materials/speech-to-speech/07-conversation#tools-while-talking">Tools while talking</a>.
+  </p>
+  <p>
+    The speak head turns text chunks, style cues and a voice prompt into codec tokens at 12.5 frames per second, decoded by a causal codec decoder.
+    A small first chunk cuts time to first audio; later chunks carry more lookahead for prosody.
+    While the call runs it says a short filler, and the listen head can backchannel during long user turns without waiting for the LLM (see <a href="/apps/materials/speech-to-speech/07-conversation#thinking-while-talking">Thinking while talking</a>).
+  </p>
+  <p>
+    Everything shares one clock.
+    Every output chunk carries an absolute timestamp, as in Qwen3-Omni, which assigns one temporal ID per 80 ms.
+    The renderer and client play audio on that clock and shed video frames first.
+    This is what stops lip drift: if audio and video are paced by separate timers, a tiny speed difference adds up to a visible gap within minutes, but a player that lines chunks up by stamp can drop a late video block without pushing the picture behind the voice.
+    <span class="tag tag--inference">Inference</span>
+    The drift is an illustration, not a measurement.
+  </p>
+
+  <p>The speech LLM owns timing and the floor; the text LLM owns content. Who acts in each situation:</p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Situation</th>
+          <th>What should happen</th>
+          <th>Who acts</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>User pauses mid-turn</td>
+          <td>Keep listening; end of turn from prosody and meaning, not silence</td>
+          <td>Speech LLM</td>
+        </tr>
+        <tr>
+          <td>User finishes</td>
+          <td>Fire the tool call early, since people start replying a touch before the other person ends (the floor-transfer offset in <a href="/apps/materials/speech-to-speech/07-conversation#turn-taking">Turn-taking</a>)</td>
+          <td>Speech LLM decides; text LLM answers</td>
+        </tr>
+        <tr>
+          <td>Agent waits for the LLM</td>
+          <td>Filler or acknowledgement while the call runs</td>
+          <td>Speech LLM</td>
+        </tr>
+        <tr>
+          <td>Agent or user backchannels</td>
+          <td>Agent says "mm-hm" at a prosodic boundary without taking the floor; a user "mm-hm", laugh or side talk does not stop the agent</td>
+          <td>Speech LLM</td>
+        </tr>
+        <tr>
+          <td>Real barge-in</td>
+          <td>Stop audio, flush buffers, truncate the reply to what was played, send played and heard text</td>
+          <td>Speech LLM acts</td>
+        </tr>
+        <tr>
+          <td>After the interruption</td>
+          <td>Resume the old thread or answer the new one</td>
+          <td>Text LLM decides; speech LLM voices</td>
+        </tr>
+        <tr>
+          <td>Own voice in the mic</td>
+          <td>Echo cancellation with the playback signal as an extra input</td>
+          <td>Client and speech LLM</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="td-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Where the duplex decision lives (an action token in the speech LLM, or a small module beside a frozen LLM)</td>
+          <td>Who controls the floor; how learned the turn-taking is</td>
+          <td>An action token needs dual-channel data; a side module is cheaper but less integrated</td>
+        </tr>
+        <tr>
+          <td>Decision cadence (per 80 ms frame, 160 to 240 ms chunk, 1 s chunk)</td>
+          <td>Timing resolution of end of turn, yield and backchannel</td>
+          <td>A chunk waits half its length on average (<a href="/apps/materials/speech-to-speech/07-conversation#conversation-clock">Conversation clock</a>); per-frame decisions cost compute</td>
+        </tr>
+        <tr>
+          <td>Interface to the LLM (transcript, plus tags and turn state)</td>
+          <td>How much emotion and turn context the LLM can use</td>
+          <td>Calibrate tags; a swappable LLM may ignore them</td>
+        </tr>
+        <tr>
+          <td>Speak-chunk sizes (small first, larger later)</td>
+          <td>Time to first audio versus prosody at the seams</td>
+          <td>Smaller first chunk risks fragmented intonation</td>
+        </tr>
+        <tr>
+          <td>Codec and token rate (causal residual quantiser at 12.5 Hz, or lower or higher)</td>
+          <td>Expressiveness versus sequence length</td>
+          <td>Expressive voice needs acoustic codebooks; lower rates lose detail</td>
+        </tr>
+        <tr>
+          <td>Model sizes (speech backbone versus text LLM)</td>
+          <td>Per-frame deadline versus reasoning quality</td>
+          <td>The speech model must finish every 80 ms frame; the LLM is a normal streaming text service</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The training stages and the timing-reward mix are in <a href="/apps/materials/speech-to-speech/08-training">Training</a>;
+    voice and style control in <a href="/apps/materials/speech-to-speech/09-control-and-prompting">Control and prompting</a>.
+    Model-by-model detail: <a href="/apps/materials/speech-lit-review/09-system-design#unified-speech-llm">unified speech LLM design</a> in the literature review.
+  </p>
+
+  <h3 id="td-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Lost paralinguistics.</strong>
+      Emotion and uncertainty must be flattened into tags.
+      If the tags are missing or miscalibrated, the LLM answers as if the user were neutral.
+    </li>
+    <li>
+      <strong>Backchannel kills the reply.</strong>
+      Teams catch it with false-yield rate per minute and by scoring with Full-Duplex-Bench (see <a href="/apps/materials/speech-to-speech/10-evaluation-and-problems#measuring-conversation">Measuring conversation</a>).
+    </li>
+    <li>
+      <strong>Context shows words the user never heard.</strong>
+      TTS runs faster than real time, so truncate the reply to the played position using per-chunk timestamps.
+    </li>
+    <li>
+      <strong>Forgetting.</strong>
+      Speech input erodes LLM knowledge, which is why the downstream LLM stays untouched and the speech backbone is gated at every stage on ASR WER, text QA and timing.
+    </li>
+    <li>
+      <strong>Reward hacking.</strong>
+      Monotone prosody, or an agent that never yields (see <a href="/apps/materials/speech-to-speech/08-training#reward-hacking-guards">Reward hacking guards</a>).
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "One speech LLM listens and speaks on a 12.5 Hz clock: streaming text with emotion tags, an action token for turn-taking, backchannels and barge-in, and expressive TTS.
+      It calls a text LLM for content, so tools and safety stay in text, and a filler covers the extra hop."
+    </p>
+  </div>
+
+  <h3 id="target-design-sources">Sources</h3>
+  <ul>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>Streaming Sequence-to-Sequence Learning with Delayed Streams Modeling (arXiv 2509.08753)</li>
+    <li>Freeze-Omni: A Smart and Low Latency Speech-to-speech Dialogue Model with Frozen LLM (arXiv 2411.00774)</li>
+    <li>MinMo: A Multimodal Large Language Model for Seamless Voice Interaction (arXiv 2501.06282)</li>
+    <li>DuplexSLA: A Full-Duplex Spoken Language Model with Synchronized Speech, Language, and Action (arXiv 2605.20755)</li>
+    <li>TurnBench: A Multi-Domain Benchmark for Turn-Taking Dynamics in Spoken Dialogue (arXiv 2608.25218)</li>
+    <li>A Survey of Full-Duplex Spoken Dialogue Systems: Architectural Hierarchy, Interaction Ontology, and Decision State Machine (arXiv 2606.19453)</li>
+    <li>Cross-Modal Knowledge Distillation for Speech Large Language Models (arXiv 2509.14930)</li>
+    <li>Full-Duplex-Bench: A Benchmark to Evaluate Full-duplex Spoken Dialogue Models on Turn-taking Capabilities (arXiv 2503.04721)</li>
+    <li><a href="https://developers.openai.com/api/docs/guides/realtime-conversations">OpenAI Realtime conversations guide</a> (truncating a reply to played audio)</li>
+  </ul>
+</section>

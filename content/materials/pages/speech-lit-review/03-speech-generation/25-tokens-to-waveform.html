@@ -1,0 +1,339 @@
+<section id="tokens-to-waveform">
+  <h2>From tokens to waveform: decoder paths</h2>
+  <p>
+    Mel is one route to audio, not the only one.
+    Four routes are in use, and they differ in what the LM predicts and what turns it into samples.
+    Codecs and flow decoders are covered in the neighbouring sections; this one compares the endings.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 392" role="img"
+      aria-label="Four routes from LM output to waveform: codec tokens through a causal codec decoder; semantic tokens through flow matching, mel and a vocoder; continuous latents through a VAE decoder; mel frames through a vocoder. The codec path is highlighted as streaming-friendly">
+      <defs>
+        <marker id="ttw-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-group" x="4" y="12" width="712" height="88" rx="8"/>
+      <text class="d-text--muted" x="14" y="90" text-anchor="start"
+        dominant-baseline="middle">streaming-friendly path (Moshi, Qwen3-Omni)</text>
+      <rect class="d-box" x="10" y="32" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="46" text-anchor="middle"
+        dominant-baseline="middle">Codec tokens</text>
+      <text class="d-text--small" x="70" y="63" text-anchor="middle"
+        dominant-baseline="middle">all codebooks</text>
+      <path class="d-arrow" d="M 130 54 L 296 54"
+        marker-end="url(#ttw-arrow)"/>
+      <text class="d-text--muted" x="213" y="42" text-anchor="middle"
+        dominant-baseline="middle">one 80 ms frame at a time</text>
+      <rect class="d-box d-box--accent" x="298" y="32" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="46" text-anchor="middle"
+        dominant-baseline="middle">Codec decoder</text>
+      <text class="d-text--small" x="358" y="63" text-anchor="middle"
+        dominant-baseline="middle">causal</text>
+      <path class="d-arrow" d="M 418 54 L 584 54"
+        marker-end="url(#ttw-arrow)"/>
+      <text class="d-text--muted" x="501" y="42" text-anchor="middle"
+        dominant-baseline="middle">waveform samples</text>
+      <rect class="d-box" x="586" y="32" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="54" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <rect class="d-box" x="10" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="146" text-anchor="middle"
+        dominant-baseline="middle">Semantic tokens</text>
+      <text class="d-text--small" x="70" y="163" text-anchor="middle"
+        dominant-baseline="middle">coarse, cheap</text>
+      <path class="d-arrow" d="M 130 154 L 152 154"
+        marker-end="url(#ttw-arrow)"/>
+      <rect class="d-box" x="154" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="214" y="146" text-anchor="middle"
+        dominant-baseline="middle">Flow matching</text>
+      <text class="d-text--small" x="214" y="163" text-anchor="middle"
+        dominant-baseline="middle">speaker prompt</text>
+      <path class="d-arrow" d="M 274 154 L 296 154"
+        marker-end="url(#ttw-arrow)"/>
+      <rect class="d-box" x="298" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="146" text-anchor="middle"
+        dominant-baseline="middle">Mel</text>
+      <text class="d-text--small" x="358" y="163" text-anchor="middle"
+        dominant-baseline="middle">50 Hz frames</text>
+      <path class="d-arrow" d="M 418 154 L 440 154"
+        marker-end="url(#ttw-arrow)"/>
+      <rect class="d-box" x="442" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="502" y="146" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+      <text class="d-text--small" x="502" y="163" text-anchor="middle"
+        dominant-baseline="middle">HiFi-GAN, BigVGAN</text>
+      <path class="d-arrow" d="M 562 154 L 584 154"
+        marker-end="url(#ttw-arrow)"/>
+      <rect class="d-box" x="586" y="132" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="154" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <rect class="d-box" x="10" y="232" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="246" text-anchor="middle"
+        dominant-baseline="middle">Latents</text>
+      <text class="d-text--small" x="70" y="263" text-anchor="middle"
+        dominant-baseline="middle">continuous</text>
+      <path class="d-arrow" d="M 130 254 L 296 254"
+        marker-end="url(#ttw-arrow)"/>
+      <text class="d-text--muted" x="213" y="242" text-anchor="middle"
+        dominant-baseline="middle">diffusion head output</text>
+      <rect class="d-box" x="298" y="232" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="254" text-anchor="middle"
+        dominant-baseline="middle">VAE decoder</text>
+      <path class="d-arrow" d="M 418 254 L 584 254"
+        marker-end="url(#ttw-arrow)"/>
+      <text class="d-text--muted" x="501" y="242" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="586" y="232" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="254" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <rect class="d-box" x="10" y="332" width="120" height="44" rx="8"/>
+      <text class="d-text" x="70" y="346" text-anchor="middle"
+        dominant-baseline="middle">Mel frames</text>
+      <text class="d-text--small" x="70" y="363" text-anchor="middle"
+        dominant-baseline="middle">continuous</text>
+      <path class="d-arrow" d="M 130 354 L 296 354"
+        marker-end="url(#ttw-arrow)"/>
+      <text class="d-text--muted" x="213" y="342" text-anchor="middle"
+        dominant-baseline="middle">regressed by the LM</text>
+      <rect class="d-box" x="298" y="332" width="120" height="44" rx="8"/>
+      <text class="d-text" x="358" y="346" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+      <text class="d-text--small" x="358" y="363" text-anchor="middle"
+        dominant-baseline="middle">HiFi-GAN</text>
+      <path class="d-arrow" d="M 418 354 L 584 354"
+        marker-end="url(#ttw-arrow)"/>
+      <text class="d-text--muted" x="501" y="342" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <rect class="d-box" x="586" y="332" width="120" height="44" rx="8"/>
+      <text class="d-text" x="646" y="354" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+    </svg>
+    <figcaption>Four decoder routes from the LM's output to a waveform. The highlighted route is the one used by streaming duplex systems.</figcaption>
+  </figure>
+
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Route</th>
+          <th>Systems</th>
+          <th>Reported detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1. Codec tokens, codec decoder</td>
+          <td>Moshi (arXiv 2410.00037), Qwen3-Omni (arXiv 2509.17765), MaskGCT (arXiv 2409.00750)</td>
+          <td>
+            Mimi is causal for both encoding and decoding, with an 80 ms frame (arXiv 2410.00037).
+            Qwen3-Omni's Talker predicts the zeroth codebook, an MTP module predicts all residual codebooks, and a lightweight causal ConvNet (Code2Wav) makes the waveform (arXiv 2509.17765).
+            MaskGCT's acoustic codec follows DAC but uses a Vocos decoder (arXiv 2409.00750).
+          </td>
+        </tr>
+        <tr>
+          <td>2. Semantic tokens, flow matching, mel, vocoder</td>
+          <td>CosyVoice 2 (arXiv 2412.10117), GLM-4-Voice (arXiv 2412.02612), Kimi-Audio (arXiv 2504.18425), Step-Audio 2 (arXiv 2507.16632)</td>
+          <td>
+            CosyVoice 2 samples a 50 Hz mel spectrogram, conditioned on speech tokens, reference speech and a speaker embedding; a pre-trained vocoder (unnamed in the paper) then produces audio (arXiv 2412.10117).
+            GLM-4-Voice and Step-Audio 2 pair flow matching with HiFi-GAN (arXiv 2412.02612, arXiv 2507.16632).
+            Kimi-Audio turns 12.5 Hz tokens into 50 Hz mel, then applies BigVGAN per chunk, with next-chunk tokens as look-ahead (arXiv 2504.18425).
+          </td>
+        </tr>
+        <tr>
+          <td>3. Continuous latents, VAE decoder</td>
+          <td>VibeVoice (arXiv 2508.19205), DiTTo-TTS (arXiv 2406.11427)</td>
+          <td>
+            VibeVoice's VAE tokenizer maps 24 kHz audio to 7.5 frames per second; a light diffusion head predicts each frame and the tokenizer decoder recovers the audio (arXiv 2508.19205).
+            DiTTo-TTS diffuses in a Mel-VAE latent space; the decoder gives a mel spectrogram and BigVGAN finishes the job, so it ends like route 2 (arXiv 2406.11427).
+          </td>
+        </tr>
+        <tr>
+          <td>4. Mel frames, vocoder</td>
+          <td>MELLE (arXiv 2407.08551)</td>
+          <td>Autoregressively generates continuous mel frames from text; an open-source HiFi-GAN vocoder reconstructs audio (arXiv 2407.08551).</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Details on the LM side are in
+    <a href="#codecs-tokenizers">Codecs and speech tokenizers</a>,
+    <a href="#continuous-autoregression">Continuous autoregression</a>
+    and <a href="#diffusion-and-flow">Diffusion and flow matching</a>.
+  </p>
+
+  <h3 id="ttw-one-step">One-step and waveform-native endings</h3>
+  <p>
+    Newer work shortens or removes the decoder stage instead of choosing between the four routes.
+  </p>
+  <ul>
+    <li>
+      One-step token-to-waveform: multi-step flow-matching decoders sound good but sample iteratively.
+      The authors apply MeanFlow in a highly compressed latent space, modelling average velocity instead of instantaneous velocity,
+      so one step is enough.
+      They report an RTF up to 17x better than multi-step baselines with negligible quality degradation,
+      and two refinements for latent mismatch: fine-tune the decoder with the MeanFlow generator frozen, or fine-tune end to end (arXiv 2606.18072).
+      This collapses route 2's flow, mel and vocoder chain into one stage.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      Flow2GAN: flow-matching pretraining, then lightweight GAN fine-tuning for generators that run in 1, 2 or 4 steps.
+      It predicts the endpoint instead of the velocity, which avoids difficulties in silent regions,
+      scales the loss by spectral energy to weight quieter regions, and uses a multi-branch network over Fourier coefficients at several time-frequency resolutions.
+      It decodes from mel or discrete audio tokens (arXiv 2512.23278; ICLR 2026 per the arXiv listing).
+    </li>
+    <li>
+      BareWave: flow-matching TTS that generates the waveform directly from text, with no intermediate acoustic representation and no pretrained component at test time.
+      Training uses representation alignment, staged noise scheduling and velocity-aware perceptual alignment (arXiv 2606.09048).
+    </li>
+    <li>
+      VoxCPM2: a 2B continuous-latent TTS (over 2M h) whose AudioVAE encodes at 16 kHz and reconstructs at 48 kHz,
+      so the decoder super-resolves implicitly; there is no separate super-resolution model (arXiv 2606.06928).
+    </li>
+  </ul>
+
+  <h3 id="ttw-decoder-vs-vocoder">Codec decoder or vocoder</h3>
+  <p>
+    A codec decoder is trained together with its encoder and quantizer to rebuild the waveform from the codes.
+    DAC is an example: a neural codec that turns audio into discrete tokens, with about 90x compression of 44.1 kHz audio at 8 kbps (arXiv 2306.06546).
+    A vocoder is a separate model that maps an acoustic representation, usually a mel spectrogram, to a waveform.
+    HiFi-GAN is a GAN vocoder that generates raw waveforms (arXiv 2010.05646).
+    BigVGAN is a GAN vocoder built to generalise to unseen speakers and recording conditions without fine-tuning (arXiv 2206.04658).
+  </p>
+
+  <h3 id="ttw-stft-reversible">Is the STFT reversible?</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>What you keep</th>
+          <th>Reversible?</th>
+          <th>How audio comes back</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Complex STFT (magnitude and phase)</td>
+          <td>Yes: inverse FFT per frame, then overlap-add, given a window and hop that overlap correctly</td>
+          <td>Inverse STFT</td>
+        </tr>
+        <tr>
+          <td>Magnitude only</td>
+          <td>No: phase is discarded, and many signals share one magnitude</td>
+          <td>
+            Phase retrieval: Griffin–Lim iterates between a phase estimate and a consistent STFT
+            (Griffin and Lim, IEEE TASSP 1984); the Fast Griffin–Lim Algorithm accelerates it
+            (Perraudin, Balazs and Søndergaard, IEEE WASPAA 2013)
+          </td>
+        </tr>
+        <tr>
+          <td>Mel spectrogram</td>
+          <td>No, and lossier: the mel filterbank also merges frequency bins</td>
+          <td>
+            Neural vocoders: HiFi-GAN (arXiv 2010.05646) and BigVGAN (arXiv 2206.04658) generate the waveform;
+            Vocos directly generates Fourier spectral coefficients and reports an order-of-magnitude speedup
+            over time-domain GAN vocoders at matching quality (arXiv 2306.00814)
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Mel features suit models but drop phase and fine frequency detail, so classical inversion is slow
+    and artefact-prone; learned vocoders, or codec decoders that skip spectrograms entirely, replaced it.
+  </p>
+
+  <h3 id="ttw-what-phase-adds">What phase adds to the signal</h3>
+  <p>
+    Magnitude says how much energy sits at each frequency in a frame.
+    Phase says where each component is in its cycle, so it fixes how the components line up in time.
+  </p>
+  <ul>
+    <li>
+      Transients and waveform shape: a plosive or onset is sharp because many components peak at the same
+      instant; keeping magnitude and scrambling phase smears that energy across the frame.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      Timing inside a frame: the group delay, \( \tau(\omega) = -\,d\phi(\omega)/d\omega \), locates
+      energy in time more finely than the frame length (standard definition).
+    </li>
+    <li>
+      Fine pitch: the instantaneous frequency, the rate of phase change over time, places a harmonic
+      more precisely than the FFT bin spacing (standard definition).
+    </li>
+    <li>
+      Frame consistency: overlapping STFT frames must agree for overlap-add to rebuild the signal;
+      inconsistent phase is what phase retrieval has to repair (see the table above).
+      <span class="tag tag--inference">Inference</span>
+    </li>
+  </ul>
+  <p>
+    The research record on how much phase matters:
+  </p>
+  <ul>
+    <li>
+      Oppenheim and Lim argue that magnitude and phase play different roles, that many important features
+      of a signal survive when only the phase is kept, and that a finite-length signal can be reconstructed
+      from phase alone to within a scale factor; their examples include images and speech
+      (Oppenheim and Lim, "The Importance of Phase in Signals", Proc. IEEE 69(5), 1981).
+    </li>
+    <li>
+      Paliwal and Alsteris challenge the traditional view that magnitude dominates for short (speech-length)
+      windows: in their listening tests the short-time phase spectrum can contribute to intelligibility
+      comparably to the magnitude spectrum when the window function and analysis-modification-synthesis
+      parameters are chosen well (Paliwal and Alsteris, Eurospeech 2003; Speech Communication 2005).
+    </li>
+    <li>
+      The same line of work reports a mismatch for machines: with an MFCC front-end, recognition of
+      phase-only stimuli at short windows was much worse than of magnitude-only stimuli
+      (Alsteris and Paliwal, Interspeech 2004 and 2005).
+    </li>
+  </ul>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Models avoid predicting phase directly because it wraps every \( 2\pi \) and looks noisy frame to frame,
+    so most systems model magnitude or mel and let a vocoder, Griffin–Lim or a codec decoder supply
+    consistent phase; Vocos is the exception that generates the spectral coefficients itself (arXiv 2306.00814).
+  </p>
+
+  <h3 id="ttw-why-flow">Why route 2 exists, and why route 1 streams</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Semantic tokens are cheap for an LM to predict but drop voice detail.
+    A flow model restores it, conditioned on a speaker prompt (CosyVoice 2 uses reference speech and a speaker embedding, arXiv 2412.10117).
+    The cost is extra stages and look-ahead, as in Kimi-Audio, where the look-ahead delays only the first chunk (arXiv 2504.18425).
+    Chunk-wise streaming of this kind is covered in
+    <a href="#streaming-low-latency">Streaming and low latency</a>.
+  </p>
+  <p>
+    Route 1 has one stage after the LM, and that stage can be causal.
+    Qwen3-Omni can output the waveform immediately after the Talker generates each token (arXiv 2509.17765).
+    <span class="tag tag--inference">Inference</span>
+    The price is on the LM side: it must predict every acoustic codebook of each frame.
+    Moshi uses a depth transformer for that and Qwen3-Omni an MTP module, as described in
+    <a href="#generation-paradigms">Generation paradigms</a>.
+  </p>
+
+  <h3 id="ttw-raw-waveform">Why not predict samples directly</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    A waveform at 24 kHz has 24,000 samples per second.
+    Mimi emits 12.5 frames per second (arXiv 2410.00037), so one frame stands for 1,920 samples.
+    Predicting samples one by one would make the sequence 1,920 times longer than a frame-rate LM sees.
+    That is why most systems predict tokens or latents and leave sample-level detail to a decoder.
+    BareWave is the exception: it runs flow matching on the waveform itself (see above), so the cost shifts from sequence length to network size and training difficulty.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Mel is one route among four.
+      Streaming duplex systems like Moshi and Qwen3-Omni skip it: the LM predicts codec tokens and a causal codec decoder makes samples frame by frame.
+      Mel plus a vocoder buys voice quality through a flow stage, at the cost of more stages and look-ahead."
+    </p>
+  </div>
+</section>

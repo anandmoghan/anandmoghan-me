@@ -1,0 +1,17 @@
+<h3 id="diffusion-objective">Diffusion objective (DDPM)</h3>
+<p>
+  The forward process mixes clean data \( x_0 \) with Gaussian noise \( \epsilon \sim \mathcal{N}(0, I) \).
+  The network \( \epsilon_\theta \) learns to predict that noise from the noisy input and the timestep \( t \).
+</p>
+\[
+  x_t = \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1-\bar\alpha_t}\,\epsilon,
+  \qquad
+  \mathcal{L} = \mathbb{E}\,\big\|\epsilon - \epsilon_\theta(x_t, t)\big\|^2
+\]
+<p>
+  Here \( \bar\alpha_t \) is the cumulative noise schedule, so it fixes how much signal survives at step \( t \).
+  Sampling runs the learned denoiser backwards from pure noise.
+</p>
+<p>
+  This is the noise-prediction objective of the DDPM paper (arXiv 2006.11239).
+</p>

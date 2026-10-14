@@ -1,0 +1,61 @@
+<section id="q-multimodal-a">
+  <h2>Multimodal generation: audio-visual diffusion and AR models</h2>
+  <ul>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Video backbones share one recipe: 3D causal VAE, DiT, flow matching.
+      Examples: Wan 2.1 (arXiv 2503.20314), HunyuanVideo 1.5 (arXiv 2511.18870), Seedance 1.5 pro (arXiv 2512.13507).
+    </li>
+    <li>Audio-driven avatars add audio conditioning to video backbones: OmniHuman-1.5 (arXiv 2508.19209), HunyuanVideo-Avatar (arXiv 2505.20156), MultiTalk (arXiv 2505.22647), InfiniteTalk (arXiv 2508.14033).</li>
+    <li>Ovi (arXiv 2510.01284) generates audio and video jointly: twin DiT towers, bidirectional cross-attention in every block, audio RoPE scaled to match 31 video latent frames against 157 audio tokens.</li>
+    <li>UniVerse-1 takes the other route: pretrained Wan2.1 and ACE-Step experts joined by lightweight cross-modal MLP connectors (arXiv 2509.06155).</li>
+    <li>Streaming distils a bidirectional teacher into a causal few-step student with a KV cache (CausVid, Self Forcing, LiveTalk); error accumulation over long rollouts is the failure mode.</li>
+    <li>AR image models split into discrete (VAR, arXiv 2404.02905; Emu3, arXiv 2409.18869), continuous with a diffusion head (MAR, arXiv 2406.11838; Fluid, arXiv 2410.13863), and hybrids (Transfusion, arXiv 2408.11039; Show-o2, arXiv 2506.15564; BAGEL, arXiv 2505.14683).</li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      MELLE, DiTAR and VibeVoice are the audio analogue of MAR and Fluid.
+    </li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Streaming system</th>
+          <th>Reported by the authors</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CausVid (arXiv 2412.07772)</td>
+          <td>9.4 FPS, 1.3 s initial latency</td>
+        </tr>
+        <tr>
+          <td>Self Forcing (arXiv 2506.08009)</td>
+          <td>17 FPS, sub-second latency, one H100</td>
+        </tr>
+        <tr>
+          <td>Live Avatar (arXiv 2512.04677)</td>
+          <td>45 FPS, 1.21 s to first frame, 5 H800</td>
+        </tr>
+        <tr>
+          <td>SoulX-FlashTalk (arXiv 2512.23379)</td>
+          <td>0.87 s start-up latency, 32 FPS</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Audio is moving into the backbone, and streaming is the frontier.
+      The standard fix is distillation plus on-policy training, and multimodal conditioning is where it breaks."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      Real-time and sync numbers are author-reported, use different GPUs and latency definitions, and are not comparable across papers.
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/07-multimodal-generation">Full chapter</a></p>
+</section>

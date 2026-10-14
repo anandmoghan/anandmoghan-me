@@ -1,0 +1,217 @@
+<section id="problems-speech-duplex">
+  <h2>Common problems: speech generation and duplex</h2>
+  <p>
+    Most speech-generation failures trace back to three causes: a weak link between the text and the audio, a flawed reference voice, and random sampling.
+    Full-duplex models add a fourth family: the model must listen while it speaks, decide when to talk, and keep its text intelligence while working on audio tokens.
+  </p>
+  <p>
+    Think of a live interpreter who can lose their place in the script (alignment), pick up the speaker's cough and accent (reference leakage), have an off day (sampling), and must decide when to cut in (duplex).
+    Knowing which family a bug belongs to tells you where to look.
+  </p>
+
+  <h3 id="psd-how">How it works</h3>
+  <p>The failures, grouped by where they enter and what you hear or see.</p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Problem</th>
+          <th>What you hear or see</th>
+          <th>Why it happens</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Hallucination and misalignment</td>
+          <td>Repeated, skipped or babbled words</td>
+          <td>Autoregressive TTS learns the text-to-audio alignment implicitly through attention, and nothing forces it to stay monotonic. Flow-matching TTS cannot stall this way, but its total duration is chosen up front and can be wrong <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Mispronunciation</td>
+          <td>Names, acronyms, numbers and heteronyms wrong</td>
+          <td>Text normalisation or letter-to-sound rules guess wrong, and a model that reads letters directly has no pronunciation dictionary to fall back on <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Long-form drift</td>
+          <td>Voice or prosody wanders over minutes</td>
+          <td>Errors compound over long autoregressive generation and nothing re-anchors the voice</td>
+        </tr>
+        <tr>
+          <td>Reference leakage</td>
+          <td>Emotion, noise or microphone channel copied from the prompt</td>
+          <td>In-context cloning copies what the reference contains, and that includes more than timbre</td>
+        </tr>
+        <tr>
+          <td>Sampling instability</td>
+          <td>Most seeds are good, some are bad</td>
+          <td>Higher temperature plausibly raises hallucination rate, so some samples fail even when the average is fine</td>
+        </tr>
+        <tr>
+          <td>Backchannel misread as barge-in</td>
+          <td>An "uh-huh" makes the agent stop</td>
+          <td>The model cannot tell acknowledgement from a real interruption; a 2026 survey calls this the most-cited complaint in user feedback. Detection is covered in <a href="/apps/materials/speech-to-speech/07-conversation#turn-taking">Conversation</a></td>
+        </tr>
+        <tr>
+          <td>Self-echo</td>
+          <td>The agent reacts to its own voice</td>
+          <td>A model that ingests user audio while speaking also hears the speaker playback</td>
+        </tr>
+        <tr>
+          <td>Intelligence drop</td>
+          <td>Worse answers in speech mode than in text mode</td>
+          <td>Adding speech capability erodes an LLM's knowledge, and spoken queries do worse again</td>
+        </tr>
+        <tr>
+          <td>Multi-turn degradation</td>
+          <td>Corrections, entities and instructions lost over turns</td>
+          <td>Overlap confuses the system, corrections are missed, and it loses track of who or what is being discussed</td>
+        </tr>
+        <tr>
+          <td>Spoken jailbreak and weak multilingual safety</td>
+          <td>The model complies with a harmful spoken request, more often in other languages or in mixed-language speech</td>
+          <td>A multilingual benchmark found weaknesses worse outside English and worse when the request was spoken; details in <a href="/apps/materials/speech-to-speech/09-control-and-prompting#safety-and-provenance">Safety and provenance</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Two more duplex effects are worth knowing.
+    A design that alternates 160 ms chunks of user and assistant tokens can only switch at chunk boundaries, which a survey calls "apparent (not substantive)" full duplex.
+    And token-level duplex models grow their attention cache (the KV cache from <a href="/apps/materials/speech-to-speech/02-listening#streaming-encoders">Listening</a>) continuously.
+    <span class="tag tag--inference">Inference</span>
+    For a Moshi-sized backbone with full attention in bf16, that is roughly 23 GB per hour at 12.5 frames per second; this is my arithmetic from the published shape, not a measurement, and grouped-query attention shrinks it.
+  </p>
+
+  <h3 id="psd-levers">Levers and optimisations</h3>
+  <p>The mitigations, with the metric that tells you whether each one worked.</p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Monotonic alignment loss, attention priors, alignment-score training</td>
+          <td>Hallucination: WER or an alignment score by a fixed ASR</td>
+          <td>Extra training terms; constrains attention</td>
+        </tr>
+        <tr>
+          <td>Pronunciation respelling, glossary, text normalisation</td>
+          <td>Mispronunciation: per-entity accuracy on a fixed name list</td>
+          <td>Manual patch; saved fixes do not apply to words added later; glossary is plan-gated at Synthesia</td>
+        </tr>
+        <tr>
+          <td>Synthesise in chunks, re-condition each on the original reference</td>
+          <td>Long-form drift: speaker similarity per window against the first</td>
+          <td>Seams at chunk boundaries</td>
+        </tr>
+        <tr>
+          <td>Prompt quality gate; denoise or reject bad references; prefer neutral clean prompts</td>
+          <td>Leakage: emotion similarity and noise floor of output</td>
+          <td>Rejects some users' uploads; neutral prompts need style control elsewhere</td>
+        </tr>
+        <tr>
+          <td>Best-of-N: sample several, score, return the best</td>
+          <td>Sampling instability: failure rate across seeds</td>
+          <td>N times the compute; the scorer becomes a target for hacking</td>
+        </tr>
+        <tr>
+          <td>Echo cancellation, plus conditioning on the model's own output stream</td>
+          <td>Self-echo: stop latency on echo-cancelled output</td>
+          <td>Needs the playback signal</td>
+        </tr>
+        <tr>
+          <td>Action channel, backchannel-aware training data, interruption rules</td>
+          <td>Backchannel misread: false-yield rate per minute</td>
+          <td>Responding early versus yielding falsely is an open trade-off</td>
+        </tr>
+        <tr>
+          <td>Freeze the text LLM, or keep a high share of text data and interleaved speech-text data</td>
+          <td>Intelligence drop: speech-versus-text accuracy gap on the same questions</td>
+          <td>Frozen weights limit how deeply speech shapes the model</td>
+        </tr>
+        <tr>
+          <td>Truncate context to what was actually spoken on barge-in</td>
+          <td>Interruption recovery: the agent does not believe it said unheard words</td>
+          <td>Needs per-chunk playout timestamps</td>
+        </tr>
+        <tr>
+          <td>Grouped-query attention, cache eviction, summarised state</td>
+          <td>Long-session memory growth</td>
+          <td>Can lose early context</td>
+        </tr>
+        <tr>
+          <td>Per-language, per-attack safety evaluation, with refusal of harmless requests tracked too</td>
+          <td>Jailbreak success rate and over-refusal</td>
+          <td>Wider coverage; defences can cost usability and latency</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Pushing a reranking signal into training turns it into online RL, which invites reward hacking; see
+    <a href="/apps/materials/speech-to-speech/08-training">Training</a>.
+    Model-by-model detail: <a href="/apps/materials/speech-lit-review/08-common-problems#speech-generation-problems">speech generation problems</a> and
+    <a href="/apps/materials/speech-lit-review/08-common-problems#speech-to-speech-problems">speech-to-speech and duplex problems</a> in the literature review.
+  </p>
+
+  <h3 id="psd-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Fixing the wrong layer.</strong>
+      A metallic timbre that survives every sampling setting points at the tokenizer, not the language model.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>A mitigation that creates the next failure.</strong>
+      Reranking by transcription error alone can favour flat, safe delivery; RL on transcription rewards can collapse prosody into monotone speech (see
+      <a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#autoregressive-generation">Autoregressive generation</a>).
+    </li>
+    <li>
+      <strong>Trusting a demo or a self-reported figure.</strong>
+      "Full duplex" in a demo is not full duplex in an evaluation, and latency and backchannel figures from different papers (DuplexSLA-style numbers are self-reported) are measured differently.
+      Ask for false-yield rate, stop latency and multi-turn results.
+    </li>
+    <li>
+      <strong>Late detection of forgetting.</strong>
+      Gate every training stage on a strict text QA score so a loss of knowledge shows up early.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "For TTS I look first at alignment hallucination, pronunciation of names and long-form drift, each with its own metric.
+      For duplex the big ones are backchannels read as barge-in, self-echo, multi-turn decay and the speech-versus-text intelligence gap.
+      I would gate on false-yield rate, stop latency and a strict text QA score."
+    </p>
+  </div>
+
+  <h3 id="problems-speech-duplex-sources">Sources</h3>
+  <ul>
+    <li>Improving Robustness of LLM-based Speech Synthesis by Learning Monotonic Alignment (arXiv 2406.17957)</li>
+    <li>Eliminating stability hallucinations in llm-based tts models via attention guidance (arXiv 2509.19852)</li>
+    <li>Mitigating Hallucinations in LM-Based TTS Models via Distribution Alignment Using GFlowNets (arXiv 2508.15442)</li>
+    <li>No Verifiable Reward for Prosody: Toward Preference-Guided Prosody Learning in TTS (arXiv 2509.18531)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>Cross-Modal Knowledge Distillation for Speech Large Language Models (arXiv 2509.14930)</li>
+    <li>Freeze-Omni: A Smart and Low Latency Speech-to-speech Dialogue Model with Frozen LLM (arXiv 2411.00774)</li>
+    <li>Scaling Speech-Text Pre-training with Synthetic Interleaved Data (arXiv 2411.17607)</li>
+    <li>Full-Duplex-Bench-v2: A Multi-Turn Evaluation Framework for Duplex Dialogue Systems with an Automated Examiner (arXiv 2510.07838)</li>
+    <li>A Survey of Full-Duplex Spoken Dialogue Systems: Architectural Hierarchy, Interaction Ontology, and Decision State Machine (arXiv 2606.19453)</li>
+    <li>Beyond Turn-Based Interfaces: Synchronous LLMs as Full-Duplex Dialogue Agents (arXiv 2409.15594)</li>
+    <li>Talking Turns: Benchmarking Audio Foundation Models on Turn-Taking Dynamics (arXiv 2503.01174)</li>
+    <li>DuplexSLA: A Full-Duplex Spoken Language Model with Synchronized Speech, Language, and Action (arXiv 2605.20755)</li>
+    <li>Audio Jailbreaks in Large Audio-Language Models: Taxonomy, Attack-Defense Analysis, and Cost-Aware Evaluation (arXiv 2605.30031)</li>
+    <li>SpeechJBB: Probing Safety Alignment and Comprehension in Large Audio Language Models under Code-Switched Speech (arXiv 2606.06037)</li>
+    <li>RedVox: Safety and Fairness Gaps in Speech Models Across Languages (arXiv 2606.26968)</li>
+    <li><a href="https://docs.synthesia.io/docs/script">Synthesia script docs</a> and the
+      <a href="https://help.synthesia.io/en/articles/9399195-how-do-i-use-pronunciation-in-synthesia">pronunciation help article</a></li>
+    <li><a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Synthesia Express-2 post</a> (grapheme input, in-context cloning)</li>
+  </ul>
+</section>

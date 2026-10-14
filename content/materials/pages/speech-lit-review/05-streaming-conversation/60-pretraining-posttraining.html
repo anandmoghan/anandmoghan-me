@@ -1,0 +1,355 @@
+<section id="pretraining-posttraining">
+  <h2>Pre-training and post-training speech-to-speech models</h2>
+  <p>
+    Nearly every open speech-to-speech model follows one recipe.
+    Start from a strong text LLM, add speech tokens, pretrain on ASR, TTS and interleaved speech-text,
+    run spoken-dialogue SFT, then apply DPO or RL on the text side and sometimes the speech side.
+    The real choice is whether the text backbone stays frozen or trains on a mixed corpus.
+  </p>
+  <p>
+    Every recipe below is the authors' own account in the cited paper.
+    For the TTS-only post-training view (WER and SIM rewards, hacking), see
+    <a href="/apps/materials/speech-lit-review/06-control-and-quality#post-training-eval">Post-training and evaluation for speech generation</a>.
+    The reward details for online RL are in the next section.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img"
+      aria-label="Proposed six-stage training pipeline for a full-duplex text and voice model, showing what trains and what is frozen at each stage">
+      <defs>
+        <marker id="arrow-pretraining-posttraining" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Row 1 == -->
+      <rect class="d-box" x="40" y="20" width="160" height="44" rx="8"/>
+      <text class="d-text" x="120" y="42" text-anchor="middle"
+        dominant-baseline="middle">1 Modality alignment</text>
+      <text class="d-text--small" x="120" y="84" text-anchor="middle">Trains: encoder + adaptor (ASR)</text>
+      <text class="d-text--muted" x="120" y="100" text-anchor="middle">Frozen: text LLM</text>
+
+      <rect class="d-box" x="280" y="20" width="160" height="44" rx="8"/>
+      <text class="d-text" x="360" y="42" text-anchor="middle"
+        dominant-baseline="middle">2 Tokenizer</text>
+      <text class="d-text--small" x="360" y="84" text-anchor="middle">Trains: 12.5 Hz semantic VQ + codec</text>
+      <text class="d-text--muted" x="360" y="100" text-anchor="middle">Frozen after reconstruction gate</text>
+
+      <rect class="d-box d-box--accent" x="520" y="20" width="160" height="44" rx="8"/>
+      <text class="d-text" x="600" y="42" text-anchor="middle"
+        dominant-baseline="middle">3 Joint pretraining</text>
+      <text class="d-text--small" x="600" y="84" text-anchor="middle">Trains: LLM, high text fraction</text>
+      <text class="d-text--muted" x="600" y="100" text-anchor="middle">Frozen: tokenizer</text>
+
+      <path class="d-arrow" d="M 200 42 L 278 42" marker-end="url(#arrow-pretraining-posttraining)"/>
+      <path class="d-arrow" d="M 440 42 L 518 42" marker-end="url(#arrow-pretraining-posttraining)"/>
+      <path class="d-arrow" d="M 680 42 L 700 42 L 700 130 L 20 130 L 20 182 L 38 182"
+        marker-end="url(#arrow-pretraining-posttraining)"/>
+
+      <!-- == Row 2 == -->
+      <rect class="d-box" x="40" y="160" width="160" height="44" rx="8"/>
+      <text class="d-text" x="120" y="182" text-anchor="middle"
+        dominant-baseline="middle">4 Spoken SFT</text>
+      <text class="d-text--small" x="120" y="224" text-anchor="middle">Trains: LLM or LoRA + adaptor</text>
+      <text class="d-text--muted" x="120" y="240" text-anchor="middle">Frozen: tokenizer</text>
+
+      <rect class="d-box" x="280" y="160" width="160" height="44" rx="8"/>
+      <text class="d-text" x="360" y="182" text-anchor="middle"
+        dominant-baseline="middle">5 Preference</text>
+      <text class="d-text--small" x="360" y="224" text-anchor="middle">Trains: DPO-LN on text tokens</text>
+      <text class="d-text--muted" x="360" y="240" text-anchor="middle">Frozen: tokenizer, codec</text>
+
+      <rect class="d-box" x="520" y="160" width="160" height="44" rx="8"/>
+      <text class="d-text" x="600" y="182" text-anchor="middle"
+        dominant-baseline="middle">6 Duplex</text>
+      <text class="d-text--small" x="600" y="224" text-anchor="middle">Trains: small head, then GRPO</text>
+      <text class="d-text--muted" x="600" y="240" text-anchor="middle">Frozen: LLM states (head step)</text>
+
+      <path class="d-arrow" d="M 200 182 L 278 182" marker-end="url(#arrow-pretraining-posttraining)"/>
+      <path class="d-arrow" d="M 440 182 L 518 182" marker-end="url(#arrow-pretraining-posttraining)"/>
+
+      <text class="d-text--muted" x="360" y="278" text-anchor="middle">Gate after each stage: ASR WER, text QA (strict), duplex timing</text>
+    </svg>
+    <figcaption>Figure: the proposed training pipeline for a full-duplex text and voice model (Inference, built from the cited recipes), with what trains and what is frozen at each stage.</figcaption>
+  </figure>
+
+  <!-- == Per-system recipes == -->
+  <h3 id="stage-recipes">Stage-by-stage recipes</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Recipe</th>
+          <th>Frozen vs trained</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>Helium text LM on 2.1T tokens; 7M h unsupervised audio, with half the batches text-only; multi-stream post-training; Fisher (2,000 h) fine-tuning; instruction tuning on &gt;20k h of synthetic speech</td>
+          <td>Temporal Transformer built on the Helium text LM</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice (2412.02612)</td>
+          <td>12.5 Hz single-codebook tokenizer (VQ on whisper-large-v3, 700k h); init GLM-4-9B-Base; interleaved data synthesised from text corpora; SFT template alternates 13 text and 26 speech tokens; no DPO or RL stage described</td>
+          <td>All trained, with a text-only share in pretraining</td>
+        </tr>
+        <tr>
+          <td>Kimi-Audio (2504.18425)</td>
+          <td>&gt;13M h audio; 585B audio + 585B text tokens, one epoch; init Qwen2.5-7B; 12.5 Hz semantic tokens plus 50 Hz continuous Whisper features; SFT ~300K h</td>
+          <td>Whisper extractor frozen for the first ~20% of pretraining</td>
+        </tr>
+        <tr>
+          <td>Step-Audio 2 (2507.16632)</td>
+          <td>1.356T tokens: adaptor only on 100B ASR tokens, then +6.6K audio tokens, 800B tokens, 200B cooldown with synthesised S2S; SFT 4B tokens; PPO then GRPO</td>
+          <td>Audio encoder frozen throughout</td>
+        </tr>
+        <tr>
+          <td>Qwen2.5-Omni (2503.20215)</td>
+          <td>Stage 1 encoders; stage 2 all parameters; stage 3 32k context. Talker: context continuation, DPO, multi-speaker instruction tuning</td>
+          <td>LLM frozen in stage 1 only</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni (2509.17765)</td>
+          <td>AuT encoder from scratch on 20M h; Thinker stage 2 ~2T tokens. Talker: monotonic mapping, long-context pretraining, DPO, speaker fine-tuning. Then SFT, strong-to-weak distillation, GSPO</td>
+          <td>LLM frozen in stage 1 only</td>
+        </tr>
+        <tr>
+          <td>Qwen-Audio-3.1-Realtime (2609.25176)</td>
+          <td>Think: SFT (Core-Cocktail) plus a distillation method, M²-OPD, to transfer language skills and build native audio abilities. Act: GRPO in self-evolving executable environments with multi-granularity rollouts. Speak and Coordinate: rules for whether, when and how it speaks or acts</td>
+          <td>Not stated in the abstract</td>
+        </tr>
+        <tr>
+          <td>MinMo (2501.06282)</td>
+          <td>Alignment in four stages: speech-to-text ~1.2M h, text-to-speech ~170k h, speech-to-speech ~10k h, duplex 4k h human-human. No DPO or RL</td>
+          <td>LLM frozen in full alignment, LoRA in SFT; duplex trains only an ~18M predictor</td>
+        </tr>
+        <tr>
+          <td>LLaMA-Omni 2 (2505.02625)</td>
+          <td>Qwen2.5 0.5B to 14B; 200K multi-turn speech dialogues; I(a) speech-to-text, I(b) TTS LM, II gate fusion and TTS LM</td>
+          <td>Speech encoder frozen in stage I(a); encoder, adapter and LLM frozen in stage II</td>
+        </tr>
+        <tr>
+          <td>Freeze-Omni (2411.00774)</td>
+          <td>CTC encoder on ~110k h ASR; prompt embedding on 60k multi-round QA; ~120M speech decoder on ~3,000 h; three-state duplex classifier</td>
+          <td>LLM frozen throughout</td>
+        </tr>
+        <tr>
+          <td>VITA-Audio (2505.03739)</td>
+          <td>Four stages; ASR and TTS ~100k h each; MCTP modules added in stages 2 to 3; SFT on 1.4M speech QA samples</td>
+          <td>Audio encoder and decoder frozen in stage 1</td>
+        </tr>
+        <tr>
+          <td>Baichuan-Audio (2502.17239)</td>
+          <td>887k h pretraining; 12.5 Hz 8-layer RVQ tokenizer; flow-matching decoder on ~270k h</td>
+          <td>Stage 1 LLM frozen; stage 2 all but text embedding and LM head</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    All rows are the authors' own accounts.
+  </p>
+
+  <!-- == Forgetting == -->
+  <h3 id="forgetting">Frozen backbone or mixed text: fighting forgetting</h3>
+  <div class="cols-2">
+    <div>
+      <p><strong>Freeze the LLM</strong></p>
+      <ul>
+        <li>Freeze-Omni and MinMo keep the text capability by construction.</li>
+        <li>LLaMA-Omni 2 freezes the LLM in stage II; Qwen2.5-Omni and Baichuan-Audio freeze it in stage 1.</li>
+        <li>
+          <span class="tag tag--inference">Inference</span>
+          The cost is a ceiling on how deeply speech can shape the representations.
+        </li>
+      </ul>
+    </div>
+    <div>
+      <p><strong>Train on a mixed corpus</strong></p>
+      <ul>
+        <li>Moshi keeps half the pretraining batches text-only; Kimi-Audio uses 585B text tokens beside 585B audio tokens; Step-Audio 2 mixes text and audio tokens.</li>
+        <li>Speech and text share one set of weights, so the mix ratio is a tuned hyperparameter.</li>
+        <li>An unbalanced mix is the main risk.</li>
+      </ul>
+    </div>
+  </div>
+  <p>
+    <span class="tag tag--confirmed">Confirmed</span>
+    Adding speech capability can degrade knowledge and reasoning even for text inputs, and more for spoken queries (arXiv 2509.14930).
+    SALAD (arXiv 2510.13632) reports that speech-adapted LLMs underperform their text counterparts and attributes the gap to forgetting and cross-modal misalignment.
+  </p>
+
+  <!-- == Data == -->
+  <h3 id="synthetic-data">Interleaved synthetic pretraining and spoken instruction data</h3>
+  <p>
+    Interleaved pretraining (arXiv 2411.17607) synthesises interleaved speech tokens from text spans with a text-to-token model and a 12.5 Hz supervised tokenizer.
+    It used 1T tokens including 600B synthetic interleaved.
+    Spoken QA rose from 13% (Moshi) to 31%.
+  </p>
+  <p>
+    Spoken instruction data is synthetic almost everywhere: an LLM writes the dialogue and TTS renders it.
+    Moshi uses over 20k h of synthetic speech (arXiv 2410.00037), and Step-Audio 2 adds synthesised speech-to-speech data in its cooldown (arXiv 2507.16632).
+    <span class="tag tag--inference">Inference</span>
+    The risk is TTS voice and prosody leakage into the model's own speaking style; mix in real recorded turns and many TTS voices.
+  </p>
+
+  <!-- == Post-training == -->
+  <h3 id="preference-rl-distill">Preference, RL and distillation</h3>
+  <ul>
+    <li>
+      <strong>DPO on text tokens.</strong>
+      Moshi-Aligned (arXiv 2506.21463) applies length-normalised DPO to text-token probabilities only, because audio-token probabilities are unstable.
+      It uses 93,490 pairs (27% timing, 73% content), judged by Mistral Large 2.
+      Averaged QA moved 36.1 to 39.2 and safety 70.9 to 77.8 (Moshi-Instruct to Moshi-Aligned).
+    </li>
+    <li>
+      <strong>Talker DPO.</strong>
+      Qwen2.5-Omni ranks preference triplets by WER and punctuation-pause error.
+      Qwen3-Omni runs DPO on multilingual pairs in a four-stage Talker.
+    </li>
+    <li>
+      <strong>RL.</strong>
+      Step-Audio 2 runs PPO with a binary conciseness reward on the thinking trace (60 iterations), PPO with a learned reward model (120), then GRPO for audio perception (400).
+      Qwen3-Omni uses GSPO with rule-based and model-based rewards.
+    </li>
+    <li>
+      <strong>Semantic-channel-only preference (WavAlign, arXiv 2604.14932).</strong>
+      The authors argue that sparse preference supervision conflicts with dense speech generation when parameters are shared.
+      Their adaptive hybrid recipe limits preference updates to the semantic channel, anchors acoustic behaviour with explicit supervision, and adjusts the mix of signals from rollout statistics to avoid unreliable gradients.
+      The abstract reports consistent gains in semantic quality and expressiveness across benchmarks and architectures, with no numbers.
+      This agrees independently with Moshi-Aligned's choice to optimise text tokens only.
+      <span class="tag tag--reported">Reported</span>
+    </li>
+    <li>
+      <strong>Agent RL in audio (SpeechGym, arXiv 2608.26432; Qwen-Audio-3.1-Realtime, arXiv 2609.25176).</strong>
+      SpeechGym trains voice agents with GRPO in an audio-only environment, where outcome-only reward gives too little signal and per-tool-call rewards restore it; see
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#bridge-asr-grpo">Bridge from GRPO on streaming ASR</a>.
+      Qwen-Audio-3.1-Realtime reports its response rate to background speech falling from 73.0% to 13.0% on Full-Duplex-Bench v1.5, and task success on a half-duplex speech-to-text adaptation of τ-Voice rising from 78.4% to 82.0%.
+      <span class="tag tag--reported">Reported</span>
+    </li>
+    <li>
+      <strong>Distillation.</strong>
+      Qwen3-Omni distils strong to weak: off-policy, then on-policy KL against Qwen3-32B and 235B teachers.
+    </li>
+  </ul>
+
+  <h3 id="duplex-post-training">Duplex post-training and evaluation gates</h3>
+  <p>
+    DuplexPO (arXiv 2607.07148) runs GRPO-style RL on selected windows from long human conversations.
+    Its four-part reward (FCDR) covers turn initiation, backchanneling, yielding and regularised participation, with a Qwen2.5-7B-Instruct backbone.
+    <span class="tag tag--reported">Reported</span>
+    Intelligence gains are small (Llama Questions 75.3 versus 72.0 for the SFT baseline, Table 4).
+    The point is that timing is optimised without touching content.
+  </p>
+  <p>
+    Post-training also changes a model's forensic fingerprint.
+    GenTraceBench (arXiv 2609.21738) finds DPO and GRPO mostly preserve it, while some SFT and pre-training data changes shift it;
+    see <a href="/apps/materials/speech-lit-review/06-control-and-quality#sp-tracing">Tracing a clip across training stages</a>.
+  </p>
+
+  <!-- == Synthesis == -->
+  <h3 id="synthesis-table">Synthesis</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Objective</th>
+          <th>Typical data</th>
+          <th>Main risk</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Tokenizer</td>
+          <td>Discrete semantic tokens, 12.5 to 25 Hz</td>
+          <td>Whisper-based VQ, ASR pseudo-labels (GLM-4-Voice 700k h)</td>
+          <td>Collapse, acoustic loss at low rate</td>
+        </tr>
+        <tr>
+          <td>Modality alignment</td>
+          <td>Audio encoder into the LLM</td>
+          <td>ASR ~100 to 110k h</td>
+          <td>Forgetting if unfrozen</td>
+        </tr>
+        <tr>
+          <td>Speech-text pretraining</td>
+          <td>Joint next-token</td>
+          <td>Interleaved synthetic plus unlabelled (Moshi 7M h, Kimi 13M h)</td>
+          <td>Forgetting, unbalanced mix</td>
+        </tr>
+        <tr>
+          <td>Speech decoder</td>
+          <td>Token to waveform</td>
+          <td>TTS pairs, ~3k h (Freeze-Omni) to 270k h (Baichuan)</td>
+          <td>Prosody drift, speaker leakage</td>
+        </tr>
+        <tr>
+          <td>Spoken SFT</td>
+          <td>Instruction following</td>
+          <td>Synthetic dialogues (LLaMA-Omni 2 200K; Kimi 300k h)</td>
+          <td>TTS voice overfit, weak paralinguistics</td>
+        </tr>
+        <tr>
+          <td>Preference</td>
+          <td>Better spoken replies</td>
+          <td>Pairs (Moshi-Aligned 93k)</td>
+          <td>Audio-token instability, judge bias on timing</td>
+        </tr>
+        <tr>
+          <td>RL</td>
+          <td>Quality, reasoning length</td>
+          <td>Rule and model rewards; executable environments for agents</td>
+          <td>Hacking, length collapse, silent groups with outcome-only reward</td>
+        </tr>
+        <tr>
+          <td>Distillation</td>
+          <td>Text capability into speech</td>
+          <td>Teacher outputs</td>
+          <td>Teacher-student mismatch</td>
+        </tr>
+        <tr>
+          <td>Duplex</td>
+          <td>Turn-taking, barge-in</td>
+          <td>Human conversation (MinMo 4k h, Fisher)</td>
+          <td>Latency versus false interruption</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- == Proposed recipe == -->
+  <h3 id="proposed-recipe">Proposed recipe for a full-duplex text+voice model</h3>
+  <div class="callout callout--inference">
+    <strong>Inference: my recipe, assembled from the sources above</strong>
+    <ol>
+      <li>Freeze a trusted text LLM; train the encoder and adaptor on ASR.</li>
+      <li>Train a semantic-first 12.5 Hz supervised tokenizer plus codec; freeze after a reconstruction gate.</li>
+      <li>Unfreeze the LLM with a high text fraction: interleaved synthetic speech (2411.17607) plus unlabelled speech with Whisper pseudo-labels.</li>
+      <li>Spoken SFT on LLM-written dialogues rendered with many TTS voices, plus real recorded turns.</li>
+      <li>DPO-LN on text tokens, with timing pairs (WavAlign makes the same split and anchors the acoustics with supervision).</li>
+      <li>A small duplex head on frozen states (MinMo style), then gated GRPO duplex RL on event windows (DuplexPO style).</li>
+      <li>Gates at every stage: ASR WER, text QA (strict), duplex timing.</li>
+    </ol>
+  </div>
+
+  <div class="callout callout--warn">
+    <strong>Trap: the audio-token DPO shortcut</strong>
+    <p>
+      Applying DPO to audio-token probabilities looks natural but Moshi-Aligned found them unstable, so it optimised text tokens only, and WavAlign gives a mechanism: shared parameters let sparse preference labels fight dense audio generation.
+      Reward signals also miss timing: the Dual-Axis Generative Reward Model (arXiv 2604.14920) argues existing metrics are superficial proxies, so it scores semantic quality and interaction timing separately.
+    </p>
+  </div>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would keep the text LLM frozen through alignment, unfreeze it with a high text fraction and interleaved synthetic data, then do DPO on text tokens and GRPO on duplex timing windows.
+      Every stage is gated on ASR WER, strict text QA and timing, because speech training erodes text ability."
+    </p>
+  </div>
+</section>

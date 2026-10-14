@@ -1,0 +1,4 @@
+{
+  "title": "Speaking with tokens",
+  "summary": "Generating speech from tokens: autoregression, multi-codebook patterns, block diffusion language models, streaming, and continuous latents."
+}

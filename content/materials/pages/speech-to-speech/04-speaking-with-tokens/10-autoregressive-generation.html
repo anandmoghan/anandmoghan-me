@@ -1,0 +1,218 @@
+<section id="autoregressive-generation">
+  <h2>Autoregressive speech generation</h2>
+  <p>
+    A text LLM writes by predicting the next word again and again.
+    Once speech is a sequence of discrete codes (see
+    <a href="/apps/materials/speech-to-speech/03-tokenizers">Tokenizers</a>),
+    a speech LM does the same with codec tokens instead of words:
+    read everything so far, predict one more token, append it, repeat.
+  </p>
+  <p>
+    Think of finishing someone's sentence in their own voice.
+    The model is handed the words to say and a short sample of the target voice, and it continues the audio.
+    There is no separate "voice" input; the voice is part of the sequence being continued.
+  </p>
+
+  <h3 id="autoregressive-generation-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 196" role="img"
+      aria-label="Autoregressive speech generation: text tokens, voice prompt codes and a start token form the prefix; the speech LM predicts a distribution, a sampler picks one code, the code is appended to the context, and generation ends at a stop token; the generated codes go to a codec decoder that outputs audio">
+      <defs>
+        <marker id="autoregressive-generation-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Sequence the LM sees == -->
+      <rect class="d-box" x="10" y="20" width="110" height="44" rx="8"/>
+      <text class="d-text" x="65" y="42" text-anchor="middle"
+        dominant-baseline="middle">Text tokens</text>
+      <rect class="d-box" x="144" y="20" width="140" height="44" rx="8"/>
+      <text class="d-text" x="214" y="42" text-anchor="middle"
+        dominant-baseline="middle">Voice prompt codes</text>
+      <rect class="d-box" x="308" y="20" width="70" height="44" rx="8"/>
+      <text class="d-text" x="343" y="42" text-anchor="middle"
+        dominant-baseline="middle">Start</text>
+      <rect class="d-box" x="402" y="20" width="140" height="44" rx="8"/>
+      <text class="d-text" x="472" y="42" text-anchor="middle"
+        dominant-baseline="middle">Generated codes</text>
+      <rect class="d-box d-box--muted" x="566" y="20" width="70" height="44" rx="8"/>
+      <text class="d-text" x="601" y="42" text-anchor="middle"
+        dominant-baseline="middle">Stop</text>
+      <path class="d-arrow" d="M 120 42 L 142 42"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+      <path class="d-arrow" d="M 284 42 L 306 42"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+      <path class="d-arrow" d="M 378 42 L 400 42"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+      <path class="d-arrow" d="M 542 42 L 564 42"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+
+      <!-- == Model loop == -->
+      <rect class="d-box d-box--accent" x="144" y="124" width="140" height="44" rx="8"/>
+      <text class="d-text" x="214" y="146" text-anchor="middle"
+        dominant-baseline="middle">Speech LM</text>
+      <rect class="d-box" x="340" y="124" width="140" height="44" rx="8"/>
+      <text class="d-text" x="410" y="146" text-anchor="middle"
+        dominant-baseline="middle">Sampler</text>
+      <rect class="d-box" x="540" y="124" width="140" height="44" rx="8"/>
+      <text class="d-text" x="610" y="146" text-anchor="middle"
+        dominant-baseline="middle">Codec decoder</text>
+      <path class="d-arrow" d="M 214 64 L 214 122"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+      <path class="d-arrow" d="M 284 146 L 338 146"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 450 124 L 450 66"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+      <path class="d-arrow" d="M 520 64 L 520 94 L 590 94 L 590 122"
+        marker-end="url(#autoregressive-generation-arrow)"/>
+      <text class="d-text--muted" x="206" y="96" text-anchor="end">context</text>
+      <text class="d-text--muted" x="311" y="136" text-anchor="middle">odds</text>
+      <text class="d-text--muted" x="442" y="96" text-anchor="end">one code, appended</text>
+      <text class="d-text--muted" x="600" y="110" text-anchor="start">all codes</text>
+      <text class="d-text--muted" x="610" y="186" text-anchor="middle">audio</text>
+    </svg>
+    <figcaption>
+      The generation loop.
+      The prefix holds text and a voice prompt; each new code is sampled, appended to the context and fed back, until the model emits a stop token.
+    </figcaption>
+  </figure>
+  <p>The loop, in order:</p>
+  <ol>
+    <li>Build the prefix: the text to speak, then the voice prompt (codes of a short reference clip), then a start marker.</li>
+    <li>The LM reads the sequence and outputs a probability distribution over the codec vocabulary (a couple of thousand codes per codebook is typical).</li>
+    <li>A sampler picks one code, which is appended to the context.</li>
+    <li>This repeats one frame at a time (about 12.5 frames per second is a common rate) until the model emits a stop token.</li>
+    <li>The codec decoder turns the generated codes into a waveform.</li>
+  </ol>
+  <p>
+    <strong>Prompts act as the voice.</strong>
+    Because the reference clip sits inside the context, the model clones the speaker by continuing the sequence, with no fine-tuning and no speaker embedding.
+    The same mechanism also copies pace, emotion and room noise; that cost returns in
+    <a href="/apps/materials/speech-to-speech/09-control-and-prompting">Control and prompting</a>.
+  </p>
+  <p>
+    <strong>Alignment is learned, not given.</strong>
+    Alignment means knowing, at every moment of the audio, which word of the text is being voiced.
+    Picture a finger moving along the sentence as the speech plays: for "turn left now" it sits on "turn" for the first third of the audio, then slides to "left", then to "now".
+    Nothing hands the LM that finger.
+    A model with separate text and audio streams can learn it in cross-attention (layers that let audio positions look at text positions); a decoder-only model such as Llasa learns it inside ordinary self-attention over one long sequence.
+    Either way, nothing in the loss forces the finger to move forward only, which is the root of most failures below.
+  </p>
+  <p>
+    <strong>Content versus acoustics.</strong>
+    The dominant high-quality recipe lets the AR model decide content and prosody, then hands the tokens to a renderer that restores acoustic detail
+    (see <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow">Diffusion and flow</a>
+    and <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform">Tokens to waveform</a>).
+  </p>
+
+  <h3 id="autoregressive-generation-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Temperature, top-k, top-p</td>
+          <td>How adventurous the sampler is</td>
+          <td>Higher is livelier prosody but more bad takes; lower is stable but flatter</td>
+        </tr>
+        <tr>
+          <td>Best-of-N reranking and inference-time search</td>
+          <td>Sample several takes, or guide decoding with speech-understanding verifiers, and keep the best</td>
+          <td>N times the compute, or more latency; the score (ASR error plus speaker similarity) defines "best"</td>
+        </tr>
+        <tr>
+          <td>Voice prompt length and quality</td>
+          <td>How well the voice is captured</td>
+          <td>A clean prompt helps; a noisy one is copied faithfully</td>
+        </tr>
+        <tr>
+          <td>Codec frame rate</td>
+          <td>Steps per second of audio</td>
+          <td>Lower rate is faster and fits longer audio in context, but each token carries more</td>
+        </tr>
+        <tr>
+          <td>Alignment loss</td>
+          <td>
+            Pushes attention to move monotonically: a CTC-style loss (see
+            <a href="/apps/materials/speech-to-speech/02-listening#audio-meets-text">Audio meets text</a>)
+            or an attention prior, a fixed band along the diagonal that keeps attention near the expected position
+          </td>
+          <td>Adds no parameters and reduces skipping and repeating</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Sampling is the cheapest lever, and reranking is the most reliable one.
+    Pushing the reranking signal into training (online RL) invites reward hacking (<a href="/apps/materials/speech-to-speech/08-training#reward-hacking-guards">guards</a>): one report finds that RL on transcription signals lowers error rates but collapses prosody into monotone speech.
+  </p>
+
+  <h3 id="autoregressive-generation-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Repeating, skipping, babbling.</strong>
+      The attention loses its place, so words repeat, vanish or turn into noise, and hallucination correlates with model uncertainty.
+      Teams measure it as word error rate (WER, defined in
+      <a href="/apps/materials/speech-to-speech/02-listening#speech-encoder">The speech encoder</a>)
+      or its character version, from one fixed, strong ASR model, and fix it with monotonic alignment losses, attention priors and reranking.
+    </li>
+    <li>
+      <strong>Stop-token failure.</strong>
+      Sampled late, the model babbles on; sampled early, the clip is cut off.
+      <span class="tag tag--inference">Inference</span>
+      Check clip length against text length, and cap generation at a multiple of the expected duration.
+    </li>
+    <li>
+      <strong>Long-form drift.</strong>
+      Over minutes, errors compound and nothing re-anchors the voice.
+      <span class="tag tag--inference">Inference</span>
+      Measure speaker similarity in sliding windows against the first window, and synthesise in chunks that each reuse the original reference.
+    </li>
+    <li>
+      <strong>Sampling instability.</strong>
+      Some seeds are bad while the average looks fine.
+      Track the failure rate across seeds, lower the temperature, and rerank.
+    </li>
+    <li>
+      <strong>Duration guessed wrong.</strong>
+      Non-autoregressive flow models cannot stall, but they must choose the total duration up front, and that choice can be wrong (see
+      <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-tts-pipeline">How flow TTS works</a>).
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Speech LMs are next-token predictors over codec tokens, with the voice supplied as a prefix of reference codes.
+      The alignment between text and audio is learned by attention, so the characteristic failures are repeated or skipped words and runaway generation.
+      I would fix them with monotonic alignment losses and best-of-N reranking scored by ASR error and speaker similarity."
+    </p>
+  </div>
+  <h3 id="autoregressive-generation-sources">Sources</h3>
+  <ul>
+    <li>Neural Codec Language Models are Zero-Shot Text to Speech Synthesizers (arXiv 2301.02111)</li>
+    <li>Llasa: Scaling Train-Time and Inference-Time Compute for Llama-based Speech Synthesis (arXiv 2502.04128)</li>
+    <li>Improving Robustness of LLM-based Speech Synthesis by Learning Monotonic Alignment (arXiv 2406.17957)</li>
+    <li>Regotron: Regularizing the Tacotron2 architecture via monotonic alignment loss (arXiv 2204.13437)</li>
+    <li>Mitigating Hallucinations in LM-Based TTS Models via Distribution Alignment Using GFlowNets (arXiv 2508.15442)</li>
+    <li>No Verifiable Reward for Prosody: Toward Preference-Guided Prosody Learning in TTS (arXiv 2509.18531)</li>
+    <li>Moshi: a speech-text foundation model for real-time dialogue (arXiv 2410.00037)</li>
+    <li>
+      Literature review:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#generation-paradigms">Generation paradigms</a>,
+      <a href="/apps/materials/speech-lit-review/08-common-problems#speech-generation-problems">Speech generation problems</a>
+    </li>
+    <li>
+      <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">Synthesia Express-2 post</a>
+      (in-context cloning from reference audio)
+    </li>
+  </ul>
+</section>

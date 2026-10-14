@@ -1,0 +1,238 @@
+<section id="turn-taking-backchannels">
+  <h2>Turn-taking prediction and the human baseline</h2>
+  <p>
+    Turn-taking is a prediction problem: when does the other speaker stop, and should I start?
+    The field moved from stand-alone predictors to end-of-turn detectors in cascades, then to semantic detectors that read the audio itself, and now to
+    duplex models that fold the decision into generation.
+  </p>
+  <h3 id="classic-predictors">Predictors: TurnGPT and VAP</h3>
+  <ul>
+    <li>
+      <strong>TurnGPT</strong> (Ekstedt and Skantze, Findings of EMNLP 2020, arXiv 2010.10874):
+      a transformer language model that predicts turn shifts in spoken dialogue from text.
+    </li>
+    <li>
+      <strong>Voice Activity Projection, VAP</strong> (Ekstedt and Skantze, Interspeech 2022, arXiv 2205.09812):
+      a self-supervised predictive objective on the voice activity of both speakers, so turn-taking models train without labels.
+    </li>
+    <li>
+      <strong>Multilingual VAP</strong> (LREC-COLING 2024, arXiv 2403.06487):
+      English, Mandarin and Japanese.
+      A model trained on one language predicts poorly on the others;
+      one multilingual model performs on par with the monolingual ones and learns to identify the input language.
+    </li>
+  </ul>
+
+  <h3 id="eot-models">End-of-turn models in production</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Design</th>
+          <th>Reported by the vendor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <a href="https://livekit.com/blog/solving-end-of-turn-detection">LiveKit Turn Detector v1</a>
+            (17 Jun 2026)
+          </td>
+          <td>Semantic branch (audio encoder, adapter, fine-tuned LLM) fused with an acoustic branch; works from speech, not a transcript</td>
+          <td>14 languages. On LiveKit's eot-bench: 9.9% false cutoffs at a 300 ms budget, 4.5% at 600 ms; 543 ms mean latency at 5% false cutoffs, 295 ms at 10%</td>
+        </tr>
+        <tr>
+          <td><a href="https://github.com/pipecat-ai/smart-turn">Pipecat Smart Turn v3</a> (Daily)</td>
+          <td>About 8M parameters: Whisper Tiny encoder plus a linear classifier; BSD 2-clause</td>
+          <td>23 languages; 8 MB quantised; as little as 10 ms on some CPUs, under 100 ms on most cloud instances</td>
+        </tr>
+        <tr>
+          <td><a href="https://developers.deepgram.com/docs/flux/quickstart">Deepgram Flux</a></td>
+          <td>End-of-turn detection inside the STT model</td>
+          <td>"~260ms end-of-turn detection" (Deepgram docs)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    These are vendor numbers, measured on different benchmarks and conditions, so do not rank the vendors from this table.
+    The eot-bench framing is worth borrowing: false-cutoff rate at a fixed latency budget (300 or 600 ms),
+    and mean latency at a fixed false-cutoff target (5% or 10%).
+    It compares systems at an operating point, not at a single threshold.
+  </p>
+
+  <h3 id="semantic-eot">Semantic end-of-turn detectors</h3>
+  <p>
+    Silence length alone cannot tell a hesitation from a finished thought.
+    A family of 2025 and 2026 detectors decides from partial speech, usually without waiting for an ASR transcript.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Detector</th>
+          <th>Design</th>
+          <th>Reported by the authors</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Codec endpointer (arXiv 2506.07081)</td>
+          <td>Real-time endpointing on streaming, low-bitrate neural audio codec features, plus a label-delay training scheme to reduce cutoff errors</td>
+          <td>At a fixed median latency of 160 ms, relative cutoff-error reductions of 42.7% (single stream) and 37.5% (two streams). On a codec-based speech LLM, median response time improves by 1200 ms and cutoff error falls 35%</td>
+        </tr>
+        <tr>
+          <td>FD-VAD (arXiv 2609.35791)</td>
+          <td>ASR-free continue/stop classifier over bounded causal audio windows: frozen speech encoder, light adapter, parameter-efficiently adapted LM; confidence-gated commitment and boundary-focused hard-negative sampling</td>
+          <td>Zero-shot on the TurnBench dev set, EOT recall 0.853 at false positives at most 0.10</td>
+        </tr>
+        <tr>
+          <td>Next-Turn (arXiv 2606.18094)</td>
+          <td>Trains on time-to-next-speech-onset, with targets derived from speech timestamps and no extra annotation</td>
+          <td>25.9% absolute improvement in endpoint accuracy within 320 ms over the strongest baseline; gains grow with longer pauses when trained jointly with binary endpointing</td>
+        </tr>
+        <tr>
+          <td>Hierarchical EOT model (arXiv 2603.13379)</td>
+          <td>Primary-speaker segmentation feeds a causal model that reads per-speaker features from the user and the bot and predicts the state now and 10, 20 and 30 ms ahead. wav2vec 2.0 features are distilled into a 32-dimensional MFCC student</td>
+          <td>1.14M parameters; 87.7% recall against 58.9% for Smart Turn v3 on an end-to-end turn-detection benchmark; median detection latency 36 ms against 800 to 1300 ms</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    Each row uses the authors' own benchmark, so do not rank them.
+    CoDeTT (arXiv 2603.25434) is the benchmark built to compare such systems: it frames turn-taking as a structured decision problem with fine-grained decision categories and controlled context, and the authors observe substantial performance disparities across decision types and scenarios.
+    The common design lesson is the same as the vendor models above: report false cutoffs and latency at a stated operating point.
+  </p>
+
+  <h3 id="human-baseline">The human baseline</h3>
+  <p>
+    On smooth transfers, humans start speaking a median of 151 ms before the other turn ends (TurnBench, arXiv 2608.25218).
+    Define the floor-transfer offset as
+  </p>
+  \[
+  \Delta = t_{\text{agent onset}} - t_{\text{user end}},
+  \qquad
+  \Delta_{\text{human, median}} = -151\ \text{ms}.
+  \]
+  <p>
+    A cascade that waits for silence can only produce \( \Delta > 0 \).
+    A negative offset needs prediction, which is what VAP and duplex models do.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+  <p>
+    TurnBench (arXiv 2608.25218, Aug 2026) is an annotated benchmark of end-of-turn (EOT) and interruption detection.
+    The authors report about 30 h of dual-channel dyadic speech in 154 dialogues, each triple-annotated.
+    A segment is gold when at least 2 of 3 annotators give the same label with endpoints within
+    \( \pm 200 \) ms.
+    Results are recall, false-positive rate (FPR) and median latency, across 14 turn-taking systems.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>VAP baseline</th>
+          <th>Recall</th>
+          <th>FPR</th>
+          <th>Median latency</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>End of turn</td>
+          <td>0.845</td>
+          <td>0.055</td>
+          <td>368 ms</td>
+        </tr>
+        <tr>
+          <td>Interruption</td>
+          <td>0.945</td>
+          <td>0.107</td>
+          <td>994 ms</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The TurnBench authors state the open problem: no current system matches human timing without excessive false positives.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 -4 720 344" role="img"
+      aria-label="Three timelines of user and agent lanes: floor transfer where the agent starts slightly before the user ends, a backchannel inside the user turn, and a barge-in where the agent stops after a stop latency">
+      <defs>
+        <marker id="floor-transfer-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text" x="56" y="8" text-anchor="start"
+        dominant-baseline="middle">1  Floor transfer</text>
+      <rect class="d-lane" x="56" y="18" width="660" height="28" rx="6"/>
+      <text class="d-text--small" x="8" y="32" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <rect class="d-lane" x="56" y="50" width="660" height="28" rx="6"/>
+      <text class="d-text--small" x="8" y="64" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-box d-box--muted" x="76" y="21" width="304" height="22" rx="8"/>
+      <text class="d-text" x="228.0" y="32.0" text-anchor="middle"
+        dominant-baseline="middle">user turn</text>
+      <rect class="d-box" x="350" y="53" width="300" height="22" rx="8"/>
+      <text class="d-text" x="500.0" y="64.0" text-anchor="middle"
+        dominant-baseline="middle">agent reply</text>
+      <path class="d-arrow d-arrow--dashed" d="M 350 16 L 350 80"/>
+      <path class="d-arrow d-arrow--dashed" d="M 380 16 L 380 80"/>
+      <text class="d-text--muted" x="400" y="8" text-anchor="start"
+        dominant-baseline="middle">offset: human median -151 ms (agent starts early)</text>
+      <text class="d-text" x="56" y="116" text-anchor="start"
+        dominant-baseline="middle">2  Backchannel</text>
+      <rect class="d-lane" x="56" y="126" width="660" height="28" rx="6"/>
+      <text class="d-text--small" x="8" y="140" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <rect class="d-lane" x="56" y="158" width="660" height="28" rx="6"/>
+      <text class="d-text--small" x="8" y="172" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-box d-box--muted" x="76" y="129" width="560" height="22" rx="8"/>
+      <text class="d-text" x="356.0" y="140.0" text-anchor="middle"
+        dominant-baseline="middle">user keeps the floor</text>
+      <rect class="d-box" x="300" y="161" width="60" height="22" rx="8"/>
+      <text class="d-text" x="330.0" y="172.0" text-anchor="middle"
+        dominant-baseline="middle">mm-hm</text>
+      <text class="d-text--muted" x="400" y="116" text-anchor="start"
+        dominant-baseline="middle">agent overlaps but does not take the turn</text>
+      <text class="d-text" x="56" y="224" text-anchor="start"
+        dominant-baseline="middle">3  Barge-in</text>
+      <rect class="d-lane" x="56" y="234" width="660" height="28" rx="6"/>
+      <text class="d-text--small" x="8" y="248" text-anchor="start"
+        dominant-baseline="middle">user</text>
+      <rect class="d-lane" x="56" y="266" width="660" height="28" rx="6"/>
+      <text class="d-text--small" x="8" y="280" text-anchor="start"
+        dominant-baseline="middle">agent</text>
+      <rect class="d-box" x="76" y="269" width="404" height="22" rx="8"/>
+      <text class="d-text" x="278.0" y="280.0" text-anchor="middle"
+        dominant-baseline="middle">agent speaking</text>
+      <rect class="d-box d-box--muted" x="400" y="237" width="250" height="22" rx="8"/>
+      <text class="d-text" x="565.0" y="248.0" text-anchor="middle"
+        dominant-baseline="middle">user barges in</text>
+      <path class="d-arrow d-arrow--dashed" d="M 400 232 L 400 296"/>
+      <path class="d-arrow d-arrow--dashed" d="M 480 232 L 480 296"/>
+      <path class="d-arrow" d="M 400 308 L 480 308"
+        marker-end="url(#floor-transfer-arrow)"
+        marker-start="url(#floor-transfer-arrow)"/>
+      <text class="d-text--muted" x="440" y="322" text-anchor="middle"
+        dominant-baseline="middle">stop latency</text>
+      <text class="d-text--muted" x="500" y="224" text-anchor="start"
+        dominant-baseline="middle">agent stops after user onset</text>
+    </svg>
+    <figcaption>Not to scale. 1: humans start a median 151 ms before the other turn ends. 2: a backchannel leaves the floor with the user. 3: stop latency runs from user onset to the last audible agent sample.</figcaption>
+  </figure>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Humans start a median 151 ms before the other turn ends, so the target offset is negative, which needs prediction.
+      I would report floor-transfer offset against that baseline, at a stated false-interruption rate."
+    </p>
+  </div>
+</section>

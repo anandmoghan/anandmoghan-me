@@ -1,0 +1,32 @@
+<section id="q-whisper">
+  <h2>Whisper in one page-half</h2>
+  <ul>
+    <li>Encoder-decoder Transformer, 680,000 h weakly supervised; one model does ASR, X-to-English translation and language ID via task tokens (arXiv 2212.04356).</li>
+    <li>Hz ladder: 16 kHz audio, 100 Hz log-mel (80 bins; 128 in large-v3), 50 Hz encoder frames (1,500 per 30 s window), 12.5 Hz after a 4x adapter.</li>
+    <li>Training: web transcripts filtered for machine-generated text, audio language ID checked against the transcript; large-v2 trained 2.5x more epochs with SpecAugment.</li>
+    <li>large-v3 used 1M h weakly labelled plus 4M h pseudo-labelled with large-v2 (<a href="https://huggingface.co/openai/whisper-large-v3">OpenAI model card</a>).</li>
+    <li>Long-form: sliding 30 s windows, beam 5, temperature fallback when log-probability is below -1 or compression ratio above 2.4, no-speech threshold 0.6.</li>
+    <li>
+      Limits (<a href="https://huggingface.co/openai/whisper-large-v3">model card</a>):
+      hallucination, repetitive text, not real-time out of the box; the fixed 30 s window and non-causal encoder make streaming hard.
+    </li>
+    <li>large-v3-turbo cuts the decoder from 32 to 4 layers (<a href="https://huggingface.co/openai/whisper-large-v3-turbo">model card</a>).</li>
+    <li>Speech LLMs reuse the encoder (Qwen2-Audio, arXiv 2407.10759; Voxtral, arXiv 2507.13264; GLM-4-Voice makes it causal, arXiv 2412.02612).</li>
+    <li>Qwen3-Omni replaced it with AuT, trained from scratch on 20M h of supervised audio (arXiv 2509.17765).</li>
+    <li>Streaming the encoder: causal fine-tune (CarelessWhisper, arXiv 2508.12301; GLM-4-Voice, arXiv 2412.02612), a windowed encoder with a 1 to 8 s window (AuT, arXiv 2601.21337), or a wrapper that re-decodes a buffer (whisper_streaming, arXiv 2307.14743).</li>
+    <li>
+      Look-ahead (right context) trades latency for accuracy: NVIDIA's cache-aware FastConformer
+      reports RNNT WER 9.5% at 0 ms against 6.3% at 1,360 ms, and chunk-aware look-ahead beats
+      per-layer look-ahead at the same latency (arXiv 2312.17279).
+      <a href="/apps/materials/speech-lit-review/02-speech-understanding#look-ahead">Look-ahead section</a>
+    </li>
+  </ul>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Whisper's recipe is right, but a fixed 30 s window and a bidirectional encoder are wrong for voice agents.
+      I would start from a streaming encoder."
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/02-speech-understanding#whisper">Full section</a></p>
+</section>

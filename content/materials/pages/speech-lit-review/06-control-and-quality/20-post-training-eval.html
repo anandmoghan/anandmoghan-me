@@ -1,0 +1,201 @@
+<section id="post-training-eval">
+  <h2>Post-training and evaluation for speech generation</h2>
+  <p>
+    Post-training uses ASR and speaker-verification rewards.
+    The recurring failure is reward hacking.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 310" role="img"
+      aria-label="RL loop for TTS: policy generates speech, ASR WER, speaker similarity and emotion rewards score it, the policy is updated, and human listening tests audit the rewards">
+      <defs>
+      <marker id="arrow-post-training-eval" viewBox="0 0 10 10" refX="9" refY="5"
+        markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+      </marker>
+      </defs>
+    <rect class="d-box d-box--accent" x="10" y="80" width="130" height="44" rx="8"/>
+    <text class="d-text" x="75" y="102" text-anchor="middle"
+      dominant-baseline="middle">TTS policy</text>
+    <rect class="d-box" x="190" y="80" width="130" height="44" rx="8"/>
+    <text class="d-text" x="255" y="102" text-anchor="middle"
+      dominant-baseline="middle">Speech samples</text>
+    <path class="d-arrow" d="M 140 102 L 188 102" marker-end="url(#arrow-post-training-eval)"/>
+    <path class="d-arrow" d="M 320 102 L 398 102" marker-end="url(#arrow-post-training-eval)"/>
+    <rect class="d-group" x="385" y="8" width="180" height="182" rx="10"/>
+    <rect class="d-box" x="400" y="20" width="150" height="44" rx="8"/>
+    <text class="d-text" x="475" y="42" text-anchor="middle"
+      dominant-baseline="middle">ASR: WER</text>
+    <rect class="d-box" x="400" y="80" width="150" height="44" rx="8"/>
+    <text class="d-text" x="475" y="102" text-anchor="middle"
+      dominant-baseline="middle">Speaker SIM</text>
+    <rect class="d-box" x="400" y="140" width="150" height="44" rx="8"/>
+    <text class="d-text" x="475" y="162" text-anchor="middle"
+      dominant-baseline="middle">Emotion, naturalness</text>
+    <path class="d-arrow" d="M 565 102 L 593 102" marker-end="url(#arrow-post-training-eval)"/>
+    <rect class="d-box" x="595" y="80" width="115" height="44" rx="8"/>
+    <text class="d-text" x="652" y="102" text-anchor="middle"
+      dominant-baseline="middle">Policy update</text>
+    <path class="d-arrow d-arrow--dashed" d="M 652 124 L 652 296 L 75 296 L 75 126"
+      marker-end="url(#arrow-post-training-eval)"/>
+    <text class="d-text--muted" x="360" y="288" text-anchor="middle">updated policy generates the next rollouts</text>
+    <rect class="d-box d-box--muted" x="400" y="226" width="150" height="44" rx="8"/>
+    <text class="d-text" x="475" y="248" text-anchor="middle"
+      dominant-baseline="middle">Human listening</text>
+    <path class="d-arrow d-arrow--dashed" d="M 475 226 L 475 192"
+      marker-end="url(#arrow-post-training-eval)"/>
+    <text class="d-text--muted" x="487" y="210">audit for reward hacking</text>
+    <text class="d-text--muted" x="164" y="94" text-anchor="middle">rollouts</text>
+    <text class="d-text--muted" x="652" y="72" text-anchor="middle">rewards</text>
+    </svg>
+    <figcaption>Figure: the RL loop for TTS. Automatic rewards score each rollout; human listening tests audit the rewards and gate release.</figcaption>
+  </figure>
+
+  <h3 id="post-training-methods">Methods</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Idea</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Seed-TTS RL (arXiv 2406.02430)</td>
+          <td>RL for robustness, speaker similarity, controllability</td>
+        </tr>
+        <tr>
+          <td>DiffRO (CosyVoice 3; arXiv 2505.17589, 2507.05911)</td>
+          <td>Computes rewards on neural codec tokens rather than synthesized audio; Gumbel-Softmax makes the reward differentiable; a multi-task reward model adds emotion and quality control</td>
+        </tr>
+        <tr>
+          <td>F5R-TTS (arXiv 2504.02407)</td>
+          <td>Converts flow outputs to Gaussians so GRPO applies; WER and SIM rewards; 29.5% relative WER reduction, 4.6% relative SIM gain (authors)</td>
+        </tr>
+        <tr>
+          <td>Flow-GRPO (arXiv 2505.05470)</td>
+          <td>ODE-to-SDE conversion that keeps the model's marginals, enabling the sampling that online RL needs for flow-matching models (text-to-image)</td>
+        </tr>
+        <tr>
+          <td>GROW (arXiv 2608.03215)</td>
+          <td>Group-relative advantage-weighted on-policy RL that acts on the standard flow-matching objective, avoiding the ODE-to-SDE conversion and per-step likelihood ratios; on DiTAR the authors report WER 2.016 to 1.558 and SIM 0.676 to 0.715</td>
+        </tr>
+        <tr>
+          <td>SwanVoice (arXiv 2605.30993)</td>
+          <td>DiffusionNFT post-training with phone-level and speaker-similarity rewards</td>
+        </tr>
+        <tr>
+          <td>FlowTTS-GRPO (arXiv 2606.23190)</td>
+          <td>Online RL for flow-matching TTS: ODE-to-SDE conversion, weighted multi-objective reward; tested on CosyVoice 3.0 and F5-TTS</td>
+        </tr>
+        <tr>
+          <td>Subjective-reward GRPO (arXiv 2608.31035)</td>
+          <td>GRPO on codec language models with learned rewards for speaking style, naturalness, likability and arousal and a CER zone constraint. Each reward mainly lifts its own metric; human transfer is uneven; best-of-8 reranking performs about as well as GRPO perceptually</td>
+        </tr>
+        <tr>
+          <td>NVAlign (arXiv 2609.31892)</td>
+          <td>Direct-gradient post-training of non-verbal tag-following, with a frozen NVV-aware recogniser as the reward, passed through the flow sampler; beats SFT and Flow-GRPO on tag-following</td>
+        </tr>
+        <tr>
+          <td>Step-Audio-EditX (arXiv 2511.03601)</td>
+          <td>Large-margin synthetic data for iterative emotion and style editing, with no embedding priors or auxiliary modules</td>
+        </tr>
+        <tr>
+          <td>Preference optimisation</td>
+          <td>EASPO: stepwise preference optimisation for diffusion TTS, scoring noisy intermediate states (arXiv 2509.25416)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="reward-hacking">Reward hacking</h3>
+  <div class="callout callout--warn">
+    <strong>Trap: automatic rewards get gamed</strong>
+    <ul>
+      <li>RRPO reports that DiffRO-style reward models can be exploited with acoustic artifacts that earn spurious reward but degrade perceptual quality (arXiv 2512.04552).</li>
+      <li>
+        A prosody study found GRPO on CER and NLL rewards lowered error rates but collapsed prosody into monotone speech; adding speaker similarity destabilised training.
+        Its fix was iterative DPO with a few hundred human preference pairs per round (arXiv 2509.18531).
+      </li>
+      <li>FlowSE-GRPO (speech enhancement): a single reward gives fast metric gains but degrades audio fidelity; multi-metric rewards mitigate this (arXiv 2601.16483).</li>
+    </ul>
+  </div>
+  <div class="callout callout--inference">
+    <strong>Inference</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      Always pair automatic rewards with a naturalness term and listening tests.
+      Run best-of-N under the same reward as the baseline first: arXiv 2608.31035 finds best-of-8 about as good as GRPO perceptually, so RL has to justify its training cost.
+    </p>
+  </div>
+
+  <h3 id="reward-validation">Validating reward models</h3>
+  <p>
+    MOS-RMBench (arXiv 2510.00743) converts existing MOS datasets into preference-comparison tasks and tests scalar, semi-scalar and generative reward models.
+    Scalar models perform best overall, with accuracy above 74%; most models do worse on synthetic than on human speech; all struggle with pairs whose MOS differs little.
+    The authors propose a MOS-aware generative reward model that scales its reward by the MOS difference, narrowing the gap with scalar models on the hardest pairs
+    <span class="tag tag--reported">Reported</span>.
+    EmoS (arXiv 2608.09189) is a GRPO-trained evaluator for emotional intelligence in spoken language models, with a bilingual response-pair dataset and 83.8% accuracy on its benchmark, which the authors call approaching human level
+    <span class="tag tag--reported">Reported</span>.
+    The practical rule: measure a judge on close pairs and synthetic audio from your own domain before it supplies a training reward.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+
+  <h3 id="tts-metrics">Metrics</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>WER</td>
+          <td>
+            <a href="https://github.com/BytedanceSpeech/seed-tts-eval">Seed-TTS-eval</a>
+            uses Whisper-large-v3 (English) and Paraformer-zh (Mandarin)
+          </td>
+        </tr>
+        <tr>
+          <td>SIM</td>
+          <td>
+            Seed-TTS-eval uses WavLM-large fine-tuned for speaker verification.
+            <span class="tag tag--inference">Inference</span>
+            Other benchmarks may use other verification models, so quote the variant
+          </td>
+        </tr>
+        <tr>
+          <td>UTMOS</td>
+          <td>Predicted MOS used as a naturalness check alongside WER and SIM (for example in GROW, arXiv 2608.03215)</td>
+        </tr>
+        <tr>
+          <td>emotion2vec</td>
+          <td>Emotion similarity (arXiv 2312.15185)</td>
+        </tr>
+        <tr>
+          <td>Full-Duplex-Bench (arXiv 2503.04721)</td>
+          <td>Pause handling, backchanneling, turn-taking and interruption management for spoken dialogue models</td>
+        </tr>
+        <tr>
+          <td>Human listening</td>
+          <td>Needed because the automatic metrics are optimisable</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="link-to-my-work">Link to my work</h3>
+  <p>
+    The GRPO experience from online RL at Amazon transfers directly.
+    The new part is making rollouts differentiable or likelihood-tractable for flow models.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I would use WER and SIM rewards plus an emotion or naturalness term, watch for monotone prosody as a hacking signature, and gate releases on human listening tests."
+    </p>
+  </div>
+</section>

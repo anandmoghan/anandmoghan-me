@@ -1,0 +1,15 @@
+<h3 id="classifier-free-guidance">Classifier-free guidance (CFG)</h3>
+<p>
+  CFG pushes the output toward the condition \( c \) by extrapolating away from an unconditional prediction \( \varnothing \).
+  The guidance scale \( w \) sets the strength.
+</p>
+\[
+  \hat v = v_\theta(x,t,c) + w\,\big(v_\theta(x,t,c) - v_\theta(x,t,\varnothing)\big)
+\]
+<p>
+  The cost is two forward passes per sampling step, so CFG doubles inference compute.
+  The same form applies to a diffusion network by swapping \( v_\theta \) for \( \epsilon_\theta \).
+</p>
+<p>
+  Classifier-free guidance was introduced for diffusion models (arXiv 2207.12598); the form above applies it to a velocity network.
+</p>

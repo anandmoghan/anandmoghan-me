@@ -1,0 +1,140 @@
+<section id="design-space">
+  <h2>The S2S design space in one picture</h2>
+  <p>
+    Every speech-to-speech system answers the same five questions.
+    The model zoo looks large only because the answers combine in many ways.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 250" role="img"
+      aria-label="S2S design space: speech in, input representation, backbone LLM, output representation, renderer, speech out, with a text stream feeding the output representation and a duplex scheme wrapping the path">
+      <defs>
+        <marker id="design-space-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <!-- == Decision 4 wraps everything == -->
+      <rect class="d-group" x="64" y="12" width="600" height="226" rx="8"/>
+      <text class="d-text--muted" x="76" y="28" text-anchor="start"
+        dominant-baseline="middle">4  Streaming / duplex scheme wraps the whole path</text>
+      <!-- == Pipeline == -->
+      <rect class="d-box" x="78" y="60" width="120" height="44" rx="8"/>
+      <text class="d-text" x="138" y="74" text-anchor="middle"
+        dominant-baseline="middle">Input rep</text>
+      <text class="d-text--small" x="138" y="91" text-anchor="middle"
+        dominant-baseline="middle">decision 1</text>
+      <rect class="d-box d-box--accent" x="234" y="60" width="120" height="44"
+        rx="8"/>
+      <text class="d-text" x="294" y="74" text-anchor="middle"
+        dominant-baseline="middle">Backbone LLM</text>
+      <text class="d-text--small" x="294" y="91" text-anchor="middle"
+        dominant-baseline="middle">swappable</text>
+      <rect class="d-box" x="390" y="60" width="120" height="44" rx="8"/>
+      <text class="d-text" x="450" y="74" text-anchor="middle"
+        dominant-baseline="middle">Output rep</text>
+      <text class="d-text--small" x="450" y="91" text-anchor="middle"
+        dominant-baseline="middle">decision 2</text>
+      <rect class="d-box" x="546" y="60" width="120" height="44" rx="8"/>
+      <text class="d-text" x="606" y="74" text-anchor="middle"
+        dominant-baseline="middle">Renderer</text>
+      <text class="d-text--small" x="606" y="91" text-anchor="middle"
+        dominant-baseline="middle">acoustic, decision 5</text>
+      <path class="d-arrow" d="M 6 82 L 76 82"
+        marker-end="url(#design-space-arrow)"/>
+      <text class="d-text--muted" x="41" y="70" text-anchor="middle"
+        dominant-baseline="middle">speech in</text>
+      <path class="d-arrow" d="M 198 82 L 232 82"
+        marker-end="url(#design-space-arrow)"/>
+      <path class="d-arrow" d="M 354 82 L 388 82"
+        marker-end="url(#design-space-arrow)"/>
+      <path class="d-arrow" d="M 510 82 L 544 82"
+        marker-end="url(#design-space-arrow)"/>
+      <path class="d-arrow" d="M 666 82 L 716 82"
+        marker-end="url(#design-space-arrow)"/>
+      <text class="d-text--muted" x="691" y="70" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <text class="d-text--muted" x="691" y="98" text-anchor="middle"
+        dominant-baseline="middle">out</text>
+      <!-- == Text stream scaffold == -->
+      <rect class="d-box" x="204" y="148" width="180" height="44" rx="8"/>
+      <text class="d-text" x="294" y="162" text-anchor="middle"
+        dominant-baseline="middle">Text stream</text>
+      <text class="d-text--small" x="294" y="179" text-anchor="middle"
+        dominant-baseline="middle">scaffold / reasoning</text>
+      <path class="d-arrow" d="M 294 104 L 294 146"
+        marker-end="url(#design-space-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 384 170 L 450 170 L 450 106"
+        marker-end="url(#design-space-arrow)"/>
+      <text class="d-text--muted" x="294" y="216" text-anchor="middle"
+        dominant-baseline="middle">decision 3: text / speech coupling</text>
+    </svg>
+    <figcaption>The five decisions around one backbone LLM. Decision 4 (streaming/duplex scheme) wraps the whole path.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Decision</th>
+          <th>Options</th>
+          <th>Common pick <span class="tag tag--inference">Inference</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1. Input representation</td>
+          <td>Continuous encoder embeddings; discrete semantic tokens; codec tokens</td>
+          <td>Continuous embeddings from an ASR-pretrained encoder at about 12.5 Hz</td>
+        </tr>
+        <tr>
+          <td>2. Output representation</td>
+          <td>Multi-codebook codec tokens; single-codebook semantic tokens; continuous latents</td>
+          <td>Semantic or codec tokens, rarely continuous</td>
+        </tr>
+        <tr>
+          <td>3. Text/speech coupling</td>
+          <td>Cascade; text-first (half-cascade); Thinker-Talker; interleaved; parallel streams</td>
+          <td>Text-first or interleaved</td>
+        </tr>
+        <tr>
+          <td>4. Streaming/duplex scheme</td>
+          <td>Turn-based; chunked; time-multiplexed; dual-stream; state head</td>
+          <td>Chunked, with a duplex layer on top</td>
+        </tr>
+        <tr>
+          <td>5. Acoustic renderer</td>
+          <td>Codec decoder; flow-matching decoder plus vocoder; causal ConvNet</td>
+          <td>AR LM for content, flow or ConvNet for acoustics</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="core-tension">The core tension</h3>
+  <p>
+    Speech encoders emit frames at 50 Hz (Whisper, as used in Voxtral; arXiv 2507.13264), while text is far sparser.
+    Every decision above is a way to give the LLM a sequence it can model at text-like cost.
+    The goal is to do that without losing prosody, speaker identity or timing.
+  </p>
+
+  <h3 id="downstream-llm">Why the LLM can be "downstream"</h3>
+  <p>
+    If the backbone sees speech as embeddings and emits tokens a separate renderer turns into audio,
+    the reasoning model can be swapped, frozen or fine-tuned lightly.
+    Freeze-Omni (arXiv 2411.00774) takes this to the limit by freezing the LLM.
+  </p>
+
+  <h3 id="open-problem">The open problem</h3>
+  <p>
+    Keeping text-level intelligence once the model must speak.
+    URO-Bench reports that open-source spoken dialogue models lag behind their backbone LLMs on instruction following and suffer from catastrophic forgetting (arXiv 2502.17810).
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I split any S2S system into five choices: input rep, output rep, text coupling,
+      duplex scheme and renderer.
+      Most new models differ in one or two of them, not all five."
+    </p>
+  </div>
+</section>

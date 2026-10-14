@@ -1,0 +1,581 @@
+<section id="whisper">
+  <h2>Whisper and the Whisper encoder</h2>
+  <p>
+    Whisper is an encoder-decoder Transformer trained on 680,000 hours of weakly supervised audio.
+    Its encoder has been the default front end for speech LLMs, though the newest streaming models train their encoders from scratch instead.
+    Source: arXiv 2212.04356 unless stated.
+  </p>
+
+  <h3 id="whisper-architecture">Architecture</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 210" role="img"
+      aria-label="Whisper pipeline: 16 kHz audio, log-mel at 100 Hz, conv stem with stride 2, encoder at 50 Hz, cross-attention into a decoder with special tokens. A branch shows the encoder feeding a 4x adapter at 12.5 Hz and then an LLM.">
+      <defs>
+        <marker id="whisper-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Main path == -->
+      <text class="d-text--muted" x="72" y="30" text-anchor="middle">16 kHz</text>
+      <text class="d-text--muted" x="216" y="30" text-anchor="middle">100 Hz</text>
+      <text class="d-text--muted" x="360" y="30" text-anchor="middle">stride 2</text>
+      <text class="d-text--muted" x="504" y="30" text-anchor="middle">50 Hz</text>
+      <text class="d-text--muted" x="648" y="30" text-anchor="middle">text tokens</text>
+
+      <rect class="d-box" x="12" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="72" y="62" text-anchor="middle"
+        dominant-baseline="middle">Audio</text>
+
+      <rect class="d-box" x="156" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="216" y="54" text-anchor="middle"
+        dominant-baseline="middle">Log-mel</text>
+      <text class="d-text--small" x="216" y="71" text-anchor="middle"
+        dominant-baseline="middle">80 or 128 bins</text>
+
+      <rect class="d-box" x="300" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="54" text-anchor="middle"
+        dominant-baseline="middle">Conv stem</text>
+      <text class="d-text--small" x="360" y="71" text-anchor="middle"
+        dominant-baseline="middle">2 conv, GELU</text>
+
+      <rect class="d-box d-box--accent" x="444" y="40" width="120" height="44"
+        rx="8"/>
+      <text class="d-text" x="504" y="54" text-anchor="middle"
+        dominant-baseline="middle">Encoder</text>
+      <text class="d-text--small" x="504" y="71" text-anchor="middle"
+        dominant-baseline="middle">1,500 frames / 30 s</text>
+
+      <rect class="d-box" x="588" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="648" y="54" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+      <text class="d-text--small" x="648" y="71" text-anchor="middle"
+        dominant-baseline="middle">cross-attention</text>
+
+      <path class="d-arrow" d="M 132 62 L 154 62" marker-end="url(#whisper-arrow)"/>
+      <path class="d-arrow" d="M 276 62 L 298 62" marker-end="url(#whisper-arrow)"/>
+      <path class="d-arrow" d="M 420 62 L 442 62" marker-end="url(#whisper-arrow)"/>
+      <path class="d-arrow" d="M 564 62 L 586 62" marker-end="url(#whisper-arrow)"/>
+
+      <text class="d-text--small" x="648" y="104" text-anchor="middle">SOT, language, task,</text>
+      <text class="d-text--small" x="648" y="120" text-anchor="middle">timestamps</text>
+
+      <!-- == Speech-LLM branch == -->
+      <text class="d-text--muted" x="12" y="124" text-anchor="start">as speech-LLM front end</text>
+      <path class="d-arrow d-arrow--dashed" d="M 504 84 L 504 128 L 360 128 L 360 148"
+        marker-end="url(#whisper-arrow)"/>
+      <rect class="d-box" x="300" y="150" width="120" height="44" rx="8"/>
+      <text class="d-text" x="360" y="164" text-anchor="middle"
+        dominant-baseline="middle">4x adapter</text>
+      <text class="d-text--small" x="360" y="181" text-anchor="middle"
+        dominant-baseline="middle">50 to 12.5 Hz</text>
+      <rect class="d-box" x="444" y="150" width="120" height="44" rx="8"/>
+      <text class="d-text" x="504" y="172" text-anchor="middle"
+        dominant-baseline="middle">LLM</text>
+      <path class="d-arrow" d="M 420 172 L 442 172" marker-end="url(#whisper-arrow)"/>
+    </svg>
+    <figcaption>Whisper end to end, with the branch that speech LLMs use: the encoder output goes through an adapter to the LLM, and the decoder is dropped.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      <span class="tag tag--confirmed">Confirmed</span>
+      Input is 16 kHz audio turned into an 80-channel log-magnitude mel spectrogram (25 ms window, 10 ms stride), in 30 s segments.
+    </li>
+    <li>
+      <span class="tag tag--confirmed">Confirmed</span>
+      The stem is two conv layers (width 3, GELU); the second has stride 2, so one encoder frame covers 20 ms.
+    </li>
+    <li>
+      Derived: the 10 ms hop gives 100 mel frames per second (100 Hz).
+      The stride-2 conv halves that to one frame per 20 ms (50 Hz).
+      A 30 s window is therefore 30 s / 10 ms = 3,000 mel frames and 3,000 / 2 = 1,500 encoder frames.
+      Short audio is padded to 30 s, so compute is paid for the full window.
+    </li>
+  </ul>
+  <p>
+    Rule (derived arithmetic):
+  </p>
+  \[
+  \text{rate (Hz)} = \frac{1000}{\text{ms per frame}}
+  \]
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Rate</th>
+          <th>ms per frame</th>
+          <th>Where it comes from</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>100 Hz</td><td>10</td><td>Log-mel hop (arXiv 2212.04356)</td></tr>
+        <tr><td>50 Hz</td><td>20</td><td>Whisper encoder after the stride-2 conv (arXiv 2212.04356)</td></tr>
+        <tr><td>25 Hz</td><td>40</td><td>Qwen2-Audio: stride-2 pooling on the encoder output, each frame about 40 ms (arXiv 2407.10759)</td></tr>
+        <tr><td>12.5 Hz</td><td>80</td><td>Voxtral: 4x downsampling adapter on 50 Hz embeddings (arXiv 2507.13264)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Layers</th>
+          <th>Width</th>
+          <th>Heads</th>
+          <th>Params</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Tiny</td><td>4</td><td>384</td><td>6</td><td>39M</td></tr>
+        <tr><td>Base</td><td>6</td><td>512</td><td>8</td><td>74M</td></tr>
+        <tr><td>Small</td><td>12</td><td>768</td><td>12</td><td>244M</td></tr>
+        <tr><td>Medium</td><td>24</td><td>1024</td><td>16</td><td>769M</td></tr>
+        <tr><td>Large</td><td>32</td><td>1280</td><td>20</td><td>1550M</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li>
+      <strong>large-v3:</strong> same architecture, 128 mel bins instead of 80, and a Cantonese token.
+      <span class="tag tag--reported">Reported</span>
+      OpenAI reports a 10% to 20% error reduction over large-v2 (<a href="https://huggingface.co/openai/whisper-large-v3">OpenAI model card</a>).
+    </li>
+    <li>
+      <strong>large-v3-turbo:</strong> a fine-tuned, pruned large-v3 with the decoder cut from 32 to 4 layers (<a href="https://huggingface.co/openai/whisper-large-v3-turbo">OpenAI model card</a>).
+      The card lists it at 809M parameters.
+    </li>
+  </ul>
+
+  <h3 id="whisper-tasks">Multitask token format</h3>
+  <p>
+    The decoder prompt carries the task as tokens: start-of-transcript, language, task (transcribe or translate), then timestamps or no-timestamps.
+    One model therefore does ASR, X-to-English translation and language ID.
+    Timestamps are quantised to 20 ms.
+  </p>
+
+  <h3 id="whisper-training">Training data and recipe</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>v1 / v2</td>
+          <td>
+            680,000 h weakly supervised: 117,000 h of non-English transcription across 96 other languages, 125,000 h of X-to-English translation, the rest English (paper).
+          </td>
+        </tr>
+        <tr>
+          <td>large-v3</td>
+          <td>
+            1 million hours of weakly labelled audio and 4 million hours of audio pseudo-labelled with large-v2 (<a href="https://huggingface.co/openai/whisper-large-v3">OpenAI model card</a>).
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li>
+      <strong>Filtering:</strong> drop machine-generated transcripts (all caps or all lower, no punctuation).
+      Compare audio language ID (VoxLingua107-trained) with CLD2 on the transcript and drop mismatches; English transcripts of other-language audio are kept as translation data.
+    </li>
+    <li>
+      <strong>Optimiser:</strong> AdamW, gradient-norm clipping, linear decay after 2,048 warmup steps, batch 256, FP16 with activation checkpointing, 2 to 3 passes over the data.
+    </li>
+    <li>
+      <strong>Augmentation:</strong> none for the first models.
+      Large-v2 trained 2.5x more epochs with SpecAugment, stochastic depth and BPE dropout.
+    </li>
+  </ul>
+
+  <h3 id="whisper-long-form">Long-form decoding</h3>
+  <p>
+    Whisper slides a 30 s window over long audio and decodes with heuristics (paper section 4.5).
+  </p>
+  <ul>
+    <li>Beam search with beam 5.</li>
+    <li>Temperature fallback from 0, in steps of 0.2 up to 1.0, when average log-probability is below -1 or the gzip compression ratio exceeds 2.4.</li>
+    <li>Condition on the previous window's text only when temperature is below 0.5.</li>
+    <li>No-speech threshold 0.6 to skip silent windows.</li>
+  </ul>
+
+  <h3 id="whisper-limits">Limitations</h3>
+  <ul>
+    <li>
+      The <a href="https://huggingface.co/openai/whisper-large-v3">model card</a> warns that predictions may include text that was not spoken (hallucination) and that the sequence-to-sequence architecture is prone to repetitive text.
+      It also states that the models cannot be used for real-time transcription out of the box.
+    </li>
+    <li>The fixed 30 s window, non-causal encoder and autoregressive beam decoder make streaming hard.</li>
+    <li>
+      A 2026 study that masked parts of the audio counted 51,797 insertions for Whisper-small, 86% of them repetition loops, and 10,365 for large-v3, 35% repetition.
+      Decoders built on an explicit LLM produced 38x fewer insertions than Whisper-small, but a Q-Former encoder brought repetition back (arXiv 2604.21276).
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <strong>Traps</strong>
+    <p>
+      Hallucination and repetition are documented limitations on the model card.
+      Do not rank checkpoints on hallucination without your own measurement.
+    </p>
+  </div>
+
+  <h3 id="whisper-front-end">The encoder as a speech-LLM front end</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>How it uses Whisper</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Qwen2-Audio (arXiv 2407.10759)</td>
+          <td>Encoder initialised from Whisper-large-v3</td>
+        </tr>
+        <tr>
+          <td>Voxtral (arXiv 2507.13264)</td>
+          <td>Whisper large-v3-based encoder, 128 mels, each 30 s chunk independent, 4x downsampling adapter</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice (arXiv 2412.02612)</td>
+          <td>Fine-tuned whisper-large-v3 ASR model with a VQ bottleneck gives a 12.5 Hz, 175 bps single-codebook tokenizer; made causal (see below)</td>
+        </tr>
+        <tr>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625), Kimi-Audio (arXiv 2504.18425)</td>
+          <td>LLaMA-Omni 2 uses the Whisper-large-v3 encoder; Kimi-Audio takes continuous Whisper features at 50 Hz and downsamples them to 12.5 Hz with an adaptor</td>
+        </tr>
+        <tr>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>Whisper large-v3 transcribes the training audio to produce the time-aligned text for the inner monologue; it is not the encoder</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni (arXiv 2509.17765)</td>
+          <td>Replaced it with AuT (see below)</td>
+        </tr>
+        <tr>
+          <td>Voxtral Realtime (arXiv 2602.11298)</td>
+          <td>Does not start from Whisper: a 970M causal encoder trained from scratch, 50 Hz, 15 s sliding window</td>
+        </tr>
+        <tr>
+          <td>Qwen3.5-Omni (arXiv 2604.15804)</td>
+          <td>Retrains AuT from scratch on 40M hours at 6.25 Hz</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Three issues recur.
+    Padding to 30 s wastes compute on short turns.
+    50 Hz is too long a sequence for an LLM, so every system adds an adapter (50 Hz / 4 = 12.5 Hz).
+    Bidirectional attention blocks streaming, so teams either make the encoder causal (GLM-4-Voice) or replace it (AuT, Voxtral Realtime).
+  </p>
+
+  <h3 id="streaming-whisper-encoder">Making the Whisper encoder stream</h3>
+  <p>
+    Whisper does not stream for three reasons.
+  </p>
+  <ul>
+    <li>The encoder takes a fixed 30 s window (arXiv 2212.04356), and Voxtral describes it as a fixed receptive field of 30 s (arXiv 2507.13264).</li>
+    <li>Streaming wrappers pad every buffer to the full context length, so each partial result pays for 30 s (arXiv 2506.12154).</li>
+    <li>
+      Encoder attention is bidirectional, so every frame sees later audio (GLM-4-Voice replaces it with block-causal attention, arXiv 2412.02612).
+      The <a href="https://huggingface.co/openai/whisper-large-v3">model card</a> states the models cannot do real-time transcription out of the box.
+    </li>
+  </ul>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 275" role="img"
+      aria-label="Two rows of 12 encoder frames. Top: one frame attends to every frame in the window, past and future. Bottom: frames are grouped into three chunks; one frame in chunk 2 attends to chunk 1 and chunk 2 but not to chunk 3.">
+      <!-- == Full attention == -->
+      <text class="d-text--muted" x="12" y="16" text-anchor="start">Full bidirectional attention over the 30 s window (12 of 1,500 frames drawn)</text>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 205 5 70 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 232 18 124 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 259 32 178 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 286 45 232 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 313 59 286 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 367 59 394 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 394 45 448 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 421 32 502 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 448 18 556 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 475 5 610 72"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 72 Q 502 -9 664 72"/>
+      <rect class="d-box" x="48" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="102" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="156" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="210" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="264" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box d-box--accent" x="318" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="372" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="426" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="480" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="534" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="588" y="72" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="642" y="72" width="44" height="24" rx="4"/>
+      <text class="d-text--small" x="360" y="116" text-anchor="middle">time, left to right (20 ms per frame)</text>
+
+      <!-- == Block-causal attention == -->
+      <text class="d-text--muted" x="12" y="148" text-anchor="start">Block-causal attention over chunks (here 4 frames per chunk)</text>
+      <rect class="d-group" x="44" y="208" width="214" height="40" rx="6"/>
+      <rect class="d-group" x="260" y="208" width="214" height="40" rx="6"/>
+      <rect class="d-group d-box--muted" x="476" y="208" width="214" height="40" rx="6"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 216 Q 205 149 70 216"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 216 Q 232 162 124 216"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 216 Q 259 176 178 216"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 216 Q 286 189 232 216"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 216 Q 313 203 286 216"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 216 Q 367 203 394 216"/>
+      <path class="d-arrow d-arrow--dashed" d="M 340 216 Q 394 189 448 216"/>
+      <rect class="d-box" x="48" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="102" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="156" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="210" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="264" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box d-box--accent" x="318" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="372" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box" x="426" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box d-box--muted" x="480" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box d-box--muted" x="534" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box d-box--muted" x="588" y="216" width="44" height="24" rx="4"/>
+      <rect class="d-box d-box--muted" x="642" y="216" width="44" height="24" rx="4"/>
+      <text class="d-text--small" x="151" y="268" text-anchor="middle">chunk 1 (past, cached)</text>
+      <text class="d-text--small" x="367" y="268" text-anchor="middle">chunk 2 (current)</text>
+      <text class="d-text--small" x="583" y="268" text-anchor="middle">chunk 3 (future, masked)</text>
+    </svg>
+    <figcaption>One query frame (accent) in each scheme. Full attention reads the whole window, so its output changes when later audio arrives. Block-causal attention reads its own chunk and earlier chunks only, so past states can be cached.</figcaption>
+  </figure>
+  <p>
+    Four families fix this, with different cost; a fifth, training a streaming encoder with a delay input, is described after the table.
+  </p>
+  <ul>
+    <li>
+      <strong>Causal fine-tuning.</strong>
+      CarelessWhisper fine-tunes Whisper with LoRA so each encoder frame attends only to its own chunk and earlier chunks, and it caches encoder keys and values instead of re-encoding padded buffers (arXiv 2508.12301).
+      It trains on 960 h of LibriSpeech with chunk sizes of 40 to 300 ms.
+      The U2-style variant puts a CTC head on the Whisper encoder, trains with dynamic chunk masks (0.1 to 1.0 s) on inputs shorter than 30 s, and rescores with the original decoder (arXiv 2506.12154).
+      GLM-4-Voice makes the encoder causal inside its tokenizer: causal convolution before the Transformer and block-causal attention, then pooling and vector quantisation give 12.5 Hz tokens (arXiv 2412.02612).
+    </li>
+    <li>
+      <strong>Replace the encoder.</strong>
+      Qwen3-Omni trains AuT (Audio Transformer) from scratch on 20 million hours of supervised audio, with 8x Conv2D downsampling to 12.5 Hz and block-wise window attention for real-time prefill caching (arXiv 2509.17765).
+      Qwen3-ASR reuses AuT with a dynamic flash-attention window of 1 s to 8 s, so one model serves streaming (short chunks) and offline (long queries) (arXiv 2601.21337).
+    </li>
+    <li>
+      <strong>Wrap the offline model.</strong>
+      whisper_streaming re-runs Whisper on a growing buffer and commits words once consecutive runs agree (LocalAgreement), at 3.3 s latency (arXiv 2307.14743).
+      Simul-Whisper uses the cross-attention alignment to guide decoding on chunks, with a truncation detector for cut words (arXiv 2406.10052).
+      The U2 authors note that wrappers reprocess the same audio and leave a training-inference mismatch (arXiv 2506.12154).
+    </li>
+  </ul>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Change to Whisper</th>
+          <th>Retraining?</th>
+          <th>Latency and compute</th>
+          <th>Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Buffer wrapper</td>
+          <td>None; re-decode a growing buffer, commit on agreement</td>
+          <td>No</td>
+          <td>3.3 s latency; re-encodes padded buffers (arXiv 2307.14743, 2506.12154)</td>
+          <td>whisper_streaming</td>
+        </tr>
+        <tr>
+          <td>Alignment-guided wrapper</td>
+          <td>Cross-attention alignment steers decoding; truncation detector</td>
+          <td>No Whisper fine-tuning</td>
+          <td>1.46% average absolute WER degradation at 1 s chunks (arXiv 2406.10052)</td>
+          <td>Simul-Whisper</td>
+        </tr>
+        <tr>
+          <td>Causal LoRA fine-tune</td>
+          <td>Chunked causal mask in the encoder; encoder KV cache</td>
+          <td>LoRA, 960 h</td>
+          <td>Large-v2, 300 ms chunks: 0.081 s average latency (greedy) vs 0.426 s for Ufal-Whisper (beam 5); test-clean WER 4.98% vs 7.50% (arXiv 2508.12301)</td>
+          <td>CarelessWhisper</td>
+        </tr>
+        <tr>
+          <td>Causal fine-tune with CTC</td>
+          <td>Dynamic chunk masks, CTC head, decoder rescoring, KV cache</td>
+          <td>Full fine-tune, about 5,800 h of earnings calls</td>
+          <td>17.30% WER at 1 s chunks; about 267 ms per partial transcript on four CPU cores (arXiv 2506.12154)</td>
+          <td>U2-style Whisper</td>
+        </tr>
+        <tr>
+          <td>Causal tokenizer</td>
+          <td>Causal conv, block-causal attention, pooling, VQ</td>
+          <td>Fine-tune the ASR model</td>
+          <td>12.5 Hz, 175 bps (arXiv 2412.02612)</td>
+          <td>GLM-4-Voice</td>
+        </tr>
+        <tr>
+          <td>New windowed encoder</td>
+          <td>Replace the encoder entirely</td>
+          <td>From scratch, 20M h</td>
+          <td>12.5 Hz; window 1 to 8 s (arXiv 2509.17765, 2601.21337)</td>
+          <td>AuT in Qwen3-Omni, Qwen3-ASR</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The fifth family does not retrofit Whisper at all.
+    Voxtral Realtime trains a causal encoder from scratch with the decoder conditioned on a delay sampled from 80 to 2400 ms; at 480 ms its LibriSpeech clean / other WER is 2.08 / 5.54, against 1.84 / 3.66 for offline Whisper (arXiv 2602.11298).
+    Moonshine v2 uses a sliding-window encoder with 80 ms of look-ahead (arXiv 2602.12241).
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Whisper streams in three ways: wrap it and pay for re-encoding, fine-tune it causal with a chunked mask and an encoder cache, or replace the encoder.
+      Wrappers need no training but cost latency; causal fine-tuning gets sub-second latency; a new windowed encoder like AuT costs a from-scratch run but serves streaming and offline from one model."
+    </p>
+  </div>
+
+  <h3 id="streaming-encoders">Streaming audio encoders beyond Whisper</h3>
+  <p>
+    Most streaming encoders do one of two things: restrict attention to a causal or windowed context, or cache past activations.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Encoder</th>
+          <th>Causal or windowed</th>
+          <th>Frame rate</th>
+          <th>Streaming mechanism</th>
+          <th>Used in</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AuT</td>
+          <td>Windowed</td>
+          <td>12.5 Hz (about 80 ms per frame)</td>
+          <td>Dynamic flash-attention window of 1 to 8 s; 8x downsampling (arXiv 2509.17765, 2601.21337)</td>
+          <td>Qwen3-Omni, Qwen3-ASR</td>
+        </tr>
+        <tr>
+          <td>Qwen2.5-Omni audio encoder</td>
+          <td>Windowed (2 s blocks)</td>
+          <td>About 40 ms per frame (25 Hz, derived)</td>
+          <td>Initialised from Whisper-large-v3; full attention changed to attention in blocks of 2 s to support prefilling (arXiv 2503.20215)</td>
+          <td>Qwen2.5-Omni</td>
+        </tr>
+        <tr>
+          <td>Mimi</td>
+          <td>Causal</td>
+          <td>12.5 Hz (80 ms)</td>
+          <td>All convolutions causal; theoretical latency 160 ms, 200 ms in practice (arXiv 2410.00037)</td>
+          <td>Moshi; DSM-ASR (arXiv 2509.08753)</td>
+        </tr>
+        <tr>
+          <td>Voxtral Realtime encoder</td>
+          <td>Causal, sliding window</td>
+          <td>50 Hz (20 ms), then 12.5 Hz after the 4x adapter</td>
+          <td>970M parameters, 750-frame (15 s) sliding window, trained from scratch; the delay is passed to the decoder (arXiv 2602.11298)</td>
+          <td>Voxtral Realtime</td>
+        </tr>
+        <tr>
+          <td>Moonshine v2 encoder</td>
+          <td>Sliding window</td>
+          <td>50 Hz (20 ms)</td>
+          <td>16 frames of left context in every layer; 4 frames of right context in the first two and last two layers, none in the middle (arXiv 2602.12241)</td>
+          <td>Moonshine v2</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice tokenizer</td>
+          <td>Causal conv plus block-causal attention</td>
+          <td>12.5 Hz</td>
+          <td>Whisper-based encoder made causal, then pooled and quantised (arXiv 2412.02612)</td>
+          <td>GLM-4-Voice</td>
+        </tr>
+        <tr>
+          <td>Cache-aware FastConformer</td>
+          <td>Limited look-ahead</td>
+          <td>80 ms (8x downsampling of a 10 ms hop, derived)</td>
+          <td>Caches past activations and trains with limited context, so no overlapping recomputation (arXiv 2312.17279)</td>
+          <td>NVIDIA NeMo; <a href="https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1">parakeet_realtime_eou_120m-v1</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li>
+      <strong>Qwen3-ASR numbers:</strong>
+      the paper reports 2.69 average WER offline vs 3.33 streaming for the 1.7B model, and 3.48 vs 4.40 for 0.6B, with streaming run at a 2 s chunk size (arXiv 2601.21337).
+      It also reports an average time to first token as low as 92 ms for the 0.6B model.
+    </li>
+    <li>
+      <strong>DSM-ASR:</strong>
+      feeds Mimi tokens (12.5 Hz) and delays the text stream by a default 2.5 s, with timestamp precision of 80 ms (arXiv 2509.08753).
+    </li>
+    <li>
+      <strong>Cache-aware Conformer:</strong>
+      with a regular look-ahead, latency compounds with depth (1,360 ms for 17 layers and one token of look-ahead); chunk-aware look-ahead does not.
+      On LibriSpeech test-other with an RNNT decoder, the cache-aware model reaches 6.3% WER at 1,360 ms, against 11.3% for buffered inference at 2,000 ms (arXiv 2312.17279).
+    </li>
+    <li>
+      The <a href="https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1">model card</a> lists a 120M-parameter cache-aware FastConformer-RNNT with 17 layers and latency of 80 to 160 ms.
+    </li>
+  </ul>
+  <h3 id="whisper-ecosystem">Ecosystem</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>What it adds</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="https://github.com/SYSTRAN/faster-whisper">faster-whisper</a></td>
+          <td>CTranslate2 reimplementation; its README claims up to 4 times faster than openai/whisper at the same accuracy with less memory (README benchmark: 1m03s vs 2m23s, fp16, beam 5); batched inference; Silero VAD filter</td>
+        </tr>
+        <tr>
+          <td><a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a></td>
+          <td>C/C++ port for CPU and edge</td>
+        </tr>
+        <tr>
+          <td>WhisperX (arXiv 2303.00747)</td>
+          <td>VAD-based pre-segmentation ("VAD Cut &amp; Merge") with batched inference for a twelve-fold speedup reported in the paper, and forced phoneme alignment for word-level timestamps; the repo notes that the alignment model is language-specific and overlapping speech is not handled well</td>
+        </tr>
+        <tr>
+          <td>distil-whisper (arXiv 2311.00430)</td>
+          <td>distil-large-v2: 2 decoder layers, 756M params, 5.8x faster, 51% fewer parameters; pseudo-labels filtered with a 10% WER threshold (45.4% dropped); less prone to long-form hallucination; works as a speculative-decoding assistant with identical outputs</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="whisper-insights">Interview insights</h3>
+  <div class="callout callout--inference">
+    <strong>Inference, not sourced fact</strong>
+    <ul>
+      <li>Whisper got the recipe right: scale plus weak supervision gives robustness, and multitask tokens put ASR, translation and language ID in one model.</li>
+      <li>It is wrong for voice products as shipped: fixed window, non-causal encoder and beam decoding hurt latency, and silence hallucination matters for agents.</li>
+      <li>Newer encoders address this: the Open ASR Leaderboard authors find Conformer encoders with Transformer decoders give the best average WER (arXiv 2510.06961), and Qwen3-ASR uses a dynamic 1 to 8 s attention window to cover both streaming and offline (arXiv 2601.21337).</li>
+      <li>AuT is the synthesis: Whisper-scale data with a streaming-friendly encoder.</li>
+      <li>The newest streaming systems (Voxtral Realtime, Moonshine v2) no longer use Whisper as the starting point, so "start from Whisper" is the pragmatic default and not the field's direction.</li>
+    </ul>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Whisper's recipe is right, but the architecture is wrong for voice agents: a fixed 30 s window and a bidirectional encoder.
+      That is why GLM-4-Voice makes it causal, Qwen3-Omni replaces it with AuT, and Voxtral Realtime trains a causal encoder from scratch with a delay knob, and why I would start from a streaming encoder."
+    </p>
+  </div>
+</section>

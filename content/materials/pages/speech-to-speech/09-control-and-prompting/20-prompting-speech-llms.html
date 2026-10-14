@@ -1,0 +1,194 @@
+<section id="prompting-speech-llms-concept">
+  <h2>Prompting speech LLMs</h2>
+  <p>
+    A speech LLM takes several prompts at once, and each one controls a different property of the output.
+    Persona text sets what the agent is, a reference clip sets who it sounds like, an instruction sets how it delivers a line, and the user's own audio nudges its prosody.
+    The channels themselves are described in <a href="/apps/materials/speech-to-speech/09-control-and-prompting#control-channels-concept">Control channels</a>; this section is about how they combine in a live conversation.
+  </p>
+  <p>
+    Think of briefing a radio host.
+    Before the show you agree the character and the voice, which stay fixed.
+    During the show you pass notes ("warm, slightly slower") with each segment, and the host reacts to the caller's mood without being told.
+  </p>
+
+  <h3 id="prompting-speech-llms-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 220" role="img"
+      aria-label="Prompting a speech LLM: a persona and voice prompt set once per session, a reasoning LLM that sends reply text with a short style hint each turn, and streamed user audio all feed the speech LLM, which outputs speech">
+      <defs>
+        <marker id="prompting-speech-llms-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="10" width="190" height="44" rx="8"/>
+      <text class="d-text" x="105" y="26" text-anchor="middle"
+        dominant-baseline="middle">Persona + voice prompt</text>
+      <text class="d-text--small" x="105" y="43" text-anchor="middle"
+        dominant-baseline="middle">set once per session</text>
+      <rect class="d-box" x="10" y="88" width="190" height="44" rx="8"/>
+      <text class="d-text" x="105" y="104" text-anchor="middle"
+        dominant-baseline="middle">Reasoning LLM</text>
+      <text class="d-text--small" x="105" y="121" text-anchor="middle"
+        dominant-baseline="middle">reply + short style hint</text>
+      <rect class="d-box" x="10" y="166" width="190" height="44" rx="8"/>
+      <text class="d-text" x="105" y="182" text-anchor="middle"
+        dominant-baseline="middle">User audio</text>
+      <text class="d-text--small" x="105" y="199" text-anchor="middle"
+        dominant-baseline="middle">streamed, sets mood</text>
+
+      <rect class="d-box d-box--accent" x="320" y="88" width="150" height="44" rx="8"/>
+      <text class="d-text" x="395" y="110" text-anchor="middle"
+        dominant-baseline="middle">Speech LLM</text>
+      <rect class="d-box" x="570" y="88" width="130" height="44" rx="8"/>
+      <text class="d-text" x="635" y="110" text-anchor="middle"
+        dominant-baseline="middle">Speech out</text>
+
+      <path class="d-arrow" d="M 200 32 L 318 100"
+        marker-end="url(#prompting-speech-llms-arrow)"/>
+      <path class="d-arrow" d="M 200 110 L 318 110"
+        marker-end="url(#prompting-speech-llms-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 200 188 L 318 120"
+        marker-end="url(#prompting-speech-llms-arrow)"/>
+      <path class="d-arrow" d="M 470 110 L 568 110"
+        marker-end="url(#prompting-speech-llms-arrow)"/>
+    </svg>
+    <figcaption>
+      Session-level prompts are fixed; the reasoning LLM adds a style hint each turn; the user's audio streams in alongside and shapes the response.
+    </figcaption>
+  </figure>
+  <p>
+    Everything is context.
+    The persona is text tokens ahead of the dialogue, and the voice prompt is audio tokens ahead of that, so the voice can be prefilled once.
+    One duplex model concatenates a voice segment and a text segment into a hybrid system prompt, marks where it ends with delimiters, and masks the loss on that prefix during training.
+    Style instructions work the same way: a description, an end token, then the content to speak.
+    Speaker and style fields are randomly masked in training so the model copes when they are missing.
+    The user's audio is streamed into the same context, and it shapes the response style and the prosody on re-entry after an interruption.
+  </p>
+  <p>
+    Some prompts are fixed and others vary.
+    Persona and voice are set at session start, and one realtime API documents that the voice cannot change once the model has emitted audio.
+    The per-turn lever is the style instruction.
+    In a unified design, the reasoning LLM returns a short style field with each reply (for example "warm, slightly slower"), and the speech LLM treats it as a style instruction.
+    The reasoning LLM never touches audio, so it can be swapped without retraining the speech model.
+    The full wiring is in <a href="/apps/materials/speech-to-speech/11-system-design">System design</a>.
+  </p>
+  <p>
+    A model has to be trained to be steerable.
+    One duplex model built on Moshi was fine-tuned on natural and synthetic dialogues covering instruction following, vocal delivery and reasoning, then tuned with two-stage reinforcement learning on hybrid rewards.
+    Its benchmark has 390 spoken prompts and 1,067 binary rubrics covering tone, persona, style or accent, and speed or length.
+    Supervised training raised the pass rate by 44.5 points over the strongest open baseline.
+    The reward analysis also caught the model gaming the reward with incomplete responses; see
+    <a href="/apps/materials/speech-to-speech/08-training#reward-hacking-guards">Reward hacking and its guards</a>.
+  </p>
+  <div class="callout callout--inference">
+    <strong>Inference (design, not sourced)</strong>
+    <ul>
+      <li>Keep the style field to a few words.</li>
+      <li>Let the speech LLM adapt to the user's audio on its own; do not ask the reasoning LLM to guess mood from a transcript.</li>
+      <li>Guidance on the style condition would act as a strength knob; no source measures it for prompts.</li>
+    </ul>
+  </div>
+
+  <h3 id="prompting-speech-llms-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Persona prompt wording</td>
+          <td>Role and behaviour consistency</td>
+          <td>Longer prompts cost context and can drift over a long call</td>
+        </tr>
+        <tr>
+          <td>Voice prompt choice and prefill</td>
+          <td>Identity, and start-up cost</td>
+          <td>A fixed, prefilled voice is cheap; changing voice mid-session is usually not possible</td>
+        </tr>
+        <tr>
+          <td>Prefix caching</td>
+          <td>Latency of a long system prompt</td>
+          <td>Needs a stable prefix</td>
+        </tr>
+        <tr>
+          <td>Style instruction per turn</td>
+          <td>Delivery of the next reply</td>
+          <td>Needs a model trained on instructions; short hints work best</td>
+        </tr>
+        <tr>
+          <td>Instruction-tuning data</td>
+          <td>How faithfully hints are followed</td>
+          <td>Labelling and synthetic-data cost</td>
+        </tr>
+        <tr>
+          <td>Prompt masking in training</td>
+          <td>Robustness when fields are missing</td>
+          <td>Slightly weaker control per field</td>
+        </tr>
+        <tr>
+          <td>User-audio adaptation</td>
+          <td>Whether tone follows the caller</td>
+          <td>Natural but hard to steer; can overshoot</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="prompting-speech-llms-wrong">What goes wrong</h3>
+  <p>
+    Instruction following is still the weak spot.
+    In one benchmark of full-duplex systems, the best of six reached only about 64% adherence on turn-taking instructions, as scored by an LLM judge.
+    Persona does not imply behaviour: another benchmark (1,038 cases from 240 conversations, eight assistant roles) found that obeying an explicit turn-taking rule did not mean a model could infer the rule from a persona.
+    Models that settled harmless instruction conflicts often failed when a safety-relevant role should have overridden an explicit directive.
+    A persona-conditioned model can also trail a stronger model on role adherence (author-reported).
+  </p>
+  <p>
+    Adaptation to the user's audio is brittle.
+    When speech before and after an interruption was compared, one system sped up by about 19 words per minute and another by about 60 with falling pitch, which the authors call hurried and brittle.
+  </p>
+  <p>
+    Measuring all this is hard.
+    Audio-LLM judges show verbosity and positional biases, so adherence scores need mitigation and human listening in the loop.
+    Emotion-embedding similarity gives a second, cheaper signal.
+    Leakage from voice prompts, unreliable tags and consent gating are covered in
+    <a href="/apps/materials/speech-to-speech/09-control-and-prompting#control-channels-concept">Control channels</a>
+    and <a href="/apps/materials/speech-to-speech/09-control-and-prompting#safety-and-provenance">Safety and provenance</a>.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I treat prompting as separate channels: persona text and a voice clip fixed per session, a short style instruction per turn, and the user's audio for adaptation.
+      A reasoning LLM can emit a style hint with each reply and the speech LLM applies it.
+      I would measure adherence with emotion similarity and calibrated judges, because instruction following is still the weak spot."
+    </p>
+  </div>
+
+  <h3 id="prompting-speech-llms-concept-sources">Sources</h3>
+  <ul>
+    <li>PersonaPlex: Voice and Role Control for Full Duplex Conversational Speech Models (arXiv 2602.06053)</li>
+    <li>CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training (arXiv 2505.17589)</li>
+    <li>Step-Audio-EditX Technical Report (arXiv 2511.03601)</li>
+    <li>SteerDuplex: Steerable Duplex Speech Dialogue Models (arXiv 2609.12623)</li>
+    <li>DuplexSpeechBench-IFEval: Evaluating Implicit Instruction Following in Full-Duplex Voice Agents (arXiv 2609.03423)</li>
+    <li>Instruct-FD: Can Your Full-Duplex Speech System Follow Turn-Taking Instructions? (arXiv 2607.20460)</li>
+    <li>Full-Duplex-Bench v1.5: Evaluating Overlap Handling for Full-Duplex Speech Models (arXiv 2507.23159)</li>
+    <li>AudioJudge: Understanding What Works in Large Audio Model Based Speech Evaluation (arXiv 2507.12705)</li>
+    <li>emotion2vec: Self-Supervised Pre-Training for Speech Emotion Representation (arXiv 2312.15185)</li>
+    <li><a href="https://developers.openai.com/api/docs/guides/realtime-conversations">OpenAI Realtime conversations guide</a></li>
+    <li><a href="https://developers.openai.com/api/docs/guides/realtime-models-prompting">OpenAI Realtime prompting guide</a></li>
+    <li><a href="https://dev.hume.ai/docs/text-to-speech-tts/acting-instructions">Hume Octave acting instructions</a></li>
+    <li><a href="https://ai.google.dev/gemini-api/docs/live-guide">Gemini Live API guide</a></li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/06-control-and-quality#prompting-speech-llms">Prompting speech LLMs</a>,
+      <a href="/apps/materials/speech-lit-review/09-system-design#unified-speech-llm">Unified speech LLM</a>
+    </li>
+  </ul>
+</section>

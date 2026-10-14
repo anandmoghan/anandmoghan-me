@@ -1,0 +1,4 @@
+{
+  "title": "Tokenizers and codecs",
+  "summary": "Turning audio into tokens or latents: VQ, RVQ, FSQ, continuous latents and semantic distillation, how they are trained, and how to judge a tokenizer."
+}

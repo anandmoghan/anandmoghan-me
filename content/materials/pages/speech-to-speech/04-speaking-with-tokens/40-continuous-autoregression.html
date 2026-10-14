@@ -1,0 +1,357 @@
+<section id="continuous-autoregression-concept">
+  <h2>Continuous autoregression with diffusion heads</h2>
+  <p>
+    Discrete tokens force every frame to be rounded to the nearest code, and that rounding loses detail.
+    Continuous autoregression drops the tokens: the model predicts the next frame (or a short patch of frames) as a continuous vector, and a small diffusion or flow head samples it.
+  </p>
+  <p>
+    Think of an artist who no longer picks from a fixed box of crayons.
+    The backbone says roughly what comes next, and a small generator paints the exact shade, one frame at a time.
+  </p>
+
+  <h3 id="continuous-autoregression-how">How it works</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 190" role="img"
+      aria-label="Continuous autoregression: past latent frames feed an autoregressive backbone, whose hidden state conditions a small diffusion or flow head; noise enters the head, which samples the next continuous latent frame; the frame is fed back as input and also decoded to audio">
+      <defs>
+        <marker id="continuous-autoregression-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <text class="d-text--muted" x="365" y="26" text-anchor="middle">a few denoising steps per frame</text>
+      <rect class="d-box" x="10" y="40" width="110" height="44" rx="8"/>
+      <text class="d-text" x="65" y="62" text-anchor="middle"
+        dominant-baseline="middle">Past latents</text>
+      <rect class="d-box d-box--accent" x="150" y="40" width="120" height="44" rx="8"/>
+      <text class="d-text" x="210" y="62" text-anchor="middle"
+        dominant-baseline="middle">AR backbone</text>
+      <rect class="d-box" x="300" y="40" width="130" height="44" rx="8"/>
+      <text class="d-text" x="365" y="62" text-anchor="middle"
+        dominant-baseline="middle">Diffusion head</text>
+      <rect class="d-box" x="460" y="40" width="110" height="44" rx="8"/>
+      <text class="d-text" x="515" y="62" text-anchor="middle"
+        dominant-baseline="middle">Next latent</text>
+      <rect class="d-box" x="600" y="40" width="110" height="44" rx="8"/>
+      <text class="d-text" x="655" y="62" text-anchor="middle"
+        dominant-baseline="middle">Decoder</text>
+      <path class="d-arrow" d="M 120 62 L 148 62"
+        marker-end="url(#continuous-autoregression-arrow)"/>
+      <path class="d-arrow" d="M 270 62 L 298 62"
+        marker-end="url(#continuous-autoregression-arrow)"/>
+      <path class="d-arrow" d="M 430 62 L 458 62"
+        marker-end="url(#continuous-autoregression-arrow)"/>
+      <path class="d-arrow" d="M 570 62 L 598 62"
+        marker-end="url(#continuous-autoregression-arrow)"/>
+      <path class="d-arrow" d="M 365 128 L 365 86"
+        marker-end="url(#continuous-autoregression-arrow)"/>
+      <text class="d-text--muted" x="365" y="142" text-anchor="middle">noise</text>
+      <path class="d-arrow d-arrow--dashed" d="M 515 86 L 515 164 L 65 164 L 65 86"
+        marker-end="url(#continuous-autoregression-arrow)"/>
+      <text class="d-text--muted" x="290" y="180" text-anchor="middle">new latent becomes input for the next step</text>
+      <text class="d-text--muted" x="655" y="100" text-anchor="middle">audio</text>
+    </svg>
+    <figcaption>
+      Continuous autoregression: the backbone supplies a hidden state, and a small diffusion head turns noise into the next latent frame.
+    </figcaption>
+  </figure>
+  <p>
+    The backbone reads the past latent frames (and text) and produces a hidden state.
+    A light head, conditioned on that state, denoises a random vector into the next frame or patch.
+    The new latent is fed back as input and sent to a decoder that makes audio.
+    There is no categorical distribution, so there is no top-k or top-p; randomness comes from the noise and its scale.
+  </p>
+  <p>
+    The upside is a higher ceiling on naturalness, since nothing is quantised.
+    Latents can also run at very low frame rates (one system uses 7.5 Hz), which shortens the sequence and lets long audio fit in context.
+    Variants differ in what the head predicts: continuous mel frames with a regression loss, patch embeddings handled by a bidirectional diffusion transformer, or VAE latents conditioned on an LLM.
+    The diffusion and flow machinery itself (noise levels, velocity, few-step distillation) is introduced in
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow">Diffusion and flow</a>; this section covers only how an LLM drives it.
+  </p>
+
+  <h4 id="car-end-to-end">End to end, with a 10-second example</h4>
+  <ol>
+    <li>
+      <strong>Build an audio compressor first.</strong>
+      A VAE tokenizer (see <a href="/apps/materials/speech-to-speech/03-tokenizers#continuous-latents">Continuous latents</a>)
+      is trained on audio before any LLM exists.
+      It turns a clip into a short sequence of continuous vectors, the latents; at 7.5 frames per second, 10 seconds becomes 75 latents (derived), each a small vector of numbers.
+    </li>
+    <li>
+      <strong>Encode the training set.</strong>
+      All training audio becomes latent sequences paired with transcripts: the audio version of tokenizing text, except each "token" is a vector, not an id.
+      The tokenizer is then frozen.
+    </li>
+    <li>
+      <strong>Train the LLM to predict the next latent.</strong>
+      Given the transcript and latents 1 to 40, predict latent 41, exactly like next-token prediction.
+      A softmax cannot output a vector, so a diffusion head takes its place.
+    </li>
+    <li>
+      <strong>Generate.</strong>
+      The LLM produces a hidden state \( h \), its summary of what should come next; the head turns fresh noise into latent 41 following \( h \), writing the latent as \( x \);
+      latent 41 is appended and read at the next step; at the end the VAE decoder turns the latents back into audio.
+    </li>
+  </ol>
+
+  <h4 id="car-latent-input">How the LM reads a latent</h4>
+  <p>
+    The latent replaces the token id: instead of looking up an embedding for token 1234, the model takes the vector itself.
+    In one system the text and the voice latents form a single sequence, text first and then one position per latent frame, fed straight into the LLM with no quantizer in between.
+    Another groups a few consecutive latent frames into a patch (four in its main model), compresses each patch into one vector, and runs the LM over patches, so the LM takes fewer, larger steps.
+  </p>
+
+  <h4 id="car-head-training">What the diffusion head learns</h4>
+  <p>
+    A softmax head can say "token 1234 with probability 0.3"; a continuous latent has no list of options, so the model needs another way to express a distribution over the next vector.
+    The diffusion head learns to turn noise into a plausible next latent, given what the backbone has seen so far.
+  </p>
+  <p>
+    Training at one position works like this.
+    The backbone reads the true previous latents and produces \( h \).
+    Take the true next latent \( x \), draw noise \( \epsilon \sim \mathcal{N}(0, I) \), pick a noise level \( t \), and mix them into a noisy version \( x_t \).
+    The head sees \( x_t \), \( t \) and \( h \), and predicts the noise:
+  </p>
+  \[
+  x_t = \sqrt{\bar\alpha_t}\,x + \sqrt{1-\bar\alpha_t}\,\epsilon,
+  \qquad
+  \mathcal{L}(h, x) = \mathbb{E}_{\epsilon, t}\big[\lVert \epsilon - \epsilon_\theta(x_t \mid t, h) \rVert^2\big]
+  \]
+  <p>
+    Here \( \bar\alpha_t \) is how much of the original signal survives at noise level \( t \): close to 1 means almost clean, close to 0 means almost pure noise
+    (the schedule is defined in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow">Diffusion and flow</a>).
+    In words: "here is a corrupted copy of the right answer and a summary of the context; tell me what noise was added".
+    The loss gradient flows through \( h \) back into the backbone, so backbone and head train together end to end.
+  </p>
+  <p>
+    The head is small: the original formulation uses a few residual MLP blocks (about 21M parameters) with \( h \) injected through adaptive layer norm, and a speech system uses a 4-layer head.
+    Variants predict the velocity of a flow instead of the noise, and add a separate stop-prediction loss so the model knows when to end.
+  </p>
+
+  <h4 id="car-how-h-steers">How the hidden state steers the head</h4>
+  <p>
+    There is no single linear layer that maps \( h \) to the latent.
+    The head's input is the noisy latent and the noise level; \( h \) enters as a condition.
+    In the original formulation it is added to the noise-level embedding and injected into every block through adaptive layer norm: small linear layers turn it into a scale and a shift that each block applies to its normalised activations.
+    So \( h \) sets how each layer transforms the noisy latent rather than producing the latent itself.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Head</th>
+          <th>How \( h \) becomes a latent</th>
+          <th>Character</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Regression</td>
+          <td>A projection outputs the frame directly</td>
+          <td>Deterministic; one speech model adds a dedicated loss and a sampling module to counter averaging</td>
+        </tr>
+        <tr>
+          <td>Gaussian</td>
+          <td>Layers output a mean and spread; the latent is sampled from them</td>
+          <td>Simple sampling and an exact probability</td>
+        </tr>
+        <tr>
+          <td>Diffusion or flow</td>
+          <td>\( h \) conditions a small network that denoises noise into the latent over a few steps</td>
+          <td>Models a full distribution; no closed-form probability</td>
+        </tr>
+        <tr>
+          <td>Consistency</td>
+          <td>\( h \) conditions a small MLP trained so that any point on a noise-to-data path maps to the same clean latent</td>
+          <td>Built for one-step sampling, so the next frame needs a single pass of the head</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    A plain regression trained with squared error tends to predict the average of all plausible next frames, which sounds over-smoothed; a diffusion head samples one plausible frame instead.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 260" role="img"
+      aria-label="Training: the backbone hidden state and a noised copy of the true next latent go into
+        the head, which predicts the noise. Inference: the head starts from pure noise and denoises in a
+        few steps to the next latent, which is fed back to the backbone">
+      <defs>
+        <marker id="car-train-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Training row == -->
+      <text class="d-text" x="10" y="20">Training (one position)</text>
+      <rect class="d-box" x="10" y="36" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="58" text-anchor="middle"
+        dominant-baseline="middle">Backbone</text>
+      <rect class="d-box d-box--muted" x="10" y="96" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="118" text-anchor="middle"
+        dominant-baseline="middle">true next latent</text>
+      <rect class="d-box" x="190" y="96" width="120" height="44" rx="8"/>
+      <text class="d-text" x="250" y="118" text-anchor="middle"
+        dominant-baseline="middle">add noise</text>
+      <rect class="d-box d-box--accent" x="370" y="62" width="130" height="52" rx="8"/>
+      <text class="d-text" x="435" y="88" text-anchor="middle"
+        dominant-baseline="middle">Diffusion head</text>
+      <rect class="d-box d-box--muted" x="560" y="62" width="150" height="52" rx="8"/>
+      <text class="d-text" x="635" y="80" text-anchor="middle"
+        dominant-baseline="middle">predicted noise</text>
+      <text class="d-text--small" x="635" y="100" text-anchor="middle"
+        dominant-baseline="middle">loss vs true noise</text>
+
+      <path class="d-arrow" d="M 140 58 L 368 80" marker-end="url(#car-train-arrow)"/>
+      <path class="d-arrow" d="M 140 118 L 188 118" marker-end="url(#car-train-arrow)"/>
+      <path class="d-arrow" d="M 310 118 L 368 98" marker-end="url(#car-train-arrow)"/>
+      <path class="d-arrow" d="M 500 88 L 558 88" marker-end="url(#car-train-arrow)"/>
+      <text class="d-text--small" x="250" y="56" text-anchor="middle">hidden state <tspan font-style="italic">h</tspan></text>
+      <text class="d-text--small" x="250" y="156" text-anchor="middle">noise level <tspan font-style="italic">t</tspan></text>
+
+      <!-- == Inference row == -->
+      <text class="d-text" x="10" y="190">Inference (each frame)</text>
+      <rect class="d-box d-box--muted" x="10" y="208" width="110" height="40" rx="8"/>
+      <text class="d-text" x="65" y="228" text-anchor="middle"
+        dominant-baseline="middle">pure noise</text>
+      <rect class="d-box d-box--accent" x="170" y="208" width="190" height="40" rx="8"/>
+      <text class="d-text" x="265" y="228" text-anchor="middle"
+        dominant-baseline="middle">head, a few steps</text>
+      <text class="d-text--small" x="265" y="202" text-anchor="middle">conditioned on <tspan font-style="italic">h</tspan></text>
+      <rect class="d-box" x="410" y="208" width="120" height="40" rx="8"/>
+      <text class="d-text" x="470" y="228" text-anchor="middle"
+        dominant-baseline="middle">next latent</text>
+      <rect class="d-box" x="580" y="208" width="130" height="40" rx="8"/>
+      <text class="d-text" x="645" y="228" text-anchor="middle"
+        dominant-baseline="middle">back to backbone</text>
+      <path class="d-arrow" d="M 120 228 L 168 228" marker-end="url(#car-train-arrow)"/>
+      <path class="d-arrow" d="M 360 228 L 408 228" marker-end="url(#car-train-arrow)"/>
+      <path class="d-arrow" d="M 530 228 L 578 228" marker-end="url(#car-train-arrow)"/>
+    </svg>
+    <figcaption>
+      Training teaches the head to remove noise from the true next latent, given the backbone's hidden state;
+      inference starts from pure noise and denoises to a new latent, which becomes the next input.
+    </figcaption>
+  </figure>
+
+  <h4 id="car-noise-randomness">Where the noise and the randomness come from</h4>
+  <p>
+    Each frame starts from fresh Gaussian noise, which the head denoises in a handful of steps: one speech system uses 10 solver steps, and another reports good results with as few as 2 when guidance is on.
+    Temperature becomes a noise knob, not a softmax knob.
+    One formulation scales the noise added at each reverse step, so lower values shrink diversity; another defines temperature as the point in the reverse process where noise is injected, where zero is fully deterministic, higher values add speaker variety, and lower values tend to improve intelligibility.
+    Classifier-free guidance (CFG) works as in image diffusion: the condition is sometimes dropped in training (for example 10% of the time), and at inference conditional and unconditional predictions are blended; one speech system uses a scale of about 1.3 (the formula and its cost are in
+    <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-levers">Levers</a>).
+  </p>
+  <p>
+    The sample is also fed back, so errors can compound; one system re-encodes its generated speech through both its acoustic and semantic tokenizers before feeding it back.
+    <span class="tag tag--inference">Inference</span>
+    The backbone trains on true latents but generates from its own samples, the usual exposure gap of autoregressive models; noise scale and guidance are the main levers for keeping that drift in check.
+  </p>
+
+  <h3 id="continuous-autoregression-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Frame or patch rate and patch size</td>
+          <td>Backbone steps per second; frames generated per backbone step</td>
+          <td>Lower rate or larger patches are cheaper and fit long audio, but each latent must carry more and patch boundaries need care</td>
+        </tr>
+        <tr>
+          <td>Head steps and distillation</td>
+          <td>Denoising evaluations per frame</td>
+          <td>Few-step or one-step heads cut first-packet latency; quality can slip</td>
+        </tr>
+        <tr>
+          <td>Noise scale ("temperature")</td>
+          <td>Where noise is injected in the reverse process</td>
+          <td>Controls variety, but is a blunter tool than top-p over a categorical</td>
+        </tr>
+        <tr>
+          <td>Head size</td>
+          <td>Cost added to every backbone step</td>
+          <td>Larger head is richer but slower</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>Consistency heads.</strong>
+    A consistency model is trained so that every point along one noise-to-data path maps back to the same clean output, so the head can jump from noise to the next frame in one step.
+    Continuous Audio Language Models use this: a small MLP head samples the next frame of an audio VAE by consistency modelling, and the authors report the head is about 12 times faster than an RQ-Transformer on speech (though the full 30-second run is about 1.3 times faster).
+    They release Pocket TTS, a 100M-parameter model that runs faster than real time on a laptop CPU.
+  </p>
+  <p>
+    <strong>Patch-level autoregression.</strong>
+    The backbone can emit a short patch of frames per step and let the head generate the patch together.
+    CuteTTS does this over causal VAE latents with a bidirectional flow-matching head, and folds classifier-free guidance and several solver steps into one student model, cutting first-audio latency by 23.3% and real-time factor by 40.8%.
+    VoxCPM2 groups every 4 latent frames (25 per second) into one patch, so the backbone runs at 6.25 steps per second, each covering 160 ms of audio; its AudioVAE encodes 16 kHz audio and reconstructs 48 kHz, which gives implicit super-resolution (see
+    <a href="/apps/materials/speech-to-speech/06-tokens-to-waveform">Tokens to waveform</a>).
+    In one system, distilling the head with MeanFlow brought reported first-packet latency to tens of milliseconds, so the per-frame cost is a tunable, not a fixed tax.
+  </p>
+
+  <h3 id="continuous-autoregression-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Per-frame cost.</strong>
+      The head runs on top of every backbone step, so latency and throughput worsen unless the head is small or distilled.
+    </li>
+    <li>
+      <strong>Reinforcement learning is harder.</strong>
+      Policy-gradient RL for flow-matching TTS must track per-step likelihood ratios, which adds overhead (see <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-rewards">Diffusion and flow: rewards</a>).
+      One direct reward-optimisation method targets discrete-token models instead.
+    </li>
+    <li>
+      <strong>Weaker sampling control.</strong>
+      There is no easy top-p, so taming rare bad samples is harder.
+    </li>
+    <li>
+      <strong>Errors compound.</strong>
+      A slightly off latent is fed back as input, and nothing snaps it back to a valid code.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+    <li>
+      <strong>Product fit.</strong>
+      Some duplex systems keep a discrete multi-codebook codec with a light causal decoder instead, which suggests continuous heads may stay a niche for live dialogue.
+      <span class="tag tag--inference">Inference</span>
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Continuous autoregression removes the quantisation bottleneck, at the price of a diffusion head per frame and awkward RL.
+      For a duplex product I would start discrete and revisit once the head is distilled to a step or two."
+    </p>
+  </div>
+  <h3 id="continuous-autoregression-sources">Sources</h3>
+  <ul>
+    <li>Autoregressive Image Generation without Vector Quantization (MAR; arXiv 2406.11838)</li>
+    <li>Autoregressive Speech Synthesis without Vector Quantization (MELLE; arXiv 2407.08551)</li>
+    <li>DiTAR: Diffusion Transformer Autoregressive Modeling for Speech Generation (arXiv 2502.03930)</li>
+    <li>VibeVoice Technical Report (arXiv 2508.19205)</li>
+    <li>dots.tts Technical Report (arXiv 2606.07080)</li>
+    <li>Continuous Audio Language Models (arXiv 2509.06926)</li>
+    <li>CuteTTS: Efficient and High-Quality Speech Synthesis via Autoregressive Modeling of Continuous Latents (arXiv 2608.08638)</li>
+    <li>VoxCPM2 Technical Report (arXiv 2606.06928)</li>
+    <li>VoxCPM: Tokenizer-Free TTS for Context-Aware Speech Generation and True-to-Life Voice Cloning (arXiv 2509.24650)</li>
+    <li>Mean Flows for One-step Generative Modeling (arXiv 2505.13447)</li>
+    <li>GROW: Group-Relative Advantage-Weighted On-Policy Reinforcement Learning of Autoregressive-Diffusion Text-to-Speech model (arXiv 2608.03215)</li>
+    <li>CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training (arXiv 2505.17589)</li>
+    <li>Qwen3-Omni Technical Report (arXiv 2509.17765)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#continuous-autoregression">Continuous autoregression and next-token diffusion</a>
+    </li>
+  </ul>
+</section>

@@ -1,0 +1,282 @@
+<section id="generation-paradigms">
+  <h2>Generation paradigms</h2>
+  <p>
+    There are five ways to generate speech from text or from an LM state.
+    The dominant high-quality design is the hybrid; block diffusion LMs are the newest entry.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 122" role="img"
+      aria-label="Hybrid generation: an autoregressive LM emits speech tokens, a flow-matching decoder turns them into a mel spectrogram, and a vocoder renders the waveform">
+      <defs>
+        <marker id="paradigms-hybrid-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="8" y="30" width="90" height="44" rx="8"/>
+      <text class="d-text" x="53" y="44" text-anchor="middle"
+        dominant-baseline="middle">Text</text>
+      <text class="d-text--small" x="53" y="61" text-anchor="middle"
+        dominant-baseline="middle">or LM state</text>
+      <rect class="d-box d-box--accent" x="176" y="30" width="100" height="44"
+        rx="8"/>
+      <text class="d-text" x="226" y="52" text-anchor="middle"
+        dominant-baseline="middle">AR LM</text>
+      <rect class="d-box" x="354" y="30" width="120" height="44" rx="8"/>
+      <text class="d-text" x="414" y="52" text-anchor="middle"
+        dominant-baseline="middle">Flow decoder</text>
+      <rect class="d-box" x="552" y="30" width="100" height="44" rx="8"/>
+      <text class="d-text" x="602" y="52" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+      <path class="d-arrow" d="M 98 52 L 174 52"
+        marker-end="url(#paradigms-hybrid-arrow)"/>
+      <text class="d-text--muted" x="136" y="42" text-anchor="middle"
+        dominant-baseline="middle">text / state</text>
+      <path class="d-arrow" d="M 276 52 L 352 52"
+        marker-end="url(#paradigms-hybrid-arrow)"/>
+      <text class="d-text--muted" x="314" y="34" text-anchor="middle"
+        dominant-baseline="middle">speech</text>
+      <text class="d-text--muted" x="314" y="46" text-anchor="middle"
+        dominant-baseline="middle">tokens</text>
+      <path class="d-arrow" d="M 474 52 L 550 52"
+        marker-end="url(#paradigms-hybrid-arrow)"/>
+      <text class="d-text--muted" x="512" y="42" text-anchor="middle"
+        dominant-baseline="middle">mel</text>
+      <path class="d-arrow" d="M 652 52 L 716 52"
+        marker-end="url(#paradigms-hybrid-arrow)"/>
+      <text class="d-text--muted" x="684" y="42" text-anchor="middle"
+        dominant-baseline="middle">audio</text>
+      <text class="d-text--muted" x="226" y="92" text-anchor="middle"
+        dominant-baseline="middle">content + prosody</text>
+      <text class="d-text--muted" x="414" y="92" text-anchor="middle"
+        dominant-baseline="middle">acoustic detail,</text>
+      <text class="d-text--muted" x="414" y="106" text-anchor="middle"
+        dominant-baseline="middle">chunk by chunk</text>
+      <text class="d-text--muted" x="602" y="92" text-anchor="middle"
+        dominant-baseline="middle">HiFi-GAN /</text>
+      <text class="d-text--muted" x="602" y="106" text-anchor="middle"
+        dominant-baseline="middle">BigVGAN</text>
+    </svg>
+    <figcaption>Hybrid AR + flow: the LM decides content and prosody; the flow decoder and vocoder restore acoustics.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Paradigm</th>
+          <th>Examples</th>
+          <th>Core idea</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AR codec LM</td>
+          <td>
+            Llasa (arXiv 2502.04128), Spark-TTS (arXiv 2503.01710),
+            <a href="https://www.sesame.com/research/crossing_the_uncanny_valley_of_voice">CSM</a>, Moshi (arXiv 2410.00037)
+          </td>
+          <td>One Transformer predicts tokens left to right</td>
+        </tr>
+        <tr>
+          <td>NAR masked</td>
+          <td>SoundStorm (arXiv 2305.09636), MaskGCT (arXiv 2409.00750)</td>
+          <td>Parallel iterative filling of tokens</td>
+        </tr>
+        <tr>
+          <td>Block diffusion LM</td>
+          <td>
+            Luna-TTS Realtime (arXiv 2608.11593), DLLM-TTS (arXiv 2608.00011),
+            Chatterbox-Flash (arXiv 2605.30748)
+          </td>
+          <td>AR across blocks of tokens, parallel masked denoising inside each block</td>
+        </tr>
+        <tr>
+          <td>NAR flow/diffusion</td>
+          <td>Voicebox (arXiv 2306.15687), F5-TTS (arXiv 2410.06885), Seed-TTS DiT (arXiv 2406.02430)</td>
+          <td>Generate the whole utterance by ODE or diffusion</td>
+        </tr>
+        <tr>
+          <td>Hybrid AR + flow</td>
+          <td>CosyVoice 2 (arXiv 2412.10117), Qwen3-TTS 25 Hz (arXiv 2601.15621), FlashTTS (arXiv 2606.09141)</td>
+          <td>LM for content and prosody, flow for acoustics</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="ar-codec-lms">AR codec LMs</h3>
+  <ul>
+    <li>
+      Llasa: a single Llama-style Transformer over X-Codec2 tokens, 1B/3B/8B,
+      with inference-time search using speech-understanding verifiers (arXiv 2502.04128).
+    </li>
+    <li>Spark-TTS: Qwen2.5 LLM plus BiCodec (arXiv 2503.01710).</li>
+    <li>CosyVoice 2: an LLM predicts speech tokens, then a chunk-aware causal flow-matching model decodes them (arXiv 2412.10117).</li>
+    <li>
+      Newer entries: IndexTTS2 (arXiv 2506.21619),
+      Step-Audio-EditX (LLM-based audio editing with reinforcement learning; arXiv 2511.03601),
+      Higgs Audio v2 (pretrained on over 10 million hours of audio, per the
+      <a href="https://github.com/boson-ai/higgs-audio">Boson AI repo</a>).
+    </li>
+  </ul>
+
+  <h3 id="multi-codebook">Multi-codebook handling</h3>
+  <p>
+    An RVQ frame has several codes, so the model needs a trick.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 230" role="img"
+      aria-label="Temporal and depth transformers: the temporal model takes one step per frame, the depth model predicts the codebooks of that frame one after another, and the frame is fed back">
+      <defs>
+        <marker id="multi-codebook-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="30" width="110" height="44" rx="8"/>
+      <text class="d-text" x="65" y="44" text-anchor="middle"
+        dominant-baseline="middle">Past frames</text>
+      <text class="d-text--small" x="65" y="61" text-anchor="middle"
+        dominant-baseline="middle">codes</text>
+      <rect class="d-box d-box--accent" x="180" y="30" width="160" height="44"
+        rx="8"/>
+      <text class="d-text" x="260" y="44" text-anchor="middle"
+        dominant-baseline="middle">Temporal model</text>
+      <text class="d-text--small" x="260" y="61" text-anchor="middle"
+        dominant-baseline="middle">one step per frame</text>
+      <rect class="d-box" x="400" y="30" width="160" height="44" rx="8"/>
+      <text class="d-text" x="480" y="44" text-anchor="middle"
+        dominant-baseline="middle">Depth model</text>
+      <text class="d-text--small" x="480" y="61" text-anchor="middle"
+        dominant-baseline="middle">small, per codebook</text>
+      <path class="d-arrow" d="M 120 52 L 178 52"
+        marker-end="url(#multi-codebook-arrow)"/>
+      <text class="d-text--muted" x="149" y="42" text-anchor="middle"
+        dominant-baseline="middle">codes</text>
+      <path class="d-arrow" d="M 340 52 L 398 52"
+        marker-end="url(#multi-codebook-arrow)"/>
+      <text class="d-text--muted" x="369" y="42" text-anchor="middle"
+        dominant-baseline="middle">state</text>
+      <rect class="d-box" x="400" y="110" width="56" height="36" rx="8"/>
+      <text class="d-text" x="428" y="128" text-anchor="middle"
+        dominant-baseline="middle">c1</text>
+      <rect class="d-box" x="480" y="110" width="56" height="36" rx="8"/>
+      <text class="d-text" x="508" y="128" text-anchor="middle"
+        dominant-baseline="middle">c2</text>
+      <rect class="d-box" x="560" y="110" width="70" height="36" rx="8"/>
+      <text class="d-text" x="595" y="128" text-anchor="middle"
+        dominant-baseline="middle">... cN</text>
+      <path class="d-arrow" d="M 428 74 L 428 108"
+        marker-end="url(#multi-codebook-arrow)"/>
+      <path class="d-arrow" d="M 456 128 L 478 128"
+        marker-end="url(#multi-codebook-arrow)"/>
+      <path class="d-arrow" d="M 536 128 L 558 128"
+        marker-end="url(#multi-codebook-arrow)"/>
+      <text class="d-text--muted" x="470" y="166" text-anchor="middle"
+        dominant-baseline="middle">codebooks of frame t, one by one</text>
+      <path class="d-arrow d-arrow--dashed"
+        d="M 595 148 L 595 192 L 65 192 L 65 76"
+        marker-end="url(#multi-codebook-arrow)"/>
+      <text class="d-text--muted" x="330" y="182" text-anchor="middle"
+        dominant-baseline="middle">frame t codes become input for step t+1</text>
+    </svg>
+    <figcaption>RQ-style split: the temporal model advances once per frame; the depth model fills in that frame's codebooks.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      Sesame CSM: a Llama backbone models the zeroth Mimi codebook from interleaved text and audio,
+      and a smaller audio decoder with a linear head per codebook models the rest;
+      Mimi runs at 12.5 Hz (<a href="https://www.sesame.com/research/crossing_the_uncanny_valley_of_voice">Sesame blog</a>).
+    </li>
+    <li>
+      Moshi: \( K = 2Q + 1 = 17 \) streams per step with \( Q = 8 \) codebooks (8 user audio, 8 own audio, 1 text).
+      Its RQ-Transformer splits temporal and per-codebook (depth) modelling (arXiv 2410.00037).
+    </li>
+    <li>Qwen3-Omni's Talker uses an MTP module to emit codec frames (arXiv 2509.17765).</li>
+  </ul>
+
+  <h3 id="nar-notes">NAR notes</h3>
+  <p>
+    SoundStorm uses bidirectional attention and confidence-based parallel decoding to generate codec tokens, and the authors report 30 s of audio in 0.5 s on a TPU-v4 (arXiv 2305.09636).
+    MaskGCT is two-stage (text to semantic tokens, then semantic to acoustic tokens), mask-and-predict in both,
+    with no explicit alignment or phone-level duration model, trained on 100K h (arXiv 2409.00750).
+  </p>
+  <div class="callout callout--warn">
+    <strong>Trap:</strong>
+    <p>MaskGCT is a masked generative model (mask-and-predict). Do not cite it as a flow model.
+      The same applies to the diffusion-LM systems above: they unmask discrete tokens and have no ODE.</p>
+  </div>
+
+  <h3 id="block-diffusion-lms">Diffusion language models and block diffusion</h3>
+  <p>
+    A diffusion LM is a masked-token model in the MaskGCT family, built on a pretrained text LLM.
+    Block diffusion splits the sequence into blocks, runs masked denoising inside each block and generates the blocks left to right.
+    That keeps streaming and a KV cache while decoding many tokens per step.
+  </p>
+  <ul>
+    <li>
+      Luna-TTS: a 0.6B family trained on 1M h of Chinese, English, Japanese and Korean speech,
+      adapted from a pretrained AR text LLM by moving from causal to bidirectional to block-causal attention.
+      Luna-TTS is fully non-autoregressive and generates the whole RVQ token grid in a fixed number of parallel refinement steps;
+      zero-shot cloning and editing come from infilling.
+      Luna-TTS Realtime is AR over blocks of 32 codec frames (1.28 s) with KV-cached, parallel denoising inside each block.
+      It reports RTF 0.0240 and 41.6 ms local first-block latency, and 1.49 WER / 76.8 SIM on Seed-TTS-Eval test-en.
+      A GRPO stage computes policy ratios over the realised denoising trajectory (arXiv 2608.11593).
+    </li>
+    <li>
+      DLLM-TTS: conditional block discrete diffusion over X-Codec2 tokens, masked diffusion within each block and blocks in sequence.
+      A 0.6B model trained on 20K h reaches RTF 0.15 and is competitive on Seed-TTS-eval (arXiv 2608.00011).
+    </li>
+    <li>
+      Chatterbox-Flash: fine-tunes an AR TTS decoder into a block-diffusion decoder.
+      Standard block-diffusion decoding hurts discrete speech tokens because a long-tail token distribution pushes parallel selection toward a few frequent tokens.
+      The fix is inference-only: subtract the block-level marginal token distribution from the scores (prior-calibrated scoring)
+      and stop the iterations early based on calibrated confidence (arXiv 2605.30748).
+    </li>
+    <li>
+      OmniVoice: a single-stage, non-autoregressive diffusion-LM model that maps text straight to multi-codebook acoustic tokens,
+      with full-codebook random masking during training and initialisation from a pretrained LLM.
+      It covers 600+ languages and trains on 581k h of open-source data (arXiv 2604.00688).
+    </li>
+    <li>
+      DeMaR: asks whether the gain of mask-and-replace training (randomly swapping some tokens, not only masking them) comes from inference-time self-correction.
+      Trained from scratch on LibriTTS, it keeps lower WER than mask-only diffusion and AR baselines even when each token stays fixed once unmasked,
+      so replacement helps through noisier training context (arXiv 2610.09448).
+    </li>
+  </ul>
+  <div class="callout callout--inference">
+    <strong>Inference:</strong>
+    <p>
+      Block diffusion sits between the AR codec LM and the fully masked NAR model:
+      it trades some of the AR model's token-by-token control for parallel decoding, while the block-causal order keeps streaming possible.
+    </p>
+  </div>
+
+  <h3 id="lm-content-flow-acoustics">The "LM for content, flow for acoustics" split</h3>
+  <ul>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Why the LM: text streaming, interleaving with text, reuse of LLM serving stacks,
+      in-context learning.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Why flow: it can restore acoustic detail lost to quantization,
+      and CosyVoice 2 shows it can decode chunk by chunk (arXiv 2412.10117).
+    </li>
+  </ul>
+  <div class="callout callout--inference">
+    <strong>Inference:</strong>
+    <p>
+      The hybrid may be transitional,
+      since Qwen3-Omni replaces block-wise diffusion with a lightweight causal ConvNet over a multi-codebook codec (arXiv 2509.17765).
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>Say this in the interview:</strong>
+    <p>
+      "The LM decides what is said and how, the renderer decides how it sounds.
+      That split is why I can stream the LM and distil the renderer separately."
+    </p>
+  </div>
+</section>

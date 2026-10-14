@@ -1,0 +1,62 @@
+<section id="q-multimodal-b">
+  <h2>Multimodal generation: tokenizers and multimodal LLMs</h2>
+  <ul>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      The tokenizer matters more than the generator: the consensus is a causal, heavily compressed latent regularised toward semantic features.
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Discrete codecs stay the default for audio LMs; continuous VAE latents stay the default for diffusion and flow.
+    </li>
+    <li>Discrete examples: MAGVIT-v2 LFQ (arXiv 2310.05737), FSQ (arXiv 2309.15505), DAC (arXiv 2306.06546); continuous examples: Wan VAE (arXiv 2503.20314), Stable Audio Open AE (arXiv 2407.14358).</li>
+    <li>Best reconstruction is not best downstream: DASB reports discrete audio representations are less robust than continuous ones (arXiv 2406.14294).</li>
+    <li>AVTok is a 1D joint audio-video tokenizer (arXiv 2606.30811, <span class="tag tag--reported">Reported</span>); VideoPoet concatenated MAGVIT-v2 and SoundStream vocabularies instead (arXiv 2312.14125).</li>
+    <li>Open multimodal LLMs share one template: vision encoder, token-reducing connector, decoder LLM (Qwen3-VL, arXiv 2511.21631; InternVL3.5, arXiv 2508.18265).</li>
+    <li>Qwen3-Omni's TM-RoPE gives audio one temporal ID per 80 ms and adjusts video frame IDs to real timestamps; Qwen2.5-Omni interleaved audio and video in fixed 2 s chunks (arXiv 2509.17765, arXiv 2503.20215).</li>
+    <li>StreamingVLM keeps a fixed-size KV cache and runs at up to 8 FPS on one H100 (arXiv 2510.09608).</li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Qwen3-Omni first packet (theoretical, cold start; arXiv 2509.17765)</th>
+          <th>Latency</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Audio</td>
+          <td>234 ms</td>
+        </tr>
+        <tr>
+          <td>Video</td>
+          <td>547 ms</td>
+        </tr>
+        <tr>
+          <td>Audio, 4 concurrent</td>
+          <td>728 ms</td>
+        </tr>
+        <tr>
+          <td>Video, 4 concurrent</td>
+          <td>1517 ms</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "The tokenizer sets the ceiling more than the generator does.
+      For an avatar that perceives the user I want time-aligned positions and a bounded streaming KV cache."
+    </p>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap</strong>
+    <p>
+      These latencies are theoretical figures, not end-to-end measurements.
+      The Qwen3-Omni paper is inconsistent on whether the Talker consumes the Thinker's text representations, so do not state either version as settled.
+    </p>
+  </div>
+  <p><a href="/apps/materials/speech-lit-review/07-multimodal-generation">Full chapter</a></p>
+</section>

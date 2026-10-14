@@ -1,0 +1,217 @@
+<section id="streaming-low-latency">
+  <h2>Streaming and low-latency generation</h2>
+  <p>
+    Streaming TTS needs a causal, low-frame-rate codec on the AR side,
+    and a chunkable, few-step decoder on the acoustic side.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img"
+      aria-label="Chunk-wise causal flow decoding timeline: LM token chunks arrive, each is decoded with look-ahead tokens from the next chunk, and audio packets are emitted; first-packet latency runs from the start to the first packet">
+      <defs>
+        <marker id="streaming-chunks-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-lane" x="0" y="16" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="36" text-anchor="start"
+        dominant-baseline="middle">LM tokens</text>
+      <rect class="d-lane" x="0" y="96" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="116" text-anchor="start"
+        dominant-baseline="middle">Flow decoder</text>
+      <rect class="d-lane" x="0" y="176" width="720" height="40" rx="8"/>
+      <text class="d-text--small" x="8" y="196" text-anchor="start"
+        dominant-baseline="middle">Audio out</text>
+      <rect class="d-box" x="100" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="150" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 1</text>
+      <rect class="d-box d-box--accent" x="224" y="102" width="76" height="28"
+        rx="8"/>
+      <text class="d-text" x="262" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 1</text>
+      <rect class="d-box d-box--muted" x="304" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="344" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 1</text>
+      <rect class="d-box" x="204" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="254" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 2</text>
+      <rect class="d-box" x="328" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="366" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 2</text>
+      <rect class="d-box d-box--muted" x="408" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="448" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 2</text>
+      <rect class="d-box" x="308" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="358" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 3</text>
+      <rect class="d-box" x="432" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="470" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 3</text>
+      <rect class="d-box d-box--muted" x="512" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="552" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 3</text>
+      <rect class="d-box" x="412" y="22" width="100" height="28" rx="8"/>
+      <text class="d-text" x="462" y="36" text-anchor="middle"
+        dominant-baseline="middle">chunk 4</text>
+      <rect class="d-box" x="536" y="102" width="76" height="28" rx="8"/>
+      <text class="d-text" x="574" y="116" text-anchor="middle"
+        dominant-baseline="middle">dec 4</text>
+      <rect class="d-box d-box--muted" x="616" y="182" width="80" height="28"
+        rx="8"/>
+      <text class="d-text" x="656" y="196" text-anchor="middle"
+        dominant-baseline="middle">pkt 4</text>
+      <path class="d-arrow" d="M 160 50 L 244 100"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 212 50 L 270 100"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow" d="M 262 130 L 334 180"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow" d="M 264 50 L 348 100"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 316 50 L 374 100"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow" d="M 366 130 L 438 180"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow" d="M 368 50 L 452 100"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 420 50 L 478 100"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow" d="M 470 130 L 542 180"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow" d="M 472 50 L 556 100"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow" d="M 574 130 L 646 180"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 100 218 L 100 254"/>
+      <path class="d-arrow d-arrow--dashed" d="M 304 218 L 304 254"/>
+      <path class="d-arrow" d="M 100 246 L 304 246"
+        marker-start="url(#streaming-chunks-arrow)"
+        marker-end="url(#streaming-chunks-arrow)"/>
+      <text class="d-text--muted" x="202" y="236" text-anchor="middle"
+        dominant-baseline="middle">first-packet latency</text>
+      <text class="d-text--muted" x="360" y="274" text-anchor="middle"
+        dominant-baseline="middle">solid: chunk tokens; dashed: look-ahead tokens from the next chunk</text>
+    </svg>
+    <figcaption>Chunk-wise causal decoding: tokens arrive in chunks, each chunk is decoded with look-ahead, and audio streams out.</figcaption>
+  </figure>
+
+  <h3 id="first-packet-numbers">First-packet numbers</h3>
+  <div class="callout callout--warn">
+    <strong>Do not compare across rows:</strong>
+    <p>All figures are the authors' self-reports, and the definitions differ.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Figure</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi</td>
+          <td>160 ms theoretical, about 200 ms in practice</td>
+          <td>arXiv 2410.00037</td>
+        </tr>
+        <tr>
+          <td>Qwen3-TTS (12 Hz)</td>
+          <td>97 ms first packet</td>
+          <td>arXiv 2601.15621</td>
+        </tr>
+        <tr>
+          <td>Qwen3-Omni</td>
+          <td>234 ms theoretical cold-start first packet</td>
+          <td>arXiv 2509.17765</td>
+        </tr>
+        <tr>
+          <td>FlashTTS (Jun 2026)</td>
+          <td>325 ms first-packet latency with a 2-NFE decoder; its own table lists 843 ms for CosyVoice 2 at 10 NFE</td>
+          <td>arXiv 2606.09141</td>
+        </tr>
+        <tr>
+          <td>Qwen3-ASR 0.6B</td>
+          <td>Average TTFT as low as 92 ms (ASR side)</td>
+          <td>arXiv 2601.21337</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="latency-levers">Latency levers</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>How it works</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Causal, low-rate codec</td>
+          <td>Fewer AR steps per second of audio, no future context needed</td>
+        </tr>
+        <tr>
+          <td>Chunk-aware causal flow</td>
+          <td>CosyVoice 2 samples one of four attention masks (non-causal, full-causal, chunk-M, chunk-2M) uniformly in training, so one model serves streaming and offline (arXiv 2412.10117)</td>
+        </tr>
+        <tr>
+          <td>Look-ahead</td>
+          <td>Kimi-Audio uses chunk-wise causal masking with a look-ahead mechanism to fix chunk-boundary issues (arXiv 2504.18425); CosyVoice 2 also uses a look-ahead pre-convolution (arXiv 2412.10117)</td>
+        </tr>
+        <tr>
+          <td>Few-step distillation</td>
+          <td>
+            ZipVoice flow distillation reduces sampling steps and removes the CFG overhead (arXiv 2506.13053);
+            MeanFlow learns average velocity over an interval (arXiv 2505.13447);
+            Int-MeanFlow distils for speech (arXiv 2510.07979);
+            FlashTTS uses an X-pred mean-flow decoder at 2 NFE (arXiv 2606.09141);
+            DMOSpeech distils a 128-step teacher to 4 steps with distribution matching (arXiv 2410.11097);
+            flow maps reach 1.80% WER at 1 NFE against 1.76% for a 32-NFE teacher (arXiv 2609.36324);
+            see the table in <a href="#flow-tts-distillation">Few-step distillation beyond MeanFlow</a>
+          </td>
+        </tr>
+        <tr>
+          <td>Mel-space prediction for chunked decoding</td>
+          <td>X-Pred MeanFlow predicts a generalized mel field and derives the average velocity analytically, with layer-selective block-wise attention for chunked generation with bounded context; it improves on Direct-u MeanFlow at few steps (arXiv 2609.12728; the abstract gives no numbers)</td>
+        </tr>
+        <tr>
+          <td>Guidance folding</td>
+          <td>CuteTTS guidance-step distillation lowers first-audio latency 23.3% and RTF 40.8% (arXiv 2608.08638); unified guidance removes CFG's extra pass for nearly 3x faster inference (arXiv 2607.00363)</td>
+        </tr>
+        <tr>
+          <td>Multi-token prediction</td>
+          <td>VITA-Audio emits several audio tokens per forward pass (arXiv 2505.03739); FlashTTS adds parallel MTP modules</td>
+        </tr>
+        <tr>
+          <td>Sampling schedule</td>
+          <td>F5-TTS's Sway Sampling is an inference-time flow-step strategy that needs no retraining (arXiv 2410.06885)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    MeanFlow's headline FID 3.43 is an ImageNet one-step result (arXiv 2505.13447).
+    IntMeanFlow reports 1-NFE token-to-spectrogram and 3-NFE text-to-spectrogram inference for speech (arXiv 2510.07979).
+  </p>
+  <div class="callout callout--inference">
+    <strong>Inference:</strong>
+    <p>
+      For flow decoders, step distillation is the biggest latency lever.
+      For AR models, lower token rate plus a causal codec is.
+    </p>
+  </div>
+  <div class="callout callout--say">
+    <strong>Say this in the interview:</strong>
+    <p>
+      "I budget first-packet latency per stage.
+      For the renderer the lever is NFE, so I would distil to 2 steps.
+      For the LM it is token rate and multi-token prediction."
+    </p>
+  </div>
+</section>

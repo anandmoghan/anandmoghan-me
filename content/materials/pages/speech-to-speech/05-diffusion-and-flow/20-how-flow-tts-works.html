@@ -1,0 +1,283 @@
+<section id="flow-tts-pipeline">
+  <h2>How a flow TTS model is trained and run</h2>
+  <p>
+    Think of a fill-in-the-blank test.
+    Show the model a sentence of text and a recording of that sentence with a stretch blanked out, and ask it to paint the missing audio.
+    Train on enough recordings and it learns two things: how text maps to sound, and how one speaker's voice stays consistent across a clip.
+  </p>
+  <p>
+    Voice cloning then comes for free.
+    Give the model a few seconds of a new speaker, the transcript of those seconds, and the new text you want spoken.
+    The blank is everything after the clip, and the model continues in the same voice.
+    No separate speaker-recognition model has to be bolted on.
+  </p>
+
+  <h3 id="flow-tts-how">How it works</h3>
+  <p>
+    The model paints a mel spectrogram, not a waveform; a vocoder turns that into sound at the end
+    (<a href="/apps/materials/speech-to-speech/06-tokens-to-waveform#decoders-vocoders">Decoders and vocoders</a>).
+    The figure shows both phases.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 306" role="img"
+      aria-label="Flow TTS. Training: text and the visible audio plus a noisy masked span go into a network that predicts velocity, and the loss covers the masked span. Inference: noise, text and the prompt audio go through N solver steps to a mel spectrogram, then a vocoder makes the waveform">
+      <defs>
+        <marker id="flow-tts-pipeline-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Training == -->
+      <rect class="d-group" x="4" y="4" width="712" height="146" rx="8"/>
+      <text class="d-text--muted" x="14" y="20" text-anchor="start"
+        dominant-baseline="middle">Training: fill in a hidden span</text>
+      <rect class="d-box" x="10" y="34" width="150" height="44" rx="8"/>
+      <text class="d-text" x="85" y="56" text-anchor="middle"
+        dominant-baseline="middle">Text + fillers</text>
+      <rect class="d-box" x="10" y="92" width="150" height="44" rx="8"/>
+      <text class="d-text" x="85" y="106" text-anchor="middle"
+        dominant-baseline="middle">Visible audio</text>
+      <text class="d-text--small" x="85" y="123" text-anchor="middle"
+        dominant-baseline="middle">+ noisy hidden span</text>
+      <path class="d-arrow" d="M 160 56 L 228 74" marker-end="url(#flow-tts-pipeline-arrow)"/>
+      <path class="d-arrow" d="M 160 114 L 228 96" marker-end="url(#flow-tts-pipeline-arrow)"/>
+      <rect class="d-box d-box--accent" x="230" y="63" width="150" height="44" rx="8"/>
+      <text class="d-text" x="305" y="78" text-anchor="middle"
+        dominant-baseline="middle">Flow network</text>
+      <text class="d-text--small" x="305" y="95" text-anchor="middle"
+        dominant-baseline="middle">also sees flow time t</text>
+      <path class="d-arrow" d="M 380 85 L 468 85" marker-end="url(#flow-tts-pipeline-arrow)"/>
+      <text class="d-text--muted" x="424" y="72" text-anchor="middle"
+        dominant-baseline="middle">predicted arrow</text>
+      <rect class="d-box" x="470" y="63" width="150" height="44" rx="8"/>
+      <text class="d-text" x="545" y="78" text-anchor="middle"
+        dominant-baseline="middle">Regression loss</text>
+      <text class="d-text--small" x="545" y="95" text-anchor="middle"
+        dominant-baseline="middle">true arrow: data - noise</text>
+      <text class="d-text--muted" x="440" y="134" text-anchor="middle"
+        dominant-baseline="middle">hide 70 to 100% of frames; loss on hidden frames only</text>
+
+      <!-- == Inference == -->
+      <rect class="d-group" x="4" y="160" width="712" height="140" rx="8"/>
+      <text class="d-text--muted" x="14" y="176" text-anchor="start"
+        dominant-baseline="middle">Inference: fill in everything after the voice prompt</text>
+      <rect class="d-box" x="10" y="226" width="130" height="44" rx="8"/>
+      <text class="d-text" x="75" y="240" text-anchor="middle"
+        dominant-baseline="middle">Noise</text>
+      <text class="d-text--small" x="75" y="257" text-anchor="middle"
+        dominant-baseline="middle">+ text + prompt audio</text>
+      <path class="d-arrow" d="M 140 248 L 198 248" marker-end="url(#flow-tts-pipeline-arrow)"/>
+      <rect class="d-box d-box--accent" x="200" y="226" width="150" height="44" rx="8"/>
+      <text class="d-text" x="275" y="240" text-anchor="middle"
+        dominant-baseline="middle">N solver steps</text>
+      <text class="d-text--small" x="275" y="257" text-anchor="middle"
+        dominant-baseline="middle">with guidance</text>
+      <path class="d-arrow d-arrow--dashed" d="M 320 226 L 320 205 L 230 205 L 230 224"
+        marker-end="url(#flow-tts-pipeline-arrow)"/>
+      <text class="d-text--muted" x="275" y="194" text-anchor="middle"
+        dominant-baseline="middle">take a step, repeat</text>
+      <path class="d-arrow" d="M 350 248 L 408 248" marker-end="url(#flow-tts-pipeline-arrow)"/>
+      <text class="d-text--muted" x="379" y="236" text-anchor="middle"
+        dominant-baseline="middle">mel</text>
+      <rect class="d-box" x="410" y="226" width="120" height="44" rx="8"/>
+      <text class="d-text" x="470" y="248" text-anchor="middle"
+        dominant-baseline="middle">Vocoder</text>
+      <path class="d-arrow" d="M 530 248 L 588 248" marker-end="url(#flow-tts-pipeline-arrow)"/>
+      <rect class="d-box" x="590" y="226" width="120" height="44" rx="8"/>
+      <text class="d-text" x="650" y="248" text-anchor="middle"
+        dominant-baseline="middle">Waveform</text>
+      <text class="d-text--muted" x="275" y="288" text-anchor="middle"
+        dominant-baseline="middle">guidance: two passes per step</text>
+    </svg>
+    <figcaption>
+      Flow TTS. Top: training learns the arrow that turns noise into the hidden audio, given text and the audio that stays visible.
+      Bottom: inference follows the learned arrows from noise, then a vocoder renders the mel.
+    </figcaption>
+  </figure>
+
+  <p>
+    <strong>Training, step by step.</strong>
+  </p>
+  <ol>
+    <li>Take a recording and compute its mel spectrogram.</li>
+    <li>Hide a span of frames, typically 70 to 100% of them; the rest stay visible as context.</li>
+    <li>
+      Line up the text with the audio.
+      A simple recipe pads the character sequence with filler tokens up to the mel length and lets the network work out which sound goes where.
+      The older recipe expands phones to frame level using forced-alignment durations.
+    </li>
+    <li>Mix the hidden span with noise at a random flow time \( t \), as in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-idea">the idea</a>.</li>
+    <li>
+      The network sees text, visible audio, the noisy span and \( t \), and predicts the velocity.
+      The loss counts only the hidden frames.
+    </li>
+    <li>
+      Occasionally drop the audio context, or the audio and text together (F5-TTS uses probabilities of 0.3 and 0.2).
+      This teaches the unconditional case that guidance needs later.
+    </li>
+  </ol>
+  <p>
+    <strong>Inference.</strong>
+    Put the reference clip first as the visible context, append noise for the part to generate, run the solver for \( N \) steps with guidance, and hand the mel to the vocoder.
+    There is no explicit speaker embedding in this setup; the clip is the voice.
+  </p>
+
+  <h4 id="flow-tts-duration">Fixing the length first</h4>
+  <p>
+    A non-autoregressive model paints every frame at once, so it must know the output length before it starts
+    (<a href="/apps/materials/speech-to-speech/04-speaking-with-tokens#autoregressive-generation">duration and alignment basics</a>).
+    The noise tensor's size <em>is</em> the duration, and the chosen total doubles as a speech-rate dial: a shorter total means faster speech.
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>How duration is decided</th>
+          <th>Idea</th>
+          <th>Catch</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>A separate regression model</td>
+          <td>A small network predicts how long each phone lasts, and the sum fixes the length</td>
+          <td>One more model to train and keep in sync</td>
+        </tr>
+        <tr>
+          <td>A ratio estimate</td>
+          <td>Scale the prompt's length by the ratio of text lengths (F5-TTS); a related recipe multiplies the phone count by the prompt's speaking rate</td>
+          <td>Crude: it assumes the new text is spoken at the prompt's pace</td>
+        </tr>
+        <tr>
+          <td>Tokens fix it</td>
+          <td>In the hybrid below, the language model's tokens already set the length</td>
+          <td>Needs the language model and its latency</td>
+        </tr>
+        <tr>
+          <td>A predictor tuned with reinforcement learning</td>
+          <td>Predict the remaining length with a classifier, then reward lengths that make the final speech score well</td>
+          <td>Needs reward models and a training run</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The F5-TTS paper does not spell out which prompt quantity the ratio scales; the natural reading is the prompt's audio duration.
+  </p>
+  <p>
+    <strong>Tuning the predictor with rewards.</strong>
+    DMOSpeech 2 treats duration as a decision worth optimising.
+    Its predictor outputs a probability over 300 length bins of 100 ms each, for the time remaining.
+    In training it draws a group of 16 candidate lengths, renders speech for each with the fast student model, and scores the result with a speech-recognition score and speaker similarity; lengths that led to better speech become more likely
+    (the group method is in <a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#flow-rewards">the rewards section</a>).
+    Removing this step raised English word error rate from 1.752 to 3.750 in the paper's ablation.
+    <span class="tag tag--inference">Inference</span>
+    An average-length guess is often wrong for any one sentence: too short clips the words, too long invents silence.
+  </p>
+  <p>
+    <strong>Keeping alignment with fewer steps.</strong>
+    A one-step student has no second chance to fix its timing.
+    A recent flow-map method adds a soft-DTW refinement: dynamic time warping lines up two sequences that run at different speeds, and the soft version is smooth enough to train through.
+    <span class="tag tag--inference">Inference</span>
+    The loss forgives small timing shifts but still punishes content in the wrong place.
+  </p>
+  <p>
+    <strong>The hybrid: tokens decide, flow renders.</strong>
+    Many speech-to-speech systems keep an autoregressive language model for content and use flow only for acoustics, as in CosyVoice 2.
+    Because the tokens already fix the content and its length, the hybrid needs no duration estimate
+    (<a href="/apps/materials/speech-to-speech/05-diffusion-and-flow#e2e-alternative">walk-through</a>).
+  </p>
+
+  <h3 id="flow-tts-levers">Levers and optimisations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Lever</th>
+          <th>What it changes</th>
+          <th>Trade-off</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Text alignment: filler padding or forced alignment</td>
+          <td>Whether a separate aligner and phone conversion are needed</td>
+          <td>Filler padding simplifies the pipeline; the network must learn alignment itself</td>
+        </tr>
+        <tr>
+          <td>Duration source</td>
+          <td>Output length and speech rate</td>
+          <td>An extra model against a crude heuristic against a reward-tuned model that needs a training run</td>
+        </tr>
+        <tr>
+          <td>Hidden fraction in training</td>
+          <td>How much the network must invent from text alone</td>
+          <td>Hiding 70 to 100% matches the inference situation of a short prompt and a long blank</td>
+        </tr>
+        <tr>
+          <td>AR tokens in front of the flow model</td>
+          <td>Content and length come from the language model; flow only renders acoustics</td>
+          <td>Needs the language model and its latency; keeps content tight</td>
+        </tr>
+        <tr>
+          <td>Backbone size</td>
+          <td>Quality per forward pass and cost per step</td>
+          <td>The common open models sit around 335M parameters; smaller is faster</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="flow-tts-wrong">What goes wrong</h3>
+  <ul>
+    <li>
+      <strong>Duration errors.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Too short rushes or clips the speech; too long adds trailing silence or stretched words.
+      Check speech rate and the end of the clip across a test set.
+    </li>
+    <li>
+      <strong>Speaker leakage.</strong>
+      <span class="tag tag--inference">Inference</span>
+      Because the prompt is context, anything in it can be continued: room noise, a hurried delivery, an emotional tone.
+      Choose clean, neutral prompts, and compare speaker similarity against the reference as well as listening.
+    </li>
+    <li>
+      <strong>Bandwidth ceiling.</strong>
+      A mel model cannot exceed what its vocoder and training data contain.
+      Codec research warns that models trained on band-limited source data often fail to reconstruct content above the data's true sampling rate.
+    </li>
+    <li>
+      <strong>A good metric that hides a defect.</strong>
+      Word error rate measures intelligibility, not naturalness.
+      Report it with speaker similarity and a listening test.
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Flow TTS is masked infilling: the model learns the arrow from noise to the hidden mel, given text and the audio around the gap, and zero-shot cloning is just infilling after a reference clip.
+      In speech-to-speech stacks it is usually the acoustic renderer behind an autoregressive content model."
+    </p>
+  </div>
+
+  <h3 id="flow-tts-pipeline-sources">Sources</h3>
+  <ul>
+    <li>Voicebox: Text-Guided Multilingual Universal Speech Generation at Scale (arXiv 2306.15687)</li>
+    <li>E2 TTS: Embarrassingly Easy Fully Non-Autoregressive Zero-Shot TTS (arXiv 2406.18009)</li>
+    <li>F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching (arXiv 2410.06885)</li>
+    <li>CosyVoice 2: Scalable Streaming Speech Synthesis with Large Language Models (arXiv 2412.10117)</li>
+    <li>High-Fidelity Audio Compression with Improved RVQGAN (arXiv 2306.06546)</li>
+    <li>DMOSpeech: Direct Metric Optimization via Distilled Diffusion Model in Zero-Shot Speech Synthesis (arXiv 2410.11097)</li>
+    <li>DMOSpeech 2: Reinforcement Learning for Duration Prediction in Metric-Optimized Speech Synthesis (arXiv 2507.14988)</li>
+    <li>Distill Locally, Schedule Globally: Flow Maps for Few-Step Text-to-Speech (arXiv 2609.36324)</li>
+    <li>
+      Model-by-model detail:
+      <a href="/apps/materials/speech-lit-review/03-speech-generation#flow-tts-fidelity">How flow-matching TTS works, and getting high-fidelity audio out</a>
+    </li>
+  </ul>
+</section>

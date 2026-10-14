@@ -1,0 +1,132 @@
+<section id="full-duplex-models">
+  <h2>Full-duplex models compared</h2>
+  <p>
+    A full-duplex model listens while it speaks.
+    Backchannels, overlaps and barge-in then come from the model's own decisions, not from a VAD timer.
+    The sources group the designs by where the "speak or listen" decision lives.
+  </p>
+  <h3 id="duplex-levels">Survey levels L0 to L3</h3>
+  <p>
+    A 2026 survey (arXiv 2606.19453) defines four levels.
+    L0 is an external scheduler around a half-duplex model.
+    L1 is a control head reading the LLM's hidden states.
+    L2 encodes the duties in the token stream itself.
+    L3 is representation-level and not realised yet.
+    Its line to remember: "architecture sets capacity, training realizes it".
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    My mapping: control-head models are L1; dual-stream, flattened, chunked, action-channel and special-token models are L2.
+  </p>
+
+  <h3 id="duplex-families">Families and numbers</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Family</th>
+          <th>Model</th>
+          <th>How it works</th>
+          <th>Reported numbers</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Dual-stream</td>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>User and agent audio plus agent text on one 80 ms clock</td>
+          <td>160 ms theory, about 200 ms practice</td>
+        </tr>
+        <tr>
+          <td>Dual-stream</td>
+          <td>PersonaPlex (arXiv 2602.06053)</td>
+          <td>Moshi-based duplex model; hybrid system prompt of a text role prompt plus a voice-cloning speech sample</td>
+          <td>Model card, Full-Duplex-Bench: smooth turn-taking latency 0.170, user-interruption latency 0.240 (units not stated); NVIDIA Open Model License (<a href="https://huggingface.co/nvidia/personaplex-7b-v1">model card</a>)</td>
+        </tr>
+        <tr>
+          <td>Time-synchronous chunks</td>
+          <td>SyncLLM (arXiv 2409.15594)</td>
+          <td>160 to 240 ms chunks of 25 Hz HuBERT tokens</td>
+          <td>Designed for Internet latencies of up to 240 ms</td>
+        </tr>
+        <tr>
+          <td>Flattened</td>
+          <td>OmniFlatten (arXiv 2410.17799)</td>
+          <td>Input speech, output text and output speech interleaved in one sequence; text chunks of 2, speech chunks of 10</td>
+          <td>Average assistant turn-taking response time 193 ms against Moshi's 553 ms (authors' Table 4)</td>
+        </tr>
+        <tr>
+          <td>Control head</td>
+          <td>MinMo (arXiv 2501.06282)</td>
+          <td>Full-duplex predictor (one Transformer layer, about 18M parameters); still needs separate AEC and VAD modules; voice token LM interleaves 5 semantic vectors : 15 speech tokens</td>
+          <td>About 600 ms in theory, 800 ms in practice (authors)</td>
+        </tr>
+        <tr>
+          <td>Control head</td>
+          <td>Freeze-Omni (arXiv 2411.00774)</td>
+          <td>Frozen LLM; chunk-wise state prediction from the LLM's last layer: keep receiving speech, or the chunk ends the user's speech (with or without interrupting)</td>
+          <td>745 ms total latency in the authors' latency breakdown</td>
+        </tr>
+        <tr>
+          <td>Time-division multiplexing</td>
+          <td>MiniCPM-o 4.5 (arXiv 2604.27393)</td>
+          <td>"Omni-Flow" groups visual, audio and output per chunk</td>
+          <td>Ablation of 1.0, 0.2 and 0.1 s chunks: the 0.2 and 0.1 s rows score lower; backbone needs 3-4 decoding steps per second</td>
+        </tr>
+        <tr>
+          <td>Three channels</td>
+          <td>DuplexSLA (arXiv 2605.20755)</td>
+          <td>160 ms chunk clock; assistant TA4 (1 text + 4 audio); action channel: response, interrupt, backchannel; initialised from Step-Audio 2 mini</td>
+          <td>Turn-taking delay 0.27 s normal, 0.40 s interrupt, 0.32 s backchannel (authors' benchmark)</td>
+        </tr>
+        <tr>
+          <td>Special tokens in one LLM</td>
+          <td>BayLing-Duplex (arXiv 2606.14528)</td>
+          <td>A single autoregressive LLM decides when to listen, speak and stop via a few added special tokens; started from GLM-4-Voice, 400K duplex samples plus DPO</td>
+          <td>92% turn-taking success, 100% interruption success on InstructS2S-Eval; speech-response score 3.39 against Moshi's 2.17 (authors)</td>
+        </tr>
+        <tr>
+          <td>Parallel streams with tools</td>
+          <td>NemotronLabs VoiceChat (arXiv 2609.21967)</td>
+          <td>Parallel agent-text and function-call output streams, an auxiliary RNN-T branch for user transcription, a streaming TTS decoder</td>
+          <td>100% takeover after interruptions, 93% resume after backchannels (Full-Duplex-Bench 1.0 and 1.5), VoiceBench 55.1, tool-selection F1 82.5% on FDB 3.0 (authors)</td>
+        </tr>
+        <tr>
+          <td>Interaction layer plus thinking layer</td>
+          <td>DuplexOmni (arXiv 2606.09186)</td>
+          <td>Interaction model handles streaming audio and video; a pluggable thinking layer does reasoning and tool use; both run asynchronously</td>
+          <td>No numbers in the abstract</td>
+        </tr>
+        <tr>
+          <td>Steerable Moshi</td>
+          <td>SteerDuplex (arXiv 2609.12623)</td>
+          <td>Moshi-based model fine-tuned for tone, persona, speaking rate and voice style, then two-stage RL with hybrid rewards</td>
+          <td>Interruption response 72.5% to 82.5%, synthetic pause barge-in 26.5% to 9%; reward probes show hacking through incomplete responses (authors)</td>
+        </tr>
+        <tr>
+          <td>Rolling masked diffusion</td>
+          <td>DiffuPlex (arXiv 2610.12214)</td>
+          <td>12.5 Hz; maximum look-ahead W = 16 frames; one backbone wake predicts several future frames</td>
+          <td>1.46x to 1.59x deployment-path wall-clock speed-up (authors)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Latency is not comparable across this table</strong>
+    <p>
+      Moshi's 160 ms is theoretical; MinMo gives theory and practice; Freeze-Omni averages total latency;
+      PersonaPlex and DuplexSLA report turn-taking delays on their own tests.
+      Hardware and definitions differ.
+      Quote a number with its definition, never as a ranking.
+    </p>
+  </div>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    Most figures are authors' own.
+    On DuplexSLA-Bench (self-reported, arXiv 2605.20755), backchannel accuracy is 0.33% for gpt-realtime-1.5 (semantic-vad-high),
+    40.00% for gemini-3.1-flash-live and 98.33% for DuplexSLA.
+    Instruct-FD (arXiv 2607.20460) finds the best of six full-duplex systems follows turn-taking
+    instructions 64.4% of the time.
+  </p>
+</section>

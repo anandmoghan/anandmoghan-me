@@ -1,0 +1,486 @@
+<section id="streaming-cascaded-voice-agent">
+  <h2>Baseline: a streaming ASR → LLM → TTS voice agent</h2>
+  <p>
+    This is the baseline, the launch fallback and the comparison point for the target design in the previous
+    section, <a href="#unified-speech-llm">a unified speech LLM with a downstream reasoning LLM</a>.
+    The target replaces the independent ASR and TTS models with one speech model and keeps the LLM behind a tool call;
+    much of this section (transport, end-of-turn, chunking, barge-in, budget) carries over to it.
+  </p>
+  <p>
+    A cascaded voice agent is three models plus turn logic, run as overlapping streams.
+    The latency comes from how well the stages overlap, not from any single model.
+    Labels: <span class="tag tag--confirmed">Confirmed</span> is sourced to a paper or first-party page,
+    <span class="tag tag--reported">Reported</span> is a self-reported figure from the vendor's or authors' own page,
+    <span class="tag tag--inference">Inference</span> is design opinion.
+  </p>
+
+  <h3 id="pipeline">Component pipeline</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 280" role="img"
+      aria-label="Streaming cascaded voice agent: microphone audio passes AEC, VAD, end-of-turn detection and streaming ASR into a turn manager, then LLM, chunker, streaming TTS and playback; barge-in sends a dashed cancel from the turn manager to the LLM and TTS">
+      <defs>
+        <marker id="arrow-cascade" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box" x="10" y="20" width="116" height="44" rx="8"/>
+      <text class="d-text" x="68" y="34" text-anchor="middle" dominant-baseline="middle">Mic</text>
+      <text class="d-text--muted" x="68" y="51" text-anchor="middle" dominant-baseline="middle">WebRTC audio</text>
+      <rect class="d-box" x="156" y="20" width="116" height="44" rx="8"/>
+      <text class="d-text" x="214" y="34" text-anchor="middle" dominant-baseline="middle">AEC + noise</text>
+      <text class="d-text--muted" x="214" y="51" text-anchor="middle" dominant-baseline="middle">suppression</text>
+      <rect class="d-box" x="302" y="20" width="116" height="44" rx="8"/>
+      <text class="d-text" x="360" y="42" text-anchor="middle" dominant-baseline="middle">VAD</text>
+      <rect class="d-box" x="448" y="20" width="116" height="44" rx="8"/>
+      <text class="d-text" x="506" y="42" text-anchor="middle" dominant-baseline="middle">End-of-turn</text>
+      <rect class="d-box" x="302" y="120" width="116" height="44" rx="8"/>
+      <text class="d-text" x="360" y="134" text-anchor="middle" dominant-baseline="middle">Streaming ASR</text>
+      <text class="d-text--muted" x="360" y="151" text-anchor="middle" dominant-baseline="middle">partials, finals</text>
+      <rect class="d-box d-box--accent" x="448" y="120" width="116" height="44" rx="8"/>
+      <text class="d-text" x="506" y="142" text-anchor="middle" dominant-baseline="middle">Turn manager</text>
+      <rect class="d-box" x="594" y="120" width="116" height="44" rx="8"/>
+      <text class="d-text" x="652" y="134" text-anchor="middle" dominant-baseline="middle">LLM</text>
+      <text class="d-text--muted" x="652" y="151" text-anchor="middle" dominant-baseline="middle">token stream</text>
+      <rect class="d-box" x="594" y="220" width="116" height="44" rx="8"/>
+      <text class="d-text" x="652" y="234" text-anchor="middle" dominant-baseline="middle">Chunker</text>
+      <text class="d-text--muted" x="652" y="251" text-anchor="middle" dominant-baseline="middle">clause, sentence</text>
+      <rect class="d-box" x="448" y="220" width="116" height="44" rx="8"/>
+      <text class="d-text" x="506" y="234" text-anchor="middle" dominant-baseline="middle">Streaming TTS</text>
+      <text class="d-text--muted" x="506" y="251" text-anchor="middle" dominant-baseline="middle">audio chunks</text>
+      <rect class="d-box" x="302" y="220" width="116" height="44" rx="8"/>
+      <text class="d-text" x="360" y="234" text-anchor="middle" dominant-baseline="middle">Playback</text>
+      <text class="d-text--muted" x="360" y="251" text-anchor="middle" dominant-baseline="middle">jitter buffer</text>
+      <path class="d-arrow" d="M 126 42 L 154 42" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow" d="M 272 42 L 300 42" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow" d="M 418 42 L 446 42" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow" d="M 360 64 L 360 118" marker-end="url(#arrow-cascade)"/>
+      <text class="d-text--muted" x="352" y="94" text-anchor="end">speech</text>
+      <path class="d-arrow" d="M 480 64 L 480 118" marker-end="url(#arrow-cascade)"/>
+      <text class="d-text--muted" x="472" y="94" text-anchor="end">turn candidate</text>
+      <path class="d-arrow" d="M 418 142 L 446 142" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow" d="M 564 142 L 592 142" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow" d="M 652 164 L 652 218" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow" d="M 594 242 L 566 242" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow" d="M 448 242 L 420 242" marker-end="url(#arrow-cascade)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 520 164 L 520 218" marker-end="url(#arrow-cascade)"/>
+      <text class="d-text--muted" x="512" y="196" text-anchor="end">barge-in: cancel + flush audio</text>
+      <path class="d-arrow d-arrow--dashed" d="M 540 118 L 540 90 L 652 90 L 652 118" marker-end="url(#arrow-cascade)"/>
+      <text class="d-text--muted" x="596" y="82" text-anchor="middle">barge-in: cancel</text>
+    </svg>
+    <figcaption>Every box streams. The turn manager owns state: listening, thinking, speaking.
+      <span class="tag tag--inference">Inference</span> (layout is a design sketch).</figcaption>
+  </figure>
+  <p>
+    This is the cascade of the earlier chapters with turn-taking added as an engineered heuristic.
+    The text interface between stages carries no timing, so the pipeline cannot represent
+    "the user is still talking" without the VAD and turn manager.
+    That is the root of the trade-offs in the last subsection.
+  </p>
+
+  <h3 id="transport">Transport</h3>
+  <p>
+    Use WebRTC between browser or phone client and server, with a data channel for control events.
+    LiveKit and Pipecat are the two open frameworks that package this.
+    <span class="tag tag--inference">Inference</span>
+    WebRTC gives you client-side echo cancellation, jitter buffering and congestion handling for free.
+  </p>
+  <p>
+    Budget the network as its own line.
+    Wan-Streamer (arXiv 2606.25041) reports about 200 ms of model-side response latency and about 550 ms in total, including 350 ms of bidirectional network latency
+    <span class="tag tag--reported">Reported</span>.
+    Time to first audio (TTFA), as used in this section, is the time from end of user speech to first agent audio at the client, so it includes that network time.
+  </p>
+  <p>
+    Between server components, use persistent bidirectional streams.
+    A sensible pattern is a high-volume data plane (tokens, audio) plus a separate
+    control plane for cancel, barge-in and feedback injection.
+    REST is a poor fit because it has no native streaming and no clean channel for cancellation.
+    <span class="tag tag--inference">Inference</span>
+  </p>
+
+  <h3 id="turn-detection">VAD and end-of-turn detection</h3>
+  <p>
+    A bare VAD with a silence timeout is the half-duplex heuristic.
+    It adds dead air to every turn, cannot tell a pause from a finished thought,
+    and treats overlapping speech as noise.
+  </p>
+  <p>
+    The usual upgrade is a VAD that triggers a semantic end-of-turn model.
+    Pipecat's Smart Turn is an open-source model that analyses the most recent 8 seconds
+    of the user's turn, with a recommended VAD stop time of 0.2 s.
+    The docs say inference can run "in under 100ms" on low-cost cloud instances.
+    <span class="tag tag--reported">Reported</span>
+    (<a href="https://docs.pipecat.ai/server/utilities/turn-detection/smart-turn-overview">Pipecat docs</a>, vendor numbers).
+    LiveKit Agents documents an adaptive interruption mode that uses an audio model to distinguish real interruptions
+    from backchannel acknowledgements.
+    <span class="tag tag--reported">Reported</span>
+    (<a href="https://docs.livekit.io/agents/logic/turns/tuning/">LiveKit docs</a>).
+  </p>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    Treat the end-of-turn model as a latency lever, not just an accuracy one.
+    A fast, aggressive endpoint gives a quick reply but cuts users off mid-thought.
+    A conservative endpoint is safe but adds dead air.
+    A learned detector shifts that curve; it does not remove it.
+  </p>
+
+  <h3 id="asr-to-llm">Streaming ASR: partials, finals and when to start the LLM</h3>
+  <p>
+    Streaming ASR emits partials (revisable) and finals (stable).
+    The latency/WER trade-off is set by chunk size and lookahead.
+    <span class="tag tag--confirmed">Confirmed</span> examples:
+    SpeechLLM-XL with 1.28 s chunks reports 2.7% / 6.7% WER on LibriSpeech test clean / other (arXiv 2410.03752);
+    Qwen3-ASR's encoder uses an attention window of 1 to 8 s so one model serves streaming and offline
+    (arXiv 2601.21337);
+    Kyutai DSM treats ASR as a delayed text stream over audio (arXiv 2509.08753).
+  </p>
+  <div class="callout callout--inference">
+    <strong>Inference: speculative start</strong>
+    <p>
+      <span class="tag tag--inference">Inference</span>
+      Never feed raw partials to the LLM; they change.
+      Start the LLM when the end-of-turn candidate fires, using the current stable transcript.
+      If the final transcript or a resumed user turn changes the text, cancel and restart.
+      Skip speculation on long turns, which are likelier to change.
+      Cost: wasted LLM (and, if enabled, TTS) compute on every cancel.
+    </p>
+  </div>
+  <p>
+    LiveKit ships a version of this: preemptive generation starts the LLM when a final transcript
+    arrives, before the turn is confirmed.
+    The docs list it as on by default, with preemptive TTS off, long utterances skipped
+    (10 s default), and a retry cap of 3.
+    They warn it does not always reduce latency, so check your metrics.
+    <span class="tag tag--reported">Reported</span>
+    (<a href="https://docs.livekit.io/agents/logic/turns/tuning/">LiveKit docs</a>, read 2026-10-13; check your installed version).
+  </p>
+
+  <h3 id="llm-ttft">LLM time-to-first-token levers</h3>
+  <p>
+    LLM time-to-first-token (TTFT) is plausibly the biggest single lever in the budget
+    <span class="tag tag--inference">Inference</span>.
+    The levers below are standard serving techniques:
+  </p>
+  <ul>
+    <li>
+      Prefix caching reuses KV for a shared system prompt.
+      It needs identical token prefixes, so a prompt that changes per turn breaks the hit.
+    </li>
+    <li>
+      Chunked prefill stops one long prompt from inflating tail latency for other sessions.
+    </li>
+    <li>
+      Speculative decoding and quantization buy per-token speed; how hard to push is set by the budget.
+    </li>
+    <li>
+      Keep concurrency limits low enough that requests queue rather than slow each other.
+    </li>
+  </ul>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    TTFT depends on load.
+    Inworld reports about 27,000 aggregate tokens per second and a p50 TTFT around 1.7 s for Gemma 4 31B Dense on a B200
+    (<a href="https://inworld.ai/resources/fastest-llm-inference-api">Inworld guide</a>, first-party measurement)
+    <span class="tag tag--reported">Reported</span>.
+    A p50 of 1.7 s at that throughput is far above a voice-agent target, so tune for latency instead:
+    a small model or router for simple turns, and a short reply style.
+  </p>
+
+  <h3 id="chunking">LLM text to TTS: chunking</h3>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The default is sentence-level chunking: buffer LLM tokens until a sentence forms, then hand it to TTS.
+    A sentence carries a full intonation contour, so it is a safe unit.
+    Smaller chunks cut time to first audio but risk fragmenting prosody across the boundary.
+    Make the first chunk small and cut at the first clause boundary (comma, dash, short sentence),
+    with a minimum length so TTS has enough text to set intonation.
+    Make later chunks full sentences; by then the first chunk's audio is hiding the wait.
+  </p>
+  <p>
+    FlashTTS replaces buffer-then-emit with a lagged multi-track autoregressive design for native streaming text input
+    (arXiv 2606.09141)
+    <span class="tag tag--reported">Reported</span>.
+  </p>
+
+  <h3 id="streaming-tts">Streaming TTS first packet</h3>
+  <p>
+    Pick TTS on first-audio latency at your real input lengths and concurrency.
+    Reported first-packet figures are self-reports with different definitions,
+    so do not compare across rows:
+    Moshi 200 ms in practice, 160 ms in theory (arXiv 2410.00037),
+    Qwen3-TTS 12 Hz 97 ms (arXiv 2601.15621),
+    Kyutai DSM-TTS 150 ms at batch size 1 (arXiv 2509.08753),
+    FlashTTS 325 ms first-packet latency (arXiv 2606.09141),
+    Hume Octave about 200 ms in Instant Mode
+    (<a href="https://dev.hume.ai/docs/text-to-speech-tts/overview">Hume docs</a>).
+    <span class="tag tag--reported">Reported</span>
+  </p>
+  <p>
+    Measure time to first byte, real-time factor, and p95/p99 under concurrent load,
+    because a single median hides the tail
+    <span class="tag tag--inference">Inference</span>.
+    Overlap stages inside the TTS server too.
+    Inworld and Modular report that a streaming-aware scheduler returned the first 2 seconds of synthesized audio
+    about 70% faster than a vanilla vLLM implementation
+    (<a href="https://www.modular.com/case-studies/inworld">Modular case study</a>).
+    <span class="tag tag--reported">Reported</span>
+  </p>
+
+  <h3 id="barge-in">Barge-in</h3>
+  <p>
+    When VAD or the turn model detects user speech during agent speech, run these steps in order:
+  </p>
+  <ol>
+    <li>Cancel the LLM stream and any queued TTS requests.</li>
+    <li>Flush audio buffers on both server and client playout.</li>
+    <li>
+      Truncate the assistant turn in context to what was actually played, not what was generated.
+    </li>
+    <li>Return to listening and let ASR take the new input.</li>
+  </ol>
+  <p>
+    Step 3 matters because TTS runs faster than real time; the model "said" far more than the user heard.
+    OpenAI's Realtime API exposes this as <code>conversation.item.truncate</code>
+    with an <code>audio_end_ms</code> offset; it cuts the audio and removes the transcript for the unplayed portion
+    <span class="tag tag--reported">Reported</span>
+    (<a href="https://developers.openai.com/api/docs/guides/realtime-conversations">OpenAI Realtime guide</a>).
+    <span class="tag tag--inference">Inference</span>
+    In your own stack, timestamp every audio chunk sent and track the client's playout position,
+    then cut the text at the word boundary nearest that position.
+  </p>
+  <p>
+    Echo cancellation is the precondition.
+    Without it the agent hears itself and interrupts itself.
+    The W3C Media Capture and Streams spec defines an <code>echoCancellation</code> property
+    that removes sound played by the speakers from the microphone recording
+    <span class="tag tag--confirmed">Confirmed</span>
+    (<a href="https://www.w3.org/TR/mediacapture-streams/">W3C spec</a>).
+    <span class="tag tag--inference">Inference</span>
+    On telephony or server-side audio you must supply AEC yourself, or gate barge-in on a higher
+    speech threshold while the agent talks.
+    LiveKit adds false-interruption recovery: if no transcript follows within a window
+    (2.0 s default), the agent can resume.
+    <span class="tag tag--reported">Reported</span>
+    (<a href="https://docs.livekit.io/agents/logic/turns/tuning/">LiveKit docs</a>).
+  </p>
+
+  <h3 id="latency-budget">Stage-by-stage latency budget</h3>
+  <p>
+    Measure from end of user speech to first agent audio at the client.
+    Sourced figures are sparse; the target column is my illustrative target, not a measurement and not from any source.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 190" role="img"
+      aria-label="Illustrative latency budget as consecutive segments from end of user speech to first agent audio; widths use the upper end of each target range, 950 ms in total">
+      <defs>
+        <marker id="arrow-latency" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-lane" x="0" y="40" width="720" height="60" rx="6"/>
+      <text class="d-text--small" x="10" y="22">end of user speech</text>
+      <text class="d-text--small" x="710" y="22" text-anchor="end">first agent audio</text>
+      <rect class="d-box" x="10" y="50" width="110.5" height="40" rx="8"/>
+      <text class="d-text" x="65.25" y="70" text-anchor="middle" dominant-baseline="middle">VAD</text>
+      <text class="d-text--muted" x="65.3" y="112" text-anchor="middle">50-150 ms</text>
+      <rect class="d-box" x="120.5" y="50" width="73.7" height="40" rx="8"/>
+      <text class="d-text" x="157.35" y="70" text-anchor="middle" dominant-baseline="middle">ASR</text>
+      <text class="d-text--muted" x="157.4" y="112" text-anchor="middle">0-100 ms</text>
+      <rect class="d-box d-box--accent" x="194.2" y="50" width="221.1" height="40" rx="8"/>
+      <text class="d-text" x="304.75" y="70" text-anchor="middle" dominant-baseline="middle">LLM</text>
+      <text class="d-text--muted" x="304.7" y="112" text-anchor="middle">200-300 ms</text>
+      <rect class="d-box" x="415.3" y="50" width="73.7" height="40" rx="8"/>
+      <text class="d-text" x="452.15" y="70" text-anchor="middle" dominant-baseline="middle">Chunk</text>
+      <text class="d-text--muted" x="452.1" y="112" text-anchor="middle">50-100 ms</text>
+      <rect class="d-box" x="488.9" y="50" width="147.4" height="40" rx="8"/>
+      <text class="d-text" x="562.6" y="70" text-anchor="middle" dominant-baseline="middle">TTS</text>
+      <text class="d-text--muted" x="562.6" y="112" text-anchor="middle">100-200 ms</text>
+      <rect class="d-box" x="636.3" y="50" width="73.7" height="40" rx="8"/>
+      <text class="d-text" x="673.15" y="70" text-anchor="middle" dominant-baseline="middle">Net</text>
+      <text class="d-text--muted" x="673.2" y="112" text-anchor="middle">50-100 ms</text>
+      <path class="d-arrow" d="M 10 140 L 712 140" marker-end="url(#arrow-latency)"/>
+      <text class="d-text--muted" x="10" y="160">0</text>
+      <text class="d-text--muted" x="710" y="160" text-anchor="end">time (up to 950 ms)</text>
+      <text class="d-text--muted" x="360" y="176" text-anchor="middle">Illustrative targets, not measurements. Total 450-950 ms; aim for 500-700 ms median.</text>
+    </svg>
+    <figcaption>Figure: the budget table as a timeline. Stages: uplink, VAD and end-of-turn; ASR final; LLM first token; chunker; TTS first packet; downlink and jitter buffer. All values are illustrative (Inference).</figcaption>
+  </figure>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Sourced figure</th>
+          <th>Illustrative target (mine)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Uplink, VAD, end-of-turn</td>
+          <td>None</td>
+          <td>50-150 ms <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>ASR final after endpoint</td>
+          <td>Qwen3-ASR-0.6B average TTFT as low as 92 ms, authors' benchmark (arXiv 2601.21337) <span class="tag tag--reported">Reported</span></td>
+          <td>0-100 ms (mostly hidden by streaming) <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>LLM first token</td>
+          <td>Load-dependent; Inworld reports p50 TTFT about 1.7 s for a 31B model (see above) <span class="tag tag--reported">Reported</span></td>
+          <td>200-300 ms <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Chunker to first clause</td>
+          <td>None</td>
+          <td>50-100 ms <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>TTS first packet</td>
+          <td>97 ms to about 200 ms across papers, self-reported (see above) <span class="tag tag--reported">Reported</span></td>
+          <td>100-200 ms <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td>Downlink, jitter buffer</td>
+          <td>None</td>
+          <td>50-100 ms <span class="tag tag--inference">Inference</span></td>
+        </tr>
+        <tr>
+          <td><strong>Total</strong></td>
+          <td>
+            Tavus claims less than one second between utterances
+            (<a href="https://www.tavus.io/blog/introducing-the-worlds-fastest-conversational-video-interface-for-developers">Tavus blog</a>);
+            Synthesia says dialogue is "typically under one second"
+            <span class="tag tag--reported">Reported</span>
+          </td>
+          <td>About 450-950 ms by summing the column; aim for 500-700 ms median <span class="tag tag--inference">Inference</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout--warn">
+    <strong>Trap: the headline number</strong>
+    <p>
+      Quoted figures differ because definitions differ: time to first token, time to first packet,
+      or latency between utterances.
+      State where you start and stop the clock, and report p95/p99 under real concurrency,
+      not a median on one idle session.
+    </p>
+  </div>
+
+  <h3 id="failure-modes">Failure modes and mitigations</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Failure</th>
+          <th>Mitigation <span class="tag tag--inference">Inference</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cuts the user off mid-thought</td>
+          <td>Semantic end-of-turn model; longer stop time when the transcript looks incomplete</td>
+        </tr>
+        <tr>
+          <td>Dead air before replies</td>
+          <td>Speculative LLM start; shorter VAD stop time; a short filler only if it fits the product</td>
+        </tr>
+        <tr>
+          <td>Agent hears itself and self-interrupts</td>
+          <td>AEC; stricter barge-in threshold while speaking; false-interruption resume</td>
+        </tr>
+        <tr>
+          <td>Backchannel ("mm-hm") kills the reply</td>
+          <td>Adaptive interruption mode; require minimum duration or words before cancelling</td>
+        </tr>
+        <tr>
+          <td>Context shows words the user never heard</td>
+          <td>Truncate to played position, timestamped per chunk</td>
+        </tr>
+        <tr>
+          <td>ASR error propagates with no recovery</td>
+          <td>The LLM sees only the transcript, so log ASR confidence and let the agent ask to confirm names and numbers</td>
+        </tr>
+        <tr>
+          <td>Prosody breaks at chunk seams</td>
+          <td>Larger later chunks; 1-2 sentences of look-ahead</td>
+        </tr>
+        <tr>
+          <td>Tail latency under load</td>
+          <td>Separate GPU pools per stage; cap concurrency; alert on p99 per stage</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="evaluation">How to evaluate</h3>
+  <ul>
+    <li>
+      <strong>Latency:</strong> per-stage and end-to-end p50/p95/p99 under production concurrency.
+      Track TTFB for TTS and real-time factor.
+    </li>
+    <li>
+      <strong>ASR:</strong> WER on your own domain audio (names, numbers, accents), not only a public leaderboard.
+    </li>
+    <li>
+      <strong>TTS:</strong> an automatic MOS predictor (UTMOS) and resynthesis WER on every change,
+      with human CMOS panels as periodic gates.
+    </li>
+    <li>
+      <strong>Interruption handling:</strong> stop latency after barge-in, false-interruption rate,
+      and backchannel handling, scored with Full-Duplex-Bench v1 (arXiv 2503.04721)
+      and v1.5 (arXiv 2507.23159).
+      Those benchmarks cover pause handling, backchannel, turn-taking, interruption and overlap scenarios.
+      <span class="tag tag--confirmed">Confirmed</span>
+    </li>
+    <li>
+      <strong>Online:</strong> time-to-first-audio next to an engagement metric,
+      since a fluent reply that arrives late reads as broken.
+    </li>
+  </ul>
+
+  <h3 id="when-to-go-native">The cascade against the target design</h3>
+  <p>
+    A cascade is the right baseline and fallback: each stage is swappable, data is abundant and errors are attributable.
+    Its structural limits are stacked latency, information loss at each text boundary,
+    no recovery from ASR errors, and no natural interruption or backchannel handling
+    <span class="tag tag--inference">Inference</span>.
+    Native full-duplex models (Moshi, dGSLM, arXiv 2203.16502) learn turn-taking from data,
+    and state-head designs like Freeze-Omni (arXiv 2411.00774) and MinMo (arXiv 2501.06282)
+    add a small decision module beside the LLM instead of using external heuristics.
+    <span class="tag tag--confirmed">Confirmed</span>
+  </p>
+  <p>
+    The cost of going native is data: real dual-channel conversation with genuine overlap is scarce
+    (Fisher is about 2,000 h, arXiv 2410.00037), and the DuplexPO authors describe a tension between
+    interactive dynamics and reasoning in full-duplex models (arXiv 2607.07148).
+    <span class="tag tag--reported">Reported</span>
+    <span class="tag tag--inference">Inference</span>
+    The target keeps the cascade's separation of content from audio but folds ASR, turn-taking and TTS into one
+    speech model, so the turn logic is learned, not engineered.
+    The cascade stays as the launch fallback, the comparison point and a generator of synthetic dialogue.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I treat a voice agent as overlapping streams with a turn manager on top.
+      Latency is the overlap: speculative LLM start at end-of-turn, a small first TTS chunk,
+      and barge-in that cancels everything and truncates context to what was played."
+    </p>
+  </div>
+
+  <h3 id="sources-streaming-agent">First-party pages cited</h3>
+  <ul>
+    <li><a href="https://docs.pipecat.ai/server/utilities/turn-detection/smart-turn-overview">Pipecat Smart Turn overview</a></li>
+    <li><a href="https://docs.livekit.io/agents/logic/turns/tuning/">LiveKit turn-taking tuning</a></li>
+    <li><a href="https://developers.openai.com/api/docs/guides/realtime-conversations">OpenAI Realtime conversations guide</a></li>
+    <li><a href="https://www.w3.org/TR/mediacapture-streams/">W3C Media Capture and Streams</a></li>
+    <li><a href="https://www.tavus.io/blog/introducing-the-worlds-fastest-conversational-video-interface-for-developers">Tavus CVI launch post</a></li>
+    <li><a href="https://dev.hume.ai/docs/text-to-speech-tts/overview">Hume TTS overview</a></li>
+    <li><a href="https://inworld.ai/resources/fastest-llm-inference-api">Inworld inference guide</a> and <a href="https://www.modular.com/case-studies/inworld">Modular case study</a></li>
+  </ul>
+</section>

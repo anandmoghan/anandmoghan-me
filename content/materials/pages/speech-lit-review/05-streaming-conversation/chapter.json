@@ -1,0 +1,4 @@
+{
+  "title": "Streaming conversational modelling",
+  "summary": "Rates and clocks, producing text and speech together, Moshi and other full-duplex models, turn-taking, streaming inference, training recipes, RL rewards, and conversational evaluation."
+}

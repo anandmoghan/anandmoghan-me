@@ -1,0 +1,236 @@
+<section id="rvq-token-patterns">
+  <h2>Training an LM on RVQ tokens: flattening, parallel, delay, depth</h2>
+  <p>
+    Once the codec exists, the LM must model \( K \) codebooks per frame.
+    MusicGen defines a codebook pattern as a partition of all (time, codebook) pairs into steps, and the model predicts every position in a step in parallel (arXiv 2306.05284).
+    Its two reference patterns, with frame \( t \) and codebook \( k \), are below.
+  </p>
+  \[
+    \text{parallel: } P_s = \{(s, k)\},
+    \qquad
+    \text{delay: } P_s = \{(s - k + 1,\, k) : s - k \ge 0\}
+  \]
+  <p>
+    Source: MusicGen, Eqs. 5 and 6 (arXiv 2306.05284).
+    In the delay pattern, codebook \( k \) is shifted by \( k - 1 \) steps.
+    Step \( s \) therefore predicts codebook 1 of frame \( s \), codebook 2 of frame \( s - 1 \), and so on.
+    Each token sees the lower codebooks of its own frame as context, and the sequence stays near \( T \) steps long.
+    <span class="tag tag--inference">Inference</span>
+    From Eq. 6, the delay pattern needs \( T + K - 1 \) steps for \( T \) frames.
+    MusicGen's 30 s ablation reports 1500 steps for delay and parallel.
+    Positions absent from a step get a special token, and the first input is the sum of special tokens (arXiv 2306.05284).
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 216" role="img"
+      aria-label="Delay pattern grid: four codebook rows against seven step columns. Row k starts k minus 1 steps later, so cells form a diagonal band. The column for step 4 is outlined: it predicts codebook 1 of frame 4, codebook 2 of frame 3, codebook 3 of frame 2 and codebook 4 of frame 1">
+      <rect class="d-group" x="294" y="24" width="56" height="162" rx="8"/>
+      <text class="d-text--muted" x="102" y="12" text-anchor="end">step s</text>
+      <text class="d-text--muted" x="154" y="12" text-anchor="middle">1</text>
+      <text class="d-text--muted" x="210" y="12" text-anchor="middle">2</text>
+      <text class="d-text--muted" x="266" y="12" text-anchor="middle">3</text>
+      <text class="d-text--muted" x="322" y="12" text-anchor="middle">4</text>
+      <text class="d-text--muted" x="378" y="12" text-anchor="middle">5</text>
+      <text class="d-text--muted" x="434" y="12" text-anchor="middle">6</text>
+      <text class="d-text--muted" x="490" y="12" text-anchor="middle">7</text>
+
+      <text class="d-text" x="102" y="46" text-anchor="end"
+        dominant-baseline="middle">codebook 1</text>
+      <text class="d-text" x="102" y="86" text-anchor="end"
+        dominant-baseline="middle">codebook 2</text>
+      <text class="d-text" x="102" y="126" text-anchor="end"
+        dominant-baseline="middle">codebook 3</text>
+      <text class="d-text" x="102" y="166" text-anchor="end"
+        dominant-baseline="middle">codebook 4</text>
+
+      <!-- == codebook 1: frames 1 to 4 at steps 1 to 4 == -->
+      <rect class="d-box" x="130" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="154" y="47" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="186" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="210" y="47" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="242" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="266" y="47" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="298" y="32" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="47" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <!-- == codebook 2: steps 2 to 5 == -->
+      <rect class="d-box" x="186" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="210" y="87" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="242" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="266" y="87" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="298" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="87" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="354" y="72" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="378" y="87" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <!-- == codebook 3: steps 3 to 6 == -->
+      <rect class="d-box" x="242" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="266" y="127" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="298" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="127" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="354" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="378" y="127" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="410" y="112" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="434" y="127" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <!-- == codebook 4: steps 4 to 7 == -->
+      <rect class="d-box" x="298" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="322" y="167" text-anchor="middle"
+        dominant-baseline="middle">f1</text>
+      <rect class="d-box" x="354" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="378" y="167" text-anchor="middle"
+        dominant-baseline="middle">f2</text>
+      <rect class="d-box" x="410" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="434" y="167" text-anchor="middle"
+        dominant-baseline="middle">f3</text>
+      <rect class="d-box" x="466" y="152" width="48" height="28" rx="6"/>
+      <text class="d-text--small" x="490" y="167" text-anchor="middle"
+        dominant-baseline="middle">f4</text>
+
+      <text class="d-text--muted" x="540" y="60" text-anchor="start">one step predicts one</text>
+      <text class="d-text--muted" x="540" y="78" text-anchor="start">diagonal (outlined: s = 4)</text>
+      <text class="d-text--muted" x="540" y="108" text-anchor="start">cell fk = frame k</text>
+      <text class="d-text--muted" x="130" y="204" text-anchor="start">T = 4 frames, K = 4 codebooks, 7 steps</text>
+    </svg>
+    <figcaption>
+      The delay pattern for four frames and four codebooks.
+      Each row is shifted one step more than the row above, so one step covers a diagonal of the grid.
+    </figcaption>
+  </figure>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Pattern</th>
+          <th>Steps (per frame / total)</th>
+          <th>Dependency captured</th>
+          <th>Latency</th>
+          <th>Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Flattening</td>
+          <td>\( K \) / \( T K \) (6000 for 30 s, \( K = 4 \))</td>
+          <td>Exact factorisation; MusicGen FAD 0.86, best</td>
+          <td>Highest; loses the codec's low frame rate</td>
+          <td>MusicLM-style (arXiv 2306.05284)</td>
+        </tr>
+        <tr>
+          <td>Parallel</td>
+          <td>1 / \( T \) (1500)</td>
+          <td>Ignores same-frame dependence; FAD 2.58</td>
+          <td>Lowest</td>
+          <td>EnCodec's entropy LM (arXiv 2210.13438)</td>
+        </tr>
+        <tr>
+          <td>Delay</td>
+          <td>1 / about \( T \) (1500)</td>
+          <td>Lower codebooks seen first; FAD 0.96</td>
+          <td>Near parallel, plus \( K - 1 \) steps of start-up (Inference)</td>
+          <td>MusicGen (arXiv 2306.05284)</td>
+        </tr>
+        <tr>
+          <td>Coarse first</td>
+          <td>2 / \( 2T \) (3000)</td>
+          <td>Codebook 1 for all steps, then the rest in parallel; FAD 1.98</td>
+          <td>Needs all of codebook 1 first</td>
+          <td>MusicGen ablation (arXiv 2306.05284)</td>
+        </tr>
+        <tr>
+          <td>AR + NAR</td>
+          <td>AR over codebook 1; 7 NAR passes</td>
+          <td>Codebook 1 sequential; later ones conditioned on earlier levels</td>
+          <td>NAR cuts time from \( O(T) \) to \( O(1) \) per level</td>
+          <td>VALL-E (arXiv 2301.02111)</td>
+        </tr>
+        <tr>
+          <td>Depth transformer</td>
+          <td>Temporal: 1; depth: up to \( K \) / \( S \) temporal steps</td>
+          <td>Each sub-token sees earlier sub-tokens of its frame</td>
+          <td>Small depth model per frame</td>
+          <td>Moshi (arXiv 2410.00037)</td>
+        </tr>
+        <tr>
+          <td>Codebook 0 + MTP</td>
+          <td>One backbone step per frame</td>
+          <td>Zeroth codebook from a linear head; MTP module emits the residuals</td>
+          <td>Lightweight fixed-step MTP</td>
+          <td>Qwen3-Omni (arXiv 2509.17765)</td>
+        </tr>
+        <tr>
+          <td>Masked parallel</td>
+          <td>Level by level, several iterations per level</td>
+          <td>Coarse to fine, conditioned on semantic tokens</td>
+          <td>30 s of audio in 0.5 s on a TPU-v4</td>
+          <td>SoundStorm (arXiv 2305.09636)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--inference">Inference</span>
+    The latency column is my reading of the step counts, except the NAR and SoundStorm figures, which the papers state.
+    FAD values are MusicGen's 30 s ablation (lower is better).
+  </p>
+  <ul>
+    <li>
+      MusicGen reports that flattening improves generation but costs far more, and that delay reaches similar performance at a fraction of the cost.
+      Its ablation table lists 1500 steps for delay, 6000 for flattening, and FAD of 0.96 and 0.86 respectively (arXiv 2306.05284).
+    </li>
+    <li>
+      VALL-E uses an autoregressive model for the first of 8 quantizers and a non-autoregressive model for the other seven, called once per quantizer.
+      The authors note that early quantizers recover acoustic properties such as speaker identity and later ones learn fine acoustic detail (arXiv 2301.02111).
+    </li>
+    <li>
+      Moshi's RQ-Transformer runs a Temporal Transformer over \( S \) steps and a smaller Depth Transformer over at most \( K \) sub-tokens per step, instead of one model over \( K S \) steps.
+      With 8 codebooks at 12.5 Hz, a flat sequence would be 100 steps per second of audio (arXiv 2410.00037).
+    </li>
+    <li>
+      Moshi also delays the acoustic tokens against the semantic token by \( \tau \) steps: \( V_{s,1} = A_{s,1} \) and \( V_{s,q} = A_{s-\tau,q} \) for \( q > 1 \).
+      The authors found a delay of 1 or 2 steps greatly improves quality, since it lets the larger Temporal Transformer model the semantic-acoustic dependence (arXiv 2410.00037).
+      For how Moshi's streams are timed, see
+      <a href="/apps/materials/speech-lit-review/05-streaming-conversation#timing-logic">Timing logic</a>.
+    </li>
+    <li>
+      Qwen3-Omni's Talker predicts one codec frame per step: a linear head for the zeroth codebook, then an MTP module for all residual codebooks (arXiv 2509.17765).
+    </li>
+    <li>
+      Fish Audio S2 uses the same split under another name.
+      Its model card describes a Dual-AR design: a 4B slow AR along the time axis predicts the primary semantic codebook,
+      and a 400M fast AR generates the remaining 9 residual codebooks at each time step
+      (<a href="https://huggingface.co/fishaudio/s2-pro">Fish Audio S2 Pro model card</a>;
+      technical report arXiv 2603.08823).
+    </li>
+    <li>
+      OmniVoice skips the AR walk down the codebooks.
+      A non-autoregressive diffusion-LM model maps text straight to multi-codebook acoustic tokens in one stage,
+      trained with a full-codebook random masking strategy (arXiv 2604.00688).
+      It belongs to the block and masked-diffusion family in
+      <a href="#block-diffusion-lms">Generation paradigms</a>.
+    </li>
+    <li>
+      SoundStorm sums the embeddings of all tokens in a frame, so the sequence length equals the number of frames, whatever the number of quantizers.
+      It uses a bidirectional Conformer with one head per RVQ level, and fills in levels coarse to fine (arXiv 2305.09636).
+    </li>
+  </ul>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "With K codebooks per frame, flattening is best but K times longer; MusicGen's delay pattern gets close at T plus K minus 1 steps.
+      For streaming speech I would model codebook 0 per frame and let a small depth or MTP head, or a delay pattern, handle the residuals."
+    </p>
+  </div>
+</section>

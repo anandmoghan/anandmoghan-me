@@ -1,0 +1,219 @@
+<section id="full-duplex">
+  <h2>Full-duplex and backchannelling</h2>
+  <p>
+    Full duplex means the model listens and speaks at once, so it can overlap, interrupt and backchannel without explicit turn logic.
+    This is the target capability for the Synthesia voice role.
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 260" role="img"
+      aria-label="Full-duplex timeline with three lanes: user audio, agent audio and agent text. The agent backchannels during user speech, then stops when the user barges in.">
+      <defs>
+        <marker id="full-duplex-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-lane" x="0" y="34" width="720" height="44" rx="8"/>
+      <text class="d-text--small" x="8" y="56" text-anchor="start"
+        dominant-baseline="middle">user audio</text>
+      <rect class="d-lane" x="0" y="94" width="720" height="44" rx="8"/>
+      <text class="d-text--small" x="8" y="116" text-anchor="start"
+        dominant-baseline="middle">agent audio</text>
+      <rect class="d-lane" x="0" y="154" width="720" height="44" rx="8"/>
+      <text class="d-text--small" x="8" y="176" text-anchor="start"
+        dominant-baseline="middle">agent text</text>
+      <path class="d-arrow d-arrow--dashed" d="M 190 22 L 190 206"/>
+      <path class="d-arrow d-arrow--dashed" d="M 240 22 L 240 206"/>
+      <text class="d-text--muted" x="215" y="12" text-anchor="middle"
+        dominant-baseline="middle">backchannel</text>
+      <path class="d-arrow d-arrow--dashed" d="M 440 22 L 440 206"/>
+      <path class="d-arrow d-arrow--dashed" d="M 460 22 L 460 206"/>
+      <text class="d-text--muted" x="450" y="12" text-anchor="middle"
+        dominant-baseline="middle">barge-in</text>
+      <rect class="d-box" x="110" y="40" width="160" height="32" rx="8"/>
+      <text class="d-text" x="190" y="56" text-anchor="middle"
+        dominant-baseline="middle">user speaks</text>
+      <rect class="d-box" x="440" y="40" width="200" height="32" rx="8"/>
+      <text class="d-text" x="540" y="56" text-anchor="middle"
+        dominant-baseline="middle">user interrupts</text>
+      <rect class="d-box d-box--muted" x="190" y="100" width="50" height="32"
+        rx="8"/>
+      <text class="d-text" x="215" y="116" text-anchor="middle"
+        dominant-baseline="middle">mm-hm</text>
+      <rect class="d-box d-box--accent" x="310" y="100" width="150" height="32"
+        rx="8"/>
+      <text class="d-text" x="385" y="116" text-anchor="middle"
+        dominant-baseline="middle">agent speaks</text>
+      <rect class="d-box d-box--muted" x="180" y="160" width="50" height="32"
+        rx="8"/>
+      <text class="d-text" x="205" y="176" text-anchor="middle"
+        dominant-baseline="middle">txt</text>
+      <rect class="d-box d-box--muted" x="290" y="160" width="150" height="32"
+        rx="8"/>
+      <text class="d-text" x="365" y="176" text-anchor="middle"
+        dominant-baseline="middle">text (leads audio)</text>
+      <path class="d-arrow" d="M 40 226 L 700 226"
+        marker-end="url(#full-duplex-arrow)"/>
+      <text class="d-text--muted" x="370" y="246" text-anchor="middle"
+        dominant-baseline="middle">time</text>
+    </svg>
+    <figcaption>Dual-stream timeline: both audio streams run at every step, so overlap, backchannel and barge-in need no turn logic.</figcaption>
+  </figure>
+
+  <h3 id="duplex-schemes">Schemes</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Scheme</th>
+          <th>Models</th>
+          <th>Mechanism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Dual-stream</td>
+          <td>Moshi (arXiv 2410.00037), dGSLM (arXiv 2203.16502)</td>
+          <td>Own and user audio as parallel streams, no explicit speaker turns. dGSLM is textless, trained on 2000 h of two-channel Fisher audio, and generates speech, laughter and other paralinguistic signals in both channels</td>
+        </tr>
+        <tr>
+          <td>Time-multiplexed / flattened</td>
+          <td>OmniFlatten (arXiv 2410.17799)</td>
+          <td>One flattened sequence; three stages: modality alignment, half-duplex, full-duplex; backbone architecture unchanged</td>
+        </tr>
+        <tr>
+          <td>State head</td>
+          <td>Freeze-Omni (arXiv 2411.00774), MinMo (arXiv 2501.06282)</td>
+          <td>Freeze-Omni: chunk-wise state prediction on the LLM's hidden state. MinMo: a duplex predictor plus a duplex alignment stage, about 8B parameters, 1.4M h of speech</td>
+        </tr>
+        <tr>
+          <td>Shared timeline</td>
+          <td>MiniCPM-o 4.5 (arXiv 2604.27393)</td>
+          <td>9B parameters; "Omni-Flow" aligns omni-modal inputs and outputs on a shared temporal axis; runs on edge devices with under 12 GB RAM (authors)</td>
+        </tr>
+        <tr>
+          <td>Token-level state</td>
+          <td>BayLing-Duplex (arXiv 2606.14528)</td>
+          <td>
+            One autoregressive LLM decides when to listen, speak and stop, with no auxiliary turn-taking module.
+            Only a few special tokens are added to the vocabulary.
+            Started from the public GLM-4-Voice checkpoint, fine-tuned on 400K duplex samples plus a light DPO stage
+          </td>
+        </tr>
+        <tr>
+          <td>Parallel output streams with tools</td>
+          <td>NemotronLabs VoiceChat (arXiv 2609.21967)</td>
+          <td>
+            Streaming speech encoder and decoder-only LM with parallel output streams for agent text and structured function calls.
+            An auxiliary RNN-T branch gives incremental user transcription, and a streaming TTS decoder speaks
+          </td>
+        </tr>
+        <tr>
+          <td>Interaction layer plus thinking layer</td>
+          <td>DuplexOmni (arXiv 2606.09186)</td>
+          <td>An end-to-end audio and video interaction model speaks in real time; a pluggable thinking layer, running asynchronously, does reasoning and tool use</td>
+        </tr>
+        <tr>
+          <td>Cascade-duplex</td>
+          <td>DuplexCascade (arXiv 2603.09180)</td>
+          <td>VAD-free cascade that aims for duplex behaviour while keeping cascade strengths</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <span class="tag tag--reported">Reported</span>
+    Self-reported results.
+    The DuplexSLA authors report 98.33% backchannel accuracy on their own benchmark, against 40% or less for the closed-source baselines they tested (arXiv 2605.20755).
+    BayLing-Duplex's authors report 92% turn-taking success and 100% interruption success on InstructS2S-Eval, and a speech-response score of 3.39 against 2.17 for Moshi (arXiv 2606.14528).
+    NemotronLabs VoiceChat's authors report 100% takeover after user interruptions and a 4.33/5 post-interruption response-quality score on Full-Duplex-Bench 1.0, a 93% resume rate after backchannels on v1.5, and a 55.1 normalized VoiceBench average (arXiv 2609.21967).
+    NVIDIA's PersonaPlex model card lists a smooth turn-taking rate of 0.908 and latencies of 0.170 and 0.240 on Full-Duplex-Bench, without units on the card
+    (<a href="https://huggingface.co/nvidia/personaplex-7b-v1">model card</a>; paper arXiv 2602.06053).
+  </p>
+
+  <h3 id="duplex-tools">Tool calls from a speech model</h3>
+  <p>
+    A voice agent that books, searches or looks up needs a tool call inside the conversation.
+    Four ideas appear in the sources.
+  </p>
+  <ul>
+    <li>
+      A dedicated output stream for function calls, parallel to the agent text, so the model can call a tool while it keeps talking (arXiv 2609.21967).
+      On Full-Duplex-Bench 3.0 the authors report 82.5% tool-selection F1 and say argument accuracy and end-to-end tool execution remain areas for improvement.
+    </li>
+    <li>
+      Speculative queries: predict the tool query while the user is still speaking.
+      Stream RAG reports QA accuracy from 11.1% to 34.2% absolute and 20% lower tool-use latency on AudioCRAG (arXiv 2510.02044).
+    </li>
+    <li>
+      Asynchronous retrieval that hides inside the gap before the answer's core content (arXiv 2604.12928).
+    </li>
+    <li>
+      A separate thinking layer that owns reasoning and tools while the interaction layer keeps the floor (arXiv 2606.09186).
+    </li>
+  </ul>
+  <p>
+    First-party model pages show the same pattern in products.
+    The Gemini 3.8 Live page lists asynchronous <code>NON_BLOCKING</code> function calling as the default, with <code>SILENT</code>, <code>WHEN_IDLE</code> and <code>INTERRUPTED</code> scheduling
+    (<a href="https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live">model page</a>).
+    The gpt-realtime-2 page lists function calling and configurable reasoning effort, and warns that higher effort can increase latency
+    (<a href="https://developers.openai.com/api/docs/models/gpt-realtime-2">model page</a>).
+  </p>
+
+  <h3 id="duplex-benchmarks">Benchmarks</h3>
+  <ul>
+    <li>Full-Duplex-Bench v1 (arXiv 2503.04721): pause handling, backchanneling, turn-taking, interruption management; automatic metrics.</li>
+    <li>
+      v1.5 (arXiv 2507.23159): overlap scenarios (user interruption, user backchannel, talking to others, background speech), stop and response latency.
+      It finds two strategies: responsive and floor-holding.
+    </li>
+    <li>
+      Full-Duplex-Bench-v3 (arXiv 2604.04847): real human audio with five disfluency categories and chained API calls across four task domains, run on six configurations (GPT-Realtime, Gemini Live 2.5, Gemini Live 3.1, Grok, Ultravox v0.7 and a Whisper, GPT-4o, TTS cascade).
+      GPT-Realtime leads Pass@1 at 0.600; Gemini Live 3.1 is fastest at 4.25 s but has the lowest turn-take rate at 78.0%; the cascade has a perfect turn-take rate and the highest latency at 10.12 s.
+      Self-correction handling and multi-step reasoning under hard scenarios are the most consistent failures.
+    </li>
+    <li>CoDeTT (arXiv 2603.25434): a context-aware benchmark that frames turn-taking as a structured decision problem with fine-grained decision categories; the authors observe substantial performance disparities across decision types and scenarios.</li>
+    <li>ECHO (arXiv 2609.17360): paired Chinese yield-or-keep turn-taking benchmark; the authors find three of four systems over-yield on backchannels.</li>
+    <li>VoiceBench (arXiv 2410.17196): multi-faceted evaluation of LLM-based voice assistants.</li>
+    <li>URO-Bench (arXiv 2502.17810): open-source spoken dialogue models lag behind their backbone LLMs on instruction following.</li>
+  </ul>
+  <p>Evaluation is maturing but not comparable across papers.</p>
+
+  <h3 id="duplex-data">Data is the bottleneck</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Fisher</td>
+          <td>About 2,000 h of two-channel telephone conversation, 8 kHz; Moshi upsamples it to 24 kHz (arXiv 2410.00037)</td>
+        </tr>
+        <tr>
+          <td>Synthetic dialogue via TTS</td>
+          <td>LLaMA-Omni 2 (200K dialogues, arXiv 2505.02625), Hibiki (aligned synthetic data, arXiv 2502.03382), Freeze-Omni (60,000 text Q&amp;A, arXiv 2411.00774), SyncLLM (212k h synthetic plus 2k h real, arXiv 2409.15594)</td>
+        </tr>
+        <tr>
+          <td>Unlabelled audio</td>
+          <td>Kimi-Audio more than 13M h (arXiv 2504.18425); MinMo 1.4M h (arXiv 2501.06282); Moshi 7M h (arXiv 2410.00037)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A 2026 survey (arXiv 2606.19453) proposes an L0-L3 hierarchy and an IDLE/LISTEN/SPEAK/WAIT/DUAL state machine.
+    It finds that observed behaviour is constrained by the interaction patterns in training and evaluation, and that public training-data coverage is limited.
+    A 2025 survey (arXiv 2509.14515) names synchronous data scarcity, architectural divergence and evaluation gaps as the main challenges.
+  </p>
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "Architecture is mostly solved: dual-stream, state-head or plain special tokens.
+      The bottleneck is dual-channel conversational data with real overlap and backchannels, and a benchmark everyone shares."
+    </p>
+  </div>
+</section>

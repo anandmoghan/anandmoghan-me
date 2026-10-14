@@ -1,0 +1,247 @@
+<section id="text-audio-duplex-clocks">
+  <h2>Text rate, audio rate and duplex clocks</h2>
+  <p>
+    Text is slow and audio is fast, so a model that emits both must choose how to align them.
+    This section shows the two alignments and the clock a duplex model adds on top.
+  </p>
+  <h3 id="text-vs-audio-rate">Text tokens against audio frames</h3>
+  <p>
+    Text is slow.
+    Moshi puts text on the same 12.5 Hz grid as audio and fills the empty frames with a PAD token.
+    In English conversational speech padding is about 65% of text-stream tokens (arXiv 2410.00037),
+    so about 35% of frames carry a real token, roughly \( 0.35 \times 12.5 \approx 4.4 \) text tokens/s
+    (derived).
+  </p>
+  <p>
+    Interleaving models drop the shared grid and fix an order instead.
+    GLM-4-Voice (arXiv 2412.02612) alternates 13 text tokens with 26 speech tokens (1:2).
+    At 12.5 Hz, 26 speech tokens last \( 26 / 12.5 = 2.08 \) s, so the text runs at
+    \( 13 / 2.08 = 6.25 \) tokens/s (derived).
+  </p>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Ratio or chunk</th>
+          <th>Clock</th>
+          <th>Duration of one unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>1 text slot per frame, ~65% PAD</td>
+          <td>12.5 Hz</td>
+          <td>80 ms per frame</td>
+        </tr>
+        <tr>
+          <td>GLM-4-Voice (arXiv 2412.02612)</td>
+          <td>13 text : 26 speech (1:2)</td>
+          <td>12.5 Hz speech</td>
+          <td>26 tokens = 2.08 s (derived); decoder block of 10 tokens = 0.8 s</td>
+        </tr>
+        <tr>
+          <td>MinMo (arXiv 2501.06282)</td>
+          <td>5 semantic vectors : 15 speech tokens</td>
+          <td>not stated</td>
+          <td>not computable</td>
+        </tr>
+        <tr>
+          <td>OmniFlatten (arXiv 2410.17799)</td>
+          <td>text chunk 2, speech chunk 10</td>
+          <td>not stated</td>
+          <td>not computable</td>
+        </tr>
+        <tr>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625)</td>
+          <td>read R = 3, write W = 10</td>
+          <td>25 Hz</td>
+          <td>\( 1/25 = 40 \) ms per token; 10 tokens = 400 ms</td>
+        </tr>
+        <tr>
+          <td>SyncLLM (arXiv 2409.15594)</td>
+          <td>time-synchronous chunks</td>
+          <td>25 Hz HuBERT</td>
+          <td>160 to 240 ms chunk = 4 to 6 tokens (derived)</td>
+        </tr>
+        <tr>
+          <td>DuplexSLA (arXiv 2605.20755)</td>
+          <td>TA4 = 1 text + 4 audio per assistant step</td>
+          <td>160 ms chunk clock, 80 ms user stride</td>
+          <td>2 user strides per chunk (derived)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="duplex-clocks">Duplex clocks</h3>
+  <p>
+    A duplex model needs one clock that both directions share.
+    In Moshi, every 80 ms step reads the user's 8 audio codes and emits the agent's text token and 8 audio codes.
+    There is no turn state; silence is just tokens.
+    One temporal-transformer pass plus up to 17 depth sub-steps must finish before the next frame is due.
+    <span class="tag tag--inference">Inference</span>
+    If the temporal pass were free, the budget is \( 80 / 17 \approx 4.7 \) ms per sub-step (derived).
+  </p>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 262" role="img"
+      aria-label="One second at 12.5 Hz: twelve and a half 80 ms frames on three lanes, user audio, agent text and agent audio, with one frame highlighted">
+      <defs>
+        <marker id="rates-timeline-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <rect class="d-box d-box--accent" x="338" y="40" width="52" height="154" rx="8"/>
+      <text class="d-text--muted" x="364.0" y="32" text-anchor="middle"
+        dominant-baseline="middle">one frame = 80 ms</text>
+      <rect class="d-lane" x="94" y="46" width="612" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="60" text-anchor="start"
+        dominant-baseline="middle">user audio</text>
+      <text class="d-text--muted" x="8" y="76" text-anchor="start"
+        dominant-baseline="middle">8 codes/frame</text>
+      <rect class="d-lane" x="94" y="96" width="612" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="110" text-anchor="start"
+        dominant-baseline="middle">agent text</text>
+      <text class="d-text--muted" x="8" y="126" text-anchor="start"
+        dominant-baseline="middle">mostly PAD</text>
+      <rect class="d-lane" x="94" y="146" width="612" height="40" rx="6"/>
+      <text class="d-text--small" x="8" y="160" text-anchor="start"
+        dominant-baseline="middle">agent audio</text>
+      <text class="d-text--muted" x="8" y="176" text-anchor="start"
+        dominant-baseline="middle">8 codes/frame</text>
+      <rect class="d-box d-box--muted" x="102" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="150" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="198" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="246" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="294" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="342" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="390" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="438" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="486" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="534" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="582" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="630" y="50" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="678" y="50" width="20" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="102" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="124.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="150" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="172.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-box d-box--muted" x="198" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="220.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="246" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="268.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="294" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="316.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="342" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="364.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-box d-box--muted" x="390" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="412.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="438" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="460.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="486" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="508.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-box d-box--muted" x="534" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="556.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box d-box--muted" x="582" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--muted" x="604.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">PAD</text>
+      <rect class="d-box" x="630" y="100" width="44" height="32" rx="8"/>
+      <text class="d-text--small" x="652.0" y="116" text-anchor="middle"
+        dominant-baseline="middle">word</text>
+      <rect class="d-box d-box--muted" x="678" y="100" width="20" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="102" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="150" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="198" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="246" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="294" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="342" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="390" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="438" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="486" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="534" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="582" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="630" y="150" width="44" height="32" rx="8"/>
+      <rect class="d-box d-box--muted" x="678" y="150" width="20" height="32" rx="8"/>
+      <path class="d-arrow" d="M 340 200 L 388 200"
+        marker-end="url(#rates-timeline-arrow)"
+        marker-start="url(#rates-timeline-arrow)"/>
+      <text class="d-text--muted" x="364.0" y="214" text-anchor="middle"
+        dominant-baseline="middle">80 ms</text>
+      <path class="d-arrow" d="M 100 236 L 710 236"
+        marker-end="url(#rates-timeline-arrow)"/>
+      <path class="d-arrow" d="M 100 232 L 100 240"/>
+      <text class="d-text--muted" x="100" y="252" text-anchor="middle"
+        dominant-baseline="middle">0</text>
+      <path class="d-arrow" d="M 250 232 L 250 240"/>
+      <text class="d-text--muted" x="250" y="252" text-anchor="middle"
+        dominant-baseline="middle">0.25 s</text>
+      <path class="d-arrow" d="M 400 232 L 400 240"/>
+      <text class="d-text--muted" x="400" y="252" text-anchor="middle"
+        dominant-baseline="middle">0.5 s</text>
+      <path class="d-arrow" d="M 550 232 L 550 240"/>
+      <text class="d-text--muted" x="550" y="252" text-anchor="middle"
+        dominant-baseline="middle">0.75 s</text>
+      <path class="d-arrow" d="M 700 232 L 700 240"/>
+      <text class="d-text--muted" x="700" y="252" text-anchor="middle"
+        dominant-baseline="middle">1.0 s</text>
+    </svg>
+    <figcaption>One second on the shared 12.5 Hz clock. Every lane advances every 80 ms; the agent text lane is mostly PAD. Token placement is schematic.</figcaption>
+  </figure>
+  <p>
+    The clock can carry more than the agent's own text.
+    Duplex models usually lack a transcript of what the user said, which logging, accessibility and quality monitoring need.
+    One proposal adds a lightweight streaming ASR head in parallel to the agent text head, with minimal extra parameters and no significant architectural change (arXiv 2609.15759).
+    The authors report a streaming average WER of 10.21% on the HuggingFace Open ASR Leaderboard inside the duplex model, and 7.73% when the same architecture is trained as a standalone streaming ASR model.
+    NemotronLabs VoiceChat takes a related route with an auxiliary RNN-T branch for incremental user transcription (arXiv 2609.21967).
+    <span class="tag tag--reported">Reported</span>
+  </p>
+  <p>Other systems decide less often than they run:</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Decision granularity</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Moshi (arXiv 2410.00037)</td>
+          <td>Every frame, 80 ms</td>
+        </tr>
+        <tr>
+          <td>DuplexSLA (arXiv 2605.20755)</td>
+          <td>160 ms chunk clock; user stream advances in 80 ms strides</td>
+        </tr>
+        <tr>
+          <td>SyncLLM</td>
+          <td>160 to 240 ms chunks (arXiv 2409.15594)</td>
+        </tr>
+        <tr>
+          <td>LLaMA-Omni 2 (arXiv 2505.02625)</td>
+          <td>400 ms speech chunks (10 tokens at 25 Hz, derived)</td>
+        </tr>
+        <tr>
+          <td>MiniCPM-o 4.5 (arXiv 2604.27393)</td>
+          <td>Ablation compares 1.0, 0.2 and 0.1 s chunks, and the 0.2 and 0.1 s rows score lower (Table 1); the LLM backbone needs 3-4 decoding steps per second</td>
+        </tr>
+        <tr>
+          <td>DiffuPlex (arXiv 2610.12214)</td>
+          <td>12.5 Hz frames; one backbone wake predicts several future frames</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

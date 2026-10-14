@@ -1,0 +1,293 @@
+<section id="prompting-speech-llms">
+  <h2>Prompting speech LLMs to shape the output speech</h2>
+  <p>
+    A speech LLM takes several prompts at once, and each one controls a different property of the output.
+    Persona text sets what the agent is, a reference clip sets who it sounds like, an instruction sets how it delivers a line, and the user's own audio nudges its prosody.
+    <a href="/apps/materials/speech-lit-review/06-control-and-quality#steering-voice-tone">Steering voice, tone and emotion</a> covers the TTS-side channels; this section covers the speech-to-speech level.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 336" role="img"
+      aria-label="Six prompt channels feed a speech LLM that outputs speech: system or persona text, voice reference audio, style instruction, inline tags, numeric parameters, and conversation audio">
+      <defs>
+        <marker id="arrow-prompting" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Prompt channels == -->
+      <rect class="d-box" x="10" y="10" width="160" height="44" rx="8"/>
+      <text class="d-text" x="90" y="32" text-anchor="middle"
+        dominant-baseline="middle">System / persona text</text>
+      <rect class="d-box" x="10" y="64" width="160" height="44" rx="8"/>
+      <text class="d-text" x="90" y="86" text-anchor="middle"
+        dominant-baseline="middle">Voice reference audio</text>
+      <rect class="d-box" x="10" y="118" width="160" height="44" rx="8"/>
+      <text class="d-text" x="90" y="140" text-anchor="middle"
+        dominant-baseline="middle">Style instruction</text>
+      <rect class="d-box" x="10" y="172" width="160" height="44" rx="8"/>
+      <text class="d-text" x="90" y="194" text-anchor="middle"
+        dominant-baseline="middle">Inline tags in text</text>
+      <rect class="d-box" x="10" y="226" width="160" height="44" rx="8"/>
+      <text class="d-text" x="90" y="248" text-anchor="middle"
+        dominant-baseline="middle">Numeric parameters</text>
+      <rect class="d-box" x="10" y="280" width="160" height="44" rx="8"/>
+      <text class="d-text" x="90" y="302" text-anchor="middle"
+        dominant-baseline="middle">Conversation audio</text>
+
+      <!-- == Model and output == -->
+      <rect class="d-box d-box--accent" x="330" y="10" width="150" height="314" rx="8"/>
+      <text class="d-text" x="405" y="160" text-anchor="middle"
+        dominant-baseline="middle">Speech LLM</text>
+      <text class="d-text--muted" x="405" y="182" text-anchor="middle">one context</text>
+      <rect class="d-box" x="560" y="145" width="120" height="44" rx="8"/>
+      <text class="d-text" x="620" y="167" text-anchor="middle"
+        dominant-baseline="middle">Speech out</text>
+
+      <!-- == Arrows == -->
+      <path class="d-arrow" d="M 170 32 L 328 32" marker-end="url(#arrow-prompting)"/>
+      <path class="d-arrow" d="M 170 86 L 328 86" marker-end="url(#arrow-prompting)"/>
+      <path class="d-arrow" d="M 170 140 L 328 140" marker-end="url(#arrow-prompting)"/>
+      <path class="d-arrow" d="M 170 194 L 328 194" marker-end="url(#arrow-prompting)"/>
+      <path class="d-arrow" d="M 170 248 L 328 248" marker-end="url(#arrow-prompting)"/>
+      <path class="d-arrow d-arrow--dashed" d="M 170 302 L 328 302"
+        marker-end="url(#arrow-prompting)"/>
+      <path class="d-arrow" d="M 480 167 L 558 167" marker-end="url(#arrow-prompting)"/>
+
+      <!-- == Labels == -->
+      <text class="d-text--muted" x="249" y="24" text-anchor="middle">role, behaviour</text>
+      <text class="d-text--muted" x="249" y="78" text-anchor="middle">timbre, identity</text>
+      <text class="d-text--muted" x="249" y="132" text-anchor="middle">tone, pace, accent</text>
+      <text class="d-text--muted" x="249" y="186" text-anchor="middle">local delivery</text>
+      <text class="d-text--muted" x="249" y="240" text-anchor="middle">rate, pauses</text>
+      <text class="d-text--muted" x="249" y="294" text-anchor="middle">user's prosody (streamed)</text>
+      <text class="d-text--muted" x="519" y="159" text-anchor="middle">tokens</text>
+    </svg>
+    <figcaption>Figure: six prompt channels enter one speech LLM; the conversation audio is streamed and the rest are set by the application.</figcaption>
+  </figure>
+
+  <h3 id="prompting-channels">Prompt channels</h3>
+  <div class="table-wrap wide">
+    <table>
+      <thead>
+        <tr>
+          <th>Channel</th>
+          <th>Example prompt</th>
+          <th>Controls</th>
+          <th>Consumed as</th>
+          <th>Example system</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>System / persona text</td>
+          <td>"You are Qwen-Omni, a smart voice assistant created by Alibaba Qwen."</td>
+          <td>Role, background, scenario, behaviour</td>
+          <td>Text tokens; PersonaPlex forces them on the agent text channel while the agent audio channel stays silent (arXiv 2602.06053)</td>
+          <td>
+            PersonaPlex, Qwen3-Omni (<code>user_system_prompt</code>,
+            <a href="https://github.com/QwenLM/Qwen3-Omni">README</a>),
+            OpenAI Realtime <code>instructions</code>
+            (<a href="https://developers.openai.com/api/docs/guides/realtime-conversations">docs</a>)
+          </td>
+        </tr>
+        <tr>
+          <td>Voice reference audio</td>
+          <td>A short speech sample</td>
+          <td>Timbre, speaker identity, speaking style</td>
+          <td>
+            PersonaPlex: audio on the agent audio channel, before the text prompt (arXiv 2602.06053).
+            The model card calls it "a sequence of audio tokens" that sets vocal characteristics and speaking style
+            (<a href="https://huggingface.co/nvidia/personaplex-7b-v1">model card</a>)
+          </td>
+          <td>
+            PersonaPlex, Synthesia Express-Voice (conditioned on reference audio, no fixed speaker embedding;
+            <a href="https://www.synthesia.io/post/express-2-is-synthesias-next-chapter-for-full-body-expressive-ai-avatars">post</a>),
+            Qwen3-Omni (three preset voices via <code>speaker</code>, no clip)
+          </td>
+        </tr>
+        <tr>
+          <td>Style instruction</td>
+          <td>"Speak in a cheerful and positive tone."</td>
+          <td>Tone, intonation, accent, whispering, speed of speech</td>
+          <td>
+            Natural-language text next to the content.
+            CosyVoice 3 prepends it to the input text, followed by <code>&lt;||endofprompt||&gt;</code> (arXiv 2505.17589).
+            Parler-TTS feeds the description as separate <code>input_ids</code> from the spoken text, which is <code>prompt_input_ids</code>
+            (<a href="https://github.com/huggingface/parler-tts">README</a>)
+          </td>
+          <td>
+            gpt-4o-mini-tts (<a href="https://developers.openai.com/api/docs/guides/text-to-speech">docs</a>),
+            OpenAI Realtime (<a href="https://developers.openai.com/api/docs/guides/realtime-models-prompting">prompting guide</a>),
+            Gemini TTS <code>style</code> value (<a href="https://ai.google.dev/gemini-api/docs/speech-generation">docs</a>),
+            CosyVoice 3, Parler-TTS
+          </td>
+        </tr>
+        <tr>
+          <td>Inline tags / markup</td>
+          <td><code>[laughter]</code>, <code>&lt;short pause&gt;</code>, <code>&lt;break time="250ms"/&gt;</code></td>
+          <td>Event or delivery at one point in the text</td>
+          <td>
+            Part of the spoken text.
+            CosyVoice 3 supports vocal bursts between text tokens and tags such as <code>[laughter]</code>, <code>[breath]</code> (arXiv 2505.17589)
+          </td>
+          <td>
+            ElevenLabs <code>[whispers]</code>
+            (<a href="https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices">docs</a>),
+            Gemini TTS angle-bracket tags,
+            Google Cloud TTS <a href="https://docs.cloud.google.com/text-to-speech/docs/ssml">SSML</a>
+            (<code>prosody</code>, <code>break</code>, <code>emphasis</code>)
+          </td>
+        </tr>
+        <tr>
+          <td>Numeric parameters</td>
+          <td><code>speed</code>, 0.5 to 2.0</td>
+          <td>Rate and pauses, outside the model's wording</td>
+          <td>
+            API fields.
+            OpenAI says its Realtime <code>speed</code> "changes playback rate, not how the model composes speech", so a faster-sounding delivery needs a prompt instruction
+            (<a href="https://developers.openai.com/api/docs/guides/realtime-models-prompting">guide</a>)
+          </td>
+          <td>
+            Hume Octave: use <code>speed</code> instead of describing pace
+            (<a href="https://dev.hume.ai/docs/text-to-speech-tts/acting-instructions">docs</a>),
+            Google SSML <code>rate</code>
+          </td>
+        </tr>
+        <tr>
+          <td>Conversation audio</td>
+          <td>The user sounds upset or hurried</td>
+          <td>Response style, re-entry prosody after an interruption</td>
+          <td>
+            Streamed input audio in the same context.
+            Gemini Live's affective dialog lets the model "adapt its response style to the input expression and tone"
+            (<a href="https://ai.google.dev/gemini-api/docs/live-guide">Live API docs</a>)
+          </td>
+          <td>Gemini Live (<code>enable_affective_dialog</code>), duplex models</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The Hume <code>speed</code> range of 0.5 to 2.0 is from the Octave docs cited in the steering section.
+    Gemini TTS takes a free-text <code>style</code> value (examples: "warm and enthusiastic", "whispered urgently") in a <code>speech_metadata</code> annotation, and treats the <code>text</code> field as a verbatim transcript, so stage directions go in the style field
+    (<a href="https://ai.google.dev/gemini-api/docs/speech-generation">Gemini speech generation docs</a>).
+  </p>
+
+  <h3 id="prompting-consumption">How the model consumes a prompt</h3>
+  <ul>
+    <li>
+      <strong>Everything is context.</strong>
+      PersonaPlex concatenates a voice segment and a text segment as a "hybrid system prompt" ahead of the dialogue, with delimiters marking where the system prompt ends.
+      Loss is masked on the system prompt during training.
+      The voice prompt comes first so it can be prefilled when no cloning is needed (arXiv 2602.06053).
+    </li>
+    <li>
+      <strong>Instruction in front, content behind.</strong>
+      CosyVoice 3 prepends a description and an end token to the text to synthesise (arXiv 2505.17589).
+      Its fine-tuning instructions name speaker and style (for example "You are Speaker A. Please talk to me happily."), and these fields are randomly masked.
+    </li>
+    <li>
+      <strong>Edit with an instruction.</strong>
+      Step-Audio-EditX takes the original audio plus a descriptive command, and can apply several editing rounds to one clip (arXiv 2511.03601).
+    </li>
+    <li>
+      <span class="tag tag--inference">Inference</span>
+      Classifier-free guidance on the style or instruction condition would act as a strength knob: higher guidance exaggerates the style, lower guidance follows the voice's default.
+      See the CFG material in the speech generation chapter; no source here measures it for prompts.
+    </li>
+  </ul>
+
+  <h3 id="prompting-unified-design">Where prompting sits in the unified design</h3>
+  <p>
+    In the <a href="/apps/materials/speech-lit-review/09-system-design#unified-speech-llm">unified speech LLM</a> design, session setup and per-turn hints are separate concerns.
+  </p>
+  <div class="callout callout--inference">
+    <strong>Inference (design, not sourced)</strong>
+    <ul>
+      <li>Fix persona text and voice at session start; OpenAI Realtime documents that the voice cannot change once the model has emitted audio.</li>
+      <li>Let the reasoning LLM return a short style field with each reply, such as <code>style: "warm, slightly slower"</code>, and pass it to the speech LLM as a style instruction.</li>
+      <li>Keep the style field to a few words; Hume advises instructions of no more than 100 characters.</li>
+      <li>Let the speech LLM adapt prosody to the user's audio on its own; do not ask the reasoning LLM to guess it from a transcript.</li>
+      <li>
+        Gate voice prompts on consent.
+        Synthesia has the voice speaker read a randomly generated passcode
+        (<a href="https://help.synthesia.io/en/articles/8612891-how-do-i-clone-my-voice-in-synthesia">help article</a>); marking and tracing outputs is in <a href="/apps/materials/speech-lit-review/06-control-and-quality#safety-provenance">Safety and provenance</a>.
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="prompting-pitfalls">Pitfalls</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Pitfall</th>
+          <th>Evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Tags the voice was not trained on</td>
+          <td>ElevenLabs: "Tags land more readily when the delivery is already in the voice's training data" (docs)</td>
+        </tr>
+        <tr>
+          <td>Stage directions read aloud</td>
+          <td>
+            ElevenLabs notes the model may speak delivery guides in the text.
+            Qwen3-Omni's README asks for output of spoken content only, with no descriptions of actions or emotions
+          </td>
+        </tr>
+        <tr>
+          <td>Prompt cannot replace the voice</td>
+          <td>OpenAI: prompting "can steer accent, pacing, and delivery, but it cannot fully replace voice design"</td>
+        </tr>
+        <tr>
+          <td>Emotion carried by the reference clip</td>
+          <td>
+            <span class="tag tag--inference">Inference</span>
+            A clip carries timbre and delivery together.
+            IndexTTS2 adds a gradient reversal layer and a speaker classifier to disentangle them (arXiv 2506.21619)
+          </td>
+        </tr>
+        <tr>
+          <td>Instruction gaps</td>
+          <td>Instruct-FD: the best of six full-duplex systems reaches only 64.4% adherence on turn-taking instructions, scored by an LLM-based judge (arXiv 2607.20460)</td>
+        </tr>
+        <tr>
+          <td>Persona does not imply behaviour</td>
+          <td>DuplexSpeechBench-IFEval: 1,038 cases from 240 conversations, eight roles, five conditioning setups, eleven models. Following an explicit floor-management policy did not reliably mean inferring it from a persona, and models that settled benign instruction conflicts often failed when a safety-relevant role should have overridden an explicit directive (arXiv 2609.03423)</td>
+        </tr>
+        <tr>
+          <td>Steerability gaps</td>
+          <td>SteerDuplex (Moshi-based) taxonomises text- and audio-based steerability and finds significant gaps in current duplex models. SFT lifts the audio-steering average pass rate by 44.5 points over the strongest open baseline on SteerBench (390 prompts, 1,067 rubrics); RL raises source-clean interruption response from 72.5% to 82.5%, and its reward analysis found gaming through incomplete responses (arXiv 2609.12623)</td>
+        </tr>
+        <tr>
+          <td>Brittle adaptation</td>
+          <td>
+            Full-Duplex-Bench v1.5 compares speech before and after an interruption.
+            GPT-4o speeds up by 19.04 words per minute; Moshi by 59.55 with falling pitch, which the authors call hurried and brittle (arXiv 2507.23159)
+          </td>
+        </tr>
+        <tr>
+          <td>Persona drift</td>
+          <td>PersonaPlex trails Gemini on its GPT-4o-judged role-adherence benchmark; author-reported (arXiv 2602.06053)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    To measure adherence, use emotion2vec for emotion similarity (arXiv 2312.15185) and audio-LLM judges for style.
+    AudioJudge reports significant verbosity and positional biases that need mitigation (arXiv 2507.12705), so keep human listening in the loop.
+  </p>
+
+  <div class="callout callout--say">
+    <strong>In the interview, say:</strong>
+    <p>
+      "I treat prompting as separate channels: persona text and a voice clip fixed per session, a short style instruction per turn, inline tags for local effects, and the user's audio for adaptation.
+      A reasoning LLM can emit a style hint with each reply, and the speech LLM applies it.
+      I would measure adherence with emotion similarity and calibrated judges, because instruction following is still the weak spot."
+    </p>
+  </div>
+</section>

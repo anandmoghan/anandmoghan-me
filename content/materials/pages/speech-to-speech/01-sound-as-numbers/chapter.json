@@ -1,0 +1,4 @@
+{
+  "title": "Sound as numbers",
+  "summary": "Sample rate, the STFT, mel spectrograms, phase, frames and Hz: how audio becomes something a model can read."
+}
