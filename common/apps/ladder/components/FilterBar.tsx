@@ -210,11 +210,18 @@ export function FilterBar({ params, setParam, clearAll }: FilterBarProps) {
               </label>
             </div>
           </Popover>
+          {chips.length > 0 && (
+            <span className="hidden sm:inline-flex">
+              <button type="button" className="btn btn--ghost btn--sm" onClick={clearAll}>
+                Clear all
+              </button>
+            </span>
+          )}
         </div>
       </div>
 
       {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2" aria-label="Active filters" role="group">
+        <div className="flex flex-wrap items-center gap-2 sm:hidden" aria-label="Active filters" role="group">
           {chips.map((chip) => (
             <span key={chip.key} className="chip chip--sm chip--removable is-active">
               {chip.label}

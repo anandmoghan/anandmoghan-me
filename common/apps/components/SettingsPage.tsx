@@ -86,10 +86,13 @@ export function SettingsPage() {
     // The ladder tab only matters to someone whose role has more than one tracker.
     .filter((tab) => tab.id !== 'ladder' || (ladderAccess?.allowed.length ?? 0) > 1)
   const tabs = [GENERAL_TAB, ...appTabs]
-  const selected = tabs.find((tab) => tab.id === requested) ?? GENERAL_TAB
+  // ?app= takes the registry id or the route name (wealth for the dashboard app).
+  const requestedId = apps.find((app) => app.id === requested || app.path === `/apps/${requested}`)?.id ?? requested
+  const selected = tabs.find((tab) => tab.id === requestedId) ?? GENERAL_TAB
 
   const select = (tab: SettingsTab) => {
-    router.replace(tab.id === GENERAL_ID ? '/settings' : `/settings?app=${tab.id}`, { scroll: false })
+    const slug = apps.find((app) => app.id === tab.id)?.path.split('/').pop() ?? tab.id
+    router.replace(tab.id === GENERAL_ID ? '/settings' : `/settings?app=${slug}`, { scroll: false })
   }
 
   return (
