@@ -581,6 +581,16 @@ export function weekRange(start: string): string {
   return `${fmtWeekday(start)} – ${fmtWeekday(addDays(start, 6))}`;
 }
 
+/** "11–17 Oct", or "28 Sep – 4 Oct" across a month end, for the week starting on the Sunday `start`. */
+export function weekRangeShort(start: string): string {
+  const fmt = (ymd: string, opts: Intl.DateTimeFormatOptions) => new Date(dayMs(ymd)).toLocaleDateString("en-GB", opts);
+  const end = addDays(start, 6);
+  const sameMonth = fmt(start, { month: "short" }) === fmt(end, { month: "short" });
+  return sameMonth
+    ? `${fmt(start, { day: "numeric" })}–${fmt(end, { day: "numeric", month: "short" })}`
+    : `${fmt(start, { day: "numeric", month: "short" })} – ${fmt(end, { day: "numeric", month: "short" })}`;
+}
+
 /** The Sunday that starts the week before the week starting on `start`: the week a weekly's summary covers. */
 export const summaryWeekStart = (start: string) => addDays(start, -7);
 
