@@ -122,9 +122,13 @@
   border-radius: 9999px;
 }
 
-/* Chip: filter pill. Add .is-active (or aria-pressed="true") for the selected state. */
-.chip {
+/* Chip: filter pill. Add .is-active (or aria-pressed="true") for the selected state.
+   The default display sits in :where() so a utility such as Tailwind hidden wins. */
+:where(.chip) {
   display: inline-flex;
+}
+
+.chip {
   align-items: center;
   gap: 0.4em;
   min-height: var(--tap);
