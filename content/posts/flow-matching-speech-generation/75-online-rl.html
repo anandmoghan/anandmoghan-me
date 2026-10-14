@@ -105,13 +105,13 @@
   \]
   <p>
     Here \( \mu_\theta \) is the velocity plus that correction and \( z \sim \mathcal{N}(0, I) \) is a fresh draw per step, so each step is a Gaussian with a closed-form density and GRPO applies unchanged.
-    Rollouts dominate the cost, so they run short: for Flow-GRPO on images, cutting rollout steps from 40 to 10 trained over 4x faster with no loss in final reward [35].
-    The FlowTTS-GRPO recipe also injects noise only in a short window of early steps, trains only those, and drops CFG from rollouts, which converged faster and still helped with CFG back on at inference [36].
-    The catch is that the injected noise is itself a defect: an SDE baseline on an AR-diffusion TTS model lost UTMOS on average [37].
+    Rollouts dominate the cost, so they run short: for Flow-GRPO on images, cutting rollout steps from 40 to 10 trained over 4x faster with no loss in final reward [22].
+    The FlowTTS-GRPO recipe also injects noise only in a short window of early steps, trains only those, and drops CFG from rollouts, which converged faster and still helped with CFG back on at inference [23].
+    The catch is that the injected noise is itself a defect: an SDE baseline on an AR-diffusion TTS model lost UTMOS on average [24].
   </p>
   <p>
     The second <strong>retrains the network to output a Gaussian</strong> over the velocity, so every step has a density without changing the sampler.
-    It works, but F5R-TTS needed a 1M-update pretraining run before its 1,100 GRPO updates [38].
+    It works, but F5R-TTS needed a 1M-update pretraining run before its 1,100 GRPO updates [25].
   </p>
   <p>
     The third <strong>skips the likelihood</strong>.
@@ -132,8 +132,8 @@
   </p>
   <p>
     The fourth <strong>leaves the flow model alone</strong> and runs RL where likelihoods already exist: the speech-token LM in two-stage systems, or a categorical <a href="#training-duration">duration predictor</a> in F5-TTS-style models.
-    Industry has used this route most: Seed-TTS ran REINFORCE on SIM and WER rewards [15], and CosyVoice 3 backpropagated a differentiable reward into its tokens [26].
-    In those systems the LM sets intelligibility; when CosyVoice 3's flow stage was trained with GRPO, its ASR reward stalled near 0.99 while similarity kept climbing [36].
+    Industry has used this route most: Seed-TTS ran REINFORCE on SIM and WER rewards [15], and CosyVoice 3 backpropagated a differentiable reward into its tokens [18].
+    In those systems the LM sets intelligibility; when CosyVoice 3's flow stage was trained with GRPO, its ASR reward stalled near 0.99 while similarity kept climbing [23].
     The reverse holds too: a flow decoder and vocoder trained on clean audio partly undo an LM-only MOS reward, and speaker attributes respond weakly because the speaker enters at the flow stage.
   </p>
   <div class="table-wrap">
@@ -184,11 +184,11 @@
   <h3 id="online-rl-a-working-recipe">A working recipe</h3>
   <p>
     Start from a converged checkpoint, which doubles as the frozen reference, and build prompts as (prompt audio, prompt text, new target text) triples so RL sees the zero-shot task.
-    Sample 8 to 16 rollouts per prompt: for Flow-GRPO on images, groups of 6 and 12 collapsed where 24 held [35], and a duration policy was unstable at 8 but not at 16 [12].
+    Sample 8 to 16 rollouts per prompt: for Flow-GRPO on images, groups of 6 and 12 collapsed where 24 held [22], and a duration policy was unstable at 8 but not at 16 [12].
     Score each rollout with a fixed ASR model (one minus WER or CER), a speaker-verification cosine to the prompt and optionally a MOS predictor.
-    Normalise each reward by its batch standard deviation before summing so the noisiest one does not dominate; FlowTTS-GRPO weights similarity and ASR at 1.0 and DNSMOS at 0.4 [36].
+    Normalise each reward by its batch standard deviation before summing so the noisiest one does not dominate; FlowTTS-GRPO weights similarity and ASR at 1.0 and DNSMOS at 0.4 [23].
     Drop groups whose rewards barely differ.
-    Train a LoRA adapter (rank 32 is under 3% of CosyVoice 3's flow model [36]) with a KL or velocity anchor, for hundreds to about ten thousand updates against hundreds of thousands to a million in pretraining.
+    Train a LoRA adapter (rank 32 is under 3% of CosyVoice 3's flow model [23]) with a KL or velocity anchor, for hundreds to about ten thousand updates against hundreds of thousands to a million in pretraining.
   </p>
 
   <!-- == Reward hacking == -->
@@ -202,7 +202,7 @@
   <p>
     I would use three defences.
     Sum several rewards and keep the KL anchor on; on images, KL and early stopping were not interchangeable.
-    Evaluate with judges the policy never saw, a different ASR model and speaker encoder than the rewards use; in FlowTTS-GRPO, WavLM similarity, not a reward, still rose from 0.777 to 0.804 on seed-tts-eval Mandarin [36].
+    Evaluate with judges the policy never saw, a different ASR model and speaker encoder than the rewards use; in FlowTTS-GRPO, WavLM similarity, not a reward, still rose from 0.777 to 0.804 on seed-tts-eval Mandarin [23].
     Stop on a held-out listening set that tracks speaking rate, not on training reward.
   </p>
 </section>

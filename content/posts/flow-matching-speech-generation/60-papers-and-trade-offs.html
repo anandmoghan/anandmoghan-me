@@ -6,7 +6,7 @@
     Flow matching became the common choice with Voicebox, and the table below groups the systems by family.
   </p>
   <p>
-    The table lines up the main speech generation systems by design choice and role, with rows grouped by family: diffusion, non-autoregressive flow matching, AR tokens plus a renderer, speech LLM decoders, and systems with no ODE at all.
+    The table keeps the systems that set the designs in use today, with rows grouped by family: diffusion, non-autoregressive flow matching, AR tokens plus a renderer, speech LLM decoders, and systems with no ODE at all.
   </p>
   <div class="table-wrap wide">
     <table>
@@ -24,64 +24,14 @@
       </thead>
       <tbody>
         <tr>
-          <td>WaveGrad, DiffWave</td>
-          <td>[16] [17]</td>
-          <td>2020</td>
-          <td>Non-autoregressive diffusion</td>
-          <td>Waveform from mel</td>
-          <td>None; the mel comes from an upstream model</td>
-          <td>Vocoders</td>
-          <td>WaveGrad needs continuous noise-level conditioning for 6 steps</td>
-        </tr>
-        <tr>
           <td>Grad-TTS</td>
-          <td>[18]</td>
+          <td>[16]</td>
           <td>2021</td>
           <td>Non-autoregressive diffusion</td>
           <td>Mel, then HiFi-GAN</td>
           <td>MAS in training, duration predictor at inference</td>
-          <td>Baseline for Matcha-TTS and VoiceFlow</td>
+          <td>Diffusion baseline for Matcha-TTS</td>
           <td>Quality drops sharply below about 10 steps</td>
-        </tr>
-        <tr>
-          <td>NaturalSpeech 2</td>
-          <td>[19]</td>
-          <td>2023</td>
-          <td>Non-autoregressive latent diffusion</td>
-          <td>Continuous codec latent</td>
-          <td>External aligner, duration and pitch predictors</td>
-          <td>Zero-shot TTS research</td>
-          <td>Heavy front end and many solver steps</td>
-        </tr>
-        <tr>
-          <td>NaturalSpeech 3</td>
-          <td>[20]</td>
-          <td>2024</td>
-          <td>Discrete masked diffusion over factorised codec tokens</td>
-          <td>Codec tokens plus durations</td>
-          <td>External aligner; duration by discrete diffusion</td>
-          <td>Zero-shot TTS research</td>
-          <td>Codec needs phoneme transcripts; English audiobooks only</td>
-        </tr>
-        <tr>
-          <td>DiTTo-TTS</td>
-          <td>[21]</td>
-          <td>2024</td>
-          <td>Non-autoregressive latent diffusion</td>
-          <td>Mel-VAE latent, then mel and BigVGAN</td>
-          <td>Cross-attention to text; one total-length predictor</td>
-          <td>Zero-shot TTS research</td>
-          <td>Total length still needs a separate model</td>
-        </tr>
-        <tr>
-          <td>Seed-TTS DiT</td>
-          <td>[15]</td>
-          <td>2024</td>
-          <td>Non-autoregressive diffusion</td>
-          <td>Vocoder latent</td>
-          <td>Total duration supplied; alignment learned</td>
-          <td>Non-streaming variant of Seed-TTS</td>
-          <td>Simpler pipeline, but non-streaming</td>
         </tr>
         <tr>
           <td>Voicebox</td>
@@ -95,7 +45,7 @@
         </tr>
         <tr>
           <td>Audiobox</td>
-          <td>[22]</td>
+          <td>[17]</td>
           <td>2023</td>
           <td>Non-autoregressive flow matching</td>
           <td>Encodec latent</td>
@@ -112,26 +62,6 @@
           <td>MAS plus duration predictor</td>
           <td>Small single-speaker TTS</td>
           <td>Single speaker, deterministic durations</td>
-        </tr>
-        <tr>
-          <td>P-Flow</td>
-          <td>[23]</td>
-          <td>2023</td>
-          <td>Non-autoregressive flow matching</td>
-          <td>Mel, then HiFi-GAN</td>
-          <td>MAS plus duration predictor; speech prompt in the text encoder</td>
-          <td>Zero-shot TTS on small data</td>
-          <td>Zero-shot duration prediction remains limited</td>
-        </tr>
-        <tr>
-          <td>VoiceFlow</td>
-          <td>[24]</td>
-          <td>2023</td>
-          <td>Non-autoregressive rectified flow</td>
-          <td>Mel, then HiFi-GAN</td>
-          <td>Forced-alignment durations plus predictor</td>
-          <td>Few-step TTS research</td>
-          <td>Few-step quality needs an extra ReFlow training stage</td>
         </tr>
         <tr>
           <td>E2 TTS</td>
@@ -164,16 +94,6 @@
           <td>Two-stage pipeline; its own DiT variant scores better on English</td>
         </tr>
         <tr>
-          <td>CosyVoice</td>
-          <td>[25]</td>
-          <td>2024</td>
-          <td>AR tokens, then flow matching</td>
-          <td>Semantic tokens, then mel</td>
-          <td>Implicit in the AR LLM</td>
-          <td>Template for the GLM-4-Voice decoder</td>
-          <td>Token sampling variance between runs</td>
-        </tr>
-        <tr>
           <td>CosyVoice 2</td>
           <td>[13]</td>
           <td>2024</td>
@@ -185,7 +105,7 @@
         </tr>
         <tr>
           <td>CosyVoice 3</td>
-          <td>[26]</td>
+          <td>[18]</td>
           <td>2025</td>
           <td>AR tokens, then flow-matching DiT</td>
           <td>25 Hz tokens, then mel</td>
@@ -194,48 +114,8 @@
           <td>Reward lowers error rates while similarity slips</td>
         </tr>
         <tr>
-          <td>GLM-4-Voice</td>
-          <td>[27]</td>
-          <td>2024</td>
-          <td>LLM tokens, then flow matching</td>
-          <td>12.5 Hz tokens, then mel and HiFi-GAN</td>
-          <td>Implicit in the LLM</td>
-          <td>End-to-end spoken chatbot</td>
-          <td>Decoder adapted for streaming inference</td>
-        </tr>
-        <tr>
-          <td>Step-Audio</td>
-          <td>[28]</td>
-          <td>2025</td>
-          <td>LLM tokens, then flow matching</td>
-          <td>Dual-codebook tokens, then mel and vocoder</td>
-          <td>Implicit in the LLM</td>
-          <td>Speech interaction model</td>
-          <td>Adds a 3B language model inside the speech decoder</td>
-        </tr>
-        <tr>
-          <td>Step-Audio 2</td>
-          <td>[29]</td>
-          <td>2025</td>
-          <td>LLM tokens, then flow matching</td>
-          <td>CosyVoice 2 tokens, then mel and HiFi-GAN</td>
-          <td>Implicit in the LLM</td>
-          <td>Speech interaction model</td>
-          <td>Extra CNN encoder layer after each self-attention module</td>
-        </tr>
-        <tr>
-          <td>Kimi-Audio</td>
-          <td>[30]</td>
-          <td>2025</td>
-          <td>LLM tokens, then flow matching</td>
-          <td>12.5 Hz tokens, then 50 Hz mel and BigVGAN</td>
-          <td>Implicit in the LLM</td>
-          <td>Speech output of an audio LLM</td>
-          <td>Needs look-ahead to avoid chunk-boundary artefacts</td>
-        </tr>
-        <tr>
           <td>Qwen2.5-Omni</td>
-          <td>[31]</td>
+          <td>[19]</td>
           <td>2025</td>
           <td>LLM tokens, then flow-matching DiT</td>
           <td>Codec tokens, then mel and modified BigVGAN</td>
@@ -245,7 +125,7 @@
         </tr>
         <tr>
           <td>MaskGCT</td>
-          <td>[32]</td>
+          <td>[20]</td>
           <td>2024</td>
           <td>Masked token prediction, no ODE</td>
           <td>Semantic tokens, then codec tokens</td>
@@ -254,18 +134,8 @@
           <td>Predicted length costs accuracy; many sequential passes</td>
         </tr>
         <tr>
-          <td>Moshi</td>
-          <td>[33]</td>
-          <td>2024</td>
-          <td>Codec tokens, no flow decoder</td>
-          <td>Mimi codec tokens</td>
-          <td>Implicit in the model</td>
-          <td>Real-time spoken dialogue</td>
-          <td>Streams by design, but quality is bounded by the codec</td>
-        </tr>
-        <tr>
           <td>Qwen3-Omni</td>
-          <td>[34]</td>
+          <td>[21]</td>
           <td>2025</td>
           <td>LLM tokens, then causal ConvNet, no flow decoder</td>
           <td>Multi-codebook codec frames</td>
@@ -326,7 +196,7 @@
           <td>Learned latent plus decoder</td>
           <td>
             A: Voicebox, F5-TTS.
-            B: Audiobox, DiTTo-TTS.
+            B: Audiobox, Seed-TTS DiT.
           </td>
           <td>
             A: long sequences; mel vocoders generalise poorly beyond speech.
@@ -343,7 +213,7 @@
           </td>
           <td>
             A: latency, doubled again by CFG.
-            B: quality falls at very low step counts without ReFlow training (VoiceFlow) or a learned solver (Audiobox).
+            B: quality falls at very low step counts without ReFlow-style training or a learned solver (Audiobox).
           </td>
         </tr>
         <tr>
