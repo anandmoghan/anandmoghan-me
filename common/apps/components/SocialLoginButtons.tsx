@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/common/firebase/AuthProvider'
-import { providerErrorMessage, SOCIAL_PROVIDER_NAMES, type SocialProviderId } from '@/common/firebase/providers'
+import { OFFERED_PROVIDERS, providerErrorMessage, SOCIAL_PROVIDER_NAMES, type SocialProviderId } from '@/common/firebase/providers'
 import { ButtonSpinner } from '../shell/Skeleton'
 
 interface Props {
@@ -56,8 +56,8 @@ export function SocialLoginButtons({ onSuccess }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="grid w-full gap-2 sm:grid-cols-2">
-        {(Object.keys(MARKS) as SocialProviderId[]).map((id) => {
+      <div className={`grid w-full gap-2${OFFERED_PROVIDERS.length > 1 ? ' sm:grid-cols-2' : ''}`}>
+        {OFFERED_PROVIDERS.map((id) => {
           const Mark = MARKS[id]
           const loading = busy === id
           return (
