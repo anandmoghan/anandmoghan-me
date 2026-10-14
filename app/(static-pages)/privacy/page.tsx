@@ -32,7 +32,17 @@ export default function PrivacyPage() {
               <li>Google Analytics page views, which set Google Analytics cookies.</li>
             </ul>
             <p>
+              The same choice lets the site remember what you read and roughly where you are
+              visiting from (your country).
+              For each post or materials page you open, it stores the title, when you last read
+              it, how far you scrolled and the heading you were at.
+              That is used to show a Continue reading card with up to three unfinished reads,
+              and to suggest posts you have not read at the end of each post.
+              Only you can read this history.
+            </p>
+            <p>
               If you decline, none of that is recorded and Google Analytics is not loaded.
+              Read next suggestions then use only tags and recency.
               Comments you post are stored with the nickname or name shown next to them.
               If you create an account, your email and profile name are stored with it.
             </p>
@@ -48,7 +58,7 @@ export default function PrivacyPage() {
             <p>
               Open your <Link href="/account">account page</Link> and choose
               {' '}<strong>Delete my data</strong>.
-              That deletes your recorded visits, your comments, your profile and the session or
+              That deletes your recorded visits, your comments, your reading history, your profile and the session or
               account itself.
             </p>
 

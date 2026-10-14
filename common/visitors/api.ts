@@ -28,8 +28,8 @@ export async function logVisit(user: User, visit: VisitBody): Promise<void> {
   await post(user, '/visit', visit);
 }
 
-/** Deletes the caller's visits, blog comments, users doc and auth account. */
-export async function deleteMyData(user: User): Promise<{ visits: number; comments: number }> {
+/** Deletes the caller's visits, blog comments, reading history, users doc and auth account. */
+export async function deleteMyData(user: User): Promise<{ visits: number; comments: number; reads: number }> {
   const res = await post(user, '/account/delete', {});
-  return (await res.json()) as { visits: number; comments: number };
+  return (await res.json()) as { visits: number; comments: number; reads: number };
 }

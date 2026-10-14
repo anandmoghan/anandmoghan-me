@@ -83,6 +83,7 @@ export async function recordVisit(
 export interface DeleteResult {
   visits: number
   comments: number
+  reads: number
 }
 
 /**
@@ -113,8 +114,12 @@ export async function deleteVisitorData(uid: string): Promise<DeleteResult> {
 
   const prefs = await db.collection(`users/${uid}/prefs`).listDocuments()
   for (const pref of prefs) writer.delete(pref)
+
+  const readDocs = await db.collection(`users/${uid}/reads`).listDocuments()
+  for (const read of readDocs) writer.delete(read)
+
   writer.delete(db.doc(`users/${uid}`))
   await writer.close()
   await getAuth().deleteUser(uid)
-  return { visits, comments }
+  return { visits, comments, reads: readDocs.length }
 }

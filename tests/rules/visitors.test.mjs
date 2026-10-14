@@ -195,3 +195,63 @@ describe("post comments: update and delete", () => {
     await assertSucceeds(deleteDoc(doc(admin(), `${POST}/hidden`)));
   });
 });
+
+function read(slug, extra = {}) {
+  return {
+    slug,
+    title: "A post",
+    lastReadAt: serverTimestamp(),
+    progress: 0.5,
+    lastHeadingId: "intro",
+    ...extra,
+  };
+}
+
+describe("reading history", () => {
+  const A = "users/anon1/reads/a-post";
+
+  test("owner, anonymous or signed in, writes and reads their own history", async () => {
+    await assertSucceeds(setDoc(doc(anon("anon1"), A), read("a-post")));
+    await assertSucceeds(getDoc(doc(anon("anon1"), A)));
+    await assertSucceeds(updateDoc(doc(anon("anon1"), A), { progress: 0.75, lastReadAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(real("alice"), "users/alice/reads/a-post"), read("a-post")));
+    await assertSucceeds(getDocs(query(collection(anon("anon1"), "users/anon1/reads"), orderBy("lastReadAt", "desc"))));
+    await assertSucceeds(deleteDoc(doc(anon("anon1"), A)));
+  });
+
+  test("materials slugs use __ for the slash in the document id", async () => {
+    const db = anon("anon1");
+    await assertSucceeds(setDoc(doc(db, "users/anon1/reads/materials:llm__attention"), read("materials:llm/attention")));
+    await assertFails(setDoc(doc(db, "users/anon1/reads/materials:llm-attention"), read("materials:llm/attention")));
+  });
+
+  test("nobody else reads or writes it, not even admins; signed-out cannot", async () => {
+    await assertSucceeds(setDoc(doc(anon("anon1"), A), read("a-post")));
+    for (const db of [anon("anon2"), real("alice"), admin(), env.unauthenticatedContext().firestore()]) {
+      await assertFails(getDoc(doc(db, A)));
+      await assertFails(setDoc(doc(db, A), read("a-post")));
+      await assertFails(deleteDoc(doc(db, A)));
+    }
+  });
+
+  test("fields are validated", async () => {
+    const db = anon("anon1");
+    await assertFails(setDoc(doc(db, A), read("a-post", { progress: 1.5 })));
+    await assertFails(setDoc(doc(db, A), read("a-post", { progress: -0.1 })));
+    await assertFails(setDoc(doc(db, A), read("a-post", { progress: "half" })));
+    await assertSucceeds(setDoc(doc(db, A), read("a-post", { progress: 1 })));
+    await assertFails(setDoc(doc(db, A), read("a-post", { title: "" })));
+    await assertFails(setDoc(doc(db, A), read("a-post", { title: "t".repeat(301) })));
+    await assertFails(setDoc(doc(db, A), read("a-post", { lastHeadingId: "h".repeat(201) })));
+    await assertFails(setDoc(doc(db, A), read("a-post", { slug: "Other Post" })));
+    await assertFails(setDoc(doc(db, A), read("other-post")));
+    await assertFails(setDoc(doc(db, A), read("a-post", { extra: true })));
+    const { lastHeadingId, ...missing } = read("a-post");
+    await assertFails(setDoc(doc(db, A), missing));
+  });
+
+  test("lastReadAt must be the request time", async () => {
+    const past = Timestamp.fromMillis(Date.now() - 86_400_000);
+    await assertFails(setDoc(doc(anon("anon1"), A), read("a-post", { lastReadAt: past })));
+  });
+});

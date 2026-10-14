@@ -1,6 +1,7 @@
 import { getAllPosts } from '@/common/utils/post';
 import PostCard from '@/common/components/PostCard';
 import TerminalAnimation from '@/common/components/TerminalAnimation';
+import { ContinueReading } from '@/common/visitors/reads/ContinueReading';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -59,6 +60,13 @@ export default function Home() {
           </noscript>
         </div>
       </section>
+
+      {/* Continue reading: renders only for visitors with consent and unfinished reads */}
+      <div className="px-6 sm:px-8 lg:px-12">
+        <div className="max-w-7xl mx-auto">
+          <ContinueReading />
+        </div>
+      </div>
 
       {/* Recent Posts Section */}
       <section className="py-8 px-6 sm:px-8 lg:px-12 border-t border-border bg-subtle">

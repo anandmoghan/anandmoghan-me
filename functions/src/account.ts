@@ -4,6 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore'
 export interface MergeResult {
   prefs: number
   comments: number
+  reads: number
 }
 
 // Comment collections that hold a uid, as [parent collection, author field].
@@ -16,14 +17,25 @@ const COMMENT_SOURCES: Array<[string, string]> = [
 
 /**
  * Moves what an anonymous session owns to an existing account, then deletes the anonymous
- * user: users/{anon}/prefs docs the target does not have yet, and comments authored by the
- * anonymous uid. The users/{anon} doc and its prefs are deleted.
+ * user: users/{anon}/prefs and users/{anon}/reads docs the target does not have yet, and
+ * comments authored by the anonymous uid. The users/{anon} doc, its prefs and reads are deleted.
  */
 export async function mergeAnonymousInto(anonUid: string, targetUid: string): Promise<MergeResult> {
   const db = getFirestore()
   const writer = db.bulkWriter()
   let prefs = 0
   let comments = 0
+  let reads = 0
+
+  const anonReads = await db.collection(`users/${anonUid}/reads`).get()
+  for (const read of anonReads.docs) {
+    const targetRef = db.doc(`users/${targetUid}/reads/${read.id}`)
+    if (!(await targetRef.get()).exists) {
+      writer.set(targetRef, read.data())
+      reads++
+    }
+    writer.delete(read.ref)
+  }
 
   const anonPrefs = await db.collection(`users/${anonUid}/prefs`).get()
   for (const pref of anonPrefs.docs) {
@@ -49,5 +61,5 @@ export async function mergeAnonymousInto(anonUid: string, targetUid: string): Pr
   writer.delete(db.doc(`users/${anonUid}`))
   await writer.close()
   await getAuth().deleteUser(anonUid)
-  return { prefs, comments }
+  return { prefs, comments, reads }
 }
