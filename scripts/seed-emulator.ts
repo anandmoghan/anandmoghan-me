@@ -18,7 +18,7 @@ const PROJECT_ID = "demo-anandmoghan-me";
 const ROOT = path.resolve(__dirname, "..");
 const ENV_FILE = path.join(ROOT, ".env.emulator.local");
 
-const ALL_APPS = ["family", "ladder", "wealth", "expense", "time", "share", "admin"];
+const ALL_APPS = ["family", "ladder", "wealth", "expense", "time", "share", "materials", "admin"];
 
 interface TestUser {
   key: string;
@@ -38,7 +38,7 @@ const USERS: TestUser[] = [
     key: "MEMBER",
     email: "member@test.local",
     displayName: "Test Member",
-    role: { admin: false, apps: ["family", "ladder"], ladderTrackers: ["anand"] },
+    role: { admin: false, apps: ["family", "ladder", "materials"], ladderTrackers: ["anand"] },
   },
   {
     key: "PLAIN",

@@ -83,10 +83,11 @@ Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy
 
 ## Restricted apps and materials
 
-Family, materials, ladder and admin are restricted (`restricted: true` in
-`common/apps/registry.ts`): only Anand (admin) and the emails in Firestore
-`family/household.members`, granted with `npm run seed-roles -- --grant-household`.
-Pages wrap their content in `RequireApp` (`common/apps/components/RequireApp.tsx`).
+Family, materials, ladder and admin are restricted: their registry entries in
+`common/apps/registry.ts` carry `restricted: true` (a Restricted badge on the hub). Access is
+Anand (admin) plus the emails in Firestore `family/household.members`, granted with
+`npm run seed-roles -- --grant-household`. Restricted routes wrap their content in
+`RequireApp` (`common/apps/components/RequireApp.tsx`), or `RequireAdmin` for admin.
 
 Materials content (`content/materials/`) never goes into `out/`. The `/apps/materials` routes are
 client shells; `generateStaticParams` emits page and chapter slugs only, so the URLs are
