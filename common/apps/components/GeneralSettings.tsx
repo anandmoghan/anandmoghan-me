@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
@@ -75,10 +75,24 @@ export function GeneralSettings() {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Linked providers can change outside this tab (another device, the console), and the cached
+  // user only learns of them on reload, so re-read the account once.
+  const [providerIds, setProviderIds] = useState<string[] | null>(null)
+  useEffect(() => {
+    if (!user || user.isAnonymous) return
+    let live = true
+    user.reload().then(
+      () => { if (live) setProviderIds(user.providerData.map((p) => p.providerId)) },
+      () => {},
+    )
+    return () => { live = false }
+  }, [user])
+
   if (loading) return <Spinner text="Loading" />
 
-  const hasPassword = user?.providerData.some((p) => p.providerId === 'password') ?? false
-  const providers = (user?.providerData ?? []).map((p) => PROVIDER_NAMES[p.providerId] ?? p.providerId)
+  const providerKeys = providerIds ?? (user?.providerData ?? []).map((p) => p.providerId)
+  const hasPassword = providerKeys.includes('password')
+  const providers = providerKeys.map((id) => PROVIDER_NAMES[id] ?? id)
 
   const handleResend = async () => {
     if (!user) return

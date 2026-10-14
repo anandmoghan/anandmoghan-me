@@ -568,3 +568,147 @@ input[type="date"].field {
     background: none;
   }
 }
+
+/* == Settings rows == */
+/* Titled cards of rows: label and note left, control right; stacked on phones. */
+.settings-card-title {
+  margin-bottom: 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.settings-card-title.text-destructive {
+  color: var(--destructive);
+}
+
+.card.settings-rows {
+  padding: 0 var(--space-5);
+}
+
+.settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-block: var(--space-4);
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.settings-row__control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .settings-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+
+  .settings-row__control {
+    flex: none;
+    justify-content: flex-end;
+    max-width: 55%;
+  }
+}
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  font-weight: 700;
+  color: var(--bg);
+  background: var(--fg);
+  border-radius: 9999px;
+}
+
+/* Three-option segmented control built on aria-pressed buttons. */
+.segmented {
+  display: inline-flex;
+  padding: 0.2rem;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+}
+
+.segmented > button {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.9rem;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+
+.segmented > button:hover {
+  color: var(--fg);
+}
+
+.segmented > button[aria-pressed="true"] {
+  color: var(--bg);
+  background: var(--fg);
+}
+
+.segmented > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* On/off switch: a button with role="switch", 40px by 22px track with a sliding thumb.
+   The button selector outweighs any bare `button { min-height }` tap-target rule. */
+button.switch {
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  min-width: 2.5rem;
+  height: 1.4rem;
+  min-height: 1.4rem;
+  padding: 0;
+  background: color-mix(in srgb, var(--muted) 45%, var(--surface));
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button.switch::after {
+  content: "";
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1rem;
+  height: 1rem;
+  background: #fff;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform 0.15s;
+}
+
+button.switch[aria-checked="true"] {
+  background: var(--accent);
+}
+
+button.switch[aria-checked="true"]::after {
+  transform: translateX(1.1rem);
+}
+
+button.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
