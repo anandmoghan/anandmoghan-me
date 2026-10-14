@@ -8,6 +8,8 @@
     and came out well ahead of VALL-E on word error rate [1].
     Since then flow matching has become the workhorse acoustic generator,
     either on its own, as in F5-TTS, or behind an autoregressive token model, as in CosyVoice 2.
+    A third pattern skips speech tokens altogether: the LLM's hidden state conditions a small
+    diffusion head that generates each continuous latent frame, as in VibeVoice.
     The catch is that every solver step is a full forward pass of a large network,
     so the real game is keeping quality while cutting steps.
   </p>
