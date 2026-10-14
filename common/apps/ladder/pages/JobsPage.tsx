@@ -30,13 +30,15 @@ export function JobsPage() {
 
   // A filter change drops ?job, so the first job of the new list is shown (as the old app did).
   const setParam = useCallback(
-    (key: string, value: string) => {
+    (key: string, value: string, replace = false) => {
       const next = new URLSearchParams(query)
       if (value) next.set(key, value)
       else next.delete(key)
       next.delete('job')
       const qs = next.toString()
-      router.push(qs ? `${pathname}?${qs}` : pathname)
+      const href = qs ? `${pathname}?${qs}` : pathname
+      if (replace) router.replace(href)
+      else router.push(href)
     },
     [query, pathname, router],
   )
@@ -60,22 +62,22 @@ export function JobsPage() {
   if (!config) return null
 
   return (
-    <div className="site-container pb-6 pt-3">
-      <div className={explicit ? 'hidden md:block' : ''}>
+    <div className="site-container flex flex-col pb-6 pt-3 md:min-h-0 md:flex-1">
+      <div className={`shrink-0 ${explicit ? 'hidden md:block' : ''}`}>
         <FilterBar params={params} setParam={setParam} clearAll={() => router.push(pathname)} />
         <StatusTabs jobs={ignoringStatus} active={filters?.status ?? ''} setStatus={(s) => setParam('status', s)} />
       </div>
 
-      <div className="mt-3 flex gap-6">
+      <div className="mt-3 flex gap-6 md:min-h-0 md:flex-1">
         <aside
-          className={`w-full md:sticky md:top-20 md:block md:max-h-[calc(100vh-11rem)] md:w-80 md:shrink-0 md:self-start md:overflow-y-auto ${
+          className={`w-full md:block md:min-h-0 md:w-80 md:shrink-0 ${
             explicit ? 'hidden' : ''
           }`}
         >
           <JobList jobs={filtered} status={filters?.status ?? ''} selected={shown?.slug ?? null} hrefFor={hrefFor} />
         </aside>
 
-        <section className={`min-w-0 flex-1 ${explicit ? '' : 'hidden md:block'}`} aria-label="Job detail">
+        <section className={`min-w-0 flex-1 md:min-h-0 md:overflow-y-auto ${explicit ? '' : 'hidden md:block'}`} aria-label="Job detail">
           {explicit && (
             <Link href={listHref} className="back-link mb-3 md:hidden">
               Job list

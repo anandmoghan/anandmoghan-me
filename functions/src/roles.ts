@@ -1,15 +1,17 @@
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
 
-// roles/{emailLowercase}: { admin, apps, ladderTrackers }. Mirrored into custom claims of the
+// roles/{emailLowercase}: { admin, apps, ladderTrackers, ladderHome? }. Mirrored into custom claims of the
 // same names; Firestore rules check the claims plus email_verified.
 export interface RoleClaims {
   admin: boolean
   apps: string[]
   ladderTrackers: string[]
+  /** The user's own tracker; one of ladderTrackers. Absent means the default (first listed). */
+  ladderHome?: string
 }
 
-const ROLE_KEYS = ['admin', 'apps', 'ladderTrackers'] as const
+const ROLE_KEYS = ['admin', 'apps', 'ladderTrackers', 'ladderHome'] as const
 
 function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
@@ -17,11 +19,13 @@ function stringList(value: unknown): string[] {
 
 export function roleFromDoc(data: Record<string, unknown> | undefined): RoleClaims | null {
   if (!data) return null
-  return {
+  const role: RoleClaims = {
     admin: data.admin === true,
     apps: stringList(data.apps),
     ladderTrackers: stringList(data.ladderTrackers),
   }
+  if (typeof data.ladderHome === 'string' && data.ladderHome) role.ladderHome = data.ladderHome
+  return role
 }
 
 export async function readRole(email: string): Promise<RoleClaims | null> {

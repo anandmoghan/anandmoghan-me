@@ -16,7 +16,7 @@ export function CompanyPage() {
 
   return (
     <div className="site-container pb-6 pt-3">
-      <div className="max-w-3xl">
+      <div>
         <Link href="/apps/ladder/companies" className="back-link mb-3">
           Companies
         </Link>
@@ -52,7 +52,7 @@ export function CompanyPage() {
               <CompanyInfoCard info={company} />
               {company.body_html && (
                 // Sanitised by the writer (migration, worker); clients cannot write it.
-                <div className="card prose" dangerouslySetInnerHTML={{ __html: company.body_html }} />
+                <div className="card prose overflow-x-auto" dangerouslySetInnerHTML={{ __html: company.body_html }} />
               )}
               <div className="card">
                 <SectionTitle>Jobs at this company</SectionTitle>

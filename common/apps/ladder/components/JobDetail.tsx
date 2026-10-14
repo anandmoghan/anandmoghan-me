@@ -56,7 +56,7 @@ export function JobDetail({ job }: { job: JobDoc }) {
     .join(', ')
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <ViewedTracker job={job} />
       <div className="card mb-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -123,7 +123,7 @@ export function JobDetail({ job }: { job: JobDoc }) {
         {tab === 'jd' &&
           (job.body_html ? (
             // body_html is sanitised by the writer (migration, worker); clients cannot write it.
-            <div className="card prose" dangerouslySetInnerHTML={{ __html: job.body_html }} />
+            <div className="card prose overflow-x-auto" dangerouslySetInnerHTML={{ __html: job.body_html }} />
           ) : (
             <p className="card text-sm italic text-muted">No description saved.</p>
           ))}

@@ -32,6 +32,7 @@ interface Role {
   admin: boolean;
   apps: string[];
   ladderTrackers: string[];
+  ladderHome?: string;
 }
 
 function stringList(value: unknown): string[] {
@@ -39,7 +40,7 @@ function stringList(value: unknown): string[] {
 }
 
 async function seedAdmins(db: Firestore, target: string): Promise<void> {
-  const owner: Role = { admin: true, apps: ALL_APPS, ladderTrackers: ALL_TRACKERS };
+  const owner: Role = { admin: true, apps: ALL_APPS, ladderTrackers: ALL_TRACKERS, ladderHome: "anand" };
   const seeds: Array<[label: string, email: string, role: Role]> = [
     ["owner", "moghan.anand@gmail.com", owner],
   ];

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
@@ -9,8 +9,8 @@ import { useTheme } from '@/common/components/ThemeProvider'
 import { AnalyticsSwitch } from '@/common/visitors/AnalyticsSwitch'
 import { useDeleteMyData } from '@/common/visitors/DeleteMyData'
 import { NicknameEditor } from '@/common/visitors/NicknameEditor'
-import { Card } from '../shell/Card'
 import { Spinner } from './Spinner'
+import { SettingsCard, SettingsRow as Row } from './SettingsRows'
 
 const PROVIDER_NAMES: Record<string, string> = {
   'google.com': 'Google',
@@ -34,28 +34,6 @@ async function refreshApp() {
     await Promise.all(registrations.map((registration) => registration.unregister()))
   }
   window.location.reload()
-}
-
-function SettingsCard({ title, danger = false, children }: { title: string; danger?: boolean; children: ReactNode }) {
-  return (
-    <section>
-      <h2 className={`settings-card-title${danger ? ' text-destructive' : ''}`}>{title}</h2>
-      <Card className="settings-rows">{children}</Card>
-    </section>
-  )
-}
-
-// Label and one-line description on the left, the control on the right; stacked on phones.
-function Row({ label, description, children }: { label: string; description?: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="settings-row">
-      <div className="min-w-0">
-        <p className="font-semibold">{label}</p>
-        {description && <p className="text-sm text-muted break-words">{description}</p>}
-      </div>
-      {children && <div className="settings-row__control">{children}</div>}
-    </div>
-  )
 }
 
 function Avatar({ name }: { name: string }) {

@@ -28,9 +28,11 @@ export const STATUS_TONE: Record<JobStatus, BadgeTone> = {
 }
 
 /** Filter keys kept in the URL query of the jobs view. */
-export const FILTER_KEYS = ['rating', 'status', 'sponsorship', 'region', 'tags', 'payMin', 'payMax'] as const
+export const FILTER_KEYS = ['q', 'rating', 'status', 'sponsorship', 'region', 'tags', 'payMin', 'payMax'] as const
 
 export interface JobFilters {
+  /** Free text over title, company and location. */
+  q?: string
   rating?: string
   status?: string
   sponsorship?: string
@@ -45,6 +47,7 @@ export function parseFilters(params: URLSearchParams, config: TrackerConfig): Jo
   const payMin = params.get('payMin')
   const payMax = params.get('payMax')
   return {
+    q: params.get('q')?.trim() || undefined,
     rating: params.get('rating') || undefined,
     status: params.get('status') || undefined,
     sponsorship: params.get('sponsorship') || undefined,
@@ -56,6 +59,10 @@ export function parseFilters(params: URLSearchParams, config: TrackerConfig): Jo
 }
 
 export function matchesFilters(job: JobDoc, filters: JobFilters): boolean {
+  if (filters.q) {
+    const haystack = `${job.title} ${job.company} ${job.location ?? ''}`.toLowerCase()
+    if (!filters.q.toLowerCase().split(/\s+/).every((word) => haystack.includes(word))) return false
+  }
   if (filters.status && job.status !== filters.status) return false
   if (filters.rating && job.rating !== filters.rating) return false
   if (filters.sponsorship && (job.sponsorship ?? 'unknown') !== filters.sponsorship) return false
@@ -94,6 +101,11 @@ function isDisplayCurrency(value: string, allowed: DisplayCurrency[]): value is 
 function formatMoney(amount: number, currency: DisplayCurrency): string {
   const rounded = amount >= 1000 ? `${Math.round(amount / 1000)}k` : `${Math.round(amount)}`
   return `${SYMBOLS[currency]}${rounded}`
+}
+
+/** A pay filter threshold for the toolbar, e.g. "£100k"; no symbol when pay is shown as posted. */
+export function formatPayThreshold(amount: number, preference: CurrencyPreference): string {
+  return preference === 'native' ? formatMoney(amount, 'GBP').replace('£', '') : formatMoney(amount, preference)
 }
 
 export function formatPayRange(
