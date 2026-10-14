@@ -1,0 +1,56 @@
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function isAuth() {
+  return request.auth != null;
+}
+
+function isOwner(uid) {
+  return isAuth() && request.auth.uid == uid;
+}
+
+function isRealAuth() {
+  return isAuth() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+}
+
+// Owner with a Google or email account (not an anonymous session).
+function isRealOwner(uid) {
+  return isOwner(uid) && isRealAuth();
+}
+
+function isVerified() {
+  return isAuth() && request.auth.token.get('email_verified', false) == true;
+}
+
+// Custom claims are mirrored from roles/{email} by the syncRoleClaims function.
+function isAdmin() {
+  return isVerified() && request.auth.token.get('admin', false) == true;
+}
+
+function hasApp(name) {
+  return isVerified() && name in request.auth.token.get('apps', []);
+}
+
+// ── users (profile + app-level prefs) ─────────────────────────────────────
+// Every visitor, anonymous included, has users/{uid}: isAnonymous, createdAt, lastSeenAt, and
+// for real accounts email, displayName, photoURL.
+
+match /users/{uid} {
+  // Owner reads their own doc (anonymous included). Real users can read any profile
+  // (group member display and invite lookup by email in the wealth app).
+  allow read: if isOwner(uid) || isRealAuth();
+  // Only owner can write
+  allow create, update, delete: if isOwner(uid);
+
+  // App-level prefs (theme, etc.) — single doc at prefs/p
+  match /prefs/{doc} {
+    allow read, write: if isOwner(uid);
+  }
+}
+
+// ── roles (admin only) ────────────────────────────────────────────────────
+// roles/{emailLowercase}: { admin: bool, apps: string[], ladderTrackers: string[] }.
+// Seeded with scripts/seed-roles.ts; edited from the admin panel.
+
+match /roles/{email} {
+  allow read, write: if isAdmin();
+}

@@ -1,0 +1,3 @@
+// ── ladder (placeholder) ──────────────────────────────────────────────────
+// Owned by the Ladder agent (phase 1): ladder/{tracker}/jobs, companies, requests.
+// No match blocks yet, so every ladder path is denied (Firestore denies by default).

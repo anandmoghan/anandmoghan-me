@@ -13,7 +13,11 @@
     "deploy": "npm run build && firebase deploy --only hosting",
     "deploy:all": "npm run build && firebase deploy --only hosting,functions,firestore,storage",
     "deploy:preview": "npm run build && firebase hosting:channel:deploy preview",
-    "migrate-media": "tsx scripts/migrate-r2-to-storage.ts"
+    "migrate-media": "tsx scripts/migrate-r2-to-storage.ts",
+    "rules": "node scripts/merge-rules.mjs",
+    "rules:check": "node scripts/merge-rules.mjs --check",
+    "test:rules": "npm run rules:check && firebase emulators:exec --only firestore,auth --project demo-anandmoghan-me \"node --test tests/rules/*.test.mjs\"",
+    "seed-roles": "tsx scripts/seed-roles.ts"
   },
   "keywords": [],
   "author": "Anand Mohan",
@@ -37,6 +41,7 @@
     "to-ico": "^1.1.5"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
     "@types/katex": "^0.16.8",
     "@types/node": "^25.0.8",
     "@types/react": "^19.2.8",

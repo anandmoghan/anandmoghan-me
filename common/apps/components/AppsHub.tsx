@@ -5,7 +5,7 @@ import { useAuth } from '@/common/firebase/AuthProvider'
 import { apps } from '../registry'
 
 export function AppsHub() {
-  const { user } = useAuth()
+  const { user, isAnonymous } = useAuth()
 
   return (
     <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12">
@@ -16,7 +16,7 @@ export function AppsHub() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {apps.map((app) => {
-          const needsLogin = app.requiresAuth && !user
+          const needsLogin = app.requiresAuth && (!user || isAnonymous)
           const href = needsLogin
             ? `/apps/login?return=${encodeURIComponent(app.path)}`
             : app.path

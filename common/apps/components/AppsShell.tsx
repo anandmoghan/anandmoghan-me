@@ -3,14 +3,14 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AuthProvider, useAuth } from '@/common/firebase/AuthProvider'
+import { useAuth } from '@/common/firebase/AuthProvider'
 import { ThemeToggle } from '@/common/components/ThemeToggle'
 import { ProfileMenu } from './ProfileMenu'
 import { ThemeSync } from './ThemeSync'
 import { apps } from '../registry'
 
 function Header() {
-  const { user, displayName, signOut } = useAuth()
+  const { user, isAnonymous, displayName, signOut } = useAuth()
   const pathname = usePathname()
   const appName = apps.find(app => pathname.startsWith(app.path))?.name ?? null
   const isShareRoute = pathname.startsWith('/apps/share')
@@ -36,7 +36,7 @@ function Header() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            {user?.isAnonymous ? (
+            {isAnonymous && isShareRoute && displayName ? (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted">Viewing as {displayName}</span>
                 <button
@@ -46,7 +46,7 @@ function Header() {
                   Log out
                 </button>
               </div>
-            ) : user ? (
+            ) : user && !isAnonymous ? (
               <ProfileMenu />
             ) : (
               pathname !== '/apps/login' && !isShareRoute && (
@@ -65,15 +65,15 @@ function Header() {
   )
 }
 
-// Client chrome for everything under /apps: auth context, theme sync, header.
+// Client chrome for everything under /apps: theme sync, header. AuthProvider is in the root layout.
 export function AppsShell({ children }: { children: ReactNode }) {
   return (
-    <AuthProvider>
+    <>
       <ThemeSync />
       <div className="apps-shell min-h-screen bg-background text-foreground flex flex-col">
         <Header />
         <main className="flex-1 flex flex-col">{children}</main>
       </div>
-    </AuthProvider>
+    </>
   )
 }

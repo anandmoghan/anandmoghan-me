@@ -13,7 +13,7 @@ function safeReturnPath(raw: string | null): string {
 
 // Reads ?return=, so the page must render this inside <Suspense>.
 export function LoginForm() {
-  const { user, loading, signInWithEmail, signUpWithEmail } = useAuth()
+  const { user, isAnonymous, loading, signInExisting, upgradeWithEmail } = useAuth()
   const router = useRouter()
   const returnTo = safeReturnPath(useSearchParams().get('return'))
 
@@ -25,10 +25,10 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && !isAnonymous) {
       router.replace(returnTo)
     }
-  }, [user, loading, router, returnTo])
+  }, [user, isAnonymous, loading, router, returnTo])
 
   if (loading) return null
 
@@ -38,13 +38,13 @@ export function LoginForm() {
     setSubmitting(true)
     try {
       if (mode === 'signin') {
-        await signInWithEmail(email, password)
+        await signInExisting(email, password)
       } else {
         if (!displayName.trim()) {
           setError('Display name is required.')
           return
         }
-        await signUpWithEmail(email, password, displayName.trim())
+        await upgradeWithEmail(email, password, displayName.trim())
       }
       router.replace(returnTo)
     } catch (err: unknown) {
@@ -72,6 +72,11 @@ export function LoginForm() {
           <p className="text-muted mt-2 text-sm">
             {mode === 'signin' ? 'Sign in to access your apps.' : 'Create an account to get started.'}
           </p>
+          {isAnonymous && (
+            <p className="text-muted mt-2 text-sm">
+              You are browsing as a guest. Signing in keeps your comments and settings.
+            </p>
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-background p-6 shadow-sm space-y-4">

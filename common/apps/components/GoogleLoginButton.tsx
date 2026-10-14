@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function GoogleLoginButton({ onSuccess }: Props) {
-  const { signInWithGoogle } = useAuth()
+  const { upgradeWithGoogle } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -16,7 +16,7 @@ export function GoogleLoginButton({ onSuccess }: Props) {
     setLoading(true)
     setError(null)
     try {
-      await signInWithGoogle()
+      await upgradeWithGoogle()
       onSuccess?.()
     } catch (err) {
       setError('Sign-in failed. Please try again.')

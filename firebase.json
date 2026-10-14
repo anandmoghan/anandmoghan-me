@@ -75,5 +75,20 @@
         ]
       }
     ]
+  },
+  "emulators": {
+    "auth": {
+      "port": 9098
+    },
+    "firestore": {
+      "port": 8181
+    },
+    "functions": {
+      "port": 5001
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
   }
 }

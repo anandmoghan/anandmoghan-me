@@ -1,0 +1,232 @@
+// ── family app (personal-manager) ───────────────────────────────────────────
+// Everything for the family app lives under the single document family/household.
+// Members are the emails in family/household.members (written by the Mac bridge via the
+// admin SDK, which bypasses rules). Clients may only change family-owned fields, and every
+// client write must carry pending_sync == true, updated_by == own email and
+// client_updated_at == request.time. Mac-owned fields are never writable by a client.
+// Source of truth for this block: personal-manager/firebase/family.rules.part.
+
+match /family/household {
+
+  function famIsMember() {
+    return request.auth != null
+      && request.auth.token.email_verified == true
+      && request.auth.token.email in get(/databases/$(database)/documents/family/household).data.members;
+  }
+
+  // The three bookkeeping fields every client write sets.
+  function famStamped() {
+    return request.resource.data.pending_sync == true
+      && request.resource.data.updated_by == request.auth.token.email
+      && request.resource.data.client_updated_at == request.time;
+  }
+
+  function famStampKeys() {
+    return ['pending_sync', 'updated_by', 'client_updated_at'];
+  }
+
+  // Updates may touch only these fields plus the stamp fields.
+  function famUpdateOnly(fields) {
+    return famStamped()
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields.concat(famStampKeys()));
+  }
+
+  // Creates may carry only these fields plus the stamp fields.
+  function famCreateOnly(fields) {
+    return famStamped()
+      && request.resource.data.keys().hasOnly(fields.concat(famStampKeys()));
+  }
+
+  // Optional string field: absent, null, or a string of at most `max` characters.
+  function famOptStr(d, k, max) {
+    return !(k in d) || d[k] == null || (d[k] is string && d[k].size() <= max);
+  }
+
+  function famReqStr(d, k, min, max) {
+    return k in d && d[k] is string && d[k].size() >= min && d[k].size() <= max;
+  }
+
+  // Optional ISO string or timestamp.
+  function famOptTime(d, k) {
+    return !(k in d) || d[k] == null || d[k] is timestamp || (d[k] is string && d[k].size() <= 40);
+  }
+
+  // Element i of list l, when present, is a string of at most 200 characters (rules cannot loop).
+  function famStrAt(l, i) {
+    return l.size() <= i || (l[i] is string && l[i].size() <= 200);
+  }
+
+  // A try-on request: one of the three people, 1 to 4 suggestion ids.
+  function famTryOnReq(d) {
+    return famPerson(d.person)
+      && 'suggestion_ids' in d && d.suggestion_ids is list
+      && d.suggestion_ids.size() >= 1 && d.suggestion_ids.size() <= 4
+      && famStrAt(d.suggestion_ids, 0) && famStrAt(d.suggestion_ids, 1)
+      && famStrAt(d.suggestion_ids, 2) && famStrAt(d.suggestion_ids, 3);
+  }
+
+  // Optional `id` field, when present, must equal the document id.
+  function famOwnId(d, id) {
+    return !('id' in d) || d.id == id;
+  }
+
+  // Optional `created_by`, when present, must be the caller.
+  function famCreatedBy(d) {
+    return !('created_by' in d) || d.created_by == request.auth.token.email;
+  }
+
+  function famPerson(p) {
+    return p in ['anand', 'kavya', 'nila'];
+  }
+
+  function famOptMoney(d, k) {
+    return !(k in d) || d[k] == null
+      || (d[k] is map && d[k].keys().hasOnly(['amount', 'currency'])
+          && d[k].amount is number && d[k].amount >= 0
+          && d[k].currency is string && d[k].currency.size() <= 3);
+  }
+
+  allow read: if famIsMember();
+  allow write: if false;
+
+  // Size and name summary only. Mac-written.
+  match /people/{id} {
+    allow read: if famIsMember();
+    allow write: if false;
+  }
+
+  match /briefs/{id} {
+    allow read: if famIsMember();
+    allow create: if famIsMember()
+      && famCreateOnly(['id', 'title', 'person', 'needs', 'constraints', 'budget', 'status', 'deadline', 'body',
+                     'created_at', 'created_by'])
+      && famOwnId(request.resource.data, id)
+      && famCreatedBy(request.resource.data)
+      && famOptTime(request.resource.data, 'created_at')
+      && famReqStr(request.resource.data, 'title', 1, 200)
+      && famPerson(request.resource.data.person)
+      && request.resource.data.needs is list && request.resource.data.needs.size() <= 30
+      && famOptStr(request.resource.data, 'constraints', 2000)
+      && famOptStr(request.resource.data, 'body', 5000)
+      && famOptStr(request.resource.data, 'deadline', 40)
+      && famOptMoney(request.resource.data, 'budget')
+      && request.resource.data.status == 'open';
+    allow update: if famIsMember()
+      && famUpdateOnly(['title', 'needs', 'constraints', 'budget', 'status'])
+      && famReqStr(request.resource.data, 'title', 1, 200)
+      && request.resource.data.needs is list && request.resource.data.needs.size() <= 30
+      && famOptStr(request.resource.data, 'constraints', 2000)
+      && famOptMoney(request.resource.data, 'budget')
+      && request.resource.data.status in ['open', 'closed'];
+    allow delete: if false;
+  }
+
+  match /suggestions/{id} {
+    allow read: if famIsMember();
+    allow create: if false;
+    allow update: if famIsMember()
+      && famUpdateOnly(['status', 'dismiss_reason', 'dismissed_at', 'shortlisted_at'])
+      && request.resource.data.status in ['new', 'shortlisted', 'dismissed', 'ordered']
+      && famOptStr(request.resource.data, 'dismiss_reason', 500)
+      && famOptTime(request.resource.data, 'dismissed_at')
+      && famOptTime(request.resource.data, 'shortlisted_at');
+    allow delete: if false;
+  }
+
+  match /orders/{id} {
+    allow read: if famIsMember();
+    // Marking a suggestion as ordered creates the order. The Mac writes the markdown.
+    allow create: if famIsMember()
+      && famCreateOnly(['id', 'suggestion_id', 'person', 'retailer', 'title', 'status', 'size', 'order_ref',
+                        'ordered_at', 'expected_at', 'price'])
+      && famOwnId(request.resource.data, id)
+      && famOptStr(request.resource.data, 'title', 200)
+      && famReqStr(request.resource.data, 'suggestion_id', 1, 200)
+      && famPerson(request.resource.data.person)
+      && famOptStr(request.resource.data, 'retailer', 20)
+      && request.resource.data.status == 'ordered'
+      && famOptStr(request.resource.data, 'size', 40)
+      && famOptStr(request.resource.data, 'order_ref', 100)
+      && famOptTime(request.resource.data, 'ordered_at')
+      && famOptTime(request.resource.data, 'expected_at')
+      && famOptMoney(request.resource.data, 'price');
+    allow update: if famIsMember()
+      && famUpdateOnly(['status', 'fit_notes', 'rating', 'delivered_at', 'order_ref', 'size'])
+      && request.resource.data.status in ['ordered', 'delivered', 'return_requested', 'returned', 'kept']
+      && famOptStr(request.resource.data, 'fit_notes', 2000)
+      && (!('rating' in request.resource.data) || request.resource.data.rating == null
+          || (request.resource.data.rating is int
+              && request.resource.data.rating >= 1 && request.resource.data.rating <= 5))
+      && famOptTime(request.resource.data, 'delivered_at')
+      && famOptStr(request.resource.data, 'order_ref', 100)
+      && famOptStr(request.resource.data, 'size', 40);
+    allow delete: if false;
+  }
+
+  // Photo upload records only. The files are in Storage under family/<person>/uploads/.
+  match /wardrobe/{id} {
+    allow read: if famIsMember();
+    allow create: if famIsMember()
+      && famCreateOnly(['photos', 'person', 'name'])
+      && famPerson(request.resource.data.person)
+      && request.resource.data.photos is list
+      && request.resource.data.photos.size() >= 1 && request.resource.data.photos.size() <= 10
+      && famOptStr(request.resource.data, 'name', 200);
+    allow update, delete: if false;
+  }
+
+  match /outfits/{id} {
+    allow read: if famIsMember();
+    allow write: if false;
+  }
+
+  match /feed/{id} {
+    allow read: if famIsMember();
+    allow create: if false;
+    allow update: if famIsMember()
+      && famUpdateOnly(['status'])
+      && request.resource.data.status in ['unread', 'read', 'done'];
+    allow delete: if false;
+  }
+
+  match /jobs/{id} {
+    allow read: if famIsMember();
+    allow write: if false;
+  }
+
+  // "Find more", photo analysis and similar requests that need the Mac.
+  match /requests/{id} {
+    allow read: if famIsMember();
+    allow create: if famIsMember()
+      && famCreateOnly(['id', 'request_id', 'type', 'person', 'brief_id', 'input', 'suggestion_ids', 'created_at',
+                        'created_by', 'requested_by'])
+      && famReqStr(request.resource.data, 'request_id', 8, 64)
+      && request.resource.data.request_id == id
+      && famOwnId(request.resource.data, id)
+      && famCreatedBy(request.resource.data)
+      && famReqStr(request.resource.data, 'type', 1, 40)
+      && (!('person' in request.resource.data) || famPerson(request.resource.data.person)
+          || request.resource.data.person == 'family')
+      && famOptStr(request.resource.data, 'brief_id', 200)
+      && (request.resource.data.type == 'tryon'
+          ? famTryOnReq(request.resource.data)
+          : !('suggestion_ids' in request.resource.data))
+      && (!('input' in request.resource.data) || (request.resource.data.input is map
+          && request.resource.data.input.size() <= 20))
+      && (!('requested_by' in request.resource.data) || request.resource.data.requested_by == request.auth.token.email)
+      && famOptTime(request.resource.data, 'created_at');
+    allow update, delete: if false;
+  }
+
+  // Virtual try-on results. Mac-written (status, images, error); the app only asks for one by creating
+  // a requests doc of type 'tryon'.
+  match /tryons/{id} {
+    allow read: if famIsMember();
+    allow write: if false;
+  }
+
+  match /system/{id} {
+    allow read: if famIsMember();
+    allow write: if false;
+  }
+}

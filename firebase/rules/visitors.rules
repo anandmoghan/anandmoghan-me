@@ -1,0 +1,3 @@
+// ── visitors (placeholder) ────────────────────────────────────────────────
+// Owned by the Visitors agent (phase 1): visits/{id}, posts/{slug}/comments/{id}.
+// No match blocks yet, so every visitors path is denied (Firestore denies by default).

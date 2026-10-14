@@ -38,7 +38,12 @@ next-env.d.ts
 .idea/
 
 # Admin scripts (service account keys + one-off scripts)
-/scripts/
+/scripts/*
+!/scripts/merge-rules.mjs
+!/scripts/seed-roles.ts
 
 # Firebase CLI cache
 .firebase/
+
+# Firebase emulator logs
+*-debug.log

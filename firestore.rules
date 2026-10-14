@@ -1,3 +1,5 @@
+// GENERATED FILE: do not edit. Edit firebase/rules/*.rules and run `npm run rules`.
+// Built by scripts/merge-rules.mjs.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,11 +18,32 @@ service cloud.firestore {
       return isAuth() && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    // Owner with a Google or email account (not an anonymous session).
+    function isRealOwner(uid) {
+      return isOwner(uid) && isRealAuth();
+    }
+
+    function isVerified() {
+      return isAuth() && request.auth.token.get('email_verified', false) == true;
+    }
+
+    // Custom claims are mirrored from roles/{email} by the syncRoleClaims function.
+    function isAdmin() {
+      return isVerified() && request.auth.token.get('admin', false) == true;
+    }
+
+    function hasApp(name) {
+      return isVerified() && name in request.auth.token.get('apps', []);
+    }
+
     // ── users (profile + app-level prefs) ─────────────────────────────────────
+    // Every visitor, anonymous included, has users/{uid}: isAnonymous, createdAt, lastSeenAt, and
+    // for real accounts email, displayName, photoURL.
 
     match /users/{uid} {
-      // Anyone authenticated can read user profiles (for group member display)
-      allow read: if isRealAuth();
+      // Owner reads their own doc (anonymous included). Real users can read any profile
+      // (group member display and invite lookup by email in the wealth app).
+      allow read: if isOwner(uid) || isRealAuth();
       // Only owner can write
       allow create, update, delete: if isOwner(uid);
 
@@ -30,67 +53,80 @@ service cloud.firestore {
       }
     }
 
+    // ── roles (admin only) ────────────────────────────────────────────────────
+    // roles/{emailLowercase}: { admin: bool, apps: string[], ladderTrackers: string[] }.
+    // Seeded with scripts/seed-roles.ts; edited from the admin panel.
+
+    match /roles/{email} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── personal apps ─────────────────────────────────────────────────────────
+    // Wealth, expense, time, groups, invites, Trading 212, config and share decks.
+    // Private per-user data uses isRealOwner(): every visitor has an anonymous session, and an
+    // anonymous uid owns nothing here until it is upgraded to Google or email (same uid).
+
     // ── wealth app ────────────────────────────────────────────────────────────
 
     match /wealth/{uid} {
-      allow read, write: if isOwner(uid);
+      allow read, write: if isRealOwner(uid);
 
       match /assets/{assetId} {
         // Group members need to read each other's assets
         allow read: if isRealAuth();
-        allow write: if isOwner(uid);
+        allow write: if isRealOwner(uid);
       }
 
       match /prefs/{doc} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
     }
 
     // ── expense app ───────────────────────────────────────────────────────────
 
     match /expense/{uid} {
-      allow read, write: if isOwner(uid);
+      allow read, write: if isRealOwner(uid);
 
       match /accounts/{accountId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
 
       match /vendors/{vendorId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
 
       match /statements/{statementId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
 
       match /transactions/{transactionId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
 
       match /prefs/{doc} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
     }
 
     // ── time app ──────────────────────────────────────────────────────────────
 
     match /time/{uid} {
-      allow read, write: if isOwner(uid);
+      allow read, write: if isRealOwner(uid);
 
       match /categories/{catId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
 
       match /sessions/{sessionId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
 
       match /rollups/{rollupId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
 
       match /prefs/{doc} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isRealOwner(uid);
       }
     }
 
@@ -140,7 +176,7 @@ service cloud.firestore {
     // bypasses rules via IAM to write the encrypted credentials.
 
     match /t212Creds/{uid} {
-      allow read: if isOwner(uid);
+      allow read: if isRealOwner(uid);
       allow write: if false;
     }
 
@@ -154,7 +190,7 @@ service cloud.firestore {
 
     match /t212Snapshots/{uid} {
       allow read: if isRealAuth();
-      allow write: if isOwner(uid);
+      allow write: if isRealOwner(uid);
     }
 
     // ── t212 projection settings (growth rate, yearly contribution) ───────────
@@ -162,7 +198,7 @@ service cloud.firestore {
 
     match /t212Settings/{uid} {
       allow read: if isRealAuth();
-      allow write: if isOwner(uid);
+      allow write: if isRealOwner(uid);
     }
 
     // ── config (exchange rates etc.) ──────────────────────────────────────────
@@ -173,7 +209,7 @@ service cloud.firestore {
     }
 
     // ── share app comments ───────────────────────────────────────────────────
-    // Unlisted presentation decks; guests sign in anonymously with a nickname
+    // Unlisted presentation decks; guests use their anonymous session with a nickname
     // and can comment on individual bullets. bulletId/nickname/text are
     // denormalized directly onto each comment doc.
 
@@ -192,6 +228,14 @@ service cloud.firestore {
         allow update, delete: if isAuth() && resource.data.authorUid == request.auth.uid;
       }
     }
+
+    // ── ladder (placeholder) ──────────────────────────────────────────────────
+    // Owned by the Ladder agent (phase 1): ladder/{tracker}/jobs, companies, requests.
+    // No match blocks yet, so every ladder path is denied (Firestore denies by default).
+
+    // ── visitors (placeholder) ────────────────────────────────────────────────
+    // Owned by the Visitors agent (phase 1): visits/{id}, posts/{slug}/comments/{id}.
+    // No match blocks yet, so every visitors path is denied (Firestore denies by default).
 
     // BEGIN family (managed by personal-manager)
     // ── family app (personal-manager) ───────────────────────────────────────────

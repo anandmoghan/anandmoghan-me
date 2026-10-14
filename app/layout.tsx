@@ -4,6 +4,7 @@ import "./globals.css";
 import GoogleAnalytics from "./components/GoogleAnalytics";
 import RedirectTracker from "./components/RedirectTracker";
 import { ThemeProvider } from "@/common/components/ThemeProvider";
+import { AuthProvider } from "@/common/firebase/AuthProvider";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://anandmoghan.me';
 const gaId = process.env.NEXT_PUBLIC_GA_ID || 'G-4BFLN7Y3SY';
@@ -220,7 +221,9 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <RedirectTracker />
         </Suspense>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

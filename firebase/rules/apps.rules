@@ -1,0 +1,167 @@
+// ── personal apps ─────────────────────────────────────────────────────────
+// Wealth, expense, time, groups, invites, Trading 212, config and share decks.
+// Private per-user data uses isRealOwner(): every visitor has an anonymous session, and an
+// anonymous uid owns nothing here until it is upgraded to Google or email (same uid).
+
+// ── wealth app ────────────────────────────────────────────────────────────
+
+match /wealth/{uid} {
+  allow read, write: if isRealOwner(uid);
+
+  match /assets/{assetId} {
+    // Group members need to read each other's assets
+    allow read: if isRealAuth();
+    allow write: if isRealOwner(uid);
+  }
+
+  match /prefs/{doc} {
+    allow read, write: if isRealOwner(uid);
+  }
+}
+
+// ── expense app ───────────────────────────────────────────────────────────
+
+match /expense/{uid} {
+  allow read, write: if isRealOwner(uid);
+
+  match /accounts/{accountId} {
+    allow read, write: if isRealOwner(uid);
+  }
+
+  match /vendors/{vendorId} {
+    allow read, write: if isRealOwner(uid);
+  }
+
+  match /statements/{statementId} {
+    allow read, write: if isRealOwner(uid);
+  }
+
+  match /transactions/{transactionId} {
+    allow read, write: if isRealOwner(uid);
+  }
+
+  match /prefs/{doc} {
+    allow read, write: if isRealOwner(uid);
+  }
+}
+
+// ── time app ──────────────────────────────────────────────────────────────
+
+match /time/{uid} {
+  allow read, write: if isRealOwner(uid);
+
+  match /categories/{catId} {
+    allow read, write: if isRealOwner(uid);
+  }
+
+  match /sessions/{sessionId} {
+    allow read, write: if isRealOwner(uid);
+  }
+
+  match /rollups/{rollupId} {
+    allow read, write: if isRealOwner(uid);
+  }
+
+  match /prefs/{doc} {
+    allow read, write: if isRealOwner(uid);
+  }
+}
+
+// ── groups ────────────────────────────────────────────────────────────────
+// 'm' = members array (wire field name)
+
+match /groups/{groupId} {
+  // Members can read the group
+  allow read: if isRealAuth() && request.auth.uid in resource.data.m;
+
+  // Any authenticated user can create a group
+  allow create: if isRealAuth();
+
+  // Existing members can update anything.
+  // Non-members can add only themselves (joining via accepted invite).
+  allow update: if isRealAuth() && (
+    request.auth.uid in resource.data.m
+    || (
+      request.auth.uid in request.resource.data.m
+      && request.resource.data.m.hasAll(resource.data.m)
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['m'])
+    )
+  );
+
+  allow delete: if isRealAuth() && request.auth.uid == resource.data.cb;
+}
+
+// ── invites ───────────────────────────────────────────────────────────────
+// 'fu' = fromUid, 'tu' = toUid, 's' = status (wire field names)
+
+match /invites/{inviteId} {
+  // Sender or recipient can read
+  allow read: if isRealAuth() && (
+    request.auth.uid == resource.data.fu ||
+    request.auth.uid == resource.data.tu
+  );
+  // Sender can create
+  allow create: if isRealAuth() && request.auth.uid == request.resource.data.fu;
+  // Recipient can update status only
+  allow update: if isRealAuth()
+    && request.auth.uid == resource.data.tu
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['s']);
+}
+
+// ── t212 encrypted credentials ────────────────────────────────────────────
+// Owner reads only (just to check "is configured"). Worker service account
+// bypasses rules via IAM to write the encrypted credentials.
+
+match /t212Creds/{uid} {
+  allow read: if isRealOwner(uid);
+  allow write: if false;
+}
+
+// ── t212 rate limit counters (Functions only, Admin SDK bypasses rules) ───
+
+match /t212RateLimits/{uid} {
+  allow read, write: if false;
+}
+
+// ── t212 snapshots ────────────────────────────────────────────────────────
+
+match /t212Snapshots/{uid} {
+  allow read: if isRealAuth();
+  allow write: if isRealOwner(uid);
+}
+
+// ── t212 projection settings (growth rate, yearly contribution) ───────────
+// Owner writes, any authenticated user reads (so shared family projections work).
+
+match /t212Settings/{uid} {
+  allow read: if isRealAuth();
+  allow write: if isRealOwner(uid);
+}
+
+// ── config (exchange rates etc.) ──────────────────────────────────────────
+
+match /config/{doc} {
+  allow read: if isRealAuth();
+  allow write: if false;
+}
+
+// ── share app comments ───────────────────────────────────────────────────
+// Unlisted presentation decks; guests use their anonymous session with a nickname
+// and can comment on individual bullets. bulletId/nickname/text are
+// denormalized directly onto each comment doc.
+
+match /shareDecks/{slug} {
+  match /comments/{commentId} {
+    allow read: if isAuth();
+    allow create: if isAuth()
+      && request.resource.data.authorUid == request.auth.uid
+      && request.resource.data.bulletId is string
+      && request.resource.data.nickname is string
+      && request.resource.data.nickname.size() > 0
+      && request.resource.data.nickname.size() <= 40
+      && request.resource.data.text is string
+      && request.resource.data.text.size() > 0
+      && request.resource.data.text.size() <= 1000;
+    allow update, delete: if isAuth() && resource.data.authorUid == request.auth.uid;
+  }
+}

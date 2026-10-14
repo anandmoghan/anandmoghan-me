@@ -1,13 +1,16 @@
 import { initializeApp } from 'firebase-admin/app'
-import { getAuth } from 'firebase-admin/auth'
+import { getAuth, type DecodedIdToken } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
+import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { onRequest, type Request } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import type { Response } from 'express'
+import { mergeAnonymousInto } from './account.js'
 import { ENCRYPTION_SECRET, REGION, SYNC_RATE_LIMIT_PER_MINUTE } from './config.js'
 import { decryptCredentials, encryptCredentials } from './crypto.js'
 import { checkRateLimit } from './rateLimit.js'
 import { fetchFrankfurterRates, writeRatesToFirestore } from './rates.js'
+import { applyRoleClaims, readRole, roleFromDoc } from './roles.js'
 import { fetchAndWriteSnapshot } from './trading212.js'
 
 initializeApp()
@@ -27,12 +30,18 @@ function text(res: Response, status: number, body: string, extra: Record<string,
   res.send(body)
 }
 
-async function verifyToken(token: string): Promise<string | null> {
+async function verifyToken(token: string): Promise<DecodedIdToken | null> {
   try {
-    return (await getAuth().verifyIdToken(token)).uid
+    return await getAuth().verifyIdToken(token)
   } catch {
     return null
   }
+}
+
+function json(res: Response, status: number, body: unknown): void {
+  res.status(status)
+  res.set({ ...CORS_HEADERS, 'Content-Type': 'application/json' })
+  res.send(JSON.stringify(body))
 }
 
 function parseJsonBody(req: Request): unknown {
@@ -62,9 +71,58 @@ export const api = onRequest(
       text(res, 401, 'Missing Authorization header')
       return
     }
-    const uid = await verifyToken(token)
-    if (!uid) {
+    const decoded = await verifyToken(token)
+    if (!decoded) {
       text(res, 401, 'Invalid or expired token')
+      return
+    }
+    const uid = decoded.uid
+    const isAnonymous = decoded.firebase.sign_in_provider === 'anonymous'
+
+    // POST /api/account/refresh-claims: mirror roles/{email} into the caller's custom claims.
+    // The client force-refreshes its ID token when `changed` is true.
+    if (req.path === '/api/account/refresh-claims' && req.method === 'POST') {
+      if (isAnonymous || !decoded.email) {
+        json(res, 200, { changed: false })
+        return
+      }
+      try {
+        const changed = await applyRoleClaims(uid, await readRole(decoded.email))
+        json(res, 200, { changed })
+      } catch (err) {
+        text(res, 500, `Failed to refresh claims: ${err}`)
+      }
+      return
+    }
+
+    // POST /api/account/merge { anonIdToken }: the caller just signed in to an existing account
+    // from an anonymous session; move that session's prefs and comments here and delete it.
+    if (req.path === '/api/account/merge' && req.method === 'POST') {
+      if (isAnonymous) {
+        text(res, 400, 'Caller must be a signed-in account')
+        return
+      }
+      let body: { anonIdToken?: string }
+      try {
+        body = (parseJsonBody(req) ?? {}) as { anonIdToken?: string }
+      } catch {
+        text(res, 400, 'Invalid JSON body')
+        return
+      }
+      const anon = body.anonIdToken ? await verifyToken(body.anonIdToken) : null
+      if (!anon || anon.firebase.sign_in_provider !== 'anonymous') {
+        text(res, 400, 'anonIdToken must be a valid anonymous ID token')
+        return
+      }
+      if (anon.uid === uid) {
+        text(res, 400, 'Nothing to merge')
+        return
+      }
+      try {
+        json(res, 200, await mergeAnonymousInto(anon.uid, uid))
+      } catch (err) {
+        text(res, 500, `Merge failed: ${err}`)
+      }
       return
     }
 
@@ -150,6 +208,23 @@ export const api = onRequest(
     }
 
     text(res, 404, 'Not found')
+  }
+)
+
+// Mirrors roles/{email} into the custom claims of the user with that email, if one exists.
+// Users who sign up later pick their claims up via POST /api/account/refresh-claims.
+export const syncRoleClaims = onDocumentWritten(
+  { region: REGION, document: 'roles/{email}' },
+  async (event) => {
+    const email = event.params.email.toLowerCase()
+    let userUid: string
+    try {
+      userUid = (await getAuth().getUserByEmail(email)).uid
+    } catch (err) {
+      if ((err as { code?: string }).code === 'auth/user-not-found') return // no account yet
+      throw err
+    }
+    await applyRoleClaims(userUid, roleFromDoc(event.data?.after.data()))
   }
 )
 
