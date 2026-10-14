@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
-import { providerErrorMessage, SOCIAL_PROVIDER_NAMES, type SocialProviderId } from '@/common/firebase/providers'
+import { OFFERED_PROVIDERS, providerErrorMessage, SOCIAL_PROVIDER_NAMES, type SocialProviderId } from '@/common/firebase/providers'
 import { RESET_NEUTRAL_NOTICE, requestPasswordReset } from '@/common/firebase/passwordReset'
 import { useTheme } from '@/common/components/ThemeProvider'
 import { AnalyticsSwitch } from '@/common/visitors/AnalyticsSwitch'
@@ -173,7 +173,7 @@ export function GeneralSettings() {
             ))}
           </Row>
           <Row label="Link an account" description="Add another way to sign in to this same account.">
-            {(Object.keys(SOCIAL_PROVIDER_NAMES) as SocialProviderId[]).map((id) => (
+            {OFFERED_PROVIDERS.map((id) => (
               <button
                 key={id}
                 type="button"

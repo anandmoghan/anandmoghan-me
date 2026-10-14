@@ -7,6 +7,10 @@ export const SOCIAL_PROVIDER_NAMES: Record<SocialProviderId, string> = {
   'apple.com': 'Apple',
 };
 
+/** The providers the sign-in screen and Settings offer. Apple is off until it is wanted and enabled
+ * in the Firebase console; add 'apple.com' here to turn it on. */
+export const OFFERED_PROVIDERS: SocialProviderId[] = ['google.com'];
+
 /** A message for the user when a Google or Apple sign-in or link fails. */
 export function providerErrorMessage(err: unknown, id: SocialProviderId, action: 'signin' | 'link'): string {
   const name = SOCIAL_PROVIDER_NAMES[id];
