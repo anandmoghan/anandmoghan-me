@@ -111,7 +111,7 @@
   <p>
     A model that clones a voice from a few seconds of audio is a spoofing tool by construction, and shipped systems use two defences.
     The first is an audio watermark trained jointly with a detector, which can localise the mark down to individual samples.
-    It is accurate: Audiobox reports a false positive rate of 0.001 and a worst-case false negative rate of 0.003 across its augmentations [21].
+    Audiobox reports that its detector stays reliable across the audio edits it was tested against [21].
   </p>
   <p>
     A watermark only protects outputs of a model that applies it, and anyone running released weights can skip that step.
