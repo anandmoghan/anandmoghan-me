@@ -69,6 +69,15 @@ service cloud.firestore {
       match /prefs/{doc} {
         allow read, write: if isOwner(uid);
       }
+
+      // Notifications: { title, body?, app?, link?, createdAt, readAt }. Written only by the server
+      // (admin SDK). The owner reads them, marks them read or unread (readAt only) and deletes them.
+      match /notifications/{id} {
+        allow read, delete: if isRealOwner(uid);
+        allow update: if isRealOwner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+          && (request.resource.data.readAt == null || request.resource.data.readAt is timestamp);
+      }
     }
 
     // ── roles (admin only) ────────────────────────────────────────────────────
