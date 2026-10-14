@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { Link } from "@/common/apps/family/router";
-import { HubCard, SectionTitle, outlineBtn, softBtn } from "@/common/apps/family/components/ui";
-import { ChevronRightIcon } from "@/common/apps/family/components/Icons";
+import { BoxCard, SectionTitle, outlineBtn, softBtn } from "@/common/apps/family/components/ui";
+import { BellIcon, BookIcon, CheckListIcon, ChevronRightIcon, ChildIcon, ListIcon, StepsIcon, TargetIcon } from "@/common/apps/family/components/Icons";
 import { PointList, ResearchComing } from "@/common/apps/family/components/parenting/parts";
 import { sortedChecks, worksGroups } from "@/common/apps/family/pages/parenting/TodayPages";
 import Spinner from "@/common/apps/family/components/Spinner";
 import { useToast } from "@/common/apps/family/hooks/useToast";
-import { currentWeek, fmtYmd, foodDayFor, isStepPlan, menuFor, napLine, orderedSteps, parentingApi, researching, summaryWeekStart, useNow, weekRange, type ParentingData, type UseParenting } from "@/common/apps/family/lib/parenting";
+import { currentWeek, fmtYmd, foodDayFor, isStepPlan, menuFor, napLine, orderedSteps, parentingApi, researching, summaryWeekStart, useNow, weekRangeShort, type ParentingData, type UseParenting } from "@/common/apps/family/lib/parenting";
 import { splitSections } from "@/common/apps/family/lib/text";
 import { dayKey } from "@/common/apps/family/lib/fitness";
 
@@ -47,8 +47,7 @@ function ThisWeek({ p, data }: { p: UseParenting; data: ParentingData }) {
       {w ? (
         <section aria-label="This week" className="card space-y-4 !p-4" data-testid="this-week" style={{ backgroundImage: "linear-gradient(160deg, color-mix(in srgb, var(--domain) 10%, var(--surface)) 0%, var(--surface) 75%)" }}>
           <div className="space-y-1">
-            <h2 className="text-lg font-extrabold leading-snug" data-testid="week-title">Week {w.week_number} ({weekRange(w.week_start)})</h2>
-            {w.age_text && <p className="text-sm text-muted" data-testid="week-age">{w.age_text}</p>}
+            <h2 className="text-lg font-extrabold leading-snug" data-testid="week-title">Week {w.week_number} · {weekRangeShort(w.week_start)}</h2>
             {w.status_headline && <p className="text-[1.05rem] font-semibold leading-snug">{w.status_headline}</p>}
           </div>
           {weekBullets(w).length > 0 && <PointList items={weekBullets(w)} label="This week" />}
@@ -77,14 +76,6 @@ function TodaysHabit({ data }: { data: ParentingData }) {
       <PointList items={[{ id: "tip", text: t.text, detail, sources: t.sources }]} label="Today's habit" />
     </section>
   );
-}
-
-function RemindersLink() {
-  return <HubCard to="/nila/sleep#reminders" title="Reminders" lines={["Bedtime, the night log, today's habit and this week's update"]} />;
-}
-
-function AboutLink() {
-  return <HubCard to="/nila/about" title="About Nila" lines={["Your notes on her sleep, feeding, routines and aims"]} />;
 }
 
 /** One tappable row: title on one line and a chevron. */
@@ -129,31 +120,41 @@ function TodayPlans({ data }: { data: ParentingData }) {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** The cards that open Today's full pages. Each shows one or two lines; the detail is on its own page. */
+/** A check is time-sensitive when it is overdue or due within two weeks. */
+function soon(due: string, today: string) {
+  const limit = new Date(`${today}T00:00:00`);
+  limit.setDate(limit.getDate() + 14);
+  return due <= dayKey(limit);
+}
+
+/** The box cards that open Today's full pages (and About and Reminders), in a responsive grid. Time-sensitive first. */
 function HubCards({ data }: { data: ParentingData }) {
   const s = data.summary;
-  if (!s) return null;
   const today = dayKey();
-  const checks = sortedChecks(s);
+  const checks = s ? sortedChecks(s) : [];
   const next = checks.find((c) => c.due) ?? checks[0];
-  const works = worksGroups(s).reduce((n, [k]) => n + (s.what_works?.[k]?.length ?? 0), 0);
-  const sections = s.body?.trim() ? splitSections(s.body).filter((x) => x.heading).length : 0;
+  const works = s ? worksGroups(s).reduce((n, [k]) => n + (s.what_works?.[k]?.length ?? 0), 0) : 0;
+  const sections = s?.body?.trim() ? splitSections(s.body).filter((x) => x.heading).length : 0;
   const latest = data.weeks[0];
   return (
-    <section className="space-y-2" aria-label="More about Nila">
-      <ul className="space-y-2">
-        {(checks.length > 0 || !!s.red_flags?.length) && (
+    <section aria-label="More about Nila">
+      <ul className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-4">
+        {s && (checks.length > 0 || !!s.red_flags?.length) && (
           <li>
-            <HubCard
-              to="/nila/jabs" testId="hub-jabs" title="Checks and jabs"
-              lines={next ? [next.title, next.due ? `${next.due < today ? "Was due" : "Due"} ${fmtYmd(next.due) || next.due}` : "No date yet"] : ["When to get help"]}
+            <BoxCard
+              to="/nila/jabs" testId="hub-jabs" title="Checks and jabs" icon={<CheckListIcon />}
+              urgent={!!next?.due && soon(next.due, today)}
+              sub={next?.due ? `${next.due < today ? "Was due" : "Due"} ${fmtYmd(next.due) || next.due}` : next ? "No date yet" : "When to get help"}
+              detail={next?.title}
             />
           </li>
         )}
-        {works > 0 && <li><HubCard to="/nila/works" testId="hub-works" title="What works for Nila" lines={[plural(works, "idea", "ideas"), "What calms her and what sets her off"]} /></li>}
-        {!!s.focus?.length && <li><HubCard to="/nila/focus" testId="hub-focus" title="Focus areas" lines={[plural(s.focus.length, "area", "areas"), s.focus[0].text]} /></li>}
-        {sections > 0 && <li><HubCard to="/nila/research" testId="hub-research" title="More from the research" lines={[plural(sections, "section", "sections")]} /></li>}
-        {data.weeks.length > 0 && <li><HubCard to="/nila/weeks" testId="hub-weeks" title="Past weeks" lines={[plural(data.weeks.length, "week", "weeks"), `Latest: ${weekRange(summaryWeekStart(latest))}`]} /></li>}
+        {s && !!s.focus?.length && <li><BoxCard to="/nila/focus" testId="hub-focus" title="Focus areas" icon={<TargetIcon />} sub={plural(s.focus.length, "area", "areas")} detail={s.focus[0].text} /></li>}
+        {works > 0 && <li><BoxCard to="/nila/works" testId="hub-works" title="What works for Nila" icon={<StepsIcon />} sub={plural(works, "idea", "ideas")} detail="What calms her and what sets her off" /></li>}
+        {sections > 0 && <li><BoxCard to="/nila/research" testId="hub-research" title="More from the research" icon={<BookIcon />} sub={plural(sections, "section", "sections")} /></li>}
+        {data.weeks.length > 0 && <li><BoxCard to="/nila/weeks" testId="hub-weeks" title="Past weeks" icon={<ListIcon />} sub={plural(data.weeks.length, "week", "weeks")} /></li>}
+        <li><BoxCard to="/nila/about" title="About Nila" icon={<ChildIcon />} sub="Your notes" detail="Her sleep, feeding, routines and aims" /></li>
+        <li><BoxCard to="/nila/sleep#reminders" title="Reminders" icon={<BellIcon />} sub="Bedtime and updates" detail="The night log, today's habit and this week's update" /></li>
       </ul>
     </section>
   );
@@ -167,8 +168,7 @@ export default function Today({ p, data }: { p: UseParenting; data: ParentingDat
         <TodaysHabit data={data} />
         <TodayPlans data={data} />
         <ResearchComing title="Her summary is not ready yet" busy={researching(data)} />
-        <AboutLink />
-        <RemindersLink />
+        <HubCards data={data} />
       </div>
     );
   }
@@ -178,8 +178,6 @@ export default function Today({ p, data }: { p: UseParenting; data: ParentingDat
       <TodaysHabit data={data} />
       <TodayPlans data={data} />
       <HubCards data={data} />
-      <AboutLink />
-      <RemindersLink />
     </div>
   );
 }
