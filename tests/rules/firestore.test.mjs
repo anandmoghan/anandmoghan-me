@@ -8,7 +8,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FAMILY_EMAIL = "member@example.com";
@@ -50,6 +50,9 @@ beforeEach(async () => {
     await setDoc(doc(db, "users/anon1"), { isAnonymous: true });
     await setDoc(doc(db, "family/household"), { members: [FAMILY_EMAIL] });
     await setDoc(doc(db, "family/household/feed/f1"), { status: "unread" });
+    for (const [area, person] of [["parenting", "nila"], ["fitness", "anand"], ["health", "kavya"]]) {
+      await setDoc(doc(db, `family/household/${area}/${person}/views/meta`), { person });
+    }
     await setDoc(doc(db, "wealth/alice"), { a: 1 });
   });
 });
@@ -228,6 +231,52 @@ describe("family", () => {
     for (const db of [...notQuite, unverified, anon("anon1")]) {
       await assertFails(getDoc(doc(db, "family/household")));
       await assertFails(getDoc(doc(db, "family/household/feed/f1")));
+    }
+  });
+});
+
+describe("family read copies", () => {
+  const PATHS = ["parenting/nila", "fitness/anand", "health/kavya"].map((p) => `family/household/${p}/views`);
+  const member = () =>
+    env
+      .authenticatedContext("m1", { email: FAMILY_EMAIL, email_verified: true, firebase: { sign_in_provider: "google.com" } })
+      .firestore();
+
+  test("a household member reads every view, one at a time or the whole collection", async () => {
+    const db = member();
+    for (const views of PATHS) {
+      await assertSucceeds(getDoc(doc(db, `${views}/meta`)));
+      await assertSucceeds(getDocs(collection(db, views)));
+    }
+  });
+
+  test("an admin with the family app reads the views too", async () => {
+    const db = real("boss", { admin: true, apps: ["family"] });
+    for (const views of PATHS) await assertSucceeds(getDocs(collection(db, views)));
+  });
+
+  test("nobody writes, deletes or adds a view from a client, members and admins included", async () => {
+    const admin = real("boss", { admin: true, apps: ["family"] });
+    for (const db of [member(), admin]) {
+      for (const views of PATHS) {
+        await assertFails(setDoc(doc(db, `${views}/meta`), { person: "x" }));
+        await assertFails(updateDoc(doc(db, `${views}/meta`), { person: "x" }));
+        await assertFails(setDoc(doc(db, `${views}/summary`), { body: "x" }));
+        await assertFails(deleteDoc(doc(db, `${views}/meta`)));
+      }
+    }
+  });
+
+  test("non-members, admins without the family app, unverified members and anonymous users cannot read", async () => {
+    const unverified = env
+      .authenticatedContext("m1", { email: FAMILY_EMAIL, email_verified: false, firebase: { sign_in_provider: "password" } })
+      .firestore();
+    const notQuite = [real("alice"), real("boss", { admin: true }), real("boss", { admin: true, apps: ["wealth"] }), real("bob", { apps: ["family"] })];
+    for (const db of [...notQuite, unverified, anon("anon1")]) {
+      for (const views of PATHS) {
+        await assertFails(getDoc(doc(db, `${views}/meta`)));
+        await assertFails(getDocs(collection(db, views)));
+      }
     }
   });
 });

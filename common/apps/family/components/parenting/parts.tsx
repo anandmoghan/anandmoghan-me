@@ -25,7 +25,7 @@ export function ParentingOffline({ offline, onRetry }: { offline: boolean; onRet
     <div className="card space-y-2 !p-4" role="alert" data-testid="parenting-offline">
       <p className="text-lg font-extrabold">{offline ? "The home Mac is offline" : "Nila's records could not be loaded"}</p>
       <p className="text-muted">
-        Her records live only on the Mac, nothing is kept in the cloud or on this phone.
+        Her logs, notes and questions are kept on the Mac.
         {offline ? " Once the Mac is back on, try again." : " The Mac answered with an error, try again in a moment."}
       </p>
       <button type="button" disabled={busy} aria-busy={busy} onClick={() => { setBusy(true); void Promise.resolve(onRetry()).finally(() => setBusy(false)); }} className={outlineBtn}>

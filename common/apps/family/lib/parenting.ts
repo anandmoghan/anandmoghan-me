@@ -1,9 +1,12 @@
 // Client for the Mac bridge's /parenting routes (docs/parenting-design.md, bridge/parenting.mjs), plus the sums the
-// Nila pages need (age today, this week's sleep step, the night-log trend, context.md sections). Like health data,
-// a child's records live only on the Mac: they are kept in React state, never in localStorage, sessionStorage,
-// IndexedDB or any cache, and every call carries the Firebase ID token.
-import { useCallback, useEffect, useRef, useState } from "react";
+// Nila pages need (age today, this week's sleep step, the night-log trend, context.md sections). A child's records
+// live on the Mac; the finished display content (plans, summaries, milestones, weeks) also has a read copy in
+// Firestore (lib/views.ts), so the pages load without the Mac. Working details (notes, questions and answers,
+// logs) and every action go to the Mac, with the Firebase ID token. Nothing is kept in localStorage, sessionStorage
+// or IndexedDB.
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_TIMEOUT_MS, HealthHttpError, HealthOfflineError, POLL_MS, jobIsActive, useHealthApi, type Ask, type HealthCtx, type HealthJob, type Source } from "@/common/apps/family/lib/health";
+import { useReadCopy, withPrefix, type ViewDocs } from "@/common/apps/family/lib/views";
 import { addDays, dayKey, dayMs, daysBetween } from "@/common/apps/family/lib/fitness";
 
 /** Only Nila has a parenting section (bridge/parenting.mjs PARENTING_PEOPLE). */
@@ -166,6 +169,8 @@ export interface ParentingData {
   weekly: Weekly | null;
   weeks: string[];
   jobs: HealthJob[];
+  /** Every weekly dashboard by id, from the Firestore copy (the Mac's overview carries only the newest). */
+  weekDocs?: Record<string, Weekly>;
 }
 
 /** An error answer from the Mac, with the bridge's message (for example why a context edit was refused). */
@@ -261,40 +266,52 @@ export const parentingApi = {
 };
 
 export type ParentingStatus = "loading" | "ready" | "offline" | "error";
-export interface UseParenting { data: ParentingData | null; status: ParentingStatus; refresh: () => Promise<void>; ctx: HealthCtx }
+export interface UseParenting { data: ParentingData | null; status: ParentingStatus; refresh: () => Promise<void>; ctx: HealthCtx; live: boolean | null }
 
-/** Loads GET /parenting/nila; polls every 10 s while a research job is queued or running. State only, no persistence. */
+const isOffline = (e: unknown) => e instanceof HealthOfflineError;
+
+/** The page data from the Firestore copy: the display fields only. The working details (context, questions and
+ * answers, logs, jobs) stay empty until the Mac answers. Null while nothing is published. */
+export function parentingFromViews(docs: ViewDocs): ParentingData | null {
+  const meta = docs.meta as { person?: string; dob?: string | null; weeks?: string[]; tip_today?: TipToday | null } | undefined;
+  if (!meta) return null;
+  const weekDocs = withPrefix<Weekly>(docs, "week_");
+  const weeks = meta.weeks ?? [];
+  return {
+    person: meta.person ?? PARENTING_PERSON,
+    dob: meta.dob ?? null,
+    summary: (docs.summary as Summary | undefined) ?? null,
+    context: null,
+    milestones: (docs.milestones as ParentingData["milestones"]) ?? null,
+    catalog: (docs.catalog as ParentingData["catalog"]) ?? null,
+    sleep_plan: (docs.sleep_plan as SleepPlan | undefined) ?? null,
+    sleep_log: [],
+    sleep_sessions: [],
+    nap_prediction: null,
+    food_plan: (docs.food_plan as FoodPlan | undefined) ?? null,
+    food_log: [],
+    problems: Object.values(withPrefix<Problem>(docs, "problem_")).sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")),
+    asks: [],
+    tip_today: meta.tip_today ?? null,
+    weekly: weeks.length ? weekDocs[weeks[0]] ?? null : null,
+    weeks,
+    jobs: [],
+    broken: [],
+    weekDocs,
+  };
+}
+
+const withWeekDocs = (full: ParentingData, published: ParentingData | null): ParentingData => ({ ...full, weekDocs: published?.weekDocs });
+const parentingBusy = (d: ParentingData) => d.jobs.some(jobIsActive);
+
+/** Page data: the Firestore copy at once, then GET /parenting/nila from the Mac (which adds the working details);
+ * polls every 10 s while a research job is queued or running. Without the Mac the copy stays and `live` is false. */
 export function useParenting(): UseParenting {
   const ctx = useHealthApi();
-  const [data, setData] = useState<ParentingData | null>(null);
-  const [status, setStatus] = useState<ParentingStatus>("loading");
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-
-  const refresh = useCallback(async () => {
-    try {
-      const next = await parentingApi.get(ctx);
-      if (!mounted.current) return;
-      setData(next);
-      setStatus("ready");
-    } catch (e) {
-      if (mounted.current) setStatus(e instanceof HealthOfflineError ? "offline" : "error");
-    }
-  }, [ctx]);
-
-  useEffect(() => { void refresh(); }, [refresh]);
-
-  const polling = !!data?.jobs.some(jobIsActive);
-  useEffect(() => {
-    if (!polling) return;
-    const t = setInterval(() => void refresh(), POLL_MS);
-    return () => clearInterval(t);
-  }, [polling, refresh]);
-
-  return { data, status, refresh, ctx };
+  const load = useCallback(() => parentingApi.get(ctx), [ctx]);
+  const options = useMemo(() => ({ area: "parenting" as const, person: PARENTING_PERSON, compose: parentingFromViews, load, isOffline, polling: parentingBusy, pollMs: POLL_MS, merge: withWeekDocs }), [load]);
+  const rc = useReadCopy(options);
+  return { ...rc, ctx };
 }
 
 /** A problem raised with the "Prevention" choice is a guide (good habits to keep), not a current problem. */

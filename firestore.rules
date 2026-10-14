@@ -683,6 +683,24 @@ service cloud.firestore {
         allow read: if famIsMember();
         allow write: if false;
       }
+
+      // Read copies of the finished Parenting, Fitness and Health display content, written whole by the
+      // Mac (admin SDK, ENABLE_PUBLISH). Working details (notes, Q&A threads, uploads, report text, logs)
+      // are never copied. Members read, nobody writes.
+      match /parenting/{person}/views/{view} {
+        allow read: if famIsMember();
+        allow write: if false;
+      }
+
+      match /fitness/{person}/views/{view} {
+        allow read: if famIsMember();
+        allow write: if false;
+      }
+
+      match /health/{person}/views/{view} {
+        allow read: if famIsMember();
+        allow write: if false;
+      }
     }
     // END family
   }

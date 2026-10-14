@@ -1,10 +1,13 @@
-// Client for the Mac bridge's /health routes (docs/health-design.md, "Bridge API"). Health data lives
-// only on the Mac: it is kept in React state, never in localStorage, sessionStorage, IndexedDB or any
-// cache, and every call carries the Firebase ID token.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Client for the Mac bridge's /health routes (docs/health-design.md, "Bridge API"). Health records live
+// on the Mac; the finished display content (summary, follow-up ticks, report summaries) also has a read
+// copy in Firestore (lib/views.ts), so the pages load without the Mac. Working details (questions and
+// answers, uploads, report text, files) and every action go to the Mac, with the Firebase ID token.
+// Nothing is kept in localStorage, sessionStorage or IndexedDB.
+import { useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/common/firebase/AuthProvider";
 import { useData } from "@/common/apps/family/hooks/useData";
 import { toMillis } from "@/common/apps/family/lib/format";
+import { useReadCopy, withPrefix, type ViewDocs } from "@/common/apps/family/lib/views";
 import type { Person } from "@/common/apps/family/types";
 
 export const HEALTH_PEOPLE: Person[] = ["anand", "kavya", "nila"];
@@ -174,43 +177,40 @@ export interface UseHealth {
   status: HealthStatus;
   refresh: () => Promise<void>;
   ctx: HealthCtx;
+  /** Whether the Mac answered: false means only the Firestore copy is shown (no questions, uploads or files). */
+  live: boolean | null;
 }
 
-/** Loads GET /health/:person; polls every 10 s while a job is queued or running. State only, no persistence. */
+const isOffline = (e: unknown) => e instanceof HealthOfflineError;
+
+/** The page data from the Firestore copy: summary, follow-up ticks and report summaries. The working details
+ * stay empty until the Mac answers. Null while nothing is published. */
+export function healthFromViews(docs: ViewDocs, person: string): HealthData | null {
+  if (!docs.meta) return null;
+  return {
+    person,
+    summary: (docs.summary as Summary | undefined) ?? null,
+    questions: null,
+    context: null,
+    reports: Object.values(withPrefix<Report>(docs, "report_")),
+    asks: [],
+    uploads: [],
+    tracking: (docs.tracking as Tracking | undefined) ?? null,
+    jobs: [],
+    broken: [],
+  };
+}
+
+const healthBusy = (d: HealthData) => !!d.jobs?.some(jobIsActive);
+
+/** Page data: the Firestore copy at once, then GET /health/:person from the Mac (which adds the working details);
+ * polls every 10 s while a job is queued or running. Without the Mac the copy stays and `live` is false. */
 export function useHealth(person: Person): UseHealth {
   const ctx = useHealthApi();
-  const [data, setData] = useState<HealthData | null>(null);
-  const [status, setStatus] = useState<HealthStatus>("loading");
-  const live = useRef(person);
-  live.current = person;
-
-  const refresh = useCallback(async () => {
-    const asked = person;
-    try {
-      const next = await healthApi.get(ctx, asked);
-      if (live.current !== asked) return;
-      setData(next);
-      setStatus("ready");
-    } catch (e) {
-      if (live.current !== asked) return;
-      setStatus(e instanceof HealthOfflineError ? "offline" : "error");
-    }
-  }, [ctx, person]);
-
-  useEffect(() => {
-    setData(null);
-    setStatus("loading");
-    void refresh();
-  }, [refresh]);
-
-  const polling = !!data?.jobs?.some(jobIsActive);
-  useEffect(() => {
-    if (!polling) return;
-    const t = setInterval(() => void refresh(), POLL_MS);
-    return () => clearInterval(t);
-  }, [polling, refresh]);
-
-  return { data, status, refresh, ctx };
+  const load = useCallback(() => healthApi.get(ctx, person), [ctx, person]);
+  const options = useMemo(() => ({ area: "health" as const, person, compose: healthFromViews, load, isOffline, polling: healthBusy, pollMs: POLL_MS }), [person, load]);
+  const rc = useReadCopy(options);
+  return { ...rc, ctx };
 }
 
 export function parseHealthPerson(v: string | null): Person | null {

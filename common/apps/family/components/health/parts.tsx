@@ -9,7 +9,7 @@ export function HealthNotice() {
   return (
     <div className="space-y-1 rounded-2xl bg-subtle px-4 py-3 text-sm leading-relaxed text-muted" data-testid="health-notice">
       <p>Not medical advice. In an emergency call 112 in India, or 999 in the UK (111 for urgent advice).</p>
-      <p>Health records stay on the home Mac and are only sent to your phone while you look at them.</p>
+      <p>Health records are kept on the home Mac. A read copy of the summaries and results is stored in the family's private database.</p>
     </div>
   );
 }
@@ -39,7 +39,7 @@ export function OfflineCard({ offline, onRetry }: { offline: boolean; onRetry: (
     <div className="card space-y-2 !p-4" role="alert" data-testid="health-offline">
       <p className="text-lg font-extrabold">{offline ? "The home Mac is offline" : "Health records could not be loaded"}</p>
       <p className="text-muted">
-        Health records live only on the Mac, nothing is kept in the cloud or on this phone.
+        Questions, uploads and the original files are kept on the Mac.
         {offline ? " Once the Mac is back on, try again." : " The Mac answered with an error, try again in a moment."}
       </p>
       <button type="button" disabled={busy} aria-busy={busy} onClick={() => { setBusy(true); void Promise.resolve(onRetry()).finally(() => setBusy(false)); }} className={outlineBtn}>

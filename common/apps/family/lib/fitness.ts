@@ -1,13 +1,15 @@
 // Client for the Mac bridge's /fitness routes (docs/fitness-design.md, "Bridge API"), plus the sums the Fitness
-// pages need (target status, checklist adherence, the 7-day BP protocol, rolling averages). Like health data,
-// fitness data lives only on the Mac: it is kept in React state, never in localStorage, sessionStorage,
-// IndexedDB or any cache, and every call carries the Firebase ID token.
-import { useCallback, useEffect, useRef, useState } from "react";
+// pages need (target status, checklist adherence, the 7-day BP protocol, rolling averages). Fitness data lives
+// on the Mac; the plan, check-ins, measurements and BP runs also have a read copy in Firestore (lib/views.ts), so
+// the pages load without the Mac. Device and key management and every action go to the Mac, with the Firebase ID
+// token. Nothing is kept in localStorage, sessionStorage or IndexedDB.
+import { useCallback, useMemo } from "react";
 import {
   API_TIMEOUT_MS, HealthHttpError, HealthOfflineError, numericOf, reportTime, useHealthApi,
   type HealthCtx, type LabResult, type Report, type Source,
 } from "@/common/apps/family/lib/health";
 import { toMillis } from "@/common/apps/family/lib/format";
+import { useReadCopy, withPrefix, type ViewDocs } from "@/common/apps/family/lib/views";
 import type { Person } from "@/common/apps/family/types";
 
 export const FITNESS_PEOPLE: Person[] = ["anand", "kavya"];
@@ -150,36 +152,42 @@ export const fitnessApi = {
 };
 
 export type FitnessStatus = "loading" | "ready" | "offline" | "error";
-export interface UseFitness { data: FitnessData | null; status: FitnessStatus; refresh: () => Promise<void>; ctx: HealthCtx }
+export interface UseFitness {
+  data: FitnessData | null;
+  status: FitnessStatus;
+  refresh: () => Promise<void>;
+  ctx: HealthCtx;
+  /** Whether the Mac answered: false means only the Firestore copy is shown (no device or key management). */
+  live: boolean | null;
+}
 
-/** Loads GET /fitness/:person. State only, no persistence. */
+const isOffline = (e: unknown) => e instanceof HealthOfflineError;
+
+/** The page data from the Firestore copy: plan, measurements, check-ins, BP runs and the last sync. Devices and
+ * imports stay empty until the Mac answers. Null while nothing is published. */
+export function fitnessFromViews(docs: ViewDocs, person: string): FitnessData | null {
+  if (!docs.meta) return null;
+  const months = <T>(prefix: string) => Object.entries(withPrefix<T>(docs, prefix)).sort(([a], [b]) => a.localeCompare(b)).map(([, d]) => d);
+  return {
+    person,
+    plan: (docs.plan as Plan | undefined) ?? null,
+    measurements: months<{ entries?: Measurement[] }>("measurements_").flatMap((m) => m.entries ?? []),
+    checkins: Object.assign({}, ...months<{ days?: Record<string, CheckinValues> }>("checkins_").map((m) => m.days ?? {})) as Record<string, CheckinValues>,
+    bp_protocols: (docs.bp as { runs?: BpRun[] } | undefined)?.runs ?? [],
+    imports: [],
+    devices: { count: 0 },
+    ingest_keys: (docs.sync as { ingest_keys?: IngestKey[] } | undefined)?.ingest_keys ?? [],
+    broken: [],
+  };
+}
+
+/** Page data: the Firestore copy at once, then GET /fitness/:person from the Mac. State only, no persistence. */
 export function useFitness(person: Person): UseFitness {
   const ctx = useHealthApi();
-  const [data, setData] = useState<FitnessData | null>(null);
-  const [status, setStatus] = useState<FitnessStatus>("loading");
-  const live = useRef(person);
-  live.current = person;
-
-  const refresh = useCallback(async () => {
-    const asked = person;
-    try {
-      const next = await fitnessApi.get(ctx, asked);
-      if (live.current !== asked) return;
-      setData(next);
-      setStatus("ready");
-    } catch (e) {
-      if (live.current !== asked) return;
-      setStatus(e instanceof HealthOfflineError ? "offline" : "error");
-    }
-  }, [ctx, person]);
-
-  useEffect(() => {
-    setData(null);
-    setStatus("loading");
-    void refresh();
-  }, [refresh]);
-
-  return { data, status, refresh, ctx };
+  const load = useCallback(() => fitnessApi.get(ctx, person), [ctx, person]);
+  const options = useMemo(() => ({ area: "fitness" as const, person, compose: fitnessFromViews, load, isOffline }), [person, load]);
+  const rc = useReadCopy(options);
+  return { ...rc, ctx };
 }
 
 export function parseFitnessPerson(v: string | null): Person | null {

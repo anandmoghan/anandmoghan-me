@@ -29,10 +29,14 @@ function summarySections(s: WeeklySummary): [string, string[]][] {
 
 /** /nila/week/:id: the summary of the week before the weekly dashboard `id` (a Sunday), in sections. */
 export default function Week({ p, id }: { p: UseParenting; id: string }) {
-  const [week, setWeek] = useState<Weekly | null>(null);
+  const published = p.data?.weekDocs?.[id] ?? null;
+  const [fetched, setWeek] = useState<Weekly | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing" | "offline" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
+  const week = published ?? fetched;
   useEffect(() => {
+    // The Firestore copy of the week is enough; only a week that is not published is asked of the Mac.
+    if (published) return;
     let live = true;
     parentingApi.week(p.ctx, id).then(
       (w) => {
@@ -46,10 +50,10 @@ export default function Week({ p, id }: { p: UseParenting; id: string }) {
       },
     );
     return () => { live = false; };
-  }, [p.ctx, id, attempt]);
+  }, [p.ctx, id, attempt, published]);
 
-  if (state === "loading") return <ListSkeleton rows={3} />;
-  if (state !== "ready" || !week) {
+  if (!week && state === "loading") return <ListSkeleton rows={3} />;
+  if (!week) {
     return (
       <div className="space-y-3">
         <div className="card space-y-2 !p-4" role="alert">
