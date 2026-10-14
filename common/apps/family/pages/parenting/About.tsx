@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { SectionTitle, Segmented, outlineBtn, primaryBtn, softBtn } from "@/common/apps/family/components/ui";
-import { Points } from "@/common/apps/family/components/Points";
 import { ListSkeleton } from "@/common/apps/family/components/Skeleton";
 import Spinner from "@/common/apps/family/components/Spinner";
 import { useToast } from "@/common/apps/family/hooks/useToast";
@@ -129,7 +128,6 @@ export default function About({ p }: { p: UseParenting }) {
         <p className="text-sm text-muted">Saved with today's date and your name. The Mac reads it next time it updates her plans.</p>
       </section>
 
-      {parsed.intro && <Points text={parsed.intro} max={2} muted />}
       {parsed.sections.length === 0 ? (
         <p className="card !px-4 !py-3.5 text-muted">No notes yet. Add the first one above.</p>
       ) : (
