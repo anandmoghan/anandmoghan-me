@@ -6,9 +6,10 @@ import { useAuth } from '@/common/firebase/AuthProvider';
 import { deleteMyData } from './api';
 import { useConsent } from './ConsentProvider';
 
-// Account page: deletes the visitor's visits, blog comments, profile and account, then starts a
-// fresh anonymous session (the sign-out listener signs in anonymously again).
-export function DeleteMyData() {
+// Deletes the visitor's visits, blog comments, profile and account, then starts a fresh anonymous
+// session (the sign-out listener signs in anonymously again). Behind the Delete buttons on the
+// Account page and in Settings.
+export function useDeleteMyData() {
   const { user, isAnonymous, signOut } = useAuth();
   const { reset } = useConsent();
   const [busy, setBusy] = useState(false);
@@ -33,6 +34,13 @@ export function DeleteMyData() {
     }
   };
 
+  return { busy, message, disabled: busy || !user, handleDelete };
+}
+
+// Account page: the Your data section.
+export function DeleteMyData() {
+  const { busy, message, disabled, handleDelete } = useDeleteMyData();
+
   return (
     <section className="mb-8">
       <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Your data</h2>
@@ -44,7 +52,7 @@ export function DeleteMyData() {
             What is stored
           </Link>
         </p>
-        <button type="button" className="btn btn--sm btn--danger" disabled={busy || !user} onClick={handleDelete}>
+        <button type="button" className="btn btn--sm btn--danger" disabled={disabled} onClick={handleDelete}>
           {busy ? 'Deleting...' : 'Delete my data'}
         </button>
         {message && <p className="text-sm">{message}</p>}

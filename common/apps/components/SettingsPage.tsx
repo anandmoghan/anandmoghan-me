@@ -1,12 +1,8 @@
 'use client'
 
-import { useState, type ComponentType } from 'react'
-import Link from 'next/link'
+import type { ComponentType } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
-import { useTheme } from '@/common/components/ThemeProvider'
-import { ConsentChoice } from '@/common/visitors/ConsentChoice'
-import { DeleteMyData } from '@/common/visitors/DeleteMyData'
 import { DataProvider } from '@/common/apps/family/hooks/useData'
 import Shortcuts from '@/common/apps/family/components/Shortcuts'
 import MacStatusCard from '@/common/apps/family/components/MacStatusCard'
@@ -15,98 +11,13 @@ import { SettingsPage as TimeSettingsPage } from '@/common/apps/time/pages/Setti
 import { DashboardSettingsPage } from '@/common/apps/wealth/pages/DashboardSettingsPage'
 import { apps } from '../registry'
 import type { AppDefinition } from '../types'
-import { Card } from '../shell/Card'
 import { DomainScope, type Domain } from '../shell/DomainScope'
-import { AccountPanel } from './AccountView'
+import { GeneralSettings } from './GeneralSettings'
 
 const GENERAL_ID = 'general'
 const GENERAL_DOMAIN: Domain = 'home'
 
-const THEME_OPTIONS: Array<{ value: 'light' | 'dark' | 'system'; label: string }> = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
-]
-
-// Cache Storage and service workers are absent in some browsers, so each step is feature-detected.
-async function refreshApp() {
-  if ('caches' in window) {
-    const keys = await caches.keys()
-    await Promise.all(keys.map((key) => caches.delete(key)))
-  }
-  if ('serviceWorker' in navigator) {
-    const registrations = await navigator.serviceWorker.getRegistrations()
-    await Promise.all(registrations.map((registration) => registration.unregister()))
-  }
-  window.location.reload()
-}
-
 const sectionTitle = 'text-sm font-semibold text-muted uppercase tracking-wide mb-4'
-
-function GeneralPanel() {
-  const { theme, setTheme } = useTheme()
-  const [refreshing, setRefreshing] = useState(false)
-
-  return (
-    <>
-      <AccountPanel />
-
-      <section className="mb-8">
-        <h2 className={sectionTitle}>Appearance</h2>
-        <Card>
-          <div role="group" aria-label="Theme" className="flex flex-wrap gap-2">
-            {THEME_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={theme === opt.value}
-                onClick={() => setTheme(opt.value)}
-                className="chip"
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </Card>
-      </section>
-
-      <section className="mb-8">
-        <h2 className={sectionTitle}>Refresh the app</h2>
-        <Card>
-          <p className="mb-3 text-sm text-muted">
-            Reloads the site with fresh files after an update, and clears anything cached on this device.
-          </p>
-          <button
-            type="button"
-            disabled={refreshing}
-            aria-busy={refreshing}
-            onClick={() => {
-              setRefreshing(true)
-              void refreshApp().catch(() => setRefreshing(false))
-            }}
-            className="chip"
-          >
-            {refreshing ? 'Refreshing...' : 'Refresh the app'}
-          </button>
-        </Card>
-      </section>
-
-      <section className="mb-8">
-        <h2 className={sectionTitle}>Privacy</h2>
-        <ConsentChoice />
-        <p className="mt-3 text-sm text-muted">
-          What the site records and why is on the{' '}
-          <Link href="/privacy#analytics" className="underline underline-offset-2">
-            privacy page
-          </Link>
-          .
-        </p>
-      </section>
-
-      <DeleteMyData />
-    </>
-  )
-}
 
 function FamilyPanel() {
   return (
@@ -149,7 +60,7 @@ const GENERAL_TAB: SettingsTab = {
   id: GENERAL_ID,
   label: 'General',
   domain: GENERAL_DOMAIN,
-  Panel: GeneralPanel,
+  Panel: GeneralSettings,
   embedded: false,
 }
 
