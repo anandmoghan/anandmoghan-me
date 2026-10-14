@@ -50,7 +50,6 @@ function AddProblem({ p }: { p: UseParenting }) {
 
 type SectionKey = "plans" | "habits" | "problems";
 const SCROLL_KEY = "nila-help-scroll";
-const SHOWN = 3;
 
 /** The one line under a card's title. */
 function cardLine(pr: Problem, kind: SectionKey): { text: string; tone?: Tone; pulse?: boolean } {
@@ -109,19 +108,14 @@ function ExpandCard({ title, hint, startOpen = false, testId, children }: { titl
   );
 }
 
-/** One group: its first few cards, and See all for the rest. */
+/** One tab: every card in the group. */
 function Group({ kind, title, empty, items }: { kind: SectionKey; title: string; empty: string; items: Problem[] }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, SHOWN);
   return (
     <section className="space-y-2.5" aria-label={title}>
       {items.length === 0 ? (
         <p className="card !px-4 !py-3.5 text-muted">{empty}</p>
       ) : (
-        <ul className="space-y-2.5">{shown.map((pr) => <ProblemRow key={pr.id} pr={pr} kind={kind} />)}</ul>
-      )}
-      {items.length > SHOWN && (
-        <button type="button" aria-expanded={all} onClick={() => setAll(!all)} className={`${outlineBtn} w-full`}>{all ? "Show fewer" : `See all (${items.length})`}</button>
+        <ul className="space-y-2.5">{items.map((pr) => <ProblemRow key={pr.id} pr={pr} kind={kind} />)}</ul>
       )}
     </section>
   );
