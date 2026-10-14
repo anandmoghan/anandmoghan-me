@@ -14,6 +14,7 @@ import { BackLink } from "@/common/apps/family/pages/Product";
 import { domainLabel, linkedSuggestions } from "@/common/apps/family/lib/feed";
 import { setFeedStatus } from "@/common/apps/family/lib/writes";
 import { personLabel, timeAgo } from "@/common/apps/family/lib/format";
+import { PinButton } from "@/common/apps/family/components/Pinned";
 
 export default function FeedDetail() {
   const { id = "" } = useParams();
@@ -41,7 +42,10 @@ export default function FeedDetail() {
   return (
     <article className="px-4 pt-3 pb-6">
       <BackLink fallback="/updates" label="Back to updates" />
-      <h1 className="mt-3 text-[1.6rem] font-extrabold leading-tight">{item.title}</h1>
+      <div className="mt-3 flex items-start justify-between gap-3">
+        <h1 className="min-w-0 text-[1.6rem] font-extrabold leading-tight">{item.title}</h1>
+        <PinButton title={item.title} />
+      </div>
       <Meta className="mt-2" parts={[personLabel(item.person), domainLabel(item.domain), timeAgo(item.created_at), item.status === "done" && "Done"]} />
       {item.body && (
         <div className="card mt-5 !p-4 sm:!p-5">

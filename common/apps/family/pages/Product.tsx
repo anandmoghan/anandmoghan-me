@@ -18,6 +18,7 @@ import TryOnSection, { Lightbox, TryonHero } from "@/common/apps/family/componen
 import { DISCLAIMER, itemPerson, defaultSelection, latestLookTryon, tryonCandidates } from "@/common/apps/family/lib/tryon";
 import { buildLooks, buyLabel, effectiveStatus, fullName, lookItems, lookPath, lookTotal } from "@/common/apps/family/lib/shop";
 import { useState } from "react";
+import { PinButton } from "@/common/apps/family/components/Pinned";
 
 export function BackLink({ fallback, label }: { fallback: string; label: string }) {
   const nav = useNavigate();
@@ -72,7 +73,10 @@ export default function Product() {
       <div className="space-y-5 px-4 pt-5 md:mx-0 md:px-0 md:pt-2">
         <div>
           <p className="text-[0.95rem] font-bold text-domain">{s.brand ?? ""}</p>
-          <h1 className="mt-0.5 text-[1.5rem] font-extrabold leading-snug">{s.title}</h1>
+          <div className="mt-0.5 flex items-start justify-between gap-3">
+            <h1 className="min-w-0 text-[1.5rem] font-extrabold leading-snug">{s.title}</h1>
+            <PinButton title={s.title} />
+          </div>
           <div className="mt-1.5"><Price price={s.price} mrp={s.mrp} large /></div>
         </div>
 

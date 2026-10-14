@@ -52,15 +52,15 @@ export function FamilyApp({ children }: { children: ReactNode }) {
     >
       <ToastProvider>
         <SubLabelProvider>
-        {loading ? (
-          <ListSkeleton rows={3} />
-        ) : (
-          <RequireAuth>
-            <DataProvider>
-              <Members>{children}</Members>
-            </DataProvider>
-          </RequireAuth>
-        )}
+          {loading ? (
+            <ListSkeleton rows={3} />
+          ) : (
+            <RequireAuth>
+              <DataProvider>
+                <Members>{children}</Members>
+              </DataProvider>
+            </RequireAuth>
+          )}
         </SubLabelProvider>
       </ToastProvider>
     </DomainScope>
