@@ -36,7 +36,7 @@ export default function Fitness() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 pt-5 pb-6 print:max-w-none print:p-0">
+    <div className="space-y-5 px-4 pt-5 pb-6 print:p-0">
       <div className="space-y-5 print:hidden">
         <PageTitle title={key === "today" ? "Today" : label} sub={key === "today" ? fmtDay(dayKey(), true) : undefined} />
         <Segmented label="Person" value={person} onChange={setPerson} options={FITNESS_PEOPLE.map((p) => [p, personLabel(p)] as const)} />

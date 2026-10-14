@@ -1,13 +1,13 @@
-import type { Metadata } from "next";
-import { RequireAuth } from "@/common/apps/components/RequireAuth";
-import { SettingsView } from "@/common/apps/components/SettingsView";
+'use client'
 
-export const metadata: Metadata = { title: "Settings" };
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
-export default function SettingsPage() {
-  return (
-    <RequireAuth>
-      <SettingsView />
-    </RequireAuth>
-  );
+// The old app settings route; Settings now lives at /settings.
+export default function Page() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace('/settings')
+  }, [router])
+  return null
 }

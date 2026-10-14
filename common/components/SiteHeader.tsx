@@ -6,6 +6,7 @@ import { useAuth } from '@/common/firebase/AuthProvider';
 import { ThemeToggle } from './ThemeToggle';
 import { ProfileMenu } from '@/common/apps/components/ProfileMenu';
 import { apps } from '@/common/apps/registry';
+import { HEADER_SLOT_ID } from './HeaderSlot';
 
 const SHARE_PATH = '/apps/share';
 
@@ -17,6 +18,7 @@ const SECTION_LABEL: Record<string, string> = {
   apps: 'Apps',
   login: 'Sign in',
   account: 'Account',
+  settings: 'Settings',
 };
 
 const NAV_LINKS = [
@@ -56,6 +58,7 @@ function AccountAction({ pathname }: { pathname: string }) {
 export function SiteHeader() {
   const pathname = usePathname();
   const section = sectionFor(pathname);
+  const inApp = apps.some((a) => pathname.startsWith(a.path));
 
   return (
     <header className="app-header site-header print:hidden">
@@ -76,21 +79,24 @@ export function SiteHeader() {
           )}
         </nav>
         <div className="app-header__actions">
-          <nav
-            className={`${section ? 'hidden md:flex' : 'flex'} items-center gap-1`}
-            aria-label="Main"
-          >
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="site-nav__link"
-                aria-current={pathname.startsWith(link.href) ? 'page' : undefined}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <div id={HEADER_SLOT_ID} className="flex items-center gap-1" />
+          {!inApp && (
+            <nav
+              className={`${section ? 'hidden md:flex' : 'flex'} items-center gap-1`}
+              aria-label="Main"
+            >
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="site-nav__link"
+                  aria-current={pathname.startsWith(link.href) ? 'page' : undefined}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
           <ThemeToggle />
           <AccountAction pathname={pathname} />
         </div>

@@ -27,7 +27,8 @@ function upgradeError(code: string | undefined): string {
   return 'Something went wrong. Please try again.'
 }
 
-export function AccountView() {
+// The account sections without page chrome: shared by /account and the Settings General tab.
+export function AccountPanel() {
   const { user, loading, isAnonymous, isAdmin, apps, upgradeWithEmail, refresh, signOut } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -80,9 +81,7 @@ export function AccountView() {
   const providers = (user?.providerData ?? []).map(p => PROVIDER_NAMES[p.providerId] ?? p.providerId)
 
   return (
-    <div className="site-container py-10">
-      <h1 className="text-2xl font-bold mb-8">Account</h1>
-
+    <>
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Identity</h2>
         <Card className="space-y-2">
@@ -185,6 +184,15 @@ export function AccountView() {
         </button>
       )}
 
+    </>
+  )
+}
+
+export function AccountView() {
+  return (
+    <div className="site-container py-10">
+      <h1 className="text-2xl font-bold mb-8">Account</h1>
+      <AccountPanel />
       <div className="mt-10">
         <DeleteMyData />
       </div>

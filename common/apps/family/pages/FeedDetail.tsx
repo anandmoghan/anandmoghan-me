@@ -39,7 +39,7 @@ export default function FeedDetail() {
   const set = (s: "read" | "done") => setFeedStatus(email, item.id, s).catch(() => toast.show({ message: "Could not save", error: true }));
 
   return (
-    <article className="mx-auto max-w-2xl px-4 pt-3 pb-6">
+    <article className="px-4 pt-3 pb-6">
       <BackLink fallback="/updates" label="Back to updates" />
       <h1 className="mt-3 text-[1.6rem] font-extrabold leading-tight">{item.title}</h1>
       <Meta className="mt-2" parts={[personLabel(item.person), domainLabel(item.domain), timeAgo(item.created_at), item.status === "done" && "Done"]} />

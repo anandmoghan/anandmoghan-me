@@ -5,7 +5,8 @@ import { useAuth } from '@/common/firebase/AuthProvider'
 import { DomainScope } from '@/common/apps/shell/DomainScope'
 import { DataProvider, useData } from '@/common/apps/family/hooks/useData'
 import { ToastProvider } from '@/common/apps/family/hooks/useToast'
-import AreaBar from '@/common/apps/family/components/AreaBar'
+import { HeaderSlot } from '@/common/components/HeaderSlot'
+import MacPill from '@/common/apps/family/components/MacPill'
 import TabBar from '@/common/apps/family/components/TabBar'
 import { ListSkeleton } from '@/common/apps/family/components/Skeleton'
 import { RequireAuth } from '@/common/apps/components/RequireAuth'
@@ -15,15 +16,20 @@ import { useLocation } from '@/common/apps/family/router'
 
 function Members({ children }: { children: ReactNode }) {
   const { access } = useData()
+  const { pathname } = useLocation()
+  // Home links to every area through its cards, so the bottom tabs (and their padding) are for sub pages only.
+  const onHome = pathname === '/'
   if (access === 'loading') return <ListSkeleton rows={3} />
   if (access === 'denied') return <RestrictedNotice />
   return (
     <>
-      <div className="with-tab-bar">
-        <AreaBar showMac />
+      <HeaderSlot>
+        <MacPill />
+      </HeaderSlot>
+      <div className={onHome ? undefined : 'with-tab-bar'}>
         {children}
       </div>
-      <TabBar />
+      {!onHome && <TabBar />}
     </>
   )
 }

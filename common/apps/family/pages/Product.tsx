@@ -61,7 +61,7 @@ export default function Product() {
   const tryCandidates = tryonCandidates(s, sameBrief);
 
   return (
-    <div className="mx-auto max-w-5xl pb-6">
+    <div className="pb-6">
       <div className="px-4 pt-2"><BackLink fallback={`/shop?brief=${s.brief_id}`} label="Back to shop" /></div>
       {/* Phones: full-width gallery above the details. Wider screens: a gallery column capped at 28rem that
           stays in view while the details scroll beside it, so photos never stretch across a wide monitor. */}
@@ -69,7 +69,7 @@ export default function Product() {
       <div className="mt-2 md:sticky md:top-16 md:overflow-hidden md:rounded-2xl md:shadow-card">
         <Carousel images={s.images ?? []} alt={s.title} fullPageFirst={!!s.full_page} />
       </div>
-      <div className="mx-auto max-w-2xl space-y-5 px-4 pt-5 md:mx-0 md:px-0 md:pt-2">
+      <div className="space-y-5 px-4 pt-5 md:mx-0 md:px-0 md:pt-2">
         <div>
           <p className="text-[0.95rem] font-bold text-domain">{s.brand ?? ""}</p>
           <h1 className="mt-0.5 text-[1.5rem] font-extrabold leading-snug">{s.title}</h1>

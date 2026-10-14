@@ -81,7 +81,7 @@ export default function Upload() {
 
   const recent = requests.filter((r) => r.type === "photo-upload").slice(-5).reverse();
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-4 pt-5 pb-6">
+    <div className="space-y-6 px-4 pt-5 pb-6">
       <PageTitle title="Upload photos" sub="Photos go to the Mac for the stylist. They are not shown anywhere else." />
       <form onSubmit={(e) => void submit(e)} className="card space-y-5 !p-4">
         <fieldset>
