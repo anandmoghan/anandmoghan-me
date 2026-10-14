@@ -142,7 +142,7 @@ export default function Feed() {
   const filtering = person !== "all" || domain !== "all";
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 pt-5 pb-6">
+    <div className="space-y-5 px-4 pt-5 pb-6">
       <PageTitle
         title={SHOW_TITLE[show]}
         sub={unread.length > 0 ? `${unread.length} unread of ${filtered.length}` : `${filtered.length} ${filtered.length === 1 ? "item" : "items"}, all read`}

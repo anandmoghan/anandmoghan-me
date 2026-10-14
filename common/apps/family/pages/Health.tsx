@@ -41,7 +41,7 @@ export default function Health() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 pt-5 pb-6">
+    <div className="space-y-5 px-4 pt-5 pb-6">
       <PageTitle
         title={label}
         action={tab !== "upload" && (

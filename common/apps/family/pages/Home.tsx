@@ -199,7 +199,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-7 px-4 pt-5 pb-6">
+    <div className="space-y-7 px-4 pt-5 pb-6">
       <h1 className="text-[1.75rem] font-extrabold leading-tight">{greeting()}{name ? `, ${name}` : ""}</h1>
 
       <section aria-label="Needs you" className="space-y-2.5">

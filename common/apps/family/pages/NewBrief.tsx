@@ -41,7 +41,7 @@ export default function NewBrief() {
 
   const field = "field mt-1.5 font-normal";
   return (
-    <div className="mx-auto max-w-2xl px-4 pt-2 pb-6">
+    <div className="px-4 pt-2 pb-6">
       <BackLink fallback="/shop" label="Back to shop" />
       <h1 className="mt-2 text-[1.65rem] font-extrabold">New brief</h1>
       <form onSubmit={submit} className="card mt-4 space-y-5 !p-4">

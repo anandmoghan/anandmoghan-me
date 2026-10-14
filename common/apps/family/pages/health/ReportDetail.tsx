@@ -38,11 +38,11 @@ export default function ReportDetail() {
   }, [ctx, person, id]);
   useEffect(() => { void load(); }, [load]);
 
-  if (!person) return <div className="mx-auto max-w-2xl px-4 pt-6"><p className="text-muted">Unknown person.</p></div>;
+  if (!person) return <div className="px-4 pt-6"><p className="text-muted">Unknown person.</p></div>;
   const flagged = (report?.results ?? []).filter(isAbnormal);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 pt-2 pb-6">
+    <div className="space-y-6 px-4 pt-2 pb-6">
       <BackLink fallback={`/health?p=${person}&tab=reports`} label="Reports" />
       {status === "loading" && <ListSkeleton rows={4} />}
       {(status === "offline" || status === "error") && <OfflineCard offline={status === "offline"} onRetry={() => load()} />}
