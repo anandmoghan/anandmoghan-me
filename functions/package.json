@@ -6,7 +6,7 @@
     "node": "22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node ../scripts/gen-post-slugs.mjs && tsc",
     "typecheck": "tsc -p tsconfig.scripts.json",
     "test": "vitest run",
     "check-decrypt": "tsx scripts/check-decrypt.ts",

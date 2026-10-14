@@ -9,6 +9,14 @@ match /visits/{visitId} {
   allow write: if false;
 }
 
+// postStats/{slug}: { views, updatedAt }. Public view counter, shown in the post header. Written
+// only by the api function (POST /api/views/:slug, admin SDK); anyone reads, signed out included.
+
+match /postStats/{slug} {
+  allow read: if true;
+  allow write: if false;
+}
+
 // posts/{slug}/comments/{id}: { uid, displayName, body, createdAt, updatedAt, status }.
 // Any session, anonymous included, comments as itself; the author's client copies its profile
 // nickname (users/{uid}.displayName) into displayName. The author edits the body or deletes;

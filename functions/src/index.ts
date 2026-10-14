@@ -6,15 +6,20 @@ import { onRequest, type Request } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import type { Response } from 'express'
 import { mergeAnonymousInto } from './account.js'
-import { ENCRYPTION_SECRET, REGION, SYNC_RATE_LIMIT_PER_MINUTE, VISIT_RATE_LIMIT_PER_MINUTE } from './config.js'
+import { ENCRYPTION_SECRET, REGION, SYNC_RATE_LIMIT_PER_MINUTE, VIEW_RATE_LIMIT_PER_MINUTE, VISIT_RATE_LIMIT_PER_MINUTE } from './config.js'
 import { decryptCredentials, encryptCredentials } from './crypto.js'
 import { checkRateLimit } from './rateLimit.js'
+import postSlugs from './postSlugs.json'
 import { fetchFrankfurterRates, writeRatesToFirestore } from './rates.js'
 import { applyRoleClaims, readRole, roleFromDoc } from './roles.js'
 import { fetchAndWriteSnapshot } from './trading212.js'
 import { countryFromHeaders, deleteVisitorData, parseVisit, recordVisit, type VisitInput } from './visits.js'
+import { incrementViews, parseViewSlug } from './views.js'
 
 initializeApp()
+
+// Slugs of the published posts, generated from content/posts at build time (scripts/gen-post-slugs.mjs).
+const COUNTABLE_SLUGS = new Set<string>(postSlugs)
 
 // Same-origin in production (Hosting rewrite), so CORS is only for the local emulator.
 const CORS_HEADERS: Record<string, string> = process.env.FUNCTIONS_EMULATOR === 'true'
@@ -63,6 +68,27 @@ export const api = onRequest(
   async (req, res) => {
     if (req.method === 'OPTIONS') {
       res.status(204).set(CORS_HEADERS).send()
+      return
+    }
+
+    // POST /api/views/:slug: public, cookieless view counter (postStats/{slug}). No auth and nothing
+    // about the visitor is stored; only slugs of published posts count, the limit is per post.
+    if (req.path.startsWith('/api/views/') && req.method === 'POST') {
+      const slug = parseViewSlug(req.path)
+      if (!slug || !COUNTABLE_SLUGS.has(slug)) {
+        text(res, 404, 'Unknown post')
+        return
+      }
+      try {
+        if (!(await checkRateLimit(`views-${slug}`, VIEW_RATE_LIMIT_PER_MINUTE))) {
+          text(res, 429, 'Rate limit exceeded', { 'Retry-After': '60' })
+          return
+        }
+        await incrementViews(slug)
+        res.status(204).set(CORS_HEADERS).send()
+      } catch (err) {
+        text(res, 500, `Failed to count view: ${err}`)
+      }
       return
     }
 
