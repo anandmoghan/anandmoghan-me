@@ -45,12 +45,17 @@ service firebase.storage {
       allow read: if isAdmin() || hasApp('materials');
     }
 
+    // Household members, or admins granted the family app (matches famIsMember() in Firestore).
+    function isFamily() {
+      return isMember() || (isAdmin() && hasApp('family'));
+    }
+
     match /family/{person}/{allPaths=**} {
-      allow read: if isMember() && person in ['anand', 'kavya', 'nila'];
+      allow read: if isFamily() && person in ['anand', 'kavya', 'nila'];
     }
 
     match /family/{person}/uploads/{allPaths=**} {
-      allow create: if isMember()
+      allow create: if isFamily()
         && person in ['anand', 'kavya', 'nila']
         && request.resource.size <= 25 * 1024 * 1024
         && (request.resource.contentType.matches('image/.*')
