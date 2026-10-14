@@ -21,6 +21,7 @@ const PARTS = [
   ["core.rules", null],
   ["apps.rules", null],
   ["ladder.rules", null],
+  ["planner.rules", null],
   ["visitors.rules", null],
   ["family.rules", ["// BEGIN family (managed by personal-manager)", "// END family"]],
 ];
