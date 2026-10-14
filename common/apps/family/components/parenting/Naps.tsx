@@ -97,7 +97,7 @@ export function NapStatus({ p, data }: { p: UseParenting; data: ParentingData })
   return (
     <section className="card space-y-4 !p-4" aria-label="Sleep timer" data-testid="nap-status" style={nowCardStyle}>
       <div className="space-y-0.5">
-        <p className="text-2xl font-extrabold leading-tight" data-testid="status-line">{statusLine(pred, now)}</p>
+        <p className="text-2xl font-extrabold leading-tight" data-testid="status-line">{statusLine(pred, now, data.sleep_sessions)}</p>
         {pred?.since && pred.state !== "unknown" && (
           <p className="text-sm text-muted">{[open && KIND_LABEL[open.kind], `since ${hm(pred.since)}`].filter(Boolean).join(" ")}</p>
         )}
@@ -218,6 +218,7 @@ function SessionRow({ s, p }: { s: SleepSession; p: UseParenting }) {
           <span className="block font-bold leading-snug">{KIND_LABEL[s.kind]} · {hm(s.start)} to {s.end ? hm(s.end) : "now"}</span>
           {meta && <span className="block truncate text-sm text-muted">{meta}</span>}
         </span>
+        {s.auto_end && <Badge tone="gold">Stopped automatically</Badge>}
         <span className="shrink-0 text-sm font-semibold text-muted">{fmtDuration(mins)}</span>
       </button>
       {open && (
@@ -238,6 +239,7 @@ function SessionRow({ s, p }: { s: SleepSession; p: UseParenting }) {
               </select>
             </label>
           </div>
+          {s.auto_end && <p className="text-sm text-muted">The timer ran too long, so it was stopped for you. Set when she woke.</p>}
           <div className={TIMES_GRID}>
             <TimeField label="Put down" ariaLabel={`Put down: ${label}`} value={downT} onChange={setDownT} />
             <TimeField label="Asleep at" ariaLabel={`Asleep at: ${label}`} value={startT} onChange={setStartT} />
@@ -285,7 +287,6 @@ export function SleepTimeline({ p, data, top, middle, back, onBack }: { p: UsePa
   const arrow = "tap flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface transition-colors hover:bg-subtle disabled:opacity-40";
   return (
     <section className="space-y-3" aria-label="Today's sleep">
-      <SectionTitle title="Today's sleep" />
       <div className="flex items-center justify-between gap-2">
         <button type="button" aria-label="Previous day" disabled={back >= MAX_DAYS_BACK} onClick={() => onBack(back + 1)} className={arrow}><Chevron dir="left" /></button>
         <p className="min-w-0 truncate text-center font-bold" aria-live="polite" data-testid="day-label">{dayLabel(back, day.start)}</p>

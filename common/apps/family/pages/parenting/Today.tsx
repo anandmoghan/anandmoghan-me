@@ -94,7 +94,7 @@ function TodayRow({ to, title, testId }: { to: string; title: string; testId: st
 function TodayPlans({ data }: { data: ParentingData }) {
   const now = useNow(30_000);
   const rows: { to: string; title: string; testId: string }[] = [];
-  const nap = napLine(data.nap_prediction, now);
+  const nap = napLine(data.nap_prediction, now, data.sleep_sessions);
   if (nap) rows.push({ to: "/nila/sleep", title: nap, testId: "today-nap" });
   const plan = data.sleep_plan;
   const week = currentWeek(plan);
