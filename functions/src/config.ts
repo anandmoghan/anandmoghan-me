@@ -10,3 +10,6 @@ export const SYNC_RATE_LIMIT_PER_MINUTE = 5
 
 // Page views per user per minute (POST /api/visit).
 export const VISIT_RATE_LIMIT_PER_MINUTE = 30
+
+// View counts per post per minute (POST /api/views/:slug), shared by all visitors of the post.
+export const VIEW_RATE_LIMIT_PER_MINUTE = 60

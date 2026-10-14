@@ -5,6 +5,7 @@ import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github.css';
 import CodeCopyButtons from '@/common/components/CodeCopyButtons';
 import TableOfContents from '@/common/components/TableOfContents';
+import { PostViews } from '@/common/posts/PostViews';
 import PrintButton from '@/common/components/PrintButton';
 import { PostComments } from '@/common/visitors/comments/PostComments';
 import { ReadingTracker } from '@/common/visitors/reads/ReadingTracker';
@@ -125,6 +126,7 @@ export default async function PostPage({ params }: PostPageProps) {
             </time>
             <span>{post.metadata.readingTime} min read</span>
             <span>{post.metadata.wordCount} words</span>
+            {post.published && <PostViews slug={post.slug} />}
           </div>
 
           {post.tags.length > 0 && (

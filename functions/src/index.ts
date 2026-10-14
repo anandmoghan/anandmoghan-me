@@ -6,28 +6,48 @@ import { onRequest, type Request } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import type { Response } from 'express'
 import { mergeAnonymousInto } from './account.js'
-import { ENCRYPTION_SECRET, REGION, SYNC_RATE_LIMIT_PER_MINUTE, VISIT_RATE_LIMIT_PER_MINUTE } from './config.js'
+import { ENCRYPTION_SECRET, REGION, SYNC_RATE_LIMIT_PER_MINUTE, VIEW_RATE_LIMIT_PER_MINUTE, VISIT_RATE_LIMIT_PER_MINUTE } from './config.js'
 import { decryptCredentials, encryptCredentials } from './crypto.js'
 import { checkRateLimit } from './rateLimit.js'
+import postSlugs from './postSlugs.json'
 import { fetchFrankfurterRates, writeRatesToFirestore } from './rates.js'
 import { applyRoleClaims, readRole, roleFromDoc } from './roles.js'
 import { fetchAndWriteSnapshot } from './trading212.js'
 import { countryFromHeaders, deleteVisitorData, parseVisit, recordVisit, type VisitInput } from './visits.js'
+import { incrementViews, parseViewSlug } from './views.js'
 
 initializeApp()
 
-// Same-origin in production (Hosting rewrite), so CORS is only for the local emulator.
-const CORS_HEADERS: Record<string, string> = process.env.FUNCTIONS_EMULATOR === 'true'
-  ? {
+// Slugs of the published posts, generated from content/posts at build time (scripts/gen-post-slugs.mjs).
+const COUNTABLE_SLUGS = new Set<string>(postSlugs)
+
+// Same-origin in production (Hosting rewrite), so CORS is only for local development: the
+// emulator allows any origin, and `next dev` on localhost:3000 may call the live function.
+const DEV_ORIGIN = 'http://localhost:3000'
+const CORS_METHODS = 'GET, POST, OPTIONS'
+
+function corsHeaders(origin: string | undefined): Record<string, string> {
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    return {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': CORS_METHODS,
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     }
-  : {}
+  }
+  if (origin === DEV_ORIGIN) {
+    return {
+      'Access-Control-Allow-Origin': DEV_ORIGIN,
+      Vary: 'Origin',
+      'Access-Control-Allow-Methods': CORS_METHODS,
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    }
+  }
+  return {}
+}
 
 function text(res: Response, status: number, body: string, extra: Record<string, string> = {}): void {
   res.status(status)
-  res.set({ ...CORS_HEADERS, 'Content-Type': 'text/plain;charset=UTF-8', ...extra })
+  res.set({ 'Content-Type': 'text/plain;charset=UTF-8', ...extra })
   res.send(body)
 }
 
@@ -41,7 +61,7 @@ async function verifyToken(token: string): Promise<DecodedIdToken | null> {
 
 function json(res: Response, status: number, body: unknown): void {
   res.status(status)
-  res.set({ ...CORS_HEADERS, 'Content-Type': 'application/json' })
+  res.set({ 'Content-Type': 'application/json' })
   res.send(JSON.stringify(body))
 }
 
@@ -61,8 +81,30 @@ async function readCreds(uid: string): Promise<Record<string, unknown> | null> {
 export const api = onRequest(
   { region: REGION, secrets: [ENCRYPTION_SECRET], invoker: 'public', timeoutSeconds: 120 },
   async (req, res) => {
+    res.set(corsHeaders(req.get('origin')))
     if (req.method === 'OPTIONS') {
-      res.status(204).set(CORS_HEADERS).send()
+      res.status(204).send()
+      return
+    }
+
+    // POST /api/views/:slug: public, cookieless view counter (postStats/{slug}). No auth and nothing
+    // about the visitor is stored; only slugs of published posts count, the limit is per post.
+    if (req.path.startsWith('/api/views/') && req.method === 'POST') {
+      const slug = parseViewSlug(req.path)
+      if (!slug || !COUNTABLE_SLUGS.has(slug)) {
+        text(res, 404, 'Unknown post')
+        return
+      }
+      try {
+        if (!(await checkRateLimit(`views-${slug}`, VIEW_RATE_LIMIT_PER_MINUTE))) {
+          text(res, 429, 'Rate limit exceeded', { 'Retry-After': '60' })
+          return
+        }
+        await incrementViews(slug)
+        res.status(204).send()
+      } catch (err) {
+        text(res, 500, `Failed to count view: ${err}`)
+      }
       return
     }
 
@@ -147,7 +189,7 @@ export const api = onRequest(
           return
         }
         await recordVisit(uid, isAnonymous, countryFromHeaders((name) => req.get(name)), visit)
-        res.status(204).set(CORS_HEADERS).send()
+        res.status(204).send()
       } catch (err) {
         text(res, 500, `Failed to record visit: ${err}`)
       }
@@ -171,7 +213,7 @@ export const api = onRequest(
       try {
         const rates = await fetchFrankfurterRates()
         res.status(200)
-        res.set({ ...CORS_HEADERS, 'Content-Type': 'application/json' })
+        res.set({ 'Content-Type': 'application/json' })
         res.send(JSON.stringify({ base: 'GBP', rates, updatedAt: Date.now() }))
       } catch (err) {
         text(res, 502, `Failed to fetch rates: ${err}`)

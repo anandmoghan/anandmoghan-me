@@ -78,6 +78,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "visits/v1"), { uid: "anon1", path: "/", createdAt: at });
     await setDoc(doc(db, `${POST}/shown`), { uid: "anon1", displayName: "A", body: "Hi", createdAt: at, updatedAt: at, status: "visible" });
     await setDoc(doc(db, `${POST}/hidden`), { uid: "anon1", displayName: "A", body: "Spam", createdAt: at, updatedAt: at, status: "hidden" });
+    await setDoc(doc(db, "postStats/a-post"), { views: 3, updatedAt: at });
     await setDoc(doc(db, "shareDecks/deck/comments/s1"), { authorUid: "anon1", text: "x", createdAt: at });
   });
 });
@@ -91,6 +92,21 @@ describe("visits", () => {
     }
     await assertFails(setDoc(doc(admin(), "visits/v2"), { uid: "boss", path: "/" }));
     await assertFails(setDoc(doc(anon("anon1"), "visits/v2"), { uid: "anon1", path: "/" }));
+  });
+});
+
+describe("post stats", () => {
+  test("anyone reads, including signed-out visitors", async () => {
+    await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), "postStats/a-post")));
+    await assertSucceeds(getDoc(doc(anon("anon1"), "postStats/a-post")));
+  });
+
+  test("nobody writes from a client, admins included", async () => {
+    for (const db of [env.unauthenticatedContext().firestore(), anon("anon1"), real("alice"), admin()]) {
+      await assertFails(setDoc(doc(db, "postStats/a-post"), { views: 999 }));
+      await assertFails(updateDoc(doc(db, "postStats/a-post"), { views: 999 }));
+      await assertFails(deleteDoc(doc(db, "postStats/a-post")));
+    }
   });
 });
 
