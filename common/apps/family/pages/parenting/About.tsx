@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from "react";
-import { SectionTitle, outlineBtn, primaryBtn, softBtn } from "@/common/apps/family/components/ui";
+import { SectionTitle, Segmented, outlineBtn, primaryBtn, softBtn } from "@/common/apps/family/components/ui";
 import { Points } from "@/common/apps/family/components/Points";
-import { Collapsible } from "@/common/apps/family/components/parenting/plan";
 import { ListSkeleton } from "@/common/apps/family/components/Skeleton";
 import Spinner from "@/common/apps/family/components/Spinner";
 import { useToast } from "@/common/apps/family/hooks/useToast";
@@ -44,6 +43,8 @@ export default function About({ p }: { p: UseParenting }) {
   const parsed = parseContext(body ?? "");
   const extra = parsed.sections.map((s) => s.heading).filter((h) => !CONTEXT_SECTIONS.some((c) => c.toLowerCase() === h.toLowerCase()));
   const options = [...CONTEXT_SECTIONS, ...extra];
+  const [tab, setTab] = useState("");
+  const shownTab = parsed.sections.some((s) => s.heading === tab) ? tab : (parsed.sections[0]?.heading ?? "");
 
   async function addNote() {
     setSaving(true);
@@ -132,23 +133,29 @@ export default function About({ p }: { p: UseParenting }) {
       {parsed.sections.length === 0 ? (
         <p className="card !px-4 !py-3.5 text-muted">No notes yet. Add the first one above.</p>
       ) : (
-        <div className="space-y-1">
-          {parsed.sections.map((s) => (
+        <div className="space-y-4">
+          <Segmented
+            center
+            scroll
+            label="Notes about Nila"
+            value={shownTab}
+            onChange={setTab}
+            options={parsed.sections.map((s) => [s.heading, s.lines.length ? `${s.heading} · ${s.lines.length}` : s.heading] as const)}
+          />
+          {parsed.sections.filter((s) => s.heading === shownTab).map((s) => (
             <div key={s.heading} data-testid="context-section">
-              <Collapsible title={s.heading} count={s.lines.length}>
-                {s.lines.length === 0 ? (
-                  <p className="text-sm text-muted">Nothing here yet.</p>
-                ) : (
-                  <ul className="card card--flush divide-y divide-border">
-                    {s.lines.map((l, i) => (
-                      <li key={i} className="p-3.5">
-                        <p className="leading-snug">{l.text}</p>
-                        {(l.date || l.who) && <p className="mt-0.5 text-sm text-muted">{[fmtYmd(l.date), l.who].filter(Boolean).join(", ")}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Collapsible>
+              {s.lines.length === 0 ? (
+                <p className="card !px-4 !py-3.5 text-sm text-muted">Nothing here yet.</p>
+              ) : (
+                <ul className="card card--flush divide-y divide-border">
+                  {s.lines.map((l, i) => (
+                    <li key={i} className="p-3.5">
+                      <p className="leading-snug">{l.text}</p>
+                      {(l.date || l.who) && <p className="mt-0.5 text-sm text-muted">{[fmtYmd(l.date), l.who].filter(Boolean).join(", ")}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ))}
         </div>

@@ -4,7 +4,6 @@ import type { ComponentType } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { DataProvider } from '@/common/apps/family/hooks/useData'
-import Shortcuts from '@/common/apps/family/components/Shortcuts'
 import MacStatusCard from '@/common/apps/family/components/MacStatusCard'
 import { ExpenseSettingsPage } from '@/common/apps/expense/pages/SettingsPage'
 import { SettingsPage as TimeSettingsPage } from '@/common/apps/time/pages/SettingsPage'
@@ -24,10 +23,6 @@ const sectionTitle = 'text-sm font-semibold text-muted uppercase tracking-wide m
 function FamilyPanel() {
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className={sectionTitle}>Shortcuts</h2>
-        <Shortcuts />
-      </section>
       <section>
         <h2 className={sectionTitle}>Mac bridge</h2>
         <DataProvider>

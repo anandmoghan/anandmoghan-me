@@ -360,7 +360,7 @@ export default function Food({ p, data }: { p: UseParenting; data: ParentingData
   }
   return (
     <div className="space-y-5">
-      <Segmented label="Food view" value={view} onChange={setView} options={VIEWS} />
+      <Segmented center label="Food view" value={view} onChange={setView} options={VIEWS} />
       {view === "today" && <TodayView p={p} data={data} plan={plan} />}
       {view === "plan" && <PlanView p={p} data={data} plan={plan} />}
       {view === "rules" && <RulesView plan={plan} />}

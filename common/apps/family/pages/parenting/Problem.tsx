@@ -105,12 +105,14 @@ export default function ProblemPage({ p, data, id }: { p: UseParenting; data: Pa
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h2 className="text-xl font-extrabold leading-snug">{pr.title}</h2>
-        {pr.seen !== pr.title && <Points text={pr.seen} muted small />}
-        {(pr.choices?.length || pr.created_at) && <p className="text-sm text-muted">{[...(pr.choices ?? []), pr.created_at && `Added ${fmtDate(pr.created_at)}`].filter(Boolean).join(" · ")}</p>}
-        {pending ? <Badge tone="muted" pulse>Researching…</Badge> : pr.research === "failed" ? <Badge tone="destructive">Research failed</Badge> : !guide && !plan && <StatusControl pr={pr} p={p} />}
-      </header>
+      <section className="card space-y-3 !p-4" aria-label="What we see">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-bold text-muted">{[...(pr.choices ?? []), pr.created_at && `Added ${fmtDate(pr.created_at)}`].filter(Boolean).join(" · ") || "What we see"}</p>
+          {pending ? <Badge tone="muted" pulse>Researching…</Badge> : pr.research === "failed" && <Badge tone="destructive">Research failed</Badge>}
+        </div>
+        {pr.seen && pr.seen !== pr.title && <Points text={pr.seen} />}
+        {!pending && pr.research !== "failed" && !guide && !plan && <StatusControl pr={pr} p={p} />}
+      </section>
       {pending ? (
         <p className="card !px-4 !py-3.5">The Mac is reading the research for this. The playbook appears here when it is done.</p>
       ) : (

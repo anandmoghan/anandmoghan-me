@@ -62,7 +62,7 @@ export function JobsPage() {
   if (!config) return null
 
   return (
-    <div className="site-container flex flex-col pb-6 pt-3 md:min-h-0 md:flex-1">
+    <div className="site-container site-container--wide flex flex-col pb-6 pt-3 md:min-h-0 md:flex-1">
       <div className={`shrink-0 ${explicit ? 'hidden md:block' : ''}`}>
         <FilterBar params={params} setParam={setParam} clearAll={() => router.push(pathname)} />
         <StatusTabs jobs={ignoringStatus} active={filters?.status ?? ''} setStatus={(s) => setParam('status', s)} />
@@ -70,14 +70,14 @@ export function JobsPage() {
 
       <div className="mt-3 flex gap-6 md:min-h-0 md:flex-1">
         <aside
-          className={`w-full md:block md:min-h-0 md:w-80 md:shrink-0 ${
+          className={`w-full md:block md:min-h-0 md:w-80 md:shrink-0 xl:w-96 ${
             explicit ? 'hidden' : ''
           }`}
         >
           <JobList jobs={filtered} status={filters?.status ?? ''} selected={shown?.slug ?? null} hrefFor={hrefFor} />
         </aside>
 
-        <section className={`min-w-0 flex-1 md:min-h-0 md:overflow-y-auto ${explicit ? '' : 'hidden md:block'}`} aria-label="Job detail">
+        <section className={`relative min-w-0 flex-1 md:min-h-0 md:overflow-y-auto ${explicit ? '' : 'hidden md:block'}`} aria-label="Job detail">
           {explicit && (
             <Link href={listHref} className="back-link mb-3 md:hidden">
               Job list
