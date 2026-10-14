@@ -356,14 +356,17 @@ service cloud.firestore {
     // admin SDK, which bypasses rules). Clients may only change family-owned fields, and every
     // client write must carry pending_sync == true, updated_by == own email and
     // client_updated_at == request.time. Mac-owned fields are never writable by a client.
-    // Source of truth for this block: personal-manager/firebase/family.rules.part.
+    // Ported from personal-manager/firebase/family.rules.part; this copy also lets admins with the
+    // family app through (famIsMember), so personal-manager's merge script must not overwrite it.
 
     match /family/household {
 
+      // A household member, or a site admin granted the family app (roles/{email} claims, core.rules).
       function famIsMember() {
-        return request.auth != null
+        return (request.auth != null
           && request.auth.token.email_verified == true
-          && request.auth.token.email in get(/databases/$(database)/documents/family/household).data.members;
+          && request.auth.token.email in get(/databases/$(database)/documents/family/household).data.members)
+          || (hasApp('family') && isAdmin());
       }
 
       // The three bookkeeping fields every client write sets.

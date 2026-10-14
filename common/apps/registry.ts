@@ -3,6 +3,15 @@ import type { AppDefinition } from './types'
 // Apps listed on the hub (/apps). "share" is routed but intentionally not listed.
 export const apps: AppDefinition[] = [
   {
+    id: 'family',
+    name: 'Family',
+    description: 'Health, shopping, style and updates for the family. Household members only.',
+    domain: 'home',
+    path: '/apps/family',
+    requiresAuth: true,
+    restricted: true,
+  },
+  {
     id: 'dashboard',
     name: 'Wealth',
     description: 'Track assets, investments, and net worth. Real estate, crypto, stocks, and your Trading 212 ISA.',

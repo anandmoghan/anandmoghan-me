@@ -168,7 +168,7 @@ describe("share deck comments", () => {
   });
 });
 
-describe("family (unchanged)", () => {
+describe("family", () => {
   const member = () =>
     env
       .authenticatedContext("m1", {
@@ -196,7 +196,22 @@ describe("family (unchanged)", () => {
     await assertFails(updateDoc(doc(member(), "family/household/feed/f1"), { status: "read" }));
   });
 
-  test("non-members, unverified members and anonymous users are denied", async () => {
+  test("an admin with the family app reads and makes stamped updates without being a member", async () => {
+    const db = real("boss", { admin: true, apps: ["family"] });
+    await assertSucceeds(getDoc(doc(db, "family/household")));
+    await assertSucceeds(getDoc(doc(db, "family/household/feed/f1")));
+    await assertSucceeds(
+      updateDoc(doc(db, "family/household/feed/f1"), {
+        status: "done",
+        pending_sync: true,
+        updated_by: "boss@example.com",
+        client_updated_at: serverTimestamp(),
+      }),
+    );
+    await assertFails(updateDoc(doc(db, "family/household/feed/f1"), { status: "read" }));
+  });
+
+  test("non-members, admins without the family app, unverified members and anonymous users are denied", async () => {
     const unverified = env
       .authenticatedContext("m1", {
         email: FAMILY_EMAIL,
@@ -204,7 +219,13 @@ describe("family (unchanged)", () => {
         firebase: { sign_in_provider: "password" },
       })
       .firestore();
-    for (const db of [real("alice"), real("boss", { admin: true, apps: ["family"] }), unverified, anon("anon1")]) {
+    const notQuite = [
+      real("alice"),
+      real("boss", { admin: true }),
+      real("boss", { admin: true, apps: ["wealth"] }),
+      real("bob", { apps: ["family"] }),
+    ];
+    for (const db of [...notQuite, unverified, anon("anon1")]) {
       await assertFails(getDoc(doc(db, "family/household")));
       await assertFails(getDoc(doc(db, "family/household/feed/f1")));
     }
