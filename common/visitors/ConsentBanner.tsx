@@ -1,24 +1,56 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useAuth } from '@/common/firebase/AuthProvider';
 import { useConsent } from './ConsentProvider';
 
-// Shown once until the visitor chooses; both choices carry equal weight, and the footer's
-// "Cookie settings" link (privacy page) lets them change their mind later.
+// First-visit welcome card with the cookie choice. A small corner card, not a modal: no overlay,
+// no focus trap, no scroll lock, so the page stays readable and usable underneath (blocking
+// interstitials hurt usability and search ranking). Shown until the visitor chooses; both choices
+// carry equal weight, and the footer's "Cookie settings" link (privacy page) changes it later.
 export function ConsentBanner() {
   const { consent, loaded, choose } = useConsent();
+  const { isAnonymous, displayName } = useAuth();
+  const pathname = usePathname();
   if (!loaded || consent) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-live="polite"
-      aria-label="Cookies"
-      aria-describedby="consent-body"
+    <aside
+      aria-label="Welcome"
       className="fixed inset-x-3 bottom-3 z-50 sm:inset-x-auto sm:left-4 sm:bottom-4 sm:max-w-sm print:hidden"
     >
       <div className="card card--compact flex flex-col gap-3 shadow-lg">
-        <p id="consent-body" className="text-sm">
+        <p className="text-sm">
+          {isAnonymous ? (
+            <>
+              Welcome. You are browsing as{' '}
+              {displayName ? <span className="font-bold">{displayName}</span> : 'a guest'}.
+              {pathname !== '/login' && (
+                <>
+                  {' '}
+                  <Link
+                    href={`/login?return=${encodeURIComponent(pathname)}`}
+                    className="underline underline-offset-2"
+                  >
+                    Sign in
+                  </Link>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              Welcome back
+              {displayName ? (
+                <>
+                  , <span className="font-bold">{displayName}</span>
+                </>
+              ) : null}
+              .
+            </>
+          )}
+        </p>
+        <p className="text-sm">
           I use cookies to personalise your reading and see what is useful.{' '}
           <Link href="/privacy#analytics" className="underline underline-offset-2">
             Learn more
@@ -33,6 +65,6 @@ export function ConsentBanner() {
           </button>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

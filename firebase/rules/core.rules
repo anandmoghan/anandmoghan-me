@@ -31,12 +31,18 @@ function hasApp(name) {
 }
 
 // ── users (profile + app-level prefs) ─────────────────────────────────────
-// Every visitor, anonymous included, has users/{uid}: isAnonymous, createdAt, consent, and for
-// real accounts email, displayName, photoURL. lastSeenAt, firstSeenAt, country and visitCount
-// are written only by the visit function (admin SDK), after the visitor accepts cookies.
+// Every visitor, anonymous included, has users/{uid}: isAnonymous, createdAt, consent,
+// displayName (the nickname on comments, guest-7f3a until edited), and for real accounts email
+// and photoURL. lastSeenAt, firstSeenAt, country and visitCount are written only by the visit
+// function (admin SDK), after the visitor accepts cookies.
 
 function serverOnlyUserFields() {
   return ['lastSeenAt', 'firstSeenAt', 'country', 'visitCount'];
+}
+
+// 2 to 30 letters, numbers, spaces, - and _, no space at either end (common/firebase/nickname.ts).
+function validNickname(name) {
+  return name is string && name.matches('^[A-Za-z0-9_-][A-Za-z0-9 _-]{0,28}[A-Za-z0-9_-]$');
 }
 
 match /users/{uid} {
@@ -45,9 +51,12 @@ match /users/{uid} {
   allow get: if isOwner(uid) || isRealAuth() || isAdmin();
   allow list: if isAdmin() || (isRealAuth() && request.query.limit <= 1);
   allow create: if isOwner(uid)
-    && !request.resource.data.keys().hasAny(serverOnlyUserFields());
+    && !request.resource.data.keys().hasAny(serverOnlyUserFields())
+    && (!('displayName' in request.resource.data) || validNickname(request.resource.data.displayName));
   allow update: if isOwner(uid)
-    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyUserFields());
+    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyUserFields())
+    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['displayName'])
+      || validNickname(request.resource.data.get('displayName', null)));
   allow delete: if isOwner(uid);
 
   // App-level prefs (theme, etc.) — single doc at prefs/p

@@ -10,8 +10,10 @@ match /visits/{visitId} {
 }
 
 // posts/{slug}/comments/{id}: { uid, displayName, body, createdAt, updatedAt, status }.
-// Any session, anonymous included, comments as itself; the author edits the body or deletes;
-// admins hide, unhide and delete. Visible comments are public.
+// Any session, anonymous included, comments as itself; the author's client copies its profile
+// nickname (users/{uid}.displayName) into displayName. The author edits the body or deletes;
+// admins hide, unhide and delete. The merge function (admin SDK) rewrites uid and displayName
+// when a guest signs in to an existing account. Visible comments are public.
 
 function commentSlug(slug) {
   return slug.size() <= 200 && slug.matches('^[a-z0-9][a-z0-9-]*$');

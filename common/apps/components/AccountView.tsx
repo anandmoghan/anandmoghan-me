@@ -5,6 +5,10 @@ import Link from 'next/link'
 import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { DeleteMyData } from '@/common/visitors/DeleteMyData'
+import { NicknameEditor } from '@/common/visitors/NicknameEditor'
+import { Card } from '../shell/Card'
+import { Field } from '../shell/Field'
+import { ButtonSpinner } from '../shell/Skeleton'
 import { GoogleLoginButton } from './GoogleLoginButton'
 import { Spinner } from './Spinner'
 
@@ -23,10 +27,9 @@ function upgradeError(code: string | undefined): string {
 }
 
 export function AccountView() {
-  const { user, loading, isAnonymous, isAdmin, apps, displayName, upgradeWithEmail, refresh, signOut } = useAuth()
+  const { user, loading, isAnonymous, isAdmin, apps, upgradeWithEmail, refresh, signOut } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -39,7 +42,8 @@ export function AccountView() {
     setNotice(null)
     setSubmitting(true)
     try {
-      const outcome = await upgradeWithEmail(email, password, name.trim() || undefined)
+      // No name here: the account keeps the profile nickname shown above.
+      const outcome = await upgradeWithEmail(email, password)
       setNotice(outcome === 'linked'
         ? 'Account created. Check your inbox for a verification link.'
         : 'Signed in to your existing account.')
@@ -69,13 +73,13 @@ export function AccountView() {
 
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Identity</h2>
-        <div className="rounded-lg border border-border bg-background p-5 space-y-2">
+        <Card className="space-y-2">
           {isAnonymous ? (
             <>
-              <p className="font-semibold">Guest{displayName ? ` (${displayName})` : ''}</p>
+              <NicknameEditor label="Browsing as" />
               <p className="text-sm text-muted">
-                You are browsing as a guest.
-                Create an account or sign in to keep your comments and settings on any device.
+                You are a guest.
+                Create an account to keep your comments, reading history and settings on any device.
               </p>
             </>
           ) : (
@@ -83,19 +87,14 @@ export function AccountView() {
               <p className="font-semibold">{user?.displayName || user?.email}</p>
               {user?.email && <p className="text-sm text-muted">{user.email}</p>}
               <p className="text-sm text-muted">Signed in with {providers.join(', ')}</p>
+              <NicknameEditor label="Commenting as" />
               {user && !user.emailVerified && (
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <span className="text-sm text-destructive">Email not verified.</span>
-                  <button
-                    onClick={handleResend}
-                    className="text-sm font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted/20 transition-colors"
-                  >
+                  <button type="button" onClick={handleResend} className="btn btn--sm">
                     Resend link
                   </button>
-                  <button
-                    onClick={() => refresh()}
-                    className="text-sm font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted/20 transition-colors"
-                  >
+                  <button type="button" onClick={() => refresh()} className="btn btn--sm">
                     I have verified
                   </button>
                 </div>
@@ -110,13 +109,16 @@ export function AccountView() {
           )}
           {notice && <p className="text-sm">{notice}</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
+        </Card>
       </section>
 
       {isAnonymous ? (
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Keep this session</h2>
-          <div className="rounded-lg border border-border bg-background p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-4">Create an account</h2>
+          <Card className="space-y-4">
+            <p className="text-sm text-muted">
+              Your comments, reading history and settings stay with you, also when you sign in to an account you already have.
+            </p>
             <GoogleLoginButton />
 
             <div className="flex items-center gap-3">
@@ -126,52 +128,40 @@ export function AccountView() {
             </div>
 
             <form onSubmit={handleUpgrade} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Display name"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              />
-              <input
+              <Field
                 type="email"
                 placeholder="Email"
+                aria-label="Email"
+                autoComplete="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
               />
-              <input
+              <Field
                 type="password"
                 placeholder="Password"
+                aria-label="Password"
+                autoComplete="new-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
               />
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting ? 'Creating account...' : 'Create account with email'}
+              <button type="submit" disabled={submitting} aria-busy={submitting} className="btn btn--primary w-full">
+                {submitting ? <><ButtonSpinner />Creating account...</> : 'Create account with email'}
               </button>
             </form>
 
-            <p className="text-center text-xs text-muted">
+            <p className="text-center text-sm text-muted">
               Already have an account?{' '}
-              <Link href="/login?return=/account" className="underline hover:text-foreground transition-colors">
+              <Link href="/login?return=/account" className="underline underline-offset-2">
                 Sign in
               </Link>
             </p>
-          </div>
+          </Card>
         </section>
       ) : (
-        <button
-          onClick={() => signOut()}
-          className="text-sm font-medium px-3 py-1.5 rounded-md border border-border text-destructive hover:bg-muted/20 transition-colors"
-        >
+        <button type="button" onClick={() => signOut()} className="btn btn--sm">
           Sign out
         </button>
       )}

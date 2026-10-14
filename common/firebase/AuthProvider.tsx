@@ -19,9 +19,10 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDb, getFirebaseAuth } from './client';
 import { mergeAnonymous, refreshClaims } from './account';
+import { NICKNAME_RULE, guestNickname, isGuestNickname, isValidNickname, toNickname } from './nickname';
 
 // Every visitor has a session: anonymous until they upgrade to Google or email. Upgrading links
 // the credential to the same uid; if that account already exists we sign in to it and the api
@@ -42,33 +43,57 @@ interface AuthContextType {
   isAdmin: boolean;
   /** Apps granted by roles/{email}. */
   apps: string[];
-  /** Real name or email, or the share-guest nickname for an anonymous session. */
+  /** Profile nickname (users/{uid}.displayName), guest-7f3a style for guests; null until loaded. */
   displayName: string | null;
+  /** Renames the profile; throws when the name breaks the nickname rule. */
+  setDisplayName: (name: string) => Promise<void>;
   upgradeWithGoogle: () => Promise<void>;
   /** 'linked': new account on this uid, verification email sent. 'existing': signed in and merged. */
   upgradeWithEmail: (email: string, password: string, displayName?: string) => Promise<'linked' | 'existing'>;
   signInExisting: (email: string, password: string) => Promise<void>;
   /** Reloads the user and claims, e.g. after the email verification link was clicked. */
   refresh: () => Promise<void>;
-  /** Share-deck guests: names the anonymous session. */
-  signInAsGuest: (nickname: string) => Promise<void>;
   /** Signs out; a fresh anonymous session starts straight away. */
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const GUEST_NICKNAME_KEY = 'shareGuestNickname';
+// Nickname the share decks used to keep in localStorage; taken over as the profile name once.
+const LEGACY_NICKNAME_KEY = 'shareGuestNickname';
+
+// The nickname is set when the doc has none: the account's own name, else the legacy share-deck
+// nickname, else guest-7f3a. An account's own name also replaces a generated guest name, so
+// linking Google to a guest session picks up the Google name unless the guest chose one.
+function profileName(user: User, stored: unknown): string {
+  const current = typeof stored === 'string' && isValidNickname(stored) ? stored : null;
+  const own = user.isAnonymous
+    ? (toNickname(localStorage.getItem(LEGACY_NICKNAME_KEY)) ?? toNickname(user.displayName))
+    : toNickname(user.displayName);
+  if (!current) return own ?? guestNickname(user.uid);
+  return !user.isAnonymous && own && isGuestNickname(current) ? own : current;
+}
 
 async function syncUserDoc(user: User): Promise<void> {
   const ref = doc(getDb(), 'users', user.uid);
   const snap = await getDoc(ref);
+  const stored: unknown = snap.get('displayName');
+  const displayName = profileName(user, stored);
   const profile = user.isAnonymous
     ? { isAnonymous: true }
-    : { isAnonymous: false, email: user.email, displayName: user.displayName, photoURL: user.photoURL };
+    : { isAnonymous: false, email: user.email, photoURL: user.photoURL };
   // No lastSeenAt here: last seen, country and visit counts are written by the visit function,
   // and only after the visitor accepts cookies.
-  await setDoc(ref, { ...profile, ...(snap.exists() ? {} : { createdAt: serverTimestamp() }) }, { merge: true });
+  await setDoc(
+    ref,
+    {
+      ...profile,
+      ...(displayName !== stored ? { displayName } : {}),
+      ...(snap.exists() ? {} : { createdAt: serverTimestamp() }),
+    },
+    { merge: true },
+  );
+  localStorage.removeItem(LEGACY_NICKNAME_KEY);
 }
 
 function errorCode(err: unknown): string | null {
@@ -78,7 +103,8 @@ function errorCode(err: unknown): string | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [guestNickname, setGuestNickname] = useState<string | null>(null);
+  // users/{uid}.displayName of the current session, live (edits, merges).
+  const [profile, setProfile] = useState<{ uid: string; displayName: string | null } | null>(null);
   // `${uid}:${isAnonymous}` keys already synced this page load (users doc, claims).
   const synced = useRef(new Set<string>());
   const anonPending = useRef(false);
@@ -110,7 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setGuestNickname(localStorage.getItem(GUEST_NICKNAME_KEY));
     const auth = getFirebaseAuth();
     return onIdTokenChanged(auth, (user) => {
       if (!user) {
@@ -131,6 +156,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       syncIdentity(user);
     });
   }, [loadSession, syncIdentity]);
+
+  const uid = session?.user.uid ?? null;
+
+  useEffect(() => {
+    if (!uid) return;
+    return onSnapshot(
+      doc(getDb(), 'users', uid),
+      (snap) => {
+        const name: unknown = snap.get('displayName');
+        setProfile({ uid, displayName: typeof name === 'string' ? name : null });
+      },
+      (err) => console.error('Loading the profile failed', err),
+    );
+  }, [uid]);
 
   // After switching from an anonymous session to an existing account.
   const finishSwitch = async (result: UserCredential, anonIdToken: string | null) => {
@@ -210,26 +249,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadSession(current);
   };
 
-  const signInAsGuest = async (nickname: string) => {
-    const auth = getFirebaseAuth();
-    const user = auth.currentUser ?? (await signInAnonymously(auth)).user;
-    await updateProfile(user, { displayName: nickname });
-    localStorage.setItem(GUEST_NICKNAME_KEY, nickname);
-    setGuestNickname(nickname);
+  const setDisplayName = async (name: string) => {
+    const current = getFirebaseAuth().currentUser;
+    if (!current) throw new Error('No session');
+    const trimmed = name.trim();
+    if (!isValidNickname(trimmed)) throw new Error(NICKNAME_RULE);
+    await setDoc(doc(getDb(), 'users', current.uid), { displayName: trimmed }, { merge: true });
+    if (!current.isAnonymous) await updateProfile(current, { displayName: trimmed });
   };
 
   const signOut = async () => {
-    localStorage.removeItem(GUEST_NICKNAME_KEY);
-    setGuestNickname(null);
     await firebaseSignOut(getFirebaseAuth());
   };
 
   const user = session?.user ?? null;
-  const displayName: string | null = !session
-    ? null
-    : session.isAnonymous
-      ? guestNickname
-      : user?.displayName || user?.email || null;
+  const displayName = profile && profile.uid === uid ? profile.displayName : null;
 
   return (
     <AuthContext.Provider
@@ -240,11 +274,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin: session?.isAdmin ?? false,
         apps: session?.apps ?? [],
         displayName,
+        setDisplayName,
         upgradeWithGoogle,
         upgradeWithEmail,
         signInExisting,
         refresh,
-        signInAsGuest,
         signOut,
       }}
     >
