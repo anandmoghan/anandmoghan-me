@@ -55,3 +55,5 @@ export const InfoIcon = ic(<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M1
 export const DOMAIN_ICON: Record<Domain, (p: P) => ReactNode> = {
   home: HomeIcon, health: HeartPulseIcon, fitness: DumbbellIcon, parenting: ChildIcon, shopping: BagIcon, style: SparkleIcon, updates: BellIcon,
 };
+
+export const PinIcon = ic(<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Zm3 11v5" />);

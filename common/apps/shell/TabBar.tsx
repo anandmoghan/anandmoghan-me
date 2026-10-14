@@ -26,11 +26,12 @@ function isActive(tab: Tab, pathname: string): boolean {
 }
 
 // Fixed bottom tabs (global app.css .tab-bar). Pair with .with-tab-bar on the page body.
-export function TabBar({ tabs, label = 'App' }: { tabs: Tab[]; label?: string }) {
+// `extra` is a last <li class="tab-bar__item"> (e.g. a popup-menu tab).
+export function TabBar({ tabs, label = 'App', extra }: { tabs: Tab[]; label?: string; extra?: ReactNode }) {
   const pathname = usePathname()
 
   return (
-    <nav aria-label={label} className={tabs.length > 5 ? 'tab-bar tab-bar--dense' : 'tab-bar'}>
+    <nav aria-label={label} className={tabs.length + (extra ? 1 : 0) > 5 ? 'tab-bar tab-bar--dense' : 'tab-bar'}>
       <ul className="tab-bar__list">
         {tabs.map((tab) => {
           const active = isActive(tab, pathname)
@@ -54,6 +55,7 @@ export function TabBar({ tabs, label = 'App' }: { tabs: Tab[]; label?: string })
             </li>
           )
         })}
+        {extra}
       </ul>
     </nav>
   )
