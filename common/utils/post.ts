@@ -68,7 +68,10 @@ function listSlugs(): string[] {
   );
 }
 
-export function getAllPosts(includeUnpublished: boolean = false): Post[] {
+// Drafts (published: false) are listed only in `npm run dev`; production builds hide them.
+const SHOW_DRAFTS_BY_DEFAULT = process.env.NODE_ENV === 'development';
+
+export function getAllPosts(includeUnpublished: boolean = SHOW_DRAFTS_BY_DEFAULT): Post[] {
   const posts = listSlugs().map(slug => {
     const { html: _html, headings: _headings, ...post } = loadPost(slug);
     return post;

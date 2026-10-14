@@ -12,12 +12,13 @@ export interface ReadNextPost {
   title: string;
   excerpt: string;
   publishedAt: string;
+  published: boolean;
   tags: { id: string; name: string }[];
 }
 
 interface ReadNextProps {
   currentTagIds: string[];
-  /** Every other published post. */
+  /** Every other post (drafts only in development). */
   posts: ReadNextPost[];
 }
 
@@ -55,7 +56,10 @@ export function ReadNext({ currentTagIds, posts }: ReadNextProps) {
         {picks.map((post) => (
           <Link key={post.slug} href={`/posts/${post.slug}`} className="card tap h-full">
             <article className="h-full flex flex-col">
-              <h3 className="text-lg font-extrabold leading-tight text-foreground mb-2">{post.title}</h3>
+              <div className="flex items-start gap-2 mb-2">
+                {!post.published && <span className="badge badge--warn flex-shrink-0 mt-1">Draft</span>}
+                <h3 className="text-lg font-extrabold leading-tight text-foreground">{post.title}</h3>
+              </div>
               <p className="mb-3 text-sm leading-relaxed text-muted line-clamp-3">{post.excerpt}</p>
               <div className="flex flex-wrap gap-2 mt-auto">
                 {post.tags.map((tag) => (

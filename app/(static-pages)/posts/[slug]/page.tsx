@@ -94,6 +94,7 @@ export default async function PostPage({ params }: PostPageProps) {
       title: other.title,
       excerpt: other.excerpt,
       publishedAt: other.publishedAt.toISOString(),
+      published: other.published,
       tags: other.tags.map(tag => ({ id: tag.id, name: tag.name })),
     }));
 
@@ -146,7 +147,7 @@ export default async function PostPage({ params }: PostPageProps) {
 
           <div className="mt-4 flex items-center justify-between gap-3">
             <Link
-              href={post.published ? "/posts" : "/posts?unpublished=true"}
+              href="/posts"
               className="btn btn--outline btn--sm"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
