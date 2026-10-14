@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
+import { RESET_NEUTRAL_NOTICE, requestPasswordReset } from '@/common/firebase/passwordReset'
 import { GoogleLoginButton } from './GoogleLoginButton'
 import { Card } from '../shell/Card'
 import { Field } from '../shell/Field'
@@ -19,12 +20,13 @@ export function LoginForm() {
   const router = useRouter()
   const returnTo = safeReturnPath(useSearchParams().get('return'))
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     if (!loading && user && !isAnonymous) {
@@ -65,8 +67,25 @@ export function LoginForm() {
     }
   }
 
-  const submitLabel = mode === 'signin' ? 'Sign in' : 'Create account'
-  const busyLabel = mode === 'signin' ? 'Signing in...' : 'Creating account...'
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setNotice(null)
+    setSubmitting(true)
+    const problem = await requestPasswordReset(email.trim(), returnTo)
+    setSubmitting(false)
+    if (problem) setError(problem)
+    else setNotice(RESET_NEUTRAL_NOTICE)
+  }
+
+  const switchMode = (next: 'signin' | 'signup' | 'reset') => {
+    setMode(next)
+    setError(null)
+    setNotice(null)
+  }
+
+  const submitLabel = mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Reset password'
+  const busyLabel = mode === 'signin' ? 'Signing in...' : mode === 'signup' ? 'Creating account...' : 'Sending...'
 
   return (
     <div className="flex flex-1 items-center justify-center py-8">
@@ -81,6 +100,37 @@ export function LoginForm() {
         </div>
 
         <Card>
+          {mode === 'reset' ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted">Enter your email and we will send you a link to choose a new password.</p>
+              <form onSubmit={handleReset} className="space-y-3">
+                <Field
+                  type="email"
+                  placeholder="Email"
+                  aria-label="Email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                />
+                {notice && <p className="text-sm" role="status">{notice}</p>}
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  aria-busy={submitting}
+                  className="btn btn--primary w-full"
+                >
+                  {submitting ? <><ButtonSpinner />{busyLabel}</> : 'Send reset link'}
+                </button>
+              </form>
+              <p className="text-center text-sm text-muted">
+                <button type="button" onClick={() => switchMode('signin')} className="font-semibold text-domain underline underline-offset-2">
+                  Back to sign in
+                </button>
+              </p>
+            </div>
+          ) : (
           <div className="space-y-4">
             <GoogleLoginButton onSuccess={() => router.replace(returnTo)} />
 
@@ -122,6 +172,13 @@ export function LoginForm() {
                 minLength={6}
               />
               {error && <p className="text-sm text-destructive">{error}</p>}
+              {mode === 'signin' && (
+                <p className="text-right text-sm">
+                  <button type="button" onClick={() => switchMode('reset')} className="font-semibold text-domain underline underline-offset-2">
+                    Forgot password?
+                  </button>
+                </p>
+              )}
               <button
                 type="submit"
                 disabled={submitting}
@@ -135,19 +192,20 @@ export function LoginForm() {
             <p className="text-center text-sm text-muted">
               {mode === 'signin' ? (
                 <>No account?{' '}
-                  <button type="button" onClick={() => { setMode('signup'); setError(null) }} className="font-semibold text-domain underline underline-offset-2">
+                  <button type="button" onClick={() => switchMode('signup')} className="font-semibold text-domain underline underline-offset-2">
                     Sign up
                   </button>
                 </>
               ) : (
                 <>Already have an account?{' '}
-                  <button type="button" onClick={() => { setMode('signin'); setError(null) }} className="font-semibold text-domain underline underline-offset-2">
+                  <button type="button" onClick={() => switchMode('signin')} className="font-semibold text-domain underline underline-offset-2">
                     Sign in
                   </button>
                 </>
               )}
             </p>
           </div>
+          )}
         </Card>
 
       </div>

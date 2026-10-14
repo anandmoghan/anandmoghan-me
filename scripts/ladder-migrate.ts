@@ -99,6 +99,7 @@ function jobFields(tracker: Tracker): Record<string, Kind> {
     tags: 'strings',
     sponsorship: SPONSORSHIP,
     sponsorship_confidence: CONFIDENCE,
+    sponsorship_source: 'string',
     pay_min: 'number',
     pay_max: 'number',
     pay_currency: 'currency',
@@ -149,6 +150,7 @@ const COMPANY_FIELDS: Record<string, Kind> = {
   financials_source: 'string',
   sponsorship: SPONSORSHIP,
   sponsorship_confidence: CONFIDENCE,
+  sponsorship_source: 'string',
 }
 
 const REQUIRED_COMPANY = ['name', 'career_page_url']

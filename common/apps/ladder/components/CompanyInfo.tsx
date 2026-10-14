@@ -3,6 +3,10 @@ import { formatDate } from '../lib'
 import type { CompanyHistoryEntry, Confidence, EmailThread, Sponsorship } from '../types'
 import { StatusBadge } from './badges'
 
+function isUrl(text: string): boolean {
+  return /^https?:\/\/\S+$/.test(text)
+}
+
 const SPONSORSHIP_LABELS: Record<Sponsorship, string> = { yes: 'Yes', no: 'No', unknown: 'Unknown' }
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -28,6 +32,7 @@ function InfoSection({ heading, notes, source, empty }: { heading: string; notes
 interface CompanyInfoProps {
   sponsorship?: Sponsorship
   sponsorship_confidence?: Confidence
+  sponsorship_source?: string
   products?: string
   products_source?: string
   funding_notes?: string
@@ -50,6 +55,17 @@ export function CompanyInfoCard({ info, profileHref }: { info: CompanyInfoProps;
         {info.sponsorship ? SPONSORSHIP_LABELS[info.sponsorship] : 'Unknown'}
         {info.sponsorship_confidence && <span className="ml-1 text-xs text-muted">({info.sponsorship_confidence})</span>}
       </p>
+      {info.sponsorship_source && (
+        <p className="break-words text-xs text-muted">
+          {isUrl(info.sponsorship_source) ? (
+            <a href={info.sponsorship_source} target="_blank" rel="noopener noreferrer" className="text-domain hover:underline">
+              {info.sponsorship_source}
+            </a>
+          ) : (
+            info.sponsorship_source
+          )}
+        </p>
+      )}
       <InfoSection heading="Products" notes={info.products} source={info.products_source} empty="No product information yet" />
       <InfoSection heading="Funding" notes={info.funding_notes} source={info.funding_source} empty="No funding information yet" />
       <InfoSection

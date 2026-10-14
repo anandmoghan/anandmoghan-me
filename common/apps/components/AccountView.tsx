@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { sendEmailVerification } from 'firebase/auth'
 import { useAuth } from '@/common/firebase/AuthProvider'
+import { RESET_NEUTRAL_NOTICE, requestPasswordReset } from '@/common/firebase/passwordReset'
 import { DeleteMyData } from '@/common/visitors/DeleteMyData'
 import { NicknameEditor } from '@/common/visitors/NicknameEditor'
 import { Card } from '../shell/Card'
@@ -65,6 +66,17 @@ export function AccountView() {
     }
   }
 
+  const hasPassword = user?.providerData.some(p => p.providerId === 'password') ?? false
+
+  const handleResetPassword = async () => {
+    if (!user?.email) return
+    setError(null)
+    setNotice(null)
+    const problem = await requestPasswordReset(user.email, '/account')
+    if (problem) setError(problem)
+    else setNotice(RESET_NEUTRAL_NOTICE)
+  }
+
   const providers = (user?.providerData ?? []).map(p => PROVIDER_NAMES[p.providerId] ?? p.providerId)
 
   return (
@@ -88,6 +100,13 @@ export function AccountView() {
               {user?.displayName && user.email && <p className="text-sm text-muted">{user.email}</p>}
               <p className="text-sm text-muted">Signed in with {providers.join(', ')}</p>
               <NicknameEditor label="Commenting as" />
+              {hasPassword && (
+                <div className="pt-2">
+                  <button type="button" onClick={handleResetPassword} className="btn btn--sm">
+                    Send password reset email
+                  </button>
+                </div>
+              )}
               {user && !user.emailVerified && (
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <span className="text-sm text-destructive">Email not verified.</span>

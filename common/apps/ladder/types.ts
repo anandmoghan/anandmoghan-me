@@ -62,6 +62,7 @@ export interface JobFields {
   tags?: string[]
   sponsorship?: Sponsorship
   sponsorship_confidence?: Confidence
+  sponsorship_source?: string
   pay_min?: number
   pay_max?: number
   pay_currency?: string
@@ -131,6 +132,7 @@ export interface CompanyFields {
   financials_source?: string
   sponsorship?: Sponsorship
   sponsorship_confidence?: Confidence
+  sponsorship_source?: string
 }
 
 export interface CompanyDoc extends CompanyFields {
