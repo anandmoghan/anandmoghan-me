@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { updateProfile } from 'firebase/auth';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/common/firebase/AuthProvider';
-import { COMMENT_MAX, NAME_MAX, type PostComment, usePostComments } from './usePostComments';
+import { NicknameEditor } from '../NicknameEditor';
+import { COMMENT_MAX, type PostComment, usePostComments } from './usePostComments';
 
 function formatDate(comment: PostComment): string {
   if (!comment.createdAt) return 'Just now';
@@ -127,32 +128,25 @@ function CommentItem({ comment, mine, isAdmin, onEdit, onToggleHidden, onDelete 
   );
 }
 
-// Comments under a published post. Any session, anonymous included, can comment; guests pick a
-// nickname, which is the same one the shared decks use.
+// Comments under a published post. Any session, anonymous included, comments under its profile
+// nickname (users/{uid}.displayName, guest-7f3a until the visitor edits it), the same name the
+// shared decks use. Never the email.
 export function PostComments({ slug }: { slug: string }) {
-  const { user, loading: authLoading, isAnonymous, isAdmin, displayName, signInAsGuest } = useAuth();
+  const { user, loading: authLoading, isAnonymous, isAdmin, displayName } = useAuth();
   const { comments, loading, error, add, edit, setStatus, remove } = usePostComments(slug);
+  const pathname = usePathname();
   const [body, setBody] = useState('');
-  const [nickname, setNickname] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  // Guests use their share nickname; real accounts their profile name. Never the email.
-  const knownName = isAnonymous ? displayName : user?.displayName || null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = body.trim();
-    const name = (knownName ?? nickname).trim();
-    if (!text || !name || !user) return;
+    if (!text || !displayName || !user) return;
     setSubmitting(true);
     setFormError(null);
     try {
-      if (!knownName) {
-        if (isAnonymous) await signInAsGuest(name);
-        else await updateProfile(user, { displayName: name });
-      }
-      await add(name, text);
+      await add(displayName, text);
       setBody('');
     } catch (err) {
       console.error('Posting the comment failed', err);
@@ -192,25 +186,19 @@ export function PostComments({ slug }: { slug: string }) {
 
       {!authLoading && user && (
         <form onSubmit={submit} className="card space-y-3">
-          {knownName ? (
-            <p className="text-sm text-muted">
-              Commenting as <span className="font-bold">{knownName}</span>
-            </p>
-          ) : (
-            <div>
-              <label htmlFor="comment-name" className="field-label">
-                Nickname
-              </label>
-              <input
-                id="comment-name"
-                className="field"
-                value={nickname}
-                maxLength={NAME_MAX}
-                onChange={(e) => setNickname(e.target.value)}
-                required
-              />
-            </div>
-          )}
+          <NicknameEditor label="Commenting as">
+            {isAnonymous && (
+              <>
+                {' · '}
+                <Link
+                  href={`/login?return=${encodeURIComponent(`${pathname}#comments`)}`}
+                  className="underline underline-offset-2"
+                >
+                  Sign in
+                </Link>
+              </>
+            )}
+          </NicknameEditor>
           <div>
             <label htmlFor="comment-body" className="field-label">
               Comment
@@ -235,7 +223,7 @@ export function PostComments({ slug }: { slug: string }) {
             </p>
           </div>
           {formError && <p className="text-sm text-destructive">{formError}</p>}
-          <button type="submit" className="btn btn--primary" disabled={submitting || !body.trim()}>
+          <button type="submit" className="btn btn--primary" disabled={submitting || !body.trim() || !displayName}>
             {submitting ? 'Posting...' : 'Post comment'}
           </button>
         </form>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { collection, addDoc, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, Timestamp } from 'firebase/firestore'
 import { getDb } from '@/common/firebase/client'
 import { useAuth } from '@/common/firebase/AuthProvider'
+import { guestNickname } from '@/common/firebase/nickname'
 
 export interface Comment {
   id: string
@@ -52,7 +53,8 @@ export function useComments(deckSlug: string): {
 
       await addDoc(collection(getDb(), 'shareDecks', deckSlug, 'comments'), {
         bulletId,
-        nickname: displayName ?? 'Anonymous',
+        // The profile nickname; its generated default until the users doc has loaded.
+        nickname: displayName ?? guestNickname(user.uid),
         text: trimmedText,
         authorUid: user.uid,
         createdAt: serverTimestamp(),

@@ -97,7 +97,8 @@ export const api = onRequest(
     }
 
     // POST /api/account/merge { anonIdToken }: the caller just signed in to an existing account
-    // from an anonymous session; move that session's prefs and comments here and delete it.
+    // from an anonymous session; move that session's profile name, consent, prefs, reads and
+    // comments here and delete it (functions/src/account.ts).
     if (req.path === '/api/account/merge' && req.method === 'POST') {
       if (isAnonymous) {
         text(res, 400, 'Caller must be a signed-in account')

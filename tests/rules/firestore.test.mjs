@@ -85,6 +85,25 @@ describe("users", () => {
     await assertSucceeds(setDoc(doc(db, "users/anon2/prefs/p"), { th: "dark" }));
   });
 
+  test("the owner sets and edits a validated nickname", async () => {
+    const db = anon("anon3");
+    await assertFails(setDoc(doc(db, "users/anon3"), { isAnonymous: true, displayName: "x" }));
+    await assertSucceeds(setDoc(doc(db, "users/anon3"), { isAnonymous: true, displayName: "guest-7f3a" }));
+    await assertSucceeds(updateDoc(doc(db, "users/anon3"), { displayName: "Bob the_reader-2" }));
+    for (const bad of ["x", "a".repeat(31), "bad<name>", " lead", "trail ", "émile", 42, null]) {
+      await assertFails(updateDoc(doc(db, "users/anon3"), { displayName: bad }));
+    }
+    await assertSucceeds(updateDoc(doc(db, "users/anon3"), { displayName: "a".repeat(30) }));
+    await assertFails(updateDoc(doc(anon("anon4"), "users/anon3"), { displayName: "Mallory" }));
+  });
+
+  test("a legacy name that breaks the rule does not block other updates", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/carol"), { isAnonymous: false, displayName: "Carol O'Neil" });
+    });
+    await assertSucceeds(updateDoc(doc(real("carol"), "users/carol"), { consent: "granted" }));
+  });
+
   test("anonymous users cannot read or write other users", async () => {
     const db = anon("anon1");
     await assertFails(getDoc(doc(db, "users/alice")));

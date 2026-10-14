@@ -32,7 +32,6 @@ export interface PostComment {
 }
 
 export const COMMENT_MAX = 2000;
-export const NAME_MAX = 40;
 
 function commentsRef(slug: string) {
   return collection(getDb(), 'posts', slug, 'comments');

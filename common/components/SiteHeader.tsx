@@ -35,25 +35,19 @@ function sectionFor(pathname: string): { href: string; label: string } | null {
 }
 
 function AccountAction({ pathname }: { pathname: string }) {
-  const { user, isAnonymous, displayName, signOut } = useAuth();
-  const isShareRoute = pathname.startsWith(SHARE_PATH);
+  const { user, isAnonymous, displayName } = useAuth();
 
-  if (isAnonymous && isShareRoute && displayName) {
-    return (
-      <>
-        <span className="hidden text-sm text-muted sm:inline">Viewing as {displayName}</span>
-        <button type="button" onClick={() => signOut()} className="btn btn--sm">
-          Log out
-        </button>
-      </>
-    );
-  }
   if (user && !isAnonymous) return <ProfileMenu />;
-  if (pathname === '/login' || isShareRoute) return null;
+  if (pathname === '/login') return null;
   return (
-    <Link href={`/login?return=${encodeURIComponent(pathname)}`} className="btn btn--sm">
-      Sign in
-    </Link>
+    <>
+      {pathname.startsWith(SHARE_PATH) && displayName && (
+        <span className="hidden text-sm text-muted sm:inline">Viewing as {displayName}</span>
+      )}
+      <Link href={`/login?return=${encodeURIComponent(pathname)}`} className="btn btn--sm">
+        Sign in
+      </Link>
+    </>
   );
 }
 

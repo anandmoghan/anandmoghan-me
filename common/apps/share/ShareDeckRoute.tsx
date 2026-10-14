@@ -5,7 +5,6 @@ import { Spinner } from '@/common/apps/components/Spinner'
 import type { Deck } from './types'
 import { deckRegistry } from './decks'
 import { DeckViewer } from './components/DeckViewer'
-import { NicknameGate } from './components/NicknameGate'
 
 export function ShareDeckRoute({ slug }: { slug: string }) {
   const [deck, setDeck] = useState<Deck | null>(null)
@@ -24,10 +23,8 @@ export function ShareDeckRoute({ slug }: { slug: string }) {
   if (!deck) return <Spinner text="Loading" />
 
   return (
-    <NicknameGate>
-      <Suspense fallback={<Spinner text="Loading" />}>
-        <DeckViewer deck={deck} slug={slug} />
-      </Suspense>
-    </NicknameGate>
+    <Suspense fallback={<Spinner text="Loading" />}>
+      <DeckViewer deck={deck} slug={slug} />
+    </Suspense>
   )
 }
