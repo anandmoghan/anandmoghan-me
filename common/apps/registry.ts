@@ -64,3 +64,8 @@ export const apps: AppDefinition[] = [
     restricted: true,
   },
 ]
+
+/** The app a site path belongs to (by path prefix), if any. */
+export function appForPath(pathname: string): AppDefinition | undefined {
+  return apps.find((a) => pathname.startsWith(a.path))
+}

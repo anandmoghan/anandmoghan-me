@@ -550,3 +550,21 @@ aside nav::-webkit-scrollbar-thumb:hover {
     padding-inline: 2rem;
   }
 }
+
+/* Settings page: the tab row scrolls sideways on phones instead of widening the page. */
+.settings-tabs {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-tabs > .chip {
+  flex: none;
+}

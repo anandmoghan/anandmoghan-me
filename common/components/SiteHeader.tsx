@@ -17,6 +17,7 @@ const SECTION_LABEL: Record<string, string> = {
   apps: 'Apps',
   login: 'Sign in',
   account: 'Account',
+  settings: 'Settings',
 };
 
 const NAV_LINKS = [

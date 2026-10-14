@@ -2,14 +2,18 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
-import { GearIcon, SignOutIcon, UserIcon } from '../shell/icons'
+import { appForPath } from '../registry'
+import { GearIcon, SignOutIcon } from '../shell/icons'
 
 const itemClass =
   'tap flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-[0.95rem] font-semibold hover:bg-subtle'
 
 export function ProfileMenu() {
   const { user, signOut } = useAuth()
+  const pathname = usePathname()
+  const currentApp = appForPath(pathname)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -54,11 +58,11 @@ export function ProfileMenu() {
             <p className="truncate font-bold">{user.displayName || 'Signed in'}</p>
             <p className="truncate text-sm text-muted">{user.email}</p>
           </div>
-          <Link href="/account" className={itemClass} onClick={() => setOpen(false)}>
-            <UserIcon />
-            Account
-          </Link>
-          <Link href="/apps/settings" className={itemClass} onClick={() => setOpen(false)}>
+          <Link
+            href={currentApp ? `/settings?app=${currentApp.id}` : '/settings'}
+            className={itemClass}
+            onClick={() => setOpen(false)}
+          >
             <GearIcon size={18} />
             Settings
           </Link>
