@@ -237,7 +237,8 @@ body.shell *::after {
   content: none;
 }
 
-.pane__list a {
+/* .pane outweighs .prose a (prose.css loads after this file), so pane links stay plain. */
+.pane .pane__list a {
   display: flex;
   gap: 0.6em;
   padding: 0.5em 0.75em;
