@@ -5,7 +5,6 @@ import { useAuth } from '@/common/firebase/AuthProvider'
 import { DomainScope } from '@/common/apps/shell/DomainScope'
 import { DataProvider, useData } from '@/common/apps/family/hooks/useData'
 import { ToastProvider } from '@/common/apps/family/hooks/useToast'
-import AreaBar from '@/common/apps/family/components/AreaBar'
 import TabBar from '@/common/apps/family/components/TabBar'
 import { ListSkeleton } from '@/common/apps/family/components/Skeleton'
 import { RequireAuth } from '@/common/apps/components/RequireAuth'
@@ -20,7 +19,6 @@ function Members({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="with-tab-bar">
-        <AreaBar showMac />
         {children}
       </div>
       <TabBar />

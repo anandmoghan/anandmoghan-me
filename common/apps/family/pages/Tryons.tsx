@@ -16,7 +16,7 @@ export default function Tryons() {
   const [big, setBig] = useState<string | null>(null);
   const rows = tryonRows({ tryons, requests: [], macLive: mac.live, match: (_ids, p) => p === person });
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 pt-5 pb-6">
+    <div className="space-y-5 px-4 pt-5 pb-6">
       <PageTitle title="My try-ons" sub="How you look in shop picks" />
       <Segmented label="Person" value={person} onChange={setPerson} options={TRYON_PEOPLE.map((p) => [p, personLabel(p)] as const)} />
       {rows.length === 0 ? (

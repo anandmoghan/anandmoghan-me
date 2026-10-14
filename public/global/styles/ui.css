@@ -180,9 +180,14 @@
 .badge--muted { color: var(--muted); }
 .badge--fg { color: var(--fg); }
 
-/* Card: raised surface. Use on a link (a.card) for the hover lift. */
-.card {
+/* Card: raised surface. Use on a link (a.card) for the hover lift.
+   The default display sits in :where() so a utility such as Tailwind flex on the same
+   element wins whatever the stylesheet order. */
+:where(.card) {
   display: block;
+}
+
+.card {
   padding: var(--space-5);
   color: var(--fg);
   background: var(--surface);

@@ -47,7 +47,7 @@ export default function Parenting() {
     : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 pt-5 pb-6">
+    <div className="space-y-5 px-4 pt-5 pb-6">
       {backTo && <div className="-mb-3"><BackLink to={backTo[0]} label={backTo[1]} /></div>}
       <PageTitle title={label} sub={key === "today" ? <span data-testid="nila-age">{[todayLabel, age && `${age} old`].filter(Boolean).join(" · ")}</span> : undefined} />
       {p.status === "loading" && <ListSkeleton rows={4} />}

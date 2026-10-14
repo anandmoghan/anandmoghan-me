@@ -15,6 +15,7 @@ import { feedItemDomain, greeting, type Domain } from "@/common/apps/family/lib/
 import { doneToday, fitnessApi } from "@/common/apps/family/lib/fitness";
 import { ageLabel, currentWeek, isGuide, parentingApi } from "@/common/apps/family/lib/parenting";
 import type { Person } from "@/common/apps/family/types";
+import MacPill from "@/common/apps/family/components/MacPill";
 
 const tint = (d: Domain) => ({ "--domain": `var(--${d})` }) as CSSProperties;
 
@@ -199,8 +200,11 @@ export default function Home() {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-7 px-4 pt-5 pb-6">
-      <h1 className="text-[1.75rem] font-extrabold leading-tight">{greeting()}{name ? `, ${name}` : ""}</h1>
+    <div className="space-y-7 px-4 pt-5 pb-6">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 text-[1.75rem] font-extrabold leading-tight">{greeting()}{name ? `, ${name}` : ""}</h1>
+        <MacPill />
+      </div>
 
       <section aria-label="Needs you" className="space-y-2.5">
         <h2 className="text-lg font-extrabold">Needs you</h2>

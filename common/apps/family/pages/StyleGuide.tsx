@@ -15,7 +15,7 @@ export default function StyleGuide() {
   const [person, setPerson] = useState<Person>(() => defaultPerson(user?.email));
   const guide = people.find((p) => p.id === person)?.style_guide;
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 pt-5 pb-6">
+    <div className="space-y-5 px-4 pt-5 pb-6">
       <PageTitle title="Style guide" sub={guide?.updated_at ? `Updated ${timeAgo(guide.updated_at)}` : "Colours, fit rules and what to skip"} />
       <Segmented label="Person" value={person} onChange={setPerson} options={TRYON_PEOPLE.map((p) => [p, personLabel(p)] as const)} />
       {guide?.body ? (

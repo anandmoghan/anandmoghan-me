@@ -21,7 +21,7 @@ export default function More() {
   const { theme, setTheme } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
   return (
-    <div className="mx-auto max-w-2xl space-y-7 px-4 pt-5 pb-6">
+    <div className="space-y-7 px-4 pt-5 pb-6">
       <PageTitle title="Settings and more" />
       <section className="space-y-2.5">
         <SectionTitle title="Shortcuts" />

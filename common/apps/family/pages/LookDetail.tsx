@@ -31,7 +31,7 @@ export default function LookDetail() {
   const total = lookTotal(items);
   const tryon = latestLookTryon(tryons, person, look);
   return (
-    <div className="mx-auto max-w-2xl px-4 pt-2 pb-6">
+    <div className="px-4 pt-2 pb-6">
       <BackLink fallback={`/shop?brief=${look.bottom.brief_id}&view=looks`} label="Back to looks" />
       <div className="mt-2 md:max-w-xl">
         <div className="overflow-hidden rounded-2xl shadow-card">
