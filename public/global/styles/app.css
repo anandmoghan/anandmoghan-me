@@ -877,11 +877,19 @@ button.switch:focus-visible {
   outline-offset: -2px;
 }
 
+/* Scrolls sideways with no visible bar; overflow-y is clipped, or the active underline's
+   1px overhang makes the row scroll vertically too. */
 .tabs-line {
   display: flex;
   gap: 0.25rem;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   border-bottom: 1px solid var(--border);
+}
+
+.tabs-line::-webkit-scrollbar {
+  display: none;
 }
 
 .tabs-line > button {
