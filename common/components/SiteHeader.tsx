@@ -51,7 +51,7 @@ function AccountAction({ pathname }: { pathname: string }) {
   if (user && !isAnonymous) return <ProfileMenu />;
   if (pathname === '/login' || isShareRoute) return null;
   return (
-    <Link href="/login" className="btn btn--sm">
+    <Link href={`/login?return=${encodeURIComponent(pathname)}`} className="btn btn--sm">
       Sign in
     </Link>
   );

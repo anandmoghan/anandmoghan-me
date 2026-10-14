@@ -1,18 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { GoogleLoginButton } from './GoogleLoginButton'
 import { Card } from '../shell/Card'
 import { Field } from '../shell/Field'
 import { ButtonSpinner } from '../shell/Skeleton'
-import { BackIcon, LockIcon } from '../shell/icons'
 
 // Only same-site absolute paths are accepted as a post-login destination.
 function safeReturnPath(raw: string | null): string {
-  return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/apps'
+  return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
 }
 
 // Reads ?return=, so the page must render this inside <Suspense>.
@@ -73,19 +71,13 @@ export function LoginForm() {
   return (
     <div className="flex flex-1 items-center justify-center py-8">
       <div className="w-full max-w-sm px-4">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <span className="icon-tile icon-tile--lg mb-4" aria-hidden>
-            <LockIcon />
-          </span>
+        <div className="mb-6 text-center">
           <h1 className="text-[1.65rem] font-extrabold leading-tight">{submitLabel}</h1>
           <p className="mt-1 text-[0.95rem] text-muted">
-            {mode === 'signin' ? 'Sign in to access your apps.' : 'Create an account to get started.'}
+            {isAnonymous
+              ? 'Keep your comments and reading history, and use the apps.'
+              : 'Comment on posts, keep your reading history, and use the apps.'}
           </p>
-          {isAnonymous && (
-            <p className="text-muted mt-2 text-sm">
-              You are browsing as a guest. Signing in keeps your comments and settings.
-            </p>
-          )}
         </div>
 
         <Card>
@@ -158,12 +150,6 @@ export function LoginForm() {
           </div>
         </Card>
 
-        <p className="mt-4 text-center">
-          <Link href="/apps" className="back-link">
-            <BackIcon />
-            Back to apps
-          </Link>
-        </p>
       </div>
     </div>
   )
