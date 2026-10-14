@@ -15,7 +15,7 @@ import {
 import { getDb } from '@/common/firebase/client'
 import { Badge } from '../shell/Badge'
 import { Card } from '../shell/Card'
-import { ListSkeleton } from '../shell/Skeleton'
+import { PageSkeleton } from '../shell/Skeleton'
 import { formatDateTime } from './format'
 
 // Newest blog comments across all posts (collection-group query on "comments", index in
@@ -74,7 +74,15 @@ export function CommentsPage() {
     }
   }
 
-  if (!rows) return error ? <p className="px-4 py-8 text-sm text-destructive">{error}</p> : <ListSkeleton />
+  if (!rows) {
+    return error ? (
+      <div className="site-container py-8">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    ) : (
+      <PageSkeleton />
+    )
+  }
 
   const shown = rows.filter((r) => filter === 'all' || r.status === filter)
   const hiddenCount = rows.filter((r) => r.status === 'hidden').length

@@ -5,7 +5,7 @@ import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore'
 import { getDb } from '@/common/firebase/client'
 import { Badge } from '../shell/Badge'
 import { Card } from '../shell/Card'
-import { ListSkeleton } from '../shell/Skeleton'
+import { PageSkeleton } from '../shell/Skeleton'
 import { formatDateTime } from './format'
 
 const MAX_USERS = 300
@@ -56,8 +56,14 @@ export function UsersPage() {
     load()
   }, [load])
 
-  if (error) return <p className="px-4 py-8 text-sm text-destructive">{error}</p>
-  if (!users) return <ListSkeleton />
+  if (error) {
+    return (
+      <div className="site-container py-8">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    )
+  }
+  if (!users) return <PageSkeleton />
 
   const signedIn = users.filter((u) => !u.isAnonymous).length
 

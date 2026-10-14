@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { FamilyApp } from "@/common/apps/family/FamilyApp";
-import { ListSkeleton } from "@/common/apps/family/components/Skeleton";
+import { PageSkeleton } from "@/common/apps/shell/Skeleton";
 import "./family.css";
 
 // The family app (ported from personal-manager/web). Routing: one static page per screen, ids in
@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 // FamilyApp reads the query string, which a static export only has in the browser.
 export default function FamilyLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<ListSkeleton rows={3} />}>
+    <Suspense fallback={<PageSkeleton rows={3} />}>
       <FamilyApp>{children}</FamilyApp>
     </Suspense>
   );

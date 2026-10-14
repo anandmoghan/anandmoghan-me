@@ -1,9 +1,16 @@
 'use client';
 
 // Shell placeholders (global app.css .skeleton), plus the grid and product page shapes the family app needs.
-import { Skeleton as Sk } from "@/common/apps/shell/Skeleton";
+import { ListSkeleton as ShellListSkeleton, Skeleton as Sk } from "@/common/apps/shell/Skeleton";
 
-export { ListSkeleton } from "@/common/apps/shell/Skeleton";
+// The shell list placeholder with the family pages' 1rem gutters.
+export function ListSkeleton({ rows }: { rows?: number }) {
+  return (
+    <div className="px-4 pt-4">
+      <ShellListSkeleton rows={rows} />
+    </div>
+  );
+}
 
 export function GridSkeleton() {
   return (

@@ -5,7 +5,7 @@ import { Timestamp, collection, getDocs, limit, orderBy, query, where } from 'fi
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { getDb } from '@/common/firebase/client'
 import { Card } from '../shell/Card'
-import { ListSkeleton } from '../shell/Skeleton'
+import { PageSkeleton } from '../shell/Skeleton'
 import { dayKey, toDate } from './format'
 
 // Visits dashboard, aggregated in the browser over a bounded recent window. Once traffic
@@ -184,8 +184,14 @@ export function VisitsPage() {
     })
   }, [])
 
-  if (error) return <p className="px-4 py-8 text-sm text-destructive">{error}</p>
-  if (!stats || !visits) return <ListSkeleton />
+  if (error) {
+    return (
+      <div className="site-container py-8">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    )
+  }
+  if (!stats || !visits) return <PageSkeleton />
 
   return (
     <div className="site-container space-y-4 py-6">

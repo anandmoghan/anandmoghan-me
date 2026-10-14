@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Card } from '../../shell/Card'
-import { ListSkeleton } from '../../shell/Skeleton'
+import { PageSkeleton } from '../../shell/Skeleton'
 import { TabBar, type Tab } from '../../shell/TabBar'
 import { LadderIcon } from '../../shell/icons'
 import { useLadder } from '../LadderProvider'
@@ -75,7 +75,7 @@ export function LadderShell({ children }: { children: ReactNode }) {
 
   let body: ReactNode
   if (!accessReady) {
-    body = <ListSkeleton />
+    body = <PageSkeleton />
   } else if (trackers.length === 0) {
     body = (
       <div className="site-container py-12">
@@ -94,7 +94,7 @@ export function LadderShell({ children }: { children: ReactNode }) {
           <TrackerSwitcher />
           {error && <p className="field-error mt-2">Could not load ladder data: {error}</p>}
         </div>
-        {loading ? <ListSkeleton /> : children}
+        {loading ? <PageSkeleton /> : children}
       </>
     )
   }
