@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { SettingsCard, SettingsRow } from '@/common/apps/components/SettingsRows'
 import { CategoryForm } from './CategoryForm'
 import { createCategory, updateCategory } from '../services/categories'
 import type { Category } from '../types'
@@ -29,48 +30,27 @@ export function CategoryList({ uid, categories }: CategoryListProps) {
   const archived = categories.filter(c => c.archived)
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">Categories</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="text-sm text-accent hover:underline font-medium"
-        >
-          + New
-        </button>
-      </div>
-
-      {active.length === 0 && archived.length === 0 && (
-        <div className="text-center py-8 text-muted text-sm">
-          <p className="text-2xl mb-2">📂</p>
-          <p>No categories yet.</p>
-          <p>Add one to start tracking time.</p>
-        </div>
-      )}
-
-      <div className="space-y-2">
+    <>
+      <SettingsCard title="Categories">
+        {active.length === 0 && (
+          <SettingsRow label="No categories yet" description="Add one to start tracking time." />
+        )}
         {active.map(cat => (
-          <CategoryRow
-            key={cat.id}
-            category={cat}
-            onEdit={() => setEditTarget(cat)}
-          />
+          <CategoryRow key={cat.id} category={cat} onEdit={() => setEditTarget(cat)} />
         ))}
-      </div>
+        <SettingsRow label="Add a category" description="Name, icon and optional budgets.">
+          <button type="button" onClick={() => setShowForm(true)} className="btn btn--sm btn--primary">
+            Add category
+          </button>
+        </SettingsRow>
+      </SettingsCard>
 
       {archived.length > 0 && (
-        <div className="mt-4">
-          <p className="text-xs text-muted font-medium mb-2">Archived</p>
-          <div className="space-y-2 opacity-60">
-            {archived.map(cat => (
-              <CategoryRow
-                key={cat.id}
-                category={cat}
-                onEdit={() => setEditTarget(cat)}
-              />
-            ))}
-          </div>
-        </div>
+        <SettingsCard title="Archived categories">
+          {archived.map(cat => (
+            <CategoryRow key={cat.id} category={cat} onEdit={() => setEditTarget(cat)} />
+          ))}
+        </SettingsCard>
       )}
 
       {showForm && (
@@ -88,32 +68,19 @@ export function CategoryList({ uid, categories }: CategoryListProps) {
           isEdit
         />
       )}
-    </div>
+    </>
   )
 }
 
 function CategoryRow({ category, onEdit }: { category: Category; onEdit: () => void }) {
+  const budgets = category.budgets
+    .map(b => `${b.kind === 't' ? b.value + 'h' : b.value + '×'} / ${b.window === 'd' ? 'day' : b.window === 'w' ? 'week' : 'month'}`)
+    .join(', ')
   return (
-    <div className="flex items-center justify-between border border-border p-3">
-      <div className="flex items-center gap-3">
-        <span className="text-xl">{category.icon}</span>
-        <div>
-          <p className="text-sm font-medium">{category.name}</p>
-          {category.budgets.length > 0 && (
-            <p className="text-xs text-muted">
-              {category.budgets.map(b =>
-                `${b.kind === 't' ? b.value + 'h' : b.value + '×'} / ${b.window === 'd' ? 'day' : b.window === 'w' ? 'week' : 'month'}`
-              ).join(', ')}
-            </p>
-          )}
-        </div>
-      </div>
-      <button
-        onClick={onEdit}
-        className="text-xs text-muted hover:text-foreground px-2 py-1 border border-border hover:border-foreground/30 transition-colors"
-      >
+    <SettingsRow label={category.name} leading={category.icon} description={budgets || undefined}>
+      <button type="button" onClick={onEdit} className="btn btn--sm">
         Edit
       </button>
-    </div>
+    </SettingsRow>
   )
 }
