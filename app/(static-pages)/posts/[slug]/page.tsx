@@ -150,7 +150,7 @@ export default async function PostPage({ params }: PostPageProps) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              All posts
+              Back to Posts
             </Link>
             <PrintButton />
           </div>
