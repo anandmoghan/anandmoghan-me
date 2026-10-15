@@ -93,9 +93,9 @@ export function LoginForm() {
         <div className="mb-6 text-center">
           <h1 className="text-[1.65rem] font-extrabold leading-tight">{submitLabel}</h1>
           <p className="mt-1 text-[0.95rem] text-muted">
-            {isAnonymous
-              ? 'Keep your comments and reading history, and use the apps.'
-              : 'Comment on posts, keep your reading history, and use the apps.'}
+            {returnTo.startsWith('/apps')
+              ? 'Sign in with your family account.'
+              : 'Sign in or create an account.'}
           </p>
         </div>
 
