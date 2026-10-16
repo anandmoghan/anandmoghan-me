@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { FamilyApp } from "@/common/apps/family/FamilyApp";
+import { InstallHead } from "@/common/apps/family/components/InstallHead";
 import { PageSkeleton } from "@/common/apps/shell/Skeleton";
 import "./family.css";
 
@@ -30,6 +31,7 @@ export const viewport: Viewport = {
 export default function FamilyLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<PageSkeleton rows={3} />}>
+      <InstallHead />
       <FamilyApp>{children}</FamilyApp>
     </Suspense>
   );
