@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab recipes for pretraining stability</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+</head>
+<body class="prose">
+  <header>
+    <h1>Lab recipes for pretraining stability</h1>
+    <p>Research note, 2024 to 2026 open technical reports. Source for the LLM pretraining stability post.</p>
+  </header>
+  <main>
+    <section id="how-to-read">
+      <h2>How to read this note</h2>
+      <p>
+        <span class="tag tag--confirmed">confirmed</span>
+        means I read the statement in the primary source (report or first-party page).
+        <span class="tag tag--reported">reported</span>
+        means it came from a search summary or a secondary page and was not checked against the primary text.
+        <span class="tag tag--inference">inference</span>
+        is my own reading across sources.
+      </p>
+      <p>
+        Long reports were fetched through a summarising tool, and for most of them only the first part of the text was read.
+        A missing statement below therefore means "not seen", not "not in the report".
+      </p>
+    </section>
+
+    <section id="summary-table">
+      <h2>Model by model summary</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Year</th>
+              <th>Stability techniques named</th>
+              <th>Spike or divergence story</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>PaLM 540B (context)</td>
+              <td>2022</td>
+              <td>Restart and skip batches</td>
+              <td>About 20 spikes despite gradient clipping; not caused by "bad data" per se</td>
+            </tr>
+            <tr>
+              <td>OLMoE</td>
+              <td>2024</td>
+              <td>RMSNorm, QK-norm, router z-loss, truncated normal init</td>
+              <td>Normal init diverged around 450B tokens in an ablation; final run smooth</td>
+            </tr>
+            <tr>
+              <td>Llama 3 405B</td>
+              <td>2024</td>
+              <td>Low peak LR, 8,000-step warmup, small early batch then larger, FP32 gradient accumulation</td>
+              <td>"Few loss spikes", no divergence interventions needed</td>
+            </tr>
+            <tr>
+              <td>Gemma 2</td>
+              <td>2024</td>
+              <td>Attention logit soft-cap 50, final logit soft-cap 30, pre and post RMSNorm</td>
+              <td>None reported</td>
+            </tr>
+            <tr>
+              <td>DeepSeek-V3</td>
+              <td>2024</td>
+              <td>Aux-loss-free balancing, node-limited routing, FP8 with high-precision retention, clip 1.0, AdamW (0.9, 0.95)</td>
+              <td>No irrecoverable spikes, no rollbacks</td>
+            </tr>
+            <tr>
+              <td>MiniMax-01</td>
+              <td>2025</td>
+              <td>DeepNorm-style scaling, Xavier init, AdamW (0.9, 0.95), global router</td>
+              <td>None seen in the read portion</td>
+            </tr>
+            <tr>
+              <td>OLMo 2 7B/13B</td>
+              <td>2025</td>
+              <td>N(0, 0.02) init, reordered norm plus QK-norm, z-loss, AdamW eps 1e-8, no weight decay on embeddings, repeated n-gram filter and loss mask</td>
+              <td>Gradient-norm spikes and slow gradient-norm growth in OLMo-0424; peak LR 30e-4 spiked in warmup</td>
+            </tr>
+            <tr>
+              <td>Nemotron-H</td>
+              <td>2025</td>
+              <td>FP8 with first and last 4 GEMMs in BF16</td>
+              <td>No spike story; numerical instability named as one failure cause</td>
+            </tr>
+            <tr>
+              <td>Gemma 3</td>
+              <td>2025</td>
+              <td>QK-norm replaces soft-capping, pre and post norm</td>
+              <td>None reported</td>
+            </tr>
+            <tr>
+              <td>Qwen3</td>
+              <td>2025</td>
+              <td>QK-norm, QKV-bias removed, global-batch load balancing</td>
+              <td>None reported</td>
+            </tr>
+            <tr>
+              <td>Marin 8B</td>
+              <td>2025</td>
+              <td>Z-loss added later, peak LR 1e-3 (2e-3 was unstable)</td>
+              <td>Few spikes; lm_head blow-up during deep cooldown</td>
+            </tr>
+            <tr>
+              <td>Marin 32B</td>
+              <td>2025</td>
+              <td>Grad clip 0.2, update-norm clip, skip-step, then switch to QK-norm</td>
+              <td>Persistent spikes from about 70k steps; QK-norm warm start removed them</td>
+            </tr>
+            <tr>
+              <td>Kimi K2</td>
+              <td>2025</td>
+              <td>MuonClip (Muon plus per-head QK-Clip, tau 100)</td>
+              <td>Vanilla Muon logits above 1000 in a mid-scale run; K2 reports zero spikes over 15.5T tokens</td>
+            </tr>
+            <tr>
+              <td>GLM-4.5</td>
+              <td>2025</td>
+              <td>Muon, QK-norm, loss-free balance routing</td>
+              <td>Pretraining section does not discuss spikes</td>
+            </tr>
+            <tr>
+              <td>Ling 2.0</td>
+              <td>2025</td>
+              <td>Dense first layers, QK-norm, router gate scaling, FP8, AdamW clip 1.0, init std 0.006, checkpoint merging</td>
+              <td>Spike handling described in the earlier Ling report (skip and re-inject data)</td>
+            </tr>
+            <tr>
+              <td>LongCat-Flash</td>
+              <td>2025</td>
+              <td>Width-scaled hyperparameter transfer, hidden z-loss, router gradient balancing, model-growth init, determinism, SDC detection</td>
+              <td>"No irrecoverable loss spikes"; massive activations correlate with spikes</td>
+            </tr>
+            <tr>
+              <td>SmolLM3</td>
+              <td>2025</td>
+              <td>No weight decay on embeddings (from OLMo 2), intra-document masking, clip 1</td>
+              <td>No spike story</td>
+            </tr>
+            <tr>
+              <td>Apertus</td>
+              <td>2025</td>
+              <td>QK-norm, pre-norm RMSNorm, WSD, fixed BoD token with doc masking</td>
+              <td>Not found in the read portion</td>
+            </tr>
+            <tr>
+              <td>Olmo 3</td>
+              <td>2025</td>
+              <td>"Largely follows OLMo 2", sliding-window attention in 3 of 4 layers</td>
+              <td>No pretraining spike discussion seen; cluster instability affected RL and DPO runs</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="open-reports">
+      <h2>Per-report notes</h2>
+
+      <h3 id="olmo2">OLMo 2 (2501.00656)</h3>
+      <ul>
+        <li>
+          Two problems are named: sudden spikes in loss and (more often) gradient norm, and slow growth of gradient-norm magnitude over the run.
+          Larger models spiked more, and big gradient-norm spikes often preceded loss spikes.
+          <span class="tag tag--confirmed">confirmed</span>
+          [OLMo 2 Furious, 2501.00656, Section 3]
+        </li>
+        <li>
+          Spike score is the share of values at least 7 standard deviations from a rolling average of the last 1,000 values.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.2]
+        </li>
+        <li>
+          Data: documents with a sequence of 32 or more repeated n-grams (1 to 13 tokens) are removed, and such sequences are also masked in the loss.
+          This mitigated gradient spikes "though not complete elimination" and did not affect the slow gradient-norm growth.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.1]
+        </li>
+        <li>
+          Init: every parameter from N(0, 0.02) replaced the scaled init of OLMo-0424.
+          Gradient-norm spike score fell from 0.40 to 0.03 in the ablation, at the cost of slightly slower convergence.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.2]
+        </li>
+        <li>
+          Reordered norm and QK-norm help only together: "In isolation, neither of these changes yield good results".
+          Together the gradient spike score went from 0.108 to 0.069.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.3.2]
+        </li>
+        <li>
+          Z-loss: a penalty on the softmax normaliser log Z squared, to stop final-softmax activations growing.
+          The text says weight 1e-4 while Table 1 lists 1e-5 (see open questions).
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.3.3]
+        </li>
+        <li>
+          Z-loss implementation detail: two implementations agreed in the forward pass but differed in the backward pass, and the team retrained from the divergence point.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.3.3]
+        </li>
+        <li>
+          AdamW epsilon lowered from 1e-5 to 1e-8; the gradient norm "settles much more quickly and remains permanently lower".
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.4.1]
+        </li>
+        <li>
+          No weight decay on embeddings: decay shrinks embeddings and can cause large early-layer gradients.
+          Spike score 0.16 with decay, 0.092 without.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 3.4.2]
+        </li>
+        <li>
+          A peak LR of 30e-4 showed instability already during warmup, with spikes that did not fully recover, so it was abandoned.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656, Section 4.1]
+        </li>
+      </ul>
+
+      <h3 id="olmo3">Olmo 3 (2512.13961)</h3>
+      <ul>
+        <li>
+          Modelling and training "largely follows that of OLMo 2"; the new architectural item is sliding-window attention in three of every four layers, last layer always full.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Olmo 3, 2512.13961, Sections 3 and 3.2]
+        </li>
+        <li>
+          No loss-spike or QK-norm discussion appeared in the first 100k characters read; the appendix tables were not read.
+          <span class="tag tag--confirmed">confirmed</span>
+          (about what I read, not about the whole paper)
+        </li>
+      </ul>
+
+      <h3 id="llama3">Llama 3 (2407.21783)</h3>
+      <ul>
+        <li>
+          "We found this training recipe to be very stable: we observed few loss spikes" and no interventions for divergence were needed.
+          <span class="tag tag--confirmed">confirmed</span>
+          [The Llama 3 Herd of Models, 2407.21783, Section 3.4.1]
+        </li>
+        <li>
+          Recipe: peak LR 8e-5 for 405B (3e-4 for 8B, 1.5e-4 for 70B), 8,000-step linear warmup, cosine decay to 8e-7 over 1.2M steps.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2407.21783, Sections 3.2 and 3.4.1]
+        </li>
+        <li>
+          Batch schedule: 4M tokens (4,096 sequence length), doubled to 8M after 252M tokens, then to 16M after 2.87T tokens, "to improve training stability" early and efficiency later.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2407.21783, Section 3.4.1]
+        </li>
+        <li>
+          FP32 gradient accumulation and FP32 reduce-scatter were used after fixing "several numerical issues".
+          <span class="tag tag--confirmed">confirmed</span>
+          [2407.21783, Section 3]
+        </li>
+        <li>
+          Reliability is the larger problem: 466 interruptions in a 54-day window (419 unexpected), about 78% attributed to hardware, 6 silent data corruption events.
+          Effective training time stayed above 90%.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2407.21783, Section 3.3.4]
+        </li>
+        <li>
+          Mid-training mix changes included downsampling data later found to be lower quality.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2407.21783, Section 3.4]
+        </li>
+      </ul>
+
+      <h3 id="deepseek">DeepSeek-V3 (2412.19437)</h3>
+      <ul>
+        <li>
+          "We did not experience any irrecoverable loss spikes or perform any rollbacks" over the full run.
+          <span class="tag tag--confirmed">confirmed</span>
+          [DeepSeek-V3 Technical Report, 2412.19437, abstract and introduction]
+        </li>
+        <li>
+          Auxiliary-loss-free balancing: a per-expert bias adjusted from batch-level load, speed 0.001 for the first 14.3T tokens then 0; plus a tiny sequence-wise balance loss (alpha 0.0001).
+          <span class="tag tag--confirmed">confirmed</span>
+          [2412.19437, Sections 2.1.2 and 4.2]
+        </li>
+        <li>
+          Each token is routed to at most 4 nodes.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2412.19437, Section 4.2]
+        </li>
+        <li>
+          FP8 training: relative loss error stays below 0.25%; outlier-prone components keep higher precision.
+          Master weights and gradients stay FP32; AdamW moments are BF16.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2412.19437, Sections 3.3 to 3.3.3]
+        </li>
+        <li>
+          AdamW with betas (0.9, 0.95), weight decay 0.1, gradient clip 1.0.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2412.19437, Section 4.2]
+        </li>
+        <li>
+          The report does not attribute the stability to any single item.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+
+      <h3 id="kimi">Kimi K2 (2507.20534)</h3>
+      <ul>
+        <li>
+          Attention-logit explosion is the named instability, more frequent with Muon than AdamW in their experiments.
+          A 9B-active, 53B-total run with vanilla Muon saw max logits "quickly exceed a magnitude of 1000".
+          <span class="tag tag--confirmed">confirmed</span>
+          [Kimi K2: Open Agentic Intelligence, 2507.20534]
+        </li>
+        <li>
+          Soft-capping is called insufficient (the dot product can grow before the cap applies), and QK-norm is incompatible with MLA because keys are not materialised at inference.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2507.20534]
+        </li>
+        <li>
+          QK-Clip rescales query and key projection weights after the update when a head's max logit exceeds tau; it does not change the current step's forward or backward pass, and is applied per head.
+          K2 used tau 100; logits decayed to a stable range after about 30% of training.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2507.20534]
+        </li>
+        <li>
+          Claim: 15.5T tokens "without a single loss spike".
+          The figure omits the very beginning of training "for clarity".
+          <span class="tag tag--confirmed">confirmed</span>
+          [2507.20534, abstract and Figure 3 caption]
+        </li>
+        <li>
+          Recipe: LR 2e-4 constant for 10T tokens, cosine to 2e-5 over 5.5T, batch 67M tokens, weight decay 0.1.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2507.20534]
+        </li>
+      </ul>
+
+      <h3 id="qwen">Qwen3 (2505.09388)</h3>
+      <ul>
+        <li>
+          QK-norm added "to ensure stable training"; QKV-bias from Qwen2 removed.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Qwen3 Technical Report, 2505.09388]
+        </li>
+        <li>
+          MoE variants: 128 experts, 8 active, no shared experts, global-batch load-balancing loss.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2505.09388]
+        </li>
+        <li>
+          No loss-spike discussion seen in the part read.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="gemma">Gemma 2 and Gemma 3 (2408.00118, 2503.19786)</h3>
+      <ul>
+        <li>
+          Gemma 2: tanh soft-capping at 50.0 for attention logits and 30.0 for final logits; RMSNorm on inputs and outputs of each sub-layer "to stabilize training".
+          <span class="tag tag--confirmed">confirmed</span>
+          [Gemma 2, 2408.00118]
+        </li>
+        <li>
+          Gemma 3: "we replace the soft-capping of Gemma 2 with QK-norm", citing Wortsman et al. on small-scale proxies for instability.
+          Neither report includes a stability ablation.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Gemma 3 Technical Report, 2503.19786]
+        </li>
+        <li>
+          Gemma 2 to Gemma 3 is a lab-level swap of soft-capping for QK-norm, which fits the field converging on QK-norm.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+
+      <h3 id="minimax">MiniMax-01 and MiniMax-M1 (2501.08313, 2506.13585)</h3>
+      <ul>
+        <li>
+          MiniMax-01 uses DeepNorm scaling (alpha (2N)^0.25, beta (8N)^-0.25) and Xavier init, noting "PostNorm can be prone to vanishing and exploding gradients"; AdamW betas (0.9, 0.95), weight decay 0.1.
+          <span class="tag tag--confirmed">confirmed</span>
+          [MiniMax-01, 2501.08313, Sections 2.3 and 4.2]
+        </li>
+        <li>
+          MiniMax-M1 is an RL-stage story: the LM head was raised to FP32 after high-magnitude activations caused a training/inference probability mismatch (correlation from about 0.9x to 0.99x).
+          <span class="tag tag--confirmed">confirmed</span>
+          [MiniMax-M1, 2506.13585, Section 3.2]
+        </li>
+        <li>
+          Same report: gradients span 1e-18 to 1e-5, so the default AdamW (0.9, 0.999, eps 1e-8) caused non-convergence; they set betas (0.9, 0.95) and eps 1e-15.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2506.13585, Section 3.2]
+        </li>
+        <li>
+          Long-context extension: overly aggressive length increases "can lead to a sudden gradient explosion".
+          <span class="tag tag--confirmed">confirmed</span>
+          [2506.13585, Section 2.1]
+        </li>
+      </ul>
+
+      <h3 id="marin">Marin 8B and 32B (first-party retrospectives)</h3>
+      <ul>
+        <li>
+          8B: "fairly stable with very few spikes"; peak LR 1e-3 chosen because 2e-3 (suggested by the DCLM paper) was unstable.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Marin 8B Retrospective, marin.readthedocs.io/en/latest/reports/marin-8b-retro/]
+        </li>
+        <li>
+          8B skipped z-loss at first; during deep cooldown the loss crept up and tracking norms showed "the lm_head was exploding".
+          Resetting optimizer state and removing weight decay did not fix it; adding z-loss 1e-4 did.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Marin 8B Retrospective]
+        </li>
+        <li>
+          32B: "many more loss spikes than we had seen at 8b (and in 70b trials)".
+          Tried max grad norm 0.2, update-norm clipping, skip-bad-steps (sigma 2.0, window 128), optimizer-state rebuild and Muon.
+          "Gradient clipping and step-skipping heuristics softened the spikes but never removed them."
+          <span class="tag tag--confirmed">confirmed</span>
+          [Marin 32B Retrospective, marin.readthedocs.io/en/latest/reports/marin-32b-retro/]
+        </li>
+        <li>
+          Fix: warm-start from the step-80k Llama weights into the Qwen3 32B architecture (adds QK-norm) with a 1,000-step re-warmup.
+          One-time loss penalty, recovery in about 10B tokens, "the loss spikes disappeared entirely"; "We should have tested QK-Norm earlier."
+          <span class="tag tag--confirmed">confirmed</span>
+          [Marin 32B Retrospective]
+        </li>
+        <li>
+          Data side: near step 190k the training loss phase-shifted while validation stayed flat; the team attributes it to correlated batches from the affine shuffle and fixed it with a Feistel shuffle plus cleaner math data.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Marin 32B Retrospective]
+        </li>
+      </ul>
+
+      <h3 id="glm">GLM-4.5 (2508.06471)</h3>
+      <ul>
+        <li>
+          Muon for all parameters except embeddings, biases and RMSNorm weights (5 Newton-Schulz steps, momentum 0.95, update RMS scaled to 0.2).
+          <span class="tag tag--confirmed">confirmed</span>
+          [GLM-4.5, 2508.06471, Section 2]
+        </li>
+        <li>
+          QK-norm "to stabilize the range of attention logits" (on in GLM-4.5, off in Air); loss-free balance routing with bias update 0.001 for 15T tokens then 0.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2508.06471, Section 2]
+        </li>
+      </ul>
+
+      <h3 id="ling">Ling family (2503.05139, 2510.22115) and LongCat-Flash (2509.01322)</h3>
+      <ul>
+        <li>
+          Ling (300B MoE): narrow spikes last a few steps and matter little; wide spikes persist and can push benchmarks toward chance.
+          Causes are "specific interactions between the data and optimizer states".
+          Mitigation: skip the update, re-inject the data later, and cut the LR if it persists.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Every FLOP Counts, 2503.05139, Section 3.4.4]
+        </li>
+        <li>
+          Same report: router z-loss coefficient 1e-4, balance loss 0.015, stochastic routing warmup against early expert collapse, and NormHead because "the output norm of the LM-Head often becomes unstable, particularly during loss spikes".
+          <span class="tag tag--confirmed">confirmed</span>
+          [2503.05139, Sections 3.2 and 3.4]
+        </li>
+        <li>
+          Ling 2.0: first layers dense "for stability", QK-norm that "significantly improve[s] stability under low-precision training", init std 0.006, clip 1.0, FP8 gap at most 0.25% after 900B tokens, top-32 checkpoint merging (WSM).
+          <span class="tag tag--confirmed">confirmed</span>
+          [Ling 2.0, 2510.22115]
+        </li>
+        <li>
+          LongCat-Flash: "massive activations correlate with severe loss spikes", hence a hidden z-loss on large-magnitude activations.
+          Also width-scaled hyperparameter transfer, a monitored router gradient ratio, model-growth init from a 14-layer model, deterministic kernels and silent-data-corruption checks; "no irrecoverable loss spikes".
+          <span class="tag tag--confirmed">confirmed</span>
+          [LongCat-Flash Technical Report, 2509.01322]
+        </li>
+      </ul>
+
+      <h3 id="small-open">Nemotron-H, SmolLM3, Apertus, OLMoE, Hunyuan-Large</h3>
+      <ul>
+        <li>
+          Nemotron-H: FP8 loss within 0.1% of BF16; first and last 4 GEMMs left in BF16 "for training stability and convergence"; FP8 results at small scale did not carry to larger models.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Nemotron-H, 2504.03624]
+        </li>
+        <li>
+          SmolLM3: removes embedding weight decay "following OLMo 2", intra-document masking for "faster and more stable long context training", clip 1, WSD; no spike story.
+          <span class="tag tag--confirmed">confirmed</span>
+          [SmolLM3 blog, huggingface.co/blog/smollm3]
+        </li>
+        <li>
+          Apertus: QK-norm "preventing excessively large attention logits", pre-norm RMSNorm, WSD that avoids re-warming, fixed beginning-of-document token with document masking said to improve stability.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Apertus, 2509.14233]
+        </li>
+        <li>
+          OLMoE ablations: router z-loss (weight 0.001) gives fewer spikes and lower loss at about 2% throughput cost; QK-norm prevents grad-norm spikes at nearly 10% throughput cost; non-parametric layer norm causes many gradient spikes; normal init diverged near 450B tokens while truncated normal was stable.
+          <span class="tag tag--confirmed">confirmed</span>
+          [OLMoE, 2409.02060, Sections 4.1 and 4.2]
+        </li>
+        <li>
+          Hunyuan-Large: recycle routing for tokens sent to overloaded experts because token dropping "may negatively impact training stability"; expert LR scaled by about 0.31.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Hunyuan-Large, 2411.02265]
+        </li>
+      </ul>
+    </section>
+
+    <section id="data-side">
+      <h2>Data-side causes and fixes</h2>
+      <ul>
+        <li>
+          Repeated or degenerate sequences: filter documents with 32 or more repeated n-grams and mask them in the loss.
+          Partial fix only.
+          <span class="tag tag--confirmed">confirmed</span>
+          [OLMo 2, 2501.00656]
+        </li>
+        <li>
+          Spikes are not purely "bad data": PaLM replayed the batches around spikes from an earlier checkpoint and saw no spike, so it concluded in favour of a data batch times parameter state interaction.
+          <span class="tag tag--confirmed">confirmed</span>
+          [PaLM, 2204.02311, Section 5.1]
+        </li>
+        <li>
+          PaLM's practice: restart about 100 steps before the spike and skip roughly 200 to 500 batches.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2204.02311]
+        </li>
+        <li>
+          Ling's version: skip the update and re-inject the data later rather than discard it.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2503.05139]
+        </li>
+        <li>
+          Data ordering: Marin's loss phase shift traced to a weak shuffle ("Shuffle quality matters even given perfect per-domain shuffling").
+          <span class="tag tag--confirmed">confirmed</span>
+          [Marin 32B Retrospective]
+        </li>
+        <li>
+          Mix changes mid-run: Llama 3 downsampled lower-quality subsets; Marin changed mixtures and rewarmed with no spike.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2407.21783; Marin 8B Retrospective]
+        </li>
+        <li>
+          Cross-document attention: Llama 3, SmolLM3 and Apertus mask across document boundaries; SmolLM3 and Apertus tie it to stability, Llama 3's link is to long-context training.
+          <span class="tag tag--reported">reported</span>
+          (Llama 3 statement not re-checked in the text)
+        </li>
+      </ul>
+    </section>
+
+    <section id="consensus">
+      <h2>Defaults versus lab-specific</h2>
+      <h3 id="near-universal">Near-universal defaults in 2025 reports</h3>
+      <ul>
+        <li>
+          Pre-norm RMSNorm blocks, with a second post-sublayer norm in Gemma and OLMo 2 (OLMo 2 moves the norm after the sublayer).
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          QK-norm: OLMo 2, OLMoE, Gemma 3, Qwen3, GLM-4.5, Ling 2.0, Apertus, Marin 32B (after spikes).
+          Exceptions in the other direction: Llama 3 had no QK-norm and was stable; Kimi K2 cannot use it with MLA and built QK-Clip instead.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          AdamW with beta2 0.95 (DeepSeek-V3, MiniMax, GLM-family Muon aside), weight decay 0.1, gradient clip 1.0.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Small init (std 0.02 or smaller; Ling 0.006) instead of scaled init.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          High-precision islands in low-precision training: FP32 accumulation, FP32 master weights and gradients, BF16 first and last GEMMs, FP32 LM head.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Monitoring max attention logits and gradient norm as spike precursors is implicit in OLMo 2, Kimi K2 and LongCat-Flash.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+      <h3 id="lab-specific">Lab-specific or still contested</h3>
+      <ul>
+        <li>
+          Z-loss: OLMo 2, OLMoE, Marin (later), Ling router z-loss; not named by Llama 3, DeepSeek-V3, Qwen3 or Gemma 3 in what I read.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Embedding weight decay removal: OLMo 2 and SmolLM3 only.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Logit soft-capping: Gemma 2 only, dropped in Gemma 3.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          QK-Clip and MuonClip: Kimi K2 (the Muon-specific problem); GLM-4.5 uses Muon with QK-norm instead.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Hidden z-loss, model-growth init, deterministic kernels and SDC checks: LongCat-Flash.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2509.01322]
+        </li>
+        <li>
+          Aux-loss-free balancing is DeepSeek-led; Qwen3 chose a global-batch balance loss; Ling uses balance plus router z-loss.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2412.19437; 2505.09388; 2503.05139]
+        </li>
+        <li>
+          Spike handling at run time (skip, rewind, re-inject, lower LR) is practised but rarely documented in recent reports; PaLM and Ling are the clearest first-party accounts.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicting sources</h2>
+      <ul>
+        <li>
+          OLMo 2 z-loss weight: Section 3.3.3 says 1e-4 while Table 1 lists 1e-5.
+          Do not quote a number without checking the PDF.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2501.00656]
+        </li>
+        <li>
+          Z-loss evidence is mixed: Marin's 1.4B test found no discernible effect on loss or evals and showed it raises the lm_head norm, while Marin 8B found it fixed cooldown lm_head blow-up and OLMoE found fewer spikes.
+          <span class="tag tag--reported">reported</span>
+          (the 1.4B result came via a search summary of a W&B report)
+        </li>
+        <li>
+          Marin 32B retrospective phase table is internally inconsistent (phase boundaries at 80,000 vs the 70k to 80k instability window).
+          Whether QK-norm alone, or the architecture switch plus re-warmup, removed the spikes was not isolated, since the earlier fixes ran on the same weights.
+          <span class="tag tag--confirmed">confirmed</span>
+          [Marin 32B Retrospective]
+        </li>
+        <li>
+          Kimi K2's "zero spikes" figure omits the start of training, and ablations showing QK-Clip does not hurt quality sit in an appendix I could not see.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2507.20534]
+        </li>
+        <li>
+          Llama 3 reports few spikes with no QK-norm, small peak LR and a batch ramp, and DeepSeek-V3 gives no attribution, so the evidence that any single technique "lets labs go bigger" is mostly ablation at small scale plus anecdote.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Not verified: DeepSeek-V3.x, Qwen3-Next, MiniMax-M2, Step-3, Nemotron 4 340B, and the tail of the OLMo 3, Apertus (Section 2.6 retrospective) and Ling 2.0 reports.
+          The search did not return primary texts for the first four.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Secondary summaries claimed Ling-1T was FP8 with a gap under 0.25%; the Ling 2.0 primary text confirms 0.25% after 900B tokens, so quote the primary wording.
+          <span class="tag tag--confirmed">confirmed</span>
+          [2510.22115]
+        </li>
+        <li>
+          Gemma 3 report cites Wortsman et al. (2023) for QK-norm but states no motivation beyond replacing soft-capping, so "Gemma moved for stability" is my reading.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li>OLMo 2 Furious, arXiv 2501.00656</li>
+        <li>Olmo 3, arXiv 2512.13961</li>
+        <li>OLMoE: Open Mixture-of-Experts Language Models, arXiv 2409.02060</li>
+        <li>The Llama 3 Herd of Models, arXiv 2407.21783</li>
+        <li>DeepSeek-V3 Technical Report, arXiv 2412.19437</li>
+        <li>Kimi K2: Open Agentic Intelligence, arXiv 2507.20534</li>
+        <li>Qwen3 Technical Report, arXiv 2505.09388</li>
+        <li>Gemma 2, arXiv 2408.00118</li>
+        <li>Gemma 3 Technical Report, arXiv 2503.19786</li>
+        <li>MiniMax-01, arXiv 2501.08313</li>
+        <li>MiniMax-M1, arXiv 2506.13585</li>
+        <li>GLM-4.5, arXiv 2508.06471</li>
+        <li>Every FLOP Counts (Ling), arXiv 2503.05139</li>
+        <li>Every Activation Boosted (Ling 2.0), arXiv 2510.22115</li>
+        <li>LongCat-Flash Technical Report, arXiv 2509.01322</li>
+        <li>Nemotron-H, arXiv 2504.03624</li>
+        <li>Apertus, arXiv 2509.14233</li>
+        <li>Hunyuan-Large, arXiv 2411.02265</li>
+        <li>PaLM: Scaling Language Modeling with Pathways, arXiv 2204.02311</li>
+        <li>Spike No More: Stabilizing the Pre-training of Large Language Models, arXiv 2312.16903 (abstract only)</li>
+        <li>SmolLM3 blog: https://huggingface.co/blog/smollm3</li>
+        <li>Marin 8B Retrospective: https://marin.readthedocs.io/en/latest/reports/marin-8b-retro/</li>
+        <li>Marin 32B Retrospective: https://marin.readthedocs.io/en/latest/reports/marin-32b-retro/</li>
+        <li>Marin 32B Spike Fixing and ZLoss vs Not 1.4B (W&amp;B reports, via search summary only)</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>Research note, not for publication. Compiled 2026-10-14.</p>
+  </footer>
+</body>
+</html>

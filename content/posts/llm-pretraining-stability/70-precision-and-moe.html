@@ -1,0 +1,88 @@
+<section id="precision-and-moe">
+  <h2>Low precision and mixture-of-experts</h2>
+  <p>
+    The dense bf16 recipe is well understood; the two things labs layer on top of it are not.
+    Lower precision saves memory and bandwidth but makes every large value expensive, and sparse experts add a router that can collapse or blow up on its own.
+    The fixes have the same flavour in both cases: scale in finer groups, keep a few sensitive operations in high precision, and control the router directly.
+  </p>
+
+  <!-- == fp16 to FP8 == -->
+  <h3 id="precision-and-moe-from-fp16-to-fp8">From fp16 to FP8</h3>
+  <p>
+    fp16 training needed loss scaling because its narrow exponent range let small gradients underflow.
+    <strong>bf16</strong> keeps fp32's 8 exponent bits and drops to 7 mantissa bits, so it needs no loss scaling, and it became the default.
+    The price moved from range to rounding: bf16's roundoff error can be up to 65,536 times worse than fp32's at large magnitudes [25].
+    That is why the accumulating paths stayed wide: Llama 3 405B accumulates gradients across micro-batches in fp32 and reduce-scatters them in fp32 across data-parallel workers [18].
+  </p>
+  <p>
+    FP8 pushes the same trade one step further.
+    The standard recipe uses E4M3 for weights and activations, E5M2 for gradients, and <strong>delayed scaling</strong>, which picks each tensor's scale from earlier iterations' maximum values.
+    Delayed scaling needs no extra pass, but it assumes the statistics are stable from step to step, and a single outlier breaks that assumption [26].
+  </p>
+  <p>
+    DeepSeek-V3 is the clearest FP8 recipe at frontier scale.
+    It scales activations per 1×128 tile (one token, 128 channels) and weights per 128×128 block, and computes each scale online from the current maximum [16].
+    It also found that FP8 tensor-core accumulation on the H800 keeps only about 14 bits, so it promotes partial sums to fp32 registers on the CUDA cores every 128 elements [16].
+    The embedding, output head, MoE gating, norms and attention stay in bf16 or fp32, as do master weights and gradients.
+    The full 14.8T-token run had no irrecoverable loss spikes and no rollbacks.
+    The trade-off is kernel complexity: per-tile scales mean custom GEMMs, dequantisation inside the matmul, and an accumulation workaround the paper itself calls a hardware deficiency.
+  </p>
+
+  <!-- == Outliers and FP4 == -->
+  <h3 id="precision-and-moe-outliers-and-fp4">Outliers and FP4</h3>
+  <p>
+    Low-precision failures are mostly outlier failures.
+    A block's scale is set by its largest value, so one huge activation squeezes everything else in the block into a few representable levels.
+    Finer groups contain the damage, which is why the block sizes keep shrinking.
+  </p>
+  <p>
+    The outliers do not have to be present at the start.
+    Intel trained Llama 2 7B in FP8 and saw a sharp loss divergence after about 220B tokens; the outliers only appeared after roughly 200B [26].
+    The cause was <strong>SwiGLU</strong>: it multiplies two linear branches, and as their weights slowly align, the product grows much faster than either branch.
+    Their fix, <strong>Smooth-SwiGLU</strong>, rescales channels before quantisation without changing the function, and trained a 7B model to 2T tokens in FP8 with up to about 34% more throughput [26].
+    The practical lesson is that an FP8 run validated over a few hundred billion tokens has not been validated against this failure.
+  </p>
+  <p>
+    NVIDIA's NVFP4 recipe trained a 12B hybrid Mamba-Transformer on 10T tokens in 4-bit [27].
+    It stores E2M1 values in blocks of 16 with an E4M3 scale per block and an fp32 scale per tensor.
+    On top of that it applies 16×16 random Hadamard transforms to the weight-gradient inputs to spread outliers, uses 2D block scaling for weights and stochastic rounding for gradients.
+    It also keeps <strong>bf16 islands</strong>: the first 2 and last 8 blocks, 16% of the linear layers, plus attention, softmax, embeddings, the head and norms [27].
+    The gap to FP8 widened as the learning rate decayed, and switching to higher precision for the decay closed much of it.
+  </p>
+  <p>
+    Those islands are the trade-off.
+    Every layer left in bf16 gives back throughput, and the list of layers was picked by hand for one model, on hardware only Blackwell has.
+    I have not seen a lab publish a frontier model pretrained in FP4.
+  </p>
+
+  <!-- == Routers == -->
+  <h3 id="precision-and-moe-routers-and-load-balancing">Routers and load balancing</h3>
+  <p>
+    A mixture-of-experts router is a softmax (or sigmoid) over expert logits, and it inherits every logit problem from the earlier sections.
+    ST-MoE ran the router in fp32 and still saw instability at its largest scale [25].
+    In its example, at a logit of 128.5, bf16 roundoff of 0.5 changes the softmax output by 36% [25].
+    The fix was the <strong>router z-loss</strong>, the mean squared log-sum-exp of the router logits over a batch of \( B \) tokens and \( N \) experts:
+  </p>
+  \[
+    L_z = \frac{1}{B} \sum_{i=1}^{B} \Big( \log \sum_{j=1}^{N} e^{x_j^{(i)}} \Big)^2
+  \]
+  <p>
+    It keeps logits small, so the exponential sees small rounding errors, and ST-MoE used a coefficient of 0.001 [25].
+    In their comparison it stabilised training without hurting quality, while clipping the updates also stabilised it but cost a lot of quality.
+  </p>
+  <p>
+    The other MoE failure is imbalance.
+    When a few experts take most tokens, routing collapses and expert parallelism stalls on the hot devices.
+    The usual cure is an auxiliary balance loss, and DeepSeek states the cost plainly: too large a balance loss hurts model quality.
+    Their alternative is <strong>auxiliary-loss-free balancing</strong>.
+    Each expert gets a bias that is added to its affinity score for top-K selection only; the gate weight still uses the original score.
+    After every step the bias of an overloaded expert drops by \( \gamma \) and an underloaded one rises by \( \gamma \), with \( \gamma = 0.001 \) for the first 14.3T tokens and zero for the last 500B [16].
+    A tiny sequence-wise balance loss stays on to stop extreme imbalance within a single sequence.
+  </p>
+  <p>
+    Qwen3 went the other way and kept a balance loss, but computes it over the global batch [28].
+    The argument for doing so is that balancing per micro-batch forces every sequence, including narrow-domain ones, to use all experts evenly, which works against the specialisation an MoE is supposed to learn [29].
+    Neither choice is free.
+    A loss trades quality for balance through its coefficient, and the bias method replaces that coefficient with a per-step load statistic and a tuned update speed that the lab has to decide when to switch off.
+  </p>
+</section>

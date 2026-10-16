@@ -1,0 +1,106 @@
+<section id="running-a-long-job">
+  <h2>Running a long job</h2>
+  <p>
+    Past a few thousand accelerators, a pretraining run stops being a modelling problem and becomes an operations problem.
+    The fixes above lower the odds of a spike, but somebody still has to see one coming, decide whether to rewind, and keep the job alive through constant hardware faults.
+  </p>
+
+  <h3 id="running-a-long-job-what-to-watch">What to watch</h3>
+  <p>
+    The training loss is the worst early warning on the dashboard: by the time it moves, the damage is done.
+    The signals that move first are cheap to log, and each maps to a failure mechanism from earlier in the post.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Signal</th>
+          <th>Failure it catches</th>
+          <th>Evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Global gradient norm</td>
+          <td>Spikes from any cause, a few steps early</td>
+          <td>
+            In GLM-130B, collapses trailed gradient-norm spikes by a few steps [11].
+            OLMo 2 counts values at least seven standard deviations from a 1,000-step rolling average [10].
+          </td>
+        </tr>
+        <tr>
+          <td>Per-layer gradient norm</td>
+          <td>Adam updates gone stale in one group of layers</td>
+          <td>In a 546B run, early-layer gradient norm exploded one step before the perplexity spike [3]</td>
+        </tr>
+        <tr>
+          <td>Per-layer update size against epsilon</td>
+          <td>Layers that quietly stop learning</td>
+          <td>Once gradient RMS nears the AdamW epsilon, updates shrink and parameters stop moving [3] [5]</td>
+        </tr>
+        <tr>
+          <td>Max attention logit per layer or head</td>
+          <td>Attention logit growth</td>
+          <td>In small-scale proxy runs, every model whose max logit passed about \( 10^4 \) diverged, and the trend across sizes predicted it [5]</td>
+        </tr>
+        <tr>
+          <td>Final-layer output norm</td>
+          <td>Output logit drift</td>
+          <td>Output-norm growth predicted later divergence in Chameleon's mixed-modal training [6]</td>
+        </tr>
+        <tr>
+          <td>Dynamic loss scale</td>
+          <td>Numerical overflow in loss-scaled mixed precision</td>
+          <td>OPT-175B's divergences came with the loss scale crashing to zero [7]</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The global signals are the cheapest to log, but only the per-layer and per-head ones point at a cause.
+  </p>
+
+  <h3 id="running-a-long-job-rollback-skip-and-data-filters">Rollback, skip and data filters</h3>
+  <p>
+    The classic response is the one PaLM documented.
+    Its 540B run spiked about 20 times despite clipping at 1.0, and each time the team restarted from a checkpoint about 100 steps before the spike and skipped roughly 200 to 500 batches [1].
+    Replaying the same batches from an earlier checkpoint did not spike, so the cause was those batches meeting that parameter state.
+    Skipping is only well defined because PaLM's data order was deterministic: each batch depended only on the step number.
+  </p>
+  <p>
+    The data side can be cleaned ahead of time.
+    OLMo 2 found that spike batches often held long runs of repeated n-grams, so it removes documents with 32 or more repeated n-grams of 1 to 13 tokens and masks such spans in the loss [10].
+    That reduced gradient spikes without eliminating them.
+  </p>
+  <p>
+    Every skip and rollback costs tokens, compute and determinism, and the final model ends up trained on a data stream nobody planned.
+    Rollback also stops working as a run ages: the Adam-instability analysis found that batch skipping helps mainly early, and spikes grow more frequent later [3].
+    DeepSeek-V4 automated spike detection and short rollbacks, found that rollbacks alone did not stop the spikes recurring, and added a routing fix that costs about 20% wall-clock when always on, so it runs only after a detected spike [17].
+  </p>
+  <p>
+    Marin 32B is the clearest public account of the operational fixes running out.
+    The Llama-style 32B run spiked far more than its 8B sibling, so the team tightened clipping from 1.0 to 0.2, added update-norm clipping and step skipping, rebuilt the optimizer state and tried Muon.
+    In their words, clipping and step-skipping "softened the spikes but never removed them" [12].
+    What worked was an architecture change mid-run: they warm-started the step-80,000 weights into the Qwen3 32B layout, which adds QK-norm, with a 1,000-step re-warmup.
+    The switch cost a one-time loss penalty that recovered in about 10B tokens, and the spikes disappeared entirely [12].
+    The lesson I take from it is that persistent spikes are a design bug, and run-time heuristics only buy time to fix it.
+  </p>
+
+  <h3 id="running-a-long-job-hardware-faults-and-silent-corruption">Hardware faults and silent corruption</h3>
+  <p>
+    At frontier scale, hardware interrupts the run far more often than the optimizer does.
+    In a 54-day window of Llama 3 405B training on 16,384 H100s, the job was interrupted 466 times, 419 of them unexpectedly, and about 78% of the unexpected ones were confirmed or suspected hardware faults [18].
+    Six were silent data corruption.
+    Meta still kept effective training time above 90%, with manual intervention only three times.
+  </p>
+  <p>
+    Silent data corruption is the dangerous case, because the job keeps running on wrong numbers.
+    Google expected it to hit Gemini training "every week or two", and handled it with deterministic replay to isolate bad computations, scanners on idle machines and hot standbys [30].
+    Redundant in-memory copies of the model state let a job recover from an intact replica instead of persistent storage, which raised goodput on the largest job from 85% to 97% [30].
+  </p>
+  <p>
+    Determinism, spare capacity and scanners all cost throughput.
+    The payoff goes beyond uptime: I would expect a corrupted reduction to look exactly like an optimization spike on the loss curve, and only a replay tells the two apart.
+    Llama 3 found several of its numerical issues the same way, by comparing loss across parallelism setups [18].
+  </p>
+</section>

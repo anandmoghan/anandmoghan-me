@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Optimizers, hyperparameters and schedules for stable pretraining</title>
+  <link rel="stylesheet" href="https://materials.anandmoghan.me/global/styles/standalone.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '\\[', right: '\\]', display: true},
+        {left: '\\(', right: '\\)', display: false}
+      ],
+      ignoredTags: ['script', 'style', 'pre', 'code']
+    });"></script>
+</head>
+<body class="prose">
+  <header>
+    <h1>Optimizers, hyperparameters and schedules for stable pretraining</h1>
+    <p>Research note for the LLM pretraining stability post. Fetched 2026-10-14 from arXiv PDFs and first-party pages.</p>
+  </header>
+  <main>
+    <section id="how-to-read">
+      <h2>How to read this note</h2>
+      <ul>
+        <li>
+          <span class="tag tag--confirmed">confirmed</span>
+          means I read the statement in the cited primary source (paper text or model card).
+        </li>
+        <li>
+          <span class="tag tag--reported">reported</span>
+          means a secondary page or an abstract-level summary states it and I did not see the primary text.
+        </li>
+        <li>
+          <span class="tag tag--inference">inference</span>
+          means my own reading across sources, not a claim any source makes.
+        </li>
+        <li>Numbers appear only where the cited source states them.</li>
+      </ul>
+    </section>
+
+    <section id="summary-table">
+      <h2>Summary: what each lever stabilises, what it costs, who uses it</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Lever</th>
+              <th>Stabilises</th>
+              <th>Cost</th>
+              <th>Production use found</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Lower AdamW beta2 (0.95)</td>
+              <td>Stale second-moment spikes</td>
+              <td>Too low slows training</td>
+              <td>DeepSeek-V3, DeepSeek-V4</td>
+            </tr>
+            <tr>
+              <td>Update clipping (StableAdamW)</td>
+              <td>Same spikes, without lowering beta2</td>
+              <td>One extra RMS per tensor</td>
+              <td>No frontier user found</td>
+            </tr>
+            <tr>
+              <td>Global grad-norm clipping</td>
+              <td>Single bad batches</td>
+              <td>Cannot fix stale second moments</td>
+              <td>DeepSeek-V3 (1.0)</td>
+            </tr>
+            <tr>
+              <td>Warmup</td>
+              <td>Early sharpness, larger tolerable LR</td>
+              <td>Wasted early steps</td>
+              <td>Llama 3 405B, DeepSeek-V3, K2, V4</td>
+            </tr>
+            <tr>
+              <td>Weight decay with correct scope</td>
+              <td>Norm drift, tiny embeddings</td>
+              <td>Another coupled knob</td>
+              <td>OLMo 2, K2, V3, V4</td>
+            </tr>
+            <tr>
+              <td>muP and relatives</td>
+              <td>Makes small-run tuning predictive</td>
+              <td>Implementation and tuning effort</td>
+              <td>MiniCPM, Cerebras work</td>
+            </tr>
+            <tr>
+              <td>WSD and constant-then-decay</td>
+              <td>Lets a run be extended or branched</td>
+              <td>Decay must still be run per branch</td>
+              <td>MiniCPM, Kimi K2, DeepSeek-V3/V4 (variants)</td>
+            </tr>
+            <tr>
+              <td>Batch size ramp</td>
+              <td>Early-training noise and inefficiency</td>
+              <td>Schedule design</td>
+              <td>Llama 3 405B, DeepSeek-V3/V4</td>
+            </tr>
+            <tr>
+              <td>Muon / MuonClip</td>
+              <td>Token efficiency; QK-Clip bounds logits</td>
+              <td>Distributed engineering, logit blow-up risk</td>
+              <td>Kimi K2, DeepSeek-V4</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="adamw-beta2-epsilon">
+      <h2>AdamW beta2 and epsilon</h2>
+      <h3 id="beta2-stale-second-moment">Beta2 and the stale second moment</h3>
+      <ul>
+        <li>
+          Loss spikes tend to occur 1-8 iterations after AdamW's second-moment estimator underestimates the squared gradients.
+          Source: Wortsman et al., Stable and low-precision training for large-scale vision-language models, arXiv 2304.13013.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The paper tracks \( \mathrm{RMS}_t = \sqrt{\mathbb{E}[g_t^2 / u_t]} \) per tensor.
+          If \( u_t \) is a good estimator of \( g_t^2 \) it stays near 1; "stuck in the past" corresponds to \( \mathrm{RMS}_t \gg 1 \).
+          Source: arXiv 2304.13013, Section 3.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Spikes grow with model size, batch size and learning rate at fixed other settings, and lowering beta2 from the PyTorch default 0.999 mitigates them; lowering it too far slows training.
+          The sweep shows 0.99, 0.98, 0.95, 0.9 and 0.5.
+          Source: arXiv 2304.13013, Figures 6-8.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The instability appeared at high beta2 even with 5k iterations of warmup.
+          Source: arXiv 2304.13013, Section 3.5.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          DeepSeek-V3 uses AdamW with beta1 = 0.9, beta2 = 0.95, weight decay 0.1.
+          DeepSeek-V4 uses the same beta2 and weight decay for its AdamW parameters.
+          Sources: DeepSeek-V3 Technical Report, arXiv 2412.19437; DeepSeek-V4, arXiv 2606.19348 Section 4.2.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Wortsman et al. (2023) small-scale proxy study defaults: beta2 = 0.95, epsilon 1e-8, global-norm gradient clipping at 1.
+          Source: Small-scale proxies for large-scale Transformer training instabilities, arXiv 2309.14322.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Beta2 interacts with batch size: Marek et al. propose holding the second-moment half-life fixed in tokens rather than holding the decay rate fixed across batch sizes, and report stable training down to batch size one.
+          Source: Small Batch Size Training for Language Models, arXiv 2507.07101.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Reading: 0.95 is the common frontier choice because it shortens the second-moment memory, which matters most when gradient scale changes quickly (early training, large LR, MoE routing shifts).
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+
+      <h3 id="epsilon">Epsilon</h3>
+      <ul>
+        <li>
+          OLMo 2 lowered AdamW epsilon from 1e-5 to 1e-8.
+          It states 1e-8 is the PyTorch default while some LM codebases default to 1e-5, and reports that the lower value allows larger early updates and the gradient norm settles faster and stays lower.
+          Source: 2 OLMo 2 Furious, arXiv 2501.00656, Section 3.4.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Everett et al. state that epsilon must be scaled correctly to avoid gradient underflow, and propose Adam-atan2, a scale-invariant Adam that removes epsilon.
+          Source: Scaling Exponents Across Parameterizations and Optimizers, arXiv 2407.05872.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          DeepSeek-V4 sets AdamW epsilon to 1e-20.
+          Source: arXiv 2606.19348 Section 4.2.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The OLMo 2 and DeepSeek-V4 epsilons point the same way (smaller than the old default) but I found no source that explains the 1e-20 choice.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="update-clipping">
+      <h2>Update clipping: Adafactor and StableAdamW</h2>
+      <ul>
+        <li>
+          Adafactor divides the learning rate at step t by \( \max(\mathrm{RMS}_t, 1) \) ("update clipping"), which slows training exactly when the second-moment estimate is out of date.
+          Source: arXiv 2304.13013, Section 3.5, crediting Shazeer and Stern.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          StableAdamW ports this to AdamW with threshold d = 1.
+          The abstract says the AdamW-Adafactor hybrid avoids loss spikes training CLIP ViT-Huge and outperforms gradient clipping at the scales tested.
+          Source: arXiv 2304.13013 (abstract and Algorithm 2).
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          In Shazeer and Stern's setting the instability appeared without warmup; Wortsman et al. saw it with 5k warmup iterations when beta2 was high.
+          Source: arXiv 2304.13013 Section 3.5.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Cost: one RMS reduction per tensor and a per-tensor LR scale.
+          The paper does not give a throughput cost.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          I found no frontier-lab report that uses StableAdamW; production reports I read use lower beta2 plus global clipping instead.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          QK-Clip in Kimi K2 is a different kind of clipping: it rescales query and key weights after the update, not the optimizer step (see the Muon section).
+          Source: Kimi K2, arXiv 2507.20534.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="gradient-clipping">
+      <h2>Gradient clipping practice</h2>
+      <ul>
+        <li>
+          DeepSeek-V3 sets the gradient clipping norm to 1.0.
+          Source: arXiv 2412.19437 Section 4.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The small-scale proxies study uses global-norm clipping at 1 by default.
+          Source: arXiv 2309.14322.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Wortsman et al. observed CLIP-style training where gradient clipping did not fix the stale-second-moment spikes that update clipping did.
+          Source: arXiv 2304.13013 (abstract: outperforms gradient clipping).
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OLMo-0424 had frequent loss spikes, often preceded by gradient-norm spikes, and a slow upward drift of gradient norm over the run.
+          OLMo 2 fixed it with initialisation, QK-norm and reordered norms, z-loss, epsilon, n-gram data filtering and no weight decay on embeddings, not with clipping alone.
+          Source: arXiv 2501.00656 Sections 3.1-3.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Llama 3 405B reports "few loss spikes" and no interventions needed; the paper does not list gradient clipping in the pretraining recipe I read.
+          Source: The Llama 3 Herd of Models, arXiv 2407.21783 Section 3.4.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Reading: clipping is a cheap safety net (norm 1.0 is the common value) but it addresses outlier batches, not the structural causes (stale second moment, logit growth).
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="warmup">
+      <h2>Warmup length</h2>
+      <ul>
+        <li>
+          Kalra and Barkeshli: the overwhelming benefit of warmup is that it lets the network tolerate a larger target learning rate by moving it to better-conditioned regions of the loss landscape; they also suggest an Adam variance initialisation that gives similar benefits.
+          Source: Why Warmup the Learning Rate?, arXiv 2406.09405.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Wortsman et al. find longer warmup reduces learning-rate sensitivity, as does independent scaling of LR and weight decay.
+          Source: arXiv 2309.14322.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Warmup lengths in recent reports:
+          Llama 3 405B 8,000 steps (peak LR 8e-5);
+          DeepSeek-V3 2K steps (to 2.2e-4);
+          Kimi K2 500 steps (to 2e-4);
+          DeepSeek-V4 2000 steps (2.7e-4 Flash, 2.0e-4 Pro);
+          Llama 3 smaller-scale runs 2,000 steps.
+          Sources: arXiv 2407.21783 Sections 3.2 and 3.4.1; arXiv 2412.19437; arXiv 2507.20534; arXiv 2606.19348.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Reading: warmup is short in steps for the largest MoE runs because batch sizes are huge, so a few thousand steps already span many billions of tokens.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="weight-decay">
+      <h2>Weight decay and its interaction with learning rate</h2>
+      <ul>
+        <li>
+          Wang and Aitchison: AdamW's weights behave like an EMA of recent updates, so the EMA timescale (in epochs) is the quantity to tune.
+          For fixed LR each timescale maps to one weight decay; the best timescale is roughly constant across model and dataset size, so optimal weight decay should fall as data grows and rise as the model grows (under muP).
+          Validated on ResNet-18, ViT (CIFAR-10, ImageNet) and NanoGPT on OpenWebText only.
+          Source: How to set AdamW's weight decay as you scale model and dataset size, arXiv 2405.13698.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The same paper states muP's learning-rate scaling breaks down for AdamW later in training unless weight decay is scaled appropriately.
+          Source: arXiv 2405.13698.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Independent (decoupled) weight decay, as in AdamW, keeps decay from being scaled by the Adam preconditioner.
+          Wortsman et al. use an independent weight decay of 1e-4 in their proxy study and cite independent scaling of LR and weight decay as reducing LR sensitivity.
+          Sources: Decoupled Weight Decay Regularization (Loshchilov and Hutter, arXiv 1711.05101, cited, not re-read); arXiv 2309.14322.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          OLMo 2 turned off weight decay on token embeddings: with decay 0.1 the embeddings became very small, and small embeddings produce large gradients in early layers because the layer-norm Jacobian scales inversely with input norm.
+          Source: arXiv 2501.00656 Section 3.4.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Muon without weight decay: both the weights and the layer outputs kept growing, exceeding the high-precision range of bf16; adding AdamW-style weight decay fixed it and made Muon beat AdamW in the over-train regime.
+          Source: Muon is Scalable for LLM Training, arXiv 2502.16982 Section 2.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Weight decay 0.1 is used by DeepSeek-V3, Kimi K2 (throughout) and DeepSeek-V4 (both AdamW and Muon parameters).
+          Sources: arXiv 2412.19437; arXiv 2507.20534; arXiv 2606.19348.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="mup">
+      <h2>muP, u-muP and hyperparameter transfer</h2>
+      <ul>
+        <li>
+          Tensor Programs V: tune on a small proxy and transfer to a large model.
+          Abstract states that transferring from a 40M-parameter model, they "outperform published numbers of the 6.7B GPT-3 model, with tuning cost only 7% of total pretraining cost."
+          Source: Tensor Programs V, arXiv 2203.03466.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          MiniCPM used muP in what it calls model wind tunnel experiments; across 0.04B to 2.1B the optimal base LR stayed near 0.01, and the stable-phase max LR was 0.01.
+          The muP grid search picked scale_depth = 1.4, scale_emb = 12, init_std = 0.1, lr = 0.01.
+          Source: MiniCPM, arXiv 2404.06395.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          u-muP combines muP with Unit Scaling so activations, weights and gradients start at scale one; abstract claims default hyperparameters are near-optimal, loss equal or lower than comparable muP models, and FP8 works out of the box.
+          Source: u-muP paper, arXiv 2407.17465.
+          <span class="tag tag--reported">reported</span>
+          (abstract only)
+        </li>
+        <li>
+          CompleteP (Cerebras) targets depth-wise transfer plus non-lazy learning; abstract reports 12-34% compute-efficiency improvements over the prior state of the art, with experiments on Cerebras CS-3 systems.
+          Source: CompleteP paper, arXiv 2505.01618.
+          <span class="tag tag--reported">reported</span>
+          (abstract only)
+        </li>
+        <li>
+          Everett et al.: all parameterizations, not only muP, can achieve hyperparameter transfer; a per-layer LR prescription for standard parameterization outperformed muP (up to 26.8B parameters in their study).
+          Source: arXiv 2407.05872.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Essential AI combine Muon with muP and describe a telescoping algorithm that accounts for sources of error in muP transfer; tested up to four billion parameters.
+          Source: Practical Efficiency of Muon for Pretraining, arXiv 2505.02222.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Wortsman et al. list muP among the interventions that reduce LR sensitivity, and predict two instability cases at scale from how activation and gradient norms scale.
+          Source: arXiv 2309.14322.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Fantastic Pretraining Optimizers warns blind hyperparameter transfer between optimizers is unfair (optimal settings differ).
+          That is about transfer across optimizers, not across scale.
+          Source: arXiv 2509.02046.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Not found: a first-party statement from a frontier lab (Llama, DeepSeek, Kimi) saying the final run used muP.
+          DeepSeek instead fits scaling laws for batch size and LR against compute (see below).
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="wsd">
+      <h2>WSD and other schedules that extend runs</h2>
+      <ul>
+        <li>
+          MiniCPM WSD: warmup, a stable phase at max LR, then a decay phase.
+          A decay of 10% of total tokens was enough for best results while 2.5% fell short; decay is exponential in MiniCPM with T = 5000 steps (about 20B tokens), mixing pretraining data with high-quality SFT data.
+          Source: arXiv 2404.06395.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          MiniCPM states "With WSD LRS, we can continuously train the LM to extreme convergence", and loss falls sharply in decay to equal or below cosine at the same step.
+          Stable-phase checkpoints can be reused and decayed at any point, which makes scaling-law studies cheaper.
+          Source: arXiv 2404.06395.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Hagele et al.: constant LR with cooldown scales as predictably as cosine; the cooldown can start at any time (even retrospectively from a checkpoint), which allows many training lengths from a single run plus short cooldowns.
+          Continuing from a pre-cooldown checkpoint avoids loss spikes and brittleness seen when re-warming a cosine schedule.
+          Stochastic weight averaging improves performance along the trajectory at no extra training cost.
+          Source: Scaling Laws and Compute-Optimal Training Beyond Fixed Training Durations, arXiv 2405.18392.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The same paper notes the data mixture can change during the cooldown, like fine-tuning, and cites Llama 3 doing this.
+          Source: arXiv 2405.18392.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Optimal peak LR for cooldown sits slightly below the cosine optimum (roughly half of the optimal cosine maximum LR in their 210M setting).
+          Source: arXiv 2405.18392 Figure 3 caption.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          DeepSeek LLM multi-step schedule: 2000 warmup steps, LR drops to 31.6% of max after 80% of tokens and 10% of max after 90%.
+          Authors chose it over cosine because it enables continual training with similar final quality; they also fit optimal batch size (rising) and LR (falling) against compute.
+          Source: DeepSeek LLM, arXiv 2401.02954.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Kimi K2 used WSD: 500-step warmup, 10T tokens constant at 2e-4, then 5.5T tokens cosine from 2e-4 to 2e-5, weight decay 0.1, global batch 67M tokens; then an annealing phase from 2e-5 to 7e-6.
+          Source: arXiv 2507.20534 Section 2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          DeepSeek-V3: warmup 2K steps to 2.2e-4, constant until 10T tokens, cosine to 2.2e-5 over 4.3T tokens, then constant 2.2e-5 for 333B tokens and 7.3e-6 for the last 167B.
+          Source: arXiv 2412.19437 Section 4.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          DeepSeek-V4: LR held at peak (2.7e-4 Flash, 2.0e-4 Pro) for most of training, decayed to a tenth near the end by cosine.
+          Source: arXiv 2606.19348 Section 4.2.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Reading: all three frontier recipes (K2, V3, V4) are a long constant-LR phase followed by a late decay, so the run length need not be fixed at launch and the long constant phase can be monitored before committing to a decay.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="batch-size">
+      <h2>Batch size warmup and critical batch size</h2>
+      <ul>
+        <li>
+          Llama 3 405B: initial batch 4M tokens at length 4,096, doubled to 8M (length 8,192) after 252M tokens, doubled to 16M after 2.87T tokens.
+          The paper says a lower batch size early improves stability and that the recipe was very stable, with few loss spikes and no interventions for divergence.
+          Source: arXiv 2407.21783 Section 3.4.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          DeepSeek-V3: batch size increased from 3072 to 15360 over the first 469B tokens, then constant.
+          Source: arXiv 2412.19437 Section 4.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          DeepSeek-V4: batch size ramped from small to 75.5M tokens (Flash) and a maximum of 94.4M (Pro).
+          Source: arXiv 2606.19348 Section 4.2.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Merrill et al. measure critical batch size directly rather than via gradient noise scale: in OLMo models it is near 0 at initialisation, rises fast, then levels off, at both 1B and 7B.
+          Batch size warmup on OLMo 1B reached slightly better loss with 43% fewer gradient steps.
+          Source: Critical Batch Size Revisited, arXiv 2505.23971.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Counter-trend: Marek et al. find small batches train stably if beta2 half-life is fixed in tokens and recommend against gradient accumulation unless training on multiple replicas.
+          Source: arXiv 2507.07101.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Essential AI report Muon retains data efficiency at batch sizes far beyond the critical batch size relative to AdamW.
+          Source: arXiv 2505.02222.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="muon">
+      <h2>Muon, Moonlight and MuonClip</h2>
+      <h3 id="muon-basics">What Muon is and what it costs</h3>
+      <ul>
+        <li>
+          Muon runs SGD momentum, then orthogonalises the update of each 2D hidden-layer weight with a Newton-Schulz iteration (stable in bf16).
+          Embeddings, the output head and scalar/vector parameters should use AdamW.
+          Source: Keller Jordan, kellerjordan.github.io/posts/muon/.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Reported by Jordan: NanoGPT speedrun (3.28 val loss on FineWeb) improved by 1.35x; FLOP overhead below 1% (0.7% for the speedrun record, 0.5% for Llama 405B training by his calculation).
+          Source: same blog.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Moonshot: Muon uses one momentum buffer versus two for AdamW; Distributed Muon communication is between 1x and 1.25x of distributed AdamW; the optimizer's end-to-end latency is usually 1% to 3% of forward-backward time.
+          Source: arXiv 2502.16982 Section 2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="muon-scalable">Muon is Scalable for LLM Training</h3>
+      <ul>
+        <li>
+          Two techniques make Muon scale: add weight decay and carefully adjust the per-parameter update scale.
+          Source: arXiv 2502.16982 abstract.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Update RMS matching: Muon's theoretical update RMS for a full-rank \( A \times B \) matrix is \( 1/\sqrt{\max(A,B)} \), so it varies with shape.
+          They scale updates by \( 0.2 \cdot \sqrt{\max(A,B)} \) to match AdamW's typical update RMS (0.2 to 0.4), so Muon reuses AdamW's LR and weight decay.
+          Source: arXiv 2502.16982 Section 2.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Claim: about 2x computational efficiency over AdamW in compute-optimal training, or about 52% of the training FLOPs to match.
+          Moonlight is a 3B/16B-parameter MoE trained on 5.7T tokens with Muon.
+          Source: arXiv 2502.16982.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+
+      <h3 id="muonclip">MuonClip and QK-Clip in Kimi K2</h3>
+      <ul>
+        <li>
+          Kimi K2 report abstract: "Based on MuonClip, K2 was pre-trained on 15.5 trillion tokens with zero loss spike."
+          The introduction says "without a single loss spike."
+          Source: Kimi K2: Open Agentic Intelligence, arXiv 2507.20534.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Moonshot say Muon training is more prone to exploding attention logits than AdamW in their experiments.
+          A mid-scale run (9B activated, 53B total MoE) with vanilla Muon saw max attention logits exceed 1000; they say logits at that level usually lead to significant loss spikes and occasional divergence.
+          Source: arXiv 2507.20534 Section 2.1 and Figure 2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Why not existing fixes: logit soft-cap clips after the dot product can already have grown; QK-Norm does not apply to MLA because key matrices are not materialised at inference.
+          Source: arXiv 2507.20534 Section 2.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          QK-Clip: per head, compute the max pre-softmax logit \( S_{\max}^h \).
+          If it exceeds threshold \( \tau \), rescale the query and key projection weights after the update by \( \gamma_h = \min(1, \tau / S_{\max}^h) \), split with balancing parameter \( \alpha \) (typically 0.5).
+          It does not change the current step's forward or backward pass.
+          For MLA it only touches head-specific components; the shared rotary key is untouched.
+          Source: arXiv 2507.20534 Section 2.1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          K2 used \( \tau = 100 \).
+          Max logits rose to the cap of 100 and decayed to a stable range after about 30% of training steps without any change to \( \tau \).
+          Source: arXiv 2507.20534 Figure 2 and text.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          QK-Clip was only transiently active: in the first 70,000 steps 12.7% of attention heads triggered it at least once; after step 70,000 all heads had reduced their max logit below 100 and it became inactive.
+          Source: arXiv 2507.20534 Appendix D.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Small-scale ablation (0.5B activated, 3B total MoE) with an aggressive \( \tau = 30 \) showed negligible effect on loss and no statistically significant downstream degradation.
+          Source: arXiv 2507.20534 Appendix D.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Scope of the claim: the "zero loss spike" statement is Moonshot's own, about the loss curve in their Figure 3; no independent reproduction at scale was found.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+
+      <h3 id="muon-adoption">Adoption beyond Moonshot</h3>
+      <ul>
+        <li>
+          DeepSeek-V4 (Flash 284B and Pro 1.6T parameters, pretrained on 32T and 33T tokens) uses Muon for most modules and AdamW for the embedding, prediction head and RMSNorm weights.
+          Muon settings: momentum 0.95, weight decay 0.1, update RMS rescaled to 0.18, Nesterov, and hybrid Newton-Schulz with 10 iterations in two stages.
+          Source: DeepSeek-V4, arXiv 2606.19348 Sections 2.4 and 4.2.2.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          V4 does not use QK-Clip because its attention applies RMSNorm directly on queries and KV entries, which they say prevents attention logit explosion.
+          Source: arXiv 2606.19348 Section 2.4.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          V4 still hit loss spikes tied to outliers in MoE layers and fixed them with Anticipatory Routing (route with parameters from step t minus delta; about 20% wall-clock overhead when always on, applied only after automatic spike detection and a short rollback) and SwiGLU clamping (linear part to [-10, 10], gate upper bound 10).
+          The report says rollbacks alone did not stop recurrence and a theoretical understanding is still open.
+          Source: arXiv 2606.19348 Section 4.2.3.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Fantastic Pretraining Optimizers (Sep 2025) states Kimi K2 is the notable exception to AdamW dominance among real-world pretraining runs it surveyed (it also lists Llama 3, DeepSeek and Qwen as AdamW users).
+          Source: arXiv 2509.02046 introduction.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          I did not verify Muon use in GLM-4.5 or other labs; searches returned nothing primary.
+          <span class="tag tag--inference">inference</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="second-order">
+      <h2>Shampoo, SOAP and optimizer comparisons</h2>
+      <ul>
+        <li>
+          AlgoPerf (time-to-result benchmark on fixed hardware) was introduced to fix unfair tuning and timing comparisons.
+          Source: AlgoPerf benchmark paper, arXiv 2306.07179.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          AlgoPerf v0.5 competition: 18 submissions from 10 teams; Distributed Shampoo won the external-tuning ruleset (the paper credits non-diagonal preconditioning over Adam, even on wall-clock) and a Schedule Free AdamW-based entry won the self-tuning ruleset.
+          Top submissions were surprisingly robust to workload changes.
+          Source: Accelerating Neural Network Training: An Analysis of the AlgoPerf Competition, arXiv 2502.15015 (abstract).
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          A secondary summary quotes about 28% faster training for Shampoo and 8% for Schedule Free AdamW; I could not confirm these in the paper.
+          <span class="tag tag--reported">reported</span>
+        </li>
+        <li>
+          Fantastic Pretraining Optimizers and Where to Find Them (Wen, Hall, Ma, Liang): ten optimizers, four sizes (0.1B to 1.2B), 1x to 8x Chinchilla.
+          Claimed 1.4x to 2x speedups mostly reflect weak baselines: tuning only the AdamW learning rate in the GPT-3 recipe gave nearly 2x.
+          Source: arXiv 2509.02046.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Fastest optimizers (Muon, SOAP, Kron) use matrix preconditioners and gave about 1.3x over AdamW below 520M parameters, but the speedup decays to about 1.1x at 1.2B parameters at 8x Chinchilla.
+          At 0.1B the matrix-based speedup is 1.4x.
+          Source: arXiv 2509.02046.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          Rankings can flip during training due to LR decay, so comparisons must be at the end of training.
+          The best optimizer also depends on the data-to-model ratio.
+          Source: arXiv 2509.02046.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          The paper notes the Moonshot Muon paper only considered the 1x Chinchilla regime, and the original SOAP paper only went up to 0.6B parameters.
+          Source: arXiv 2509.02046 footnote 1.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          In Search of Adam's Secret Sauce: setting beta1 = beta2 performs near-optimally in their sweeps (up to 410M); Signum closes most of the perplexity gap between SGD and Adam.
+          Source: arXiv 2505.21829.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open questions and conflicting sources</h2>
+      <ul>
+        <li>
+          Muon speedup: Moonshot report about 2x compute efficiency (52% of FLOPs) in compute-optimal training with a 5.7T-token Moonlight run; Wen et al. find at most about 1.1x over a well-tuned AdamW at 1.2B and 8x Chinchilla, shrinking with scale.
+          The regimes differ (MoE versus dense, tuning budget, token ratio), so these may not truly conflict, but nobody has run the same comparison at tens of billions of parameters publicly.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Does Muon stabilise or destabilise?
+          DeepSeek-V4 says Muon gives faster convergence and improved training stability; Moonshot say Muon is more prone to attention-logit explosion than AdamW and needed QK-Clip.
+          V4 sidesteps this with RMSNorm on queries and keys, then still reports MoE-outlier loss spikes.
+          Sources: arXiv 2606.19348; arXiv 2507.20534.
+          <span class="tag tag--confirmed">confirmed</span>
+          (the disagreement; the cause is open)
+        </li>
+        <li>
+          Moonshot's explanation for why Muon is more prone to logit explosion is in an appendix I did not read in detail.
+          <span class="tag tag--reported">reported</span>
+        </li>
+        <li>
+          Zero loss spikes: K2 claims zero over 15.5T tokens, V4 reports spikes and needs two mitigations; the two models differ in architecture (MLA, QK-Clip versus hybrid attention, mHC, RMSNorm on QK), so the comparison is not clean.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Is global gradient clipping still doing work in Muon runs?
+          I did not find clipping settings in the K2 or V4 optimizer sections I read.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          muP in frontier runs: the transfer literature is strong at small to mid scale (up to 26.8B in Everett et al., 4B in Essential AI, 6.7B comparison in Tensor Programs V), but no first-party report from a frontier lab confirms muP in a final run.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          Weight-decay scaling rules (Wang and Aitchison) were validated on small vision and NanoGPT setups only.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+        <li>
+          StableAdamW evidence is CLIP ViT-Huge; I found no language-model pretraining report using it.
+          <span class="tag tag--inference">inference</span>
+        </li>
+        <li>
+          The AlgoPerf speedup figures from a secondary site are unconfirmed; check arXiv 2502.15015 body before quoting numbers.
+          <span class="tag tag--reported">reported</span>
+        </li>
+        <li>
+          Hagele et al. and MiniCPM use different decay shapes (1-sqrt and linear versus exponential); Hagele et al. leave open whether one cooldown shape is optimal for a given compute budget.
+          <span class="tag tag--confirmed">confirmed</span>
+        </li>
+      </ul>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ol>
+        <li>Wortsman et al., Stable and low-precision training for large-scale vision-language models, arXiv 2304.13013.</li>
+        <li>Wortsman et al., Small-scale proxies for large-scale Transformer training instabilities, arXiv 2309.14322.</li>
+        <li>Yang et al., Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer, arXiv 2203.03466.</li>
+        <li>u-muP: The Unit-Scaled Maximal Update Parametrization, arXiv 2407.17465.</li>
+        <li>CompleteP (Cerebras), arXiv 2505.01618, depth-wise hyperparameter transfer paper.</li>
+        <li>Everett et al., Scaling Exponents Across Parameterizations and Optimizers, arXiv 2407.05872.</li>
+        <li>Wang and Aitchison, How to set AdamW's weight decay as you scale model and dataset size, arXiv 2405.13698.</li>
+        <li>Kalra and Barkeshli, Why Warmup the Learning Rate? Underlying Mechanisms and Improvements, arXiv 2406.09405.</li>
+        <li>Merrill et al., Critical Batch Size Revisited, arXiv 2505.23971.</li>
+        <li>Marek et al., Small Batch Size Training for Language Models, arXiv 2507.07101.</li>
+        <li>Hu et al., MiniCPM: Unveiling the Potential of Small Language Models with Scalable Training Strategies, arXiv 2404.06395.</li>
+        <li>Hagele et al., Scaling Laws and Compute-Optimal Training Beyond Fixed Training Durations, arXiv 2405.18392.</li>
+        <li>DeepSeek-AI, DeepSeek LLM: Scaling Open-Source Language Models with Longtermism, arXiv 2401.02954.</li>
+        <li>DeepSeek-AI, DeepSeek-V3 Technical Report, arXiv 2412.19437.</li>
+        <li>DeepSeek-AI, DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence, arXiv 2606.19348; model card https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro.</li>
+        <li>Llama Team, The Llama 3 Herd of Models, arXiv 2407.21783.</li>
+        <li>OLMo Team, 2 OLMo 2 Furious, arXiv 2501.00656.</li>
+        <li>Liu et al. (Moonshot), Muon is Scalable for LLM Training, arXiv 2502.16982.</li>
+        <li>Kimi Team, Kimi K2: Open Agentic Intelligence, arXiv 2507.20534.</li>
+        <li>Jordan, Muon: An optimizer for hidden layers in neural networks, https://kellerjordan.github.io/posts/muon/.</li>
+        <li>Essential AI, Practical Efficiency of Muon for Pretraining, arXiv 2505.02222.</li>
+        <li>Wen, Hall, Ma, Liang, Fantastic Pretraining Optimizers and Where to Find Them, arXiv 2509.02046.</li>
+        <li>AlgoPerf: Training Algorithms benchmark, arXiv 2306.07179.</li>
+        <li>Accelerating Neural Network Training: An Analysis of the AlgoPerf Competition, arXiv 2502.15015.</li>
+        <li>In Search of Adam's Secret Sauce, arXiv 2505.21829.</li>
+        <li>Loshchilov and Hutter, Decoupled Weight Decay Regularization, arXiv 1711.05101 (cited via other papers, not re-read).</li>
+      </ol>
+    </section>
+  </main>
+  <footer>
+    <p>Not read: SOAP paper body (arXiv 2409.11321) beyond the Fantastic paper's summary, Moonshot's appendix on why Muon explodes logits, GLM-4.5 and Qwen optimizer details.</p>
+  </footer>
+</body>
+</html>

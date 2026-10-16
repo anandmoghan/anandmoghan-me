@@ -1,0 +1,98 @@
+<section id="schedules">
+  <h2>Schedules that let a run keep going</h2>
+  <p>
+    A cosine schedule is a contract signed at launch.
+    It fixes the total token count on day one, so a run that is going well cannot simply keep going, and a run that is going badly cannot be stopped at a useful point.
+    Frontier runs have quietly dropped that contract.
+    The learning rate now sits flat for most of training and decays late, and the batch size grows during the early phase instead of being fixed.
+    Both changes make the schedule something a lab can adjust while the run is live.
+  </p>
+
+  <!-- == Warmup-stable-decay == -->
+  <h3 id="schedules-warmup-stable-decay">Warmup-stable-decay</h3>
+  <p>
+    <strong>Warmup-stable-decay</strong> (WSD) has three phases: a short warmup, a long stable phase at the peak learning rate, and a decay at the end.
+    MiniCPM popularised it for language models and found that a decay over about 10% of the tokens was enough, while 2.5% fell short [20].
+    The point is not a better final loss than cosine; it is that the run length no longer has to be known in advance.
+    Any stable-phase checkpoint can be decayed to produce a finished model, and the main run carries on at peak.
+  </p>
+  <p>
+    The large reports all use some version of this shape.
+    Kimi K2 held its learning rate constant at \( 2 \times 10^{-4} \) for 10T tokens, then decayed it by cosine over the remaining 5.5T [2].
+    DeepSeek-V3 stayed constant until 10T tokens and decayed over the next 4.3T before two short low-rate phases [16].
+    My read is that the long flat phase is also a monitoring window: the team watches a run whose dynamics do not change underneath it, and commits to a decay only once it trusts the checkpoint.
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 270" role="img"
+      aria-label="Learning rate against tokens: a cosine schedule warms up and then
+        decays smoothly across the whole run; warmup-stable-decay warms up, holds the
+        peak learning rate for most of the run and decays only at the end; a checkpoint
+        taken during the stable phase starts a short cooldown branch that decays to the
+        minimum learning rate while the main run continues at peak">
+      <defs>
+        <marker id="schedules-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="d-arrowhead" d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+
+      <!-- == Axes == -->
+      <path class="d-arrow" d="M 60 240 L 60 20" marker-end="url(#schedules-arrow)"/>
+      <path class="d-arrow" d="M 60 240 L 700 240" marker-end="url(#schedules-arrow)"/>
+      <text class="d-text--muted" x="68" y="24">learning rate</text>
+      <text class="d-text--muted" x="700" y="260" text-anchor="end">tokens</text>
+      <text class="d-text--muted" x="52" y="64" text-anchor="end">peak</text>
+      <text class="d-text--muted" x="52" y="224" text-anchor="end">min</text>
+      <text class="d-text--muted" x="76" y="260" text-anchor="middle">warmup</text>
+
+      <!-- == Cosine == -->
+      <path class="d-arrow d-arrow--dashed" d="M 62 238 L 90 60 C 298 60, 452 220, 660 220"/>
+      <text class="d-text--small" x="196" y="96" text-anchor="end">cosine</text>
+
+      <!-- == Warmup-stable-decay == -->
+      <path class="d-arrow" d="M 62 238 L 90 60 L 560 60 C 596 60, 624 220, 660 220"/>
+      <text class="d-text--small" x="360" y="48">warmup-stable-decay: constant peak</text>
+      <text class="d-text--small" x="624" y="124">decay</text>
+
+      <!-- == Cooldown branch == -->
+      <path class="d-arrow" d="M 330 60 C 360 60, 384 220, 418 220"
+        marker-end="url(#schedules-arrow)"/>
+      <circle class="d-box--accent" cx="330" cy="60" r="6"/>
+      <text class="d-text--small" x="322" y="48" text-anchor="end">checkpoint</text>
+      <text class="d-text--small" x="428" y="226">cooldown branch</text>
+    </svg>
+    <figcaption>
+      Cosine (dashed) decays across the whole run.
+      Warmup-stable-decay holds the peak and decays only at the end, so any stable-phase checkpoint can branch into a short cooldown while the main run continues.
+    </figcaption>
+  </figure>
+
+  <p>
+    The trade-off is that stable-phase loss is not the real loss.
+    A run at peak learning rate sits well above where it would land after a decay, and comparisons made before the decay can flip after it.
+    Seeing the real number means running a <strong>cooldown branch</strong>: copy a checkpoint, decay it over a short stretch of tokens, evaluate, and throw the branch away.
+    A cooldown can be started at any time, even retrospectively from a saved checkpoint, and the schedule scales as reliably as cosine [23].
+    Every branch still costs compute and is a short run with its own failure modes.
+    Marin's 8B run saw its output head blow up during a deep cooldown; resetting the optimizer state and removing weight decay did not help; adding z-loss did [8].
+    The best peak learning rate for this schedule also sits below the cosine optimum [23], so a peak tuned for cosine is not a safe default.
+  </p>
+
+  <!-- == Batch ramps == -->
+  <h3 id="schedules-ramping-the-batch-size">Ramping the batch size</h3>
+  <p>
+    The batch size has the same problem at the other end of the run.
+    Early in training the useful batch size is small: Merrill et al. measured the critical batch size of OLMo models directly and found it starts near zero, rises fast and then levels off [24].
+    A huge batch from step one spends tokens on updates that a much smaller batch would have made just as well.
+  </p>
+  <p>
+    Llama 3 405B started at 4M tokens per batch, doubled to 8M after 252M tokens and to 16M after 2.87T tokens [18].
+    Meta says the small early batch was there for stability, and the run had few loss spikes and needed no interventions for divergence.
+    DeepSeek-V3 grew its batch fivefold, from 3,072 to 15,360, over the first 469B tokens and then held it [16].
+  </p>
+  <p>
+    A ramp is not free.
+    Each step change alters the gradient noise and the number of tokens per optimizer step, so settings defined in steps (warmup length, the Adam \( \beta_2 \) averaging window) shift in token terms at every doubling.
+    My read is that a spike right after a step change is hard to attribute, especially when the sequence length changes too, as it did at Llama 3's first doubling.
+  </p>
+</section>

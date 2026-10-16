@@ -1,0 +1,12 @@
+{
+  "title": "Keeping Long Pretraining Runs Stable",
+  "excerpt": "Why large language model pretraining runs spike and diverge, and the architecture, optimizer, precision and operations fixes that now let labs train for trillions of tokens.",
+  "publishedAt": "2026-10-14",
+  "tags": [
+    "machine-learning",
+    "deep-learning",
+    "nlp"
+  ],
+  "author": "Anand Mohan",
+  "published": false
+}
