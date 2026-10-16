@@ -25,6 +25,7 @@ import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/fires
 import { getDb, getFirebaseAuth } from './client';
 import { mergeAnonymous, refreshClaims } from './account';
 import type { SocialProviderId } from './providers';
+import { clearOffline, readKey, writeKey } from '@/common/apps/family/lib/offlineStore';
 import { NICKNAME_RULE, guestNickname, isGuestNickname, isValidNickname, toNickname } from './nickname';
 
 // Every visitor has a session: anonymous until they upgrade to Google, Apple or email. Upgrading links
@@ -102,6 +103,30 @@ async function syncUserDoc(user: User): Promise<void> {
   localStorage.removeItem(LEGACY_NICKNAME_KEY);
 }
 
+interface Claims {
+  isAdmin: boolean;
+  apps: string[];
+}
+
+// The role claims of the ID token. A signed-in user's last claims are kept on the device: with no network and an
+// expired token (the token refresh needs the network) the Nila app on a phone still opens for the same user, and
+// the claims are read again as soon as the token refreshes online. The rules still decide on the server.
+async function claimsOf(user: User): Promise<Claims> {
+  try {
+    const { claims } = await user.getIdTokenResult();
+    const verified = claims.email_verified === true;
+    const result = { isAdmin: verified && claims.admin === true, apps: verified && Array.isArray(claims.apps) ? (claims.apps as string[]) : [] };
+    if (!user.isAnonymous) writeKey(`claims:${user.uid}`, result).catch(() => undefined);
+    return result;
+  } catch (err) {
+    const saved = err instanceof FirebaseError && err.code === 'auth/network-request-failed' && !user.isAnonymous
+      ? await readKey<Claims>(`claims:${user.uid}`).catch(() => null)
+      : null;
+    if (!saved) throw err;
+    return saved;
+  }
+}
+
 function socialProvider(id: SocialProviderId): FirebaseAuthProvider {
   if (id === 'google.com') return new GoogleAuthProvider();
   const apple = new OAuthProvider('apple.com');
@@ -143,14 +168,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadSession = useCallback(async (user: User) => {
-    const { claims } = await user.getIdTokenResult();
-    const verified = claims.email_verified === true;
-    setSession({
-      user,
-      isAnonymous: user.isAnonymous,
-      isAdmin: verified && claims.admin === true,
-      apps: verified && Array.isArray(claims.apps) ? (claims.apps as string[]) : [],
-    });
+    const { isAdmin, apps } = await claimsOf(user);
+    setSession({ user, isAnonymous: user.isAnonymous, isAdmin, apps });
     setLoading(false);
   }, []);
 
@@ -285,6 +304,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // What Nila saved on this device (data, claims, access) goes with the session.
+    await clearOffline().catch(() => undefined);
     await firebaseSignOut(getFirebaseAuth());
   };
 

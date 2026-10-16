@@ -5,7 +5,7 @@ import { Navigate, useParams } from "@/common/apps/family/router";
 import { BackLink, PageTitle, softBtn } from "@/common/apps/family/components/ui";
 import { BrokenNote } from "@/common/apps/family/components/health/parts";
 import { ListSkeleton } from "@/common/apps/family/components/Skeleton";
-import { ParentingNotice, ParentingOffline } from "@/common/apps/family/components/parenting/parts";
+import { ParentingNotice, ParentingOffline, StaleNote } from "@/common/apps/family/components/parenting/parts";
 import Today from "@/common/apps/family/pages/parenting/Today";
 import Food, { FOOD_PAGES, FoodPlanPage, type FoodPage } from "@/common/apps/family/pages/parenting/Food";
 import About from "@/common/apps/family/pages/parenting/About";
@@ -43,7 +43,7 @@ export default function Parenting() {
   // A problem's page is titled with the problem itself.
   const label = key === "problem" ? p.data?.problems.find((x) => x.id === id)?.title ?? tabLabel : tabLabel;
   // Logs are working details that live on the Mac; the rest shows from the Firestore copy.
-  const needsMac = p.live === false && (key === "sleep" || key === "food");
+  const needsMac = p.live === false && !p.stale?.withMac && (key === "sleep" || key === "food");
   const todayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const age = p.data ? ageLabel(p.data.dob, undefined, true) ?? p.data.summary?.age : null;
 
@@ -61,6 +61,7 @@ export default function Parenting() {
     <div className="space-y-5 px-4 pt-5 pb-6">
       {backTo && <div className="-mb-3"><BackLink to={backTo[0]} label={backTo[1]} /></div>}
       <PageTitle title={label} action={key === "about" && p.status === "ready" && !aboutEditing ? <button type="button" onClick={() => setAboutEditing(true)} className={softBtn}>Edit text</button> : undefined} sub={key === "today" ? <span data-testid="nila-age">{[todayLabel, age && `${age} old`].filter(Boolean).join(" · ")}</span> : undefined} />
+      {p.stale && <StaleNote savedAt={p.stale.savedAt} />}
       {p.status === "loading" && <ListSkeleton rows={4} />}
       {(p.status === "offline" || p.status === "error") && <ParentingOffline offline={p.status === "offline"} onRetry={() => p.refresh()} />}
       {p.status === "ready" && p.data && needsMac && <ParentingOffline offline onRetry={() => p.refresh()} />}

@@ -1,0 +1,29 @@
+{
+  "name": "Nila",
+  "short_name": "Nila",
+  "description": "Nila: today, milestones, food, sleep and help",
+  "start_url": "/apps/family/nila/today",
+  "scope": "/apps/family/nila",
+  "display": "standalone",
+  "background_color": "#f7f4ef",
+  "theme_color": "#f7f4ef",
+  "icons": [
+    {
+      "src": "/apps/icon-nila-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apps/icon-nila-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apps/icon-nila.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

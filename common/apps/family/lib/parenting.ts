@@ -2,11 +2,14 @@
 // Nila pages need (age today, this week's sleep step, the night-log trend, context.md sections). A child's records
 // live on the Mac; the finished display content (plans, summaries, milestones, weeks) also has a read copy in
 // Firestore (lib/views.ts), so the pages load without the Mac. Working details (notes, questions and answers,
-// logs) and every action go to the Mac, with the Firebase ID token. Nothing is kept in localStorage, sessionStorage
-// or IndexedDB.
+// logs) and every action go to the Mac, with the Firebase ID token. Nila is an installable app that also works
+// without a network: what both sources last returned is saved to IndexedDB on the device, per user (lib/views.ts,
+// lib/offlineStore.ts), shown with an "Offline" note when the network or the Mac is not there, and emptied on
+// sign-out. Nothing is kept in localStorage or sessionStorage.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_TIMEOUT_MS, HealthHttpError, HealthOfflineError, POLL_MS, jobIsActive, useHealthApi, type Ask, type HealthCtx, type HealthJob, type Source } from "@/common/apps/family/lib/health";
 import { useReadCopy, withPrefix, type ViewDocs } from "@/common/apps/family/lib/views";
+import type { Stale } from "@/common/apps/family/lib/offline";
 import { addDays, dayKey, dayMs, daysBetween } from "@/common/apps/family/lib/fitness";
 
 /** Only Nila has a parenting section (bridge/parenting.mjs PARENTING_PEOPLE). */
@@ -191,6 +194,8 @@ export const zoneName = (zone: string = phoneZone()): string =>
   new Intl.DateTimeFormat("en-GB", { timeZone: zone, timeZoneName: "long" }).formatToParts(new Date()).find((x) => x.type === "timeZoneName")?.value ?? zone;
 
 async function call(ctx: HealthCtx, path: string, method = "GET", body?: unknown): Promise<unknown> {
+  // No network at all: fail at once instead of after the timeout.
+  if (!navigator.onLine) throw new HealthOfflineError();
   const token = await ctx.getToken();
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), API_TIMEOUT_MS);
@@ -274,7 +279,7 @@ export const parentingApi = {
 };
 
 export type ParentingStatus = "loading" | "ready" | "offline" | "error";
-export interface UseParenting { data: ParentingData | null; status: ParentingStatus; refresh: () => Promise<void>; ctx: HealthCtx; live: boolean | null }
+export interface UseParenting { data: ParentingData | null; status: ParentingStatus; refresh: () => Promise<void>; ctx: HealthCtx; live: boolean | null; stale: Stale | null }
 
 const isOffline = (e: unknown) => e instanceof HealthOfflineError;
 
@@ -313,11 +318,12 @@ const withWeekDocs = (full: ParentingData, published: ParentingData | null): Par
 const parentingBusy = (d: ParentingData) => d.jobs.some(jobIsActive);
 
 /** Page data: the Firestore copy at once, then GET /parenting/nila from the Mac (which adds the working details);
- * polls every 10 s while a research job is queued or running. Without the Mac the copy stays and `live` is false. */
+ * polls every 10 s while a research job is queued or running. Without the Mac the copy stays and `live` is false;
+ * without a network (or the Mac) the last saved data shows and `stale` says when it was saved. */
 export function useParenting(): UseParenting {
   const ctx = useHealthApi();
   const load = useCallback(() => parentingApi.get(ctx), [ctx]);
-  const options = useMemo(() => ({ area: "parenting" as const, person: PARENTING_PERSON, compose: parentingFromViews, load, isOffline, polling: parentingBusy, pollMs: POLL_MS, merge: withWeekDocs }), [load]);
+  const options = useMemo(() => ({ area: "parenting" as const, person: PARENTING_PERSON, compose: parentingFromViews, load, isOffline, polling: parentingBusy, pollMs: POLL_MS, merge: withWeekDocs, offline: true }), [load]);
   const rc = useReadCopy(options);
   return { ...rc, ctx };
 }

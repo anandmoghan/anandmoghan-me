@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "tsx scripts/stamp-nila-sw.ts",
     "start": "next start",
     "lint": "next lint",
     "sync-global": "node scripts/sync-global.mjs",
@@ -17,6 +18,7 @@
     "rules": "node scripts/merge-rules.mjs",
     "rules:check": "node scripts/merge-rules.mjs --check",
     "test:rules": "npm run rules:check && firebase emulators:exec --only firestore,auth,storage --project demo-anandmoghan-me \"node --test --test-concurrency=1 tests/rules/*.test.mjs\"",
+    "test:pwa": "node --import tsx --test tests/pwa/*.test.ts",
     "test:merge": "firebase emulators:exec --only firestore,auth --project demo-anandmoghan-me \"npm --prefix functions test\"",
     "seed-roles": "tsx scripts/seed-roles.ts",
     "emulators": "npm --prefix functions run build && mkdir -p .emulator-data && firebase emulators:start --only auth,firestore,storage,functions --project demo-anandmoghan-me --import .emulator-data --export-on-exit .emulator-data",

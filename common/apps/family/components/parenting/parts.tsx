@@ -19,6 +19,17 @@ export function ParentingNotice() {
   );
 }
 
+/** Shown above the page while saved content is on screen (no network, or the Mac is not answering). */
+export function StaleNote({ savedAt }: { savedAt: number }) {
+  const when = new Date(savedAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return (
+    <div className="card !p-3 text-sm" role="status" data-testid="parenting-stale">
+      <p className="font-bold">Offline: showing what was saved {when}</p>
+      <p className="text-muted">Logging and questions need a connection. This page refreshes by itself when you are back online.</p>
+    </div>
+  );
+}
+
 export function ParentingOffline({ offline, onRetry }: { offline: boolean; onRetry: () => void | Promise<unknown> }) {
   const [busy, setBusy] = useState(false);
   return (

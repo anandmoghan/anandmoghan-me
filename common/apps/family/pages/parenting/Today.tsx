@@ -6,6 +6,7 @@ import { BoxCard, SectionTitle, outlineBtn, softBtn } from "@/common/apps/family
 import { BellIcon, BookIcon, CheckListIcon, ChevronRightIcon, ChildIcon, ListIcon, StepsIcon, TargetIcon } from "@/common/apps/family/components/Icons";
 import { PointList, ResearchComing } from "@/common/apps/family/components/parenting/parts";
 import { sortedChecks, worksGroups } from "@/common/apps/family/pages/parenting/TodayPages";
+import InstallHint from "@/common/apps/family/components/parenting/InstallHint";
 import Spinner from "@/common/apps/family/components/Spinner";
 import { useToast } from "@/common/apps/family/hooks/useToast";
 import { currentWeek, fmtYmd, foodDayFor, isStepPlan, menuFor, napLine, orderedSteps, parentingApi, researching, summaryWeekStart, useNow, weekRangeShort, type ParentingData, type UseParenting } from "@/common/apps/family/lib/parenting";
@@ -164,7 +165,8 @@ export default function Today({ p, data }: { p: UseParenting; data: ParentingDat
   if (!data.summary) {
     return (
       <div className="space-y-5">
-        <ThisWeek p={p} data={data} />
+        <InstallHint />
+      <ThisWeek p={p} data={data} />
         <TodaysHabit data={data} />
         <TodayPlans data={data} />
         <ResearchComing title="Her summary is not ready yet" busy={researching(data)} />
@@ -174,6 +176,7 @@ export default function Today({ p, data }: { p: UseParenting; data: ParentingDat
   }
   return (
     <div className="space-y-5">
+      <InstallHint />
       <ThisWeek p={p} data={data} />
       <TodaysHabit data={data} />
       <TodayPlans data={data} />

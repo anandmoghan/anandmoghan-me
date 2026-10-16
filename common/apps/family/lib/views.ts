@@ -6,10 +6,17 @@
 //
 // useReadCopy combines the two sources: the copy shows immediately; when the Mac answers its full
 // overview replaces it (same fields, plus the working details); when the Mac is offline the copy stays.
+// With `offline` (Nila only) both sources are also saved to IndexedDB (lib/offlineStore.ts), per user, and shown
+// when the phone has no network or the Mac does not answer. Firestore's own persistence is not used: it is one
+// switch for the whole Firestore instance (every app), and it would not hold the Mac's answer.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot, type DocumentData } from "firebase/firestore";
 import { getDb } from "@/common/firebase/client";
+import { useAuth } from "@/common/firebase/AuthProvider";
 import { useData } from "@/common/apps/family/hooks/useData";
+import { chooseSources, type Saved, type Stale } from "@/common/apps/family/lib/offline";
+import { readKey, writeKey } from "@/common/apps/family/lib/offlineStore";
+import { useOnline } from "@/common/apps/family/lib/useOnline";
 
 export type ViewArea = "parenting" | "fitness" | "health";
 /** View id to document, for one area and person. */
@@ -60,6 +67,8 @@ interface Options<T> {
   pollMs?: number;
   /** Adds what only the copy holds (per-week documents) to the Mac's answer. */
   merge?: (full: T, published: T | null) => T;
+  /** Save what loads on this device, show it without a network, and reload when the network is back. */
+  offline?: boolean;
 }
 
 export interface ReadCopy<T> {
@@ -68,15 +77,54 @@ export interface ReadCopy<T> {
   refresh: () => Promise<void>;
   /** Whether the Mac answered: true yes, false no (the working details are missing), null not yet. */
   live: boolean | null;
+  /** Set while saved content is shown because the network or the Mac did not answer. */
+  stale: Stale | null;
 }
 
-export function useReadCopy<T>({ area, person, compose, load, isOffline, polling, pollMs = 10_000, merge }: Options<T>): ReadCopy<T> {
-  const docs = useViews(area, person);
-  const published = useMemo(() => (docs ? compose(docs, person) : null), [docs, compose, person]);
+export function useReadCopy<T>({ area, person, compose, load, isOffline, polling, pollMs = 10_000, merge, offline = false }: Options<T>): ReadCopy<T> {
+  const { user } = useAuth();
+  const online = useOnline();
+  const liveDocs = useViews(area, person);
   const [full, setFull] = useState<T | null>(null);
   const [macStatus, setMacStatus] = useState<ViewStatus>("loading");
   const current = useRef(person);
   current.current = person;
+
+  // The copy on the device. `ready` is true once the saved copy was read, so the first save never overwrites it.
+  const uid = user?.uid;
+  const cacheKey = offline && uid ? `${area}:${person}:${uid}` : null;
+  const [saved, setSaved] = useState<Saved<T> | null>(null);
+  const [ready, setReady] = useState(false);
+  const savedRef = useRef<Saved<T> | null>(null);
+  useEffect(() => {
+    setReady(false);
+    setSaved(null);
+    savedRef.current = null;
+    if (!cacheKey) return;
+    let cancelled = false;
+    readKey<Saved<T>>(cacheKey).then(
+      (value) => {
+        if (cancelled) return;
+        savedRef.current = value;
+        setSaved(value);
+        setReady(true);
+      },
+      () => !cancelled && setReady(true),
+    );
+    return () => { cancelled = true; };
+  }, [cacheKey]);
+  useEffect(() => {
+    if (!cacheKey || !ready || (liveDocs === null && full === null)) return;
+    const prev = savedRef.current;
+    const next: Saved<T> = { savedAt: Date.now(), docs: liveDocs ?? prev?.docs ?? null, full: full ?? prev?.full ?? null };
+    savedRef.current = next;
+    setSaved(next);
+    writeKey(cacheKey, next).catch(() => undefined);
+  }, [cacheKey, ready, liveDocs, full]);
+
+  const chosen = chooseSources({ docs: liveDocs, full, macDown: macStatus === "offline" || macStatus === "error", online }, saved);
+  const docs = chosen.docs;
+  const published = useMemo(() => (docs ? compose(docs, person) : null), [docs, compose, person]);
 
   const refresh = useCallback(async () => {
     const asked = person;
@@ -101,9 +149,21 @@ export function useReadCopy<T>({ area, person, compose, load, isOffline, polling
   // The Mac published something new (a finished job, an edit on another phone): ask it again.
   const seen = useRef<ViewDocs | null>(null);
   useEffect(() => {
-    if (seen.current && docs && seen.current !== docs) void refresh();
-    seen.current = docs;
-  }, [docs, refresh]);
+    if (seen.current && liveDocs && seen.current !== liveDocs) void refresh();
+    seen.current = liveDocs;
+  }, [liveDocs, refresh]);
+
+  // Back online, or the app brought back to the front after a while: ask again.
+  useEffect(() => {
+    if (!cacheKey) return;
+    const again = () => { if (document.visibilityState === "visible") void refresh(); };
+    window.addEventListener("online", again);
+    document.addEventListener("visibilitychange", again);
+    return () => {
+      window.removeEventListener("online", again);
+      document.removeEventListener("visibilitychange", again);
+    };
+  }, [cacheKey, refresh]);
 
   const active = full !== null && !!polling?.(full);
   useEffect(() => {
@@ -112,6 +172,7 @@ export function useReadCopy<T>({ area, person, compose, load, isOffline, polling
     return () => clearInterval(t);
   }, [active, refresh, pollMs]);
 
-  const data = full ? (merge ? merge(full, published) : full) : published;
-  return { data, status: data ? "ready" : macStatus, refresh, live: macStatus === "ready" ? true : macStatus === "loading" ? null : false };
+  const shown = chosen.full;
+  const data = shown ? (merge ? merge(shown, published) : shown) : published;
+  return { data, status: data ? "ready" : macStatus, refresh, live: macStatus === "ready" ? true : macStatus === "loading" ? null : false, stale: chosen.stale };
 }

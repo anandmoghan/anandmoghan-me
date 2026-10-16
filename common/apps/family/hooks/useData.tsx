@@ -9,6 +9,8 @@ import { useAuth } from "@/common/firebase/AuthProvider";
 import { apiBase, newRequestId, pingMac, postRequest, type LiveJob } from "@/common/apps/family/lib/mac";
 import { createRequestDoc } from "@/common/apps/family/lib/writes";
 import { toMillis } from "@/common/apps/family/lib/format";
+import { readKey, writeKey } from "@/common/apps/family/lib/offlineStore";
+import { useOnline } from "@/common/apps/family/lib/useOnline";
 import type {
   Brief, FeedItem, Job, MacStatus, Order, PersonDoc, RequestDoc, Suggestion, Tryon, WardrobeItem,
 } from "@/common/apps/family/types";
@@ -48,6 +50,8 @@ const POLL_MS = 30000;
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user, isAdmin, apps } = useAuth();
   const email = (user?.email ?? "").toLowerCase();
+  const uid = user?.uid;
+  const online = useOnline();
   // Site admins with the family app pass the rules too (firebase/rules/family.rules).
   const adminAccess = isAdmin && apps.includes("family");
   const [access, setAccess] = useState<Access>("loading");
@@ -71,8 +75,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       { includeMetadataChanges: true },
       (snap) => {
         const members = ((snap.data()?.members as string[] | undefined) ?? []).map((m) => m.toLowerCase());
-        if (members.includes(email) || adminAccess) setAccess("allowed");
+        const member = members.includes(email) || adminAccess;
+        if (member) setAccess("allowed");
         else if (!snap.metadata.fromCache) setAccess("denied");
+        // What the server decided is remembered for the next time the phone has no network (below).
+        if (uid && (!snap.metadata.fromCache || member)) writeKey(`member:${uid}`, member).catch(() => undefined);
       },
       (err) => {
         if (err.code === "permission-denied" && accessAttempt >= 2) setAccess("denied");
@@ -80,7 +87,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       },
     );
     return () => { unsub(); if (retry) clearTimeout(retry); };
-  }, [email, adminAccess, accessAttempt]);
+  }, [email, uid, adminAccess, accessAttempt]);
+
+  // No network: the household doc cannot be read, so a member the server let in before stays in (Nila opens
+  // offline). Online, the server decides again as soon as it answers.
+  useEffect(() => {
+    if (!uid || online || access !== "loading") return;
+    readKey<boolean>(`member:${uid}`).then((member) => member && setAccess("allowed"), () => undefined);
+  }, [uid, online, access]);
 
   useEffect(() => {
     if (access !== "allowed") return;
