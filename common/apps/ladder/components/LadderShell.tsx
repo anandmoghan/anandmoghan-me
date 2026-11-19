@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Card } from '../../shell/Card'
 import { PageSkeleton } from '../../shell/Skeleton'
 import { TabBar, type Tab } from '../../shell/TabBar'
-import { LadderIcon } from '../../shell/icons'
+import { LadderIcon, UserIcon } from '../../shell/icons'
 import { useLadder } from '../LadderProvider'
 import { TRACKER_CONFIG } from '../trackers'
 
@@ -47,7 +47,13 @@ function TrackerSwitcher() {
             if (t === tracker) return
             setTracker(t)
             // Job and company ids belong to one tracker: go back to that section's list.
-            router.replace(pathname.startsWith('/apps/ladder/compan') ? '/apps/ladder/companies' : pathname === '/apps/ladder/resume' ? pathname : '/apps/ladder')
+            router.replace(
+              pathname.startsWith('/apps/ladder/compan')
+                ? '/apps/ladder/companies'
+                : pathname === '/apps/ladder/resume' || pathname === '/apps/ladder/profile'
+                  ? pathname
+                  : '/apps/ladder',
+            )
           }}
         >
           {TRACKER_CONFIG[t].label}
@@ -71,6 +77,7 @@ export function LadderShell({ children }: { children: ReactNode }) {
     },
     { href: '/apps/ladder/companies', label: 'Companies', icon: BuildingIcon, active: pathname.startsWith('/apps/ladder/compan') },
     { href: '/apps/ladder/resume', label: 'Resume', icon: DocIcon },
+    { href: '/apps/ladder/profile', label: 'Profile', icon: <UserIcon /> },
   ]
 
   let body: ReactNode

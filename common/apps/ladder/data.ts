@@ -10,14 +10,16 @@ import {
   serverTimestamp,
   Timestamp,
   updateDoc,
+  writeBatch,
   type FieldValue,
 } from 'firebase/firestore'
 import { getDownloadURL, ref } from 'firebase/storage'
 import { getDb, getFirebaseStorage } from '@/common/firebase/client'
+import { profileFromDoc, type ProfileFields, type ProfileHistoryEntry } from './profile'
 import type { CompanyDoc, JobDoc, RequestDoc, RequestType, Tracker, TrackerDoc, UserJobField } from './types'
 
 // Client reads and writes for ladder. Rules (firebase/rules/ladder.rules) allow a client to change
-// only the user-editable job fields and to queue requests; everything else is written by the
+// only the user-editable job fields and the profile, and to queue requests; everything else is written by the
 // migration script and the Mac worker with the admin SDK.
 
 type Unsubscribe = () => void
@@ -72,6 +74,7 @@ export function subscribeRequests(
             createdAt: toDate(data.createdAt),
             finishedAt: toDate(data.finishedAt),
             error: data.error ?? null,
+            ...(typeof data.result?.pdf === 'string' ? { pdf: data.result.pdf } : {}),
           }
         }),
       ),
@@ -120,4 +123,57 @@ export async function createRequest(
 /** Download URL for a generated PDF (Storage path from resume_pdf etc.); needs read access. */
 export function fileUrl(path: string): Promise<string> {
   return getDownloadURL(ref(getFirebaseStorage(), path))
+}
+
+const profileRef = (tracker: Tracker) => doc(getDb(), 'ladder', tracker, 'profile', 'current')
+
+/** The tracker profile's fields, or null before anyone has saved one. */
+export function subscribeProfile(
+  tracker: Tracker,
+  onData: (profile: ProfileFields | null) => void,
+  onError: (err: Error) => void,
+): Unsubscribe {
+  return onSnapshot(profileRef(tracker), (snap) => onData(snap.exists() ? profileFromDoc(snap.data()) : null), onError)
+}
+
+/** Earlier resume versions, newest first. */
+export function subscribeProfileHistory(
+  tracker: Tracker,
+  onData: (entries: ProfileHistoryEntry[]) => void,
+  onError: (err: Error) => void,
+): Unsubscribe {
+  const q = query(collection(profileRef(tracker), 'history'), orderBy('savedAt', 'desc'), limit(50))
+  return onSnapshot(
+    q,
+    (snap) =>
+      onData(
+        snap.docs.map((d) => {
+          const data = d.data()
+          return { id: d.id, resumeTex: data.resumeTex, savedAt: toDate(data.savedAt), savedBy: data.savedBy }
+        }),
+      ),
+    onError,
+  )
+}
+
+/**
+ * Writes the whole profile (the rules require every field). When resumeTex changed it also adds a
+ * history version, in the same batch so a version exists for every saved resume.
+ */
+export async function saveProfile(
+  tracker: Tracker,
+  uid: string,
+  profile: ProfileFields,
+  resumeChanged: boolean,
+): Promise<void> {
+  const batch = writeBatch(getDb())
+  batch.set(profileRef(tracker), { ...profile, updatedAt: serverTimestamp(), updatedBy: uid })
+  if (resumeChanged) {
+    batch.set(doc(collection(profileRef(tracker), 'history')), {
+      resumeTex: profile.resumeTex,
+      savedAt: serverTimestamp(),
+      savedBy: uid,
+    })
+  }
+  await batch.commit()
 }

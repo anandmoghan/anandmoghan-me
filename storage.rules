@@ -15,6 +15,8 @@ rules_version = '2';
 // ladder/<tracker>/generated/<slug>/**  tailored resume and cover letter PDFs (and .tex), written by
 //                             the Mac worker and scripts/ladder-migrate.ts (admin SDK); read by users
 //                             with access to the tracker (same check as firebase/rules/ladder.rules)
+// ladder/<tracker>/resume/<requestId>.pdf  base resume PDF from a build-resume request (worker
+//                             writes, same readers)
 //
 // Membership is family/household.members in Firestore (cross-service firestore.get).
 // Role claims (admin, apps) are mirrored from Firestore roles/{email} by the syncRoleClaims
@@ -76,6 +78,11 @@ service firebase.storage {
     }
 
     match /ladder/{tracker}/generated/{slug}/{file} {
+      allow read: if canReadLadder(tracker);
+    }
+
+    // Base resume PDFs built from profile/current.resumeTex by build-resume requests.
+    match /ladder/{tracker}/resume/{file} {
       allow read: if canReadLadder(tracker);
     }
 
