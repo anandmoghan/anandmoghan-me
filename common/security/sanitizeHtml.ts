@@ -5,11 +5,11 @@ import DOMPurify, { type WindowLike } from 'dompurify'
 // modules/ladder/html.mjs): text structure, lists, tables, code and http(s)/mailto links. No images, no
 // styles, no classes, no ids, no event handlers. Author-controlled HTML (blog posts, materials, KaTeX)
 // is built from this repo or published by an admin and is not passed through here.
-export const ALLOWED_TAGS = [
+const ALLOWED_TAGS = [
   'p', 'br', 'hr', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'u', 'a',
   'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
 ]
-export const ALLOWED_ATTR = ['href', 'rel', 'target']
+const ALLOWED_ATTR = ['href', 'rel', 'target']
 // DOMPurify's default pattern with the schemes narrowed: a value with a scheme must be http(s) or mailto;
 // plain values (rel, target, relative links) pass.
 const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i

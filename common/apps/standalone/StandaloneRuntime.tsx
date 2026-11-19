@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { iconBase, manifestUrl, serviceWorkerUrl, standaloneAppFor } from './apps'
 
 /** Chrome's install prompt event (not in the DOM typings). */
-export interface InstallPromptEvent extends Event {
+interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
 }
 

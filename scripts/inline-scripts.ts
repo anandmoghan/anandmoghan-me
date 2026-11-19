@@ -11,7 +11,7 @@ const SCRIPT = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/g;
 const RUN_GAP = /^\s*$/;
 const DATA_BLOCK = /^\s+type="application\/ld\+json"$/;
 
-export interface Externalized {
+interface Externalized {
   html: string;
   /** File path under INLINE_DIR (e.g. "/_next/static/chunks/inline/ab12.js") to its source. */
   files: Map<string, string>;

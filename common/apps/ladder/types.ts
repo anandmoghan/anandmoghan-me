@@ -1,9 +1,8 @@
 // Firestore model for ladder. Mirrors ladder/lib/jobs/types.ts and lib/companies/types.ts in both
-// tracker repos, and anandmoghan-me-apis/ladder/schema.mjs (the worker and agent CLI validate
+// tracker repos, and anandmoghan-me-api/modules/ladder/schema.mjs (the worker and agent CLI validate
 // against that file, strictly). Job and company fields stay snake_case as in the old frontmatter;
 // request docs use camelCase.
 //
-//   ladder/{tracker}                    TrackerDoc
 //   ladder/{tracker}/jobs/{slug}        JobDoc
 //   ladder/{tracker}/companies/{slug}   CompanyDoc
 //   ladder/{tracker}/requests/{id}      RequestDoc (queue read by the Mac worker)
@@ -158,11 +157,6 @@ export interface RequestDoc {
   error?: string | null
   /** build-resume: Storage path of the built PDF, ladder/{tracker}/resume/{id}.pdf (worker sets it). */
   pdf?: string
-}
-
-/** ladder/{tracker}: the base resume, as sanitised HTML. */
-export interface TrackerDoc {
-  resume_html?: string
 }
 
 export interface CompanyHistoryEntry {

@@ -22,17 +22,17 @@ export const WORK_MODE = ['remote', 'hybrid', 'onsite'] as const
 export const SALARY_PERIOD = ['year', 'month', 'day', 'hour'] as const
 export const CONTRACT_TYPE = ['permanent', 'fixed_term', 'contract', 'freelance', 'part_time', 'internship'] as const
 
-export type Seniority = (typeof SENIORITY)[number]
-export type RoleType = (typeof ROLE_TYPE)[number]
-export type WorkMode = (typeof WORK_MODE)[number]
+type Seniority = (typeof SENIORITY)[number]
+type RoleType = (typeof ROLE_TYPE)[number]
+type WorkMode = (typeof WORK_MODE)[number]
 export type SalaryPeriod = (typeof SALARY_PERIOD)[number]
-export type ContractType = (typeof CONTRACT_TYPE)[number]
+type ContractType = (typeof CONTRACT_TYPE)[number]
 
 export const MAX_RESUME_TEX = 200_000
 export const MAX_ABOUT = 5_000
 export const MAX_WORK_AUTHORISATION = 2_000
-export const MAX_LIST = 100
-export const MAX_ITEM = 500
+const MAX_LIST = 100
+const MAX_ITEM = 500
 
 export const LABELS: Record<Seniority | RoleType | WorkMode | SalaryPeriod | ContractType, string> = {
   entry: 'Entry',
@@ -69,14 +69,14 @@ export interface TargetRole {
   roleType: RoleType
 }
 
-export interface SalaryFloor {
+interface SalaryFloor {
   amount: number
   currency: string
   period: SalaryPeriod
 }
 
 /** The string-list fields, in the order the form shows them. */
-export const LIST_FIELDS = [
+const LIST_FIELDS = [
   'highlights',
   'skills',
   'industries',

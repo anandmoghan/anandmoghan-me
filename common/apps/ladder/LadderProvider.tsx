@@ -4,10 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useAuth } from '@/common/firebase/AuthProvider'
 import { ladderAccessFromClaims, visibleTrackers, type LadderAccess } from './access'
 import { useLadderShowAll } from './useLadderPrefs'
-import { subscribeCompanies, subscribeJobs, subscribeRequests, subscribeTracker } from './data'
+import { subscribeCompanies, subscribeJobs, subscribeRequests } from './data'
 import { compareJobs, type CurrencyPreference } from './lib'
 import { TRACKER_CONFIG, isTracker, type TrackerConfig } from './trackers'
-import { type CompanyDoc, type JobDoc, type RequestDoc, type Tracker, type TrackerDoc } from './types'
+import { type CompanyDoc, type JobDoc, type RequestDoc, type Tracker } from './types'
 
 // Ladder state shared by every /apps/ladder page: which trackers the user may open (custom
 // claims, mirrored from roles/{email}), the current tracker, live jobs, companies and requests,
@@ -27,7 +27,6 @@ interface LadderContextValue {
   jobs: JobDoc[]
   companies: CompanyDoc[]
   requests: RequestDoc[]
-  trackerDoc: TrackerDoc | null
   loading: boolean
   error: string | null
   currency: CurrencyPreference
@@ -61,7 +60,6 @@ export function LadderProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<JobDoc[]>([])
   const [companies, setCompanies] = useState<CompanyDoc[]>([])
   const [requests, setRequests] = useState<RequestDoc[]>([])
-  const [trackerDoc, setTrackerDoc] = useState<TrackerDoc | null>(null)
   const [loadedFor, setLoadedFor] = useState<Tracker | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [currency, setCurrencyState] = useState<CurrencyPreference>('GBP')
@@ -125,7 +123,6 @@ export function LadderProvider({ children }: { children: ReactNode }) {
           ),
         fail,
       ),
-      subscribeTracker(tracker, setTrackerDoc, fail),
     ]
     return () => unsubs.forEach((u) => u())
   }, [tracker])
@@ -154,13 +151,12 @@ export function LadderProvider({ children }: { children: ReactNode }) {
       jobs: loadedFor === tracker ? jobs : [],
       companies: loadedFor === tracker ? companies : [],
       requests: loadedFor === tracker ? requests : [],
-      trackerDoc: loadedFor === tracker ? trackerDoc : null,
       loading: !accessReady || (tracker !== null && loadedFor !== tracker && !error),
       error,
       currency: shownCurrency,
       setCurrency,
     }),
-    [trackers, accessReady, tracker, config, setTracker, jobs, companies, requests, trackerDoc, loadedFor, error, shownCurrency, setCurrency],
+    [trackers, accessReady, tracker, config, setTracker, jobs, companies, requests, loadedFor, error, shownCurrency, setCurrency],
   )
 
   return <LadderContext.Provider value={value}>{children}</LadderContext.Provider>

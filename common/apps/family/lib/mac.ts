@@ -4,7 +4,7 @@
 // same client-generated request_id so a timed-out call that did succeed is not run twice.
 import { FAMILY_API } from "@/common/api/config";
 
-export const STATUS_TIMEOUT_MS = 4000;
+const STATUS_TIMEOUT_MS = 4000;
 
 export function newRequestId(): string {
   return crypto.randomUUID();

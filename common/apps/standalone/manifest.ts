@@ -4,7 +4,7 @@ import { iconBase, type StandaloneApp } from './apps'
 
 // Build-time only (Node): the layouts' metadata and scripts/build-app-manifests.ts read the colours from disk.
 
-export interface AccentColors {
+interface AccentColors {
   light: string
   dark: string
 }
@@ -36,7 +36,7 @@ export function accentColors(app: StandaloneApp): AccentColors {
 }
 
 /** The page background of the light theme (tokens.css --bg): the splash screen behind the icon. */
-export function pageBackground(): string {
+function pageBackground(): string {
   return tokenColor(readFileSync(TOKENS, 'utf8'), 'bg')
 }
 

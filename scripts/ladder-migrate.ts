@@ -6,13 +6,12 @@
 // Both repos are read only. For each tracker:
 //   content/jobs/<slug>.md         -> ladder/{tracker}/jobs/{slug}   (frontmatter fields + body_html)
 //   content/companies/<slug>.md    -> ladder/{tracker}/companies/{slug}
-//   content/resume/base.md         -> ladder/{tracker}.resume_html
 //   content/{resume,cover-letter}/generated/<slug>/*.{pdf,tex}
 //                                  -> Storage ladder/{tracker}/generated/<slug>/<file>
 // resume_pdf, resume_tex, cover_letter_pdf and cover_letter_tex are rewritten to those Storage
-// paths. Field names and shapes follow anandmoghan-me-apis/ladder/schema.mjs: frontmatter fields
+// paths. Field names and shapes follow anandmoghan-me-api/modules/ladder/schema.mjs: frontmatter fields
 // outside lib/jobs/types.ts are dropped (and counted), YAML dates become YYYY-MM-DD strings, and
-// markdown bodies become HTML sanitised with the same allowlist as anandmoghan-me-apis/ladder/html.mjs.
+// markdown bodies become HTML sanitised with the same allowlist as anandmoghan-me-api/modules/ladder/html.mjs.
 // Documents are written with set(), so a rerun replaces them (including any edits made in the app).
 //
 // Usage (prints counts and field names only, never job contents):
@@ -45,7 +44,7 @@ const CODE_DIR = path.join(os.homedir(), 'workspace', 'code')
 const EMULATOR_PROJECT = 'demo-anandmoghan-me'
 const PRODUCTION_PROJECT = 'anandmoghan-me'
 
-// == Sanitising (same options as anandmoghan-me-apis/ladder/html.mjs) ==
+// == Sanitising (same options as anandmoghan-me-api/modules/ladder/html.mjs) ==
 
 const SANITISE: sanitizeHtml.IOptions = {
   allowedTags: [
@@ -252,7 +251,6 @@ interface FileUpload {
 interface TrackerData {
   jobs: Converted[]
   companies: Converted[]
-  resumeHtml: string | null
   uploads: FileUpload[]
   skipped: Tally
   dropped: Tally
@@ -274,7 +272,6 @@ function readTracker(tracker: Tracker, contentDir: string): TrackerData {
   const result: TrackerData = {
     jobs: [],
     companies: [],
-    resumeHtml: null,
     uploads: [],
     skipped: new Tally(),
     dropped: new Tally(),
@@ -354,9 +351,6 @@ function readTracker(tracker: Tracker, contentDir: string): TrackerData {
     }
   }
 
-  const resume = path.join(contentDir, 'resume', 'base.md')
-  if (fs.existsSync(resume)) result.resumeHtml = markdownToHtml(fs.readFileSync(resume, 'utf-8'))
-
   return result
 }
 
@@ -365,7 +359,6 @@ function report(tracker: Tracker, data: TrackerData) {
   console.log(`\n[${tracker}]`)
   console.log(`  jobs: ${data.jobs.length}`)
   console.log(`  companies: ${data.companies.length}`)
-  console.log(`  base resume: ${data.resumeHtml ? 'yes' : 'no'}`)
   console.log(`  generated files: ${data.uploads.length} (${pdfs} pdf, ${data.uploads.length - pdfs} tex)`)
   console.log(`  jobs with resume_pdf: ${data.jobs.filter((j) => j.data.resume_pdf).length}`)
   console.log(`  jobs with cover_letter_pdf: ${data.jobs.filter((j) => j.data.cover_letter_pdf).length}`)
@@ -395,7 +388,6 @@ async function write(tracker: Tracker, data: TrackerData, projectId: string, buc
   const root = db.collection('ladder').doc(tracker)
   // Failures are counted by onWriteError; the per-write promises only need a handler.
   const ignore = () => undefined
-  writer.set(root, { resume_html: data.resumeHtml ?? '', updated_at: FieldValue.serverTimestamp() }, { merge: true }).catch(ignore)
   for (const job of data.jobs) writer.set(root.collection('jobs').doc(job.id), { ...job.data, ...stamp }).catch(ignore)
   for (const company of data.companies) {
     writer.set(root.collection('companies').doc(company.id), { ...company.data, ...stamp }).catch(ignore)

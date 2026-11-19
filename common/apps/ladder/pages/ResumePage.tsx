@@ -1,28 +1,24 @@
 'use client'
 
-import SafeHtml from '@/common/security/SafeHtml'
 import Link from 'next/link'
 import { FileLink } from '../components/JobActions'
 import { useLadder } from '../LadderProvider'
 
-// The base resume (ladder/{tracker}.resume_html) and every job's generated resume and cover letter.
+// Every job's tailored resume and cover letter. The resume source itself is on the Profile page.
 export function ResumePage() {
-  const { trackerDoc, jobs } = useLadder()
+  const { jobs } = useLadder()
   const withMaterials = jobs.filter((job) => job.resume_pdf || job.cover_letter_pdf)
 
   return (
     <div className="site-container site-container--wide space-y-8 pb-6 pt-3">
       <section>
         <h1 className="mb-4 text-[1.65rem] font-extrabold leading-tight">Resume</h1>
-        {trackerDoc?.resume_html ? (
-          // Sanitised by the migration script; clients cannot write it.
-          <SafeHtml className="card prose overflow-x-auto" html={trackerDoc.resume_html} />
-        ) : (
-          <p className="text-sm italic text-muted">No resume content yet.</p>
-        )}
-        <p className="mt-3 text-sm text-muted">
-          A plain-text extraction of the canonical resume, which lives as LaTeX on the Mac and compiles to PDF.
-          It is kept here so it is easy to read and search against job postings.
+        <p className="text-sm text-muted">
+          The resume LaTeX, its versions and the PDF build are on the{' '}
+          <Link href="/apps/ladder/profile" className="font-bold text-domain hover:underline">
+            Profile
+          </Link>{' '}
+          page.
         </p>
       </section>
 

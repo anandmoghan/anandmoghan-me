@@ -16,7 +16,7 @@ import {
 import { getDownloadURL, ref } from 'firebase/storage'
 import { getDb, getFirebaseStorage } from '@/common/firebase/client'
 import { profileFromDoc, type ProfileFields, type ProfileHistoryEntry } from './profile'
-import type { CompanyDoc, JobDoc, RequestDoc, RequestType, Tracker, TrackerDoc, UserJobField } from './types'
+import type { CompanyDoc, JobDoc, RequestDoc, RequestType, Tracker, UserJobField } from './types'
 
 // Client reads and writes for ladder. Rules (firebase/rules/ladder.rules) allow a client to change
 // only the user-editable job fields and the profile, and to queue requests; everything else is written by the
@@ -82,17 +82,6 @@ export function subscribeRequests(
   )
 }
 
-export function subscribeTracker(
-  tracker: Tracker,
-  onData: (data: TrackerDoc | null) => void,
-  onError: (err: Error) => void,
-): Unsubscribe {
-  return onSnapshot(
-    doc(getDb(), 'ladder', tracker),
-    (snap) => onData(snap.exists() ? (snap.data() as TrackerDoc) : null),
-    onError,
-  )
-}
 
 /** A change to user-editable fields. `null` removes the field (for example clearing a rating). */
 export type JobPatch = { [K in UserJobField]?: JobDoc[K] | null }

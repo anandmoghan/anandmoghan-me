@@ -108,7 +108,7 @@ function parsePrivateApps(raw: string | undefined): AppDefinition[] {
   })
 }
 
-export const privateApps = parsePrivateApps(process.env.NEXT_PUBLIC_PRIVATE_APPS)
+const privateApps = parsePrivateApps(process.env.NEXT_PUBLIC_PRIVATE_APPS)
 
 export const apps: AppDefinition[] = [...publicApps, ...privateApps]
 

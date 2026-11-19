@@ -5,8 +5,8 @@
 // ladderTrackers claim (both mirrored from roles/{email} by syncRoleClaims).
 // Clients change only the user-editable job fields and the profile, and queue requests. Everything
 // else (new jobs, companies, body_html, PDFs, request progress) is written by
-// scripts/ladder-migrate.ts and the Mac worker (anandmoghan-me-apis/ladder) with the admin SDK, which bypasses rules.
-// Field shapes match anandmoghan-me-apis/ladder/schema.mjs.
+// scripts/ladder-migrate.ts and the Mac worker (anandmoghan-me-api/modules/ladder) with the admin SDK, which bypasses rules.
+// Field shapes match anandmoghan-me-api/modules/ladder/schema.mjs.
 
 match /ladder/{tracker} {
 
@@ -59,8 +59,8 @@ match /ladder/{tracker} {
       && (!('updated_at' in ch) || d.updated_at == request.time);
   }
 
-  allow read: if ladderCanAccess();
-  allow write: if false;
+  // The tracker doc itself holds nothing a client reads; everything lives in its subcollections.
+  allow read, write: if false;
 
   match /jobs/{slug} {
     allow read: if ladderCanAccess();

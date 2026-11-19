@@ -12,7 +12,7 @@ import { LadderShell } from '@/common/apps/ladder/components/LadderShell'
 //   /apps/ladder/job?slug=       one job on its own page
 //   /apps/ladder/companies       company watchlist
 //   /apps/ladder/company?slug=   one company
-//   /apps/ladder/resume          base resume and generated PDFs
+//   /apps/ladder/resume          tailored resumes and cover letters
 //   /apps/ladder/profile         tracker profile: resume LaTeX, versions, preferences
 // The tracker is chosen in the app (stored in localStorage); ?t=anand|kavya preselects it.
 export const metadata: Metadata = standaloneMetadata('ladder')

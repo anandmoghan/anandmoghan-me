@@ -16,7 +16,7 @@ import type {
 } from "@/common/apps/family/types";
 
 export type Access = "loading" | "allowed" | "denied";
-export type MacState = { live: boolean | null; lastSeen: MacStatus["last_seen"] };
+type MacState = { live: boolean | null; lastSeen: MacStatus["last_seen"] };
 
 interface DataValue {
   access: Access;

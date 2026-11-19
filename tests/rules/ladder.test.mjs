@@ -68,7 +68,7 @@ beforeEach(async () => {
   await env.clearStorage();
   await env.withSecurityRulesDisabled(async (admin) => {
     const db = admin.firestore();
-    await setDoc(doc(db, "ladder/anand"), { resume_html: "<p>CV</p>" });
+    await setDoc(doc(db, "ladder/anand"), { label: "Anand" });
     await setDoc(jobRef(db), {
       slug: SLUG,
       tracker: "anand",
@@ -91,7 +91,7 @@ beforeEach(async () => {
 describe("ladder access", () => {
   test("a user reads only the trackers listed in their claims", async () => {
     const db = users.anand().firestore();
-    await assertSucceeds(getDoc(doc(db, "ladder/anand")));
+    await assertFails(getDoc(doc(db, "ladder/anand")));
     await assertSucceeds(getDocs(collection(db, "ladder/anand/jobs")));
     await assertSucceeds(getDoc(doc(db, "ladder/anand/companies/acme")));
     await assertSucceeds(getDocs(collection(db, "ladder/anand/requests")));
@@ -173,7 +173,7 @@ describe("ladder job edits", () => {
     await assertFails(setDoc(jobRef(db, "anand", "2026-10-14-new-job"), { status: "new" }));
     await assertFails(deleteDoc(jobRef(db)));
     await assertFails(setDoc(doc(db, "ladder/anand/companies/new"), { name: "New" }));
-    await assertFails(updateDoc(doc(db, "ladder/anand"), { resume_html: "<p>x</p>" }));
+    await assertFails(updateDoc(doc(db, "ladder/anand"), { label: "x" }));
   });
 
   test("a user cannot edit another tracker's jobs", async () => {

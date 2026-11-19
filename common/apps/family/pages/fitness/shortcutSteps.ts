@@ -1,5 +1,5 @@
 // Hand-build instructions for the "Family health sync" Shortcut, for when the signed file
-// (public/apps/family-health-sync.shortcut here; source built by scripts/shortcut/build-shortcut.mjs) won't import.
+// (public/apps/family-health-sync.shortcut here; built by anandmoghan-me-api scripts/build-shortcut.mjs family) won't import.
 // Same actions, in the same order, as the generated file. Action names are as they appear in the
 // Shortcuts action search on iOS 17 and 18.
 
