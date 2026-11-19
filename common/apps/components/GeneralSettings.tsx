@@ -10,7 +10,7 @@ import { useTheme } from '@/common/components/ThemeProvider'
 import { AnalyticsSwitch } from '@/common/visitors/AnalyticsSwitch'
 import { useDeleteMyData } from '@/common/visitors/DeleteMyData'
 import { NicknameEditor } from '@/common/visitors/NicknameEditor'
-import { apps as appRegistry } from '../registry'
+import { apps as appRegistry, isListed } from '../registry'
 import { Spinner } from './Spinner'
 import { SettingsCard, SettingsRow as Row } from './SettingsRows'
 
@@ -69,8 +69,8 @@ export function GeneralSettings() {
     return () => { live = false }
   }, [user])
 
-  // Same visibility rule as the hub: admin-only apps appear for admins.
-  const installable = appRegistry.filter((app) => !app.adminOnly || isAdmin)
+  // Same visibility rule as the hub.
+  const installable = appRegistry.filter((app) => isListed(app, isAdmin, apps))
 
   if (loading) return <Spinner text="Loading" />
 

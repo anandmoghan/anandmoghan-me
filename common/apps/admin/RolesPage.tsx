@@ -21,10 +21,10 @@ interface Role {
   ladderHome: string
 }
 
-// App claims the rules check, plus every registry area. Values already on a role are kept even
-// when they are not in this list.
+// App claims the rules check, plus every registry area and private app id. Values already on a
+// role are kept even when they are not in this list.
 const APP_OPTIONS = Array.from(
-  new Set(['family', 'ladder', ...registry.map((a) => a.domain), 'share']),
+  new Set(['family', 'ladder', ...registry.map((a) => (a.private ? a.id : a.domain)), 'share']),
 ).filter((a) => a !== 'home')
 const TRACKER_OPTIONS = ['anand', 'kavya']
 

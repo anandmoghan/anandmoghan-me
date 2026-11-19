@@ -13,6 +13,10 @@ export interface AppDefinition {
   adminOnly?: boolean
   /** Only Anand and family (roles/{email} grants); the hub card shows a Restricted badge. */
   restricted?: boolean
+  /** From NEXT_PUBLIC_PRIVATE_APPS: listed only for users whose apps claim has this id. */
+  private?: boolean
+  /** CSS colour for the area accent; overrides the domain colour (private apps). */
+  accent?: string
 }
 
 export interface UserProfile {
