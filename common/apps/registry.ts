@@ -12,7 +12,7 @@ const publicApps: AppDefinition[] = [
     restricted: true,
   },
   {
-    id: 'dashboard',
+    id: 'wealth',
     name: 'Wealth',
     description: 'Track assets, investments, and net worth. Real estate, crypto, stocks, and your Trading 212 ISA.',
     domain: 'wealth',

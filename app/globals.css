@@ -551,6 +551,13 @@ aside nav::-webkit-scrollbar-thumb:hover {
   }
 }
 
+/* The current app's icon before its name in the header, in that app's colour. */
+.app-header__glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--domain);
+}
+
 /* Wide apps (ladder's list and detail split) use more of a large screen. */
 .site-container.site-container--wide {
   max-width: 112rem;

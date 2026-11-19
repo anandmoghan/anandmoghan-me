@@ -4,7 +4,7 @@ import { useAuth } from '@/common/firebase/AuthProvider'
 import { apps, isListed } from '../registry'
 import { Badge } from '../shell/Badge'
 import { HubCard } from '../shell/Card'
-import { DOMAIN_ICON } from '../shell/icons'
+import { APP_GLYPH, isGlyphId } from '../icons'
 
 export function AppsHub() {
   const { user, isAnonymous, isAdmin, apps: granted } = useAuth()
@@ -21,7 +21,7 @@ export function AppsHub() {
           const href = needsLogin
             ? `/login?return=${encodeURIComponent(app.path)}`
             : app.path
-          const Icon = DOMAIN_ICON[app.domain]
+          const Icon = isGlyphId(app.id) ? APP_GLYPH[app.id] : undefined
           return (
             <li key={app.id} className="flex">
               <HubCard

@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>App Icons</title>
+  <link rel="stylesheet"
+    href="https://materials.anandmoghan.me/global/styles/standalone.css">
+</head>
+<body class="prose">
+  <header>
+    <h1>App icons</h1>
+    <p>
+      The icon set for every app on anandmoghan.me, as installable tiles and as UI glyphs.
+      Open this file from the repo so the tile images resolve.
+    </p>
+  </header>
+  <main>
+    <!-- == Glyph sprite for the previews below: the paths of common/apps/icons/<id>.tsx == -->
+    <svg width="0" height="0" aria-hidden="true">
+      <defs>
+      <symbol id="glyph-family" viewBox="0 0 24 24">
+        <path d="M4 10.6 12 4l8 6.6v8.4a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19Z"/>
+        <path fill="currentColor" stroke="none" transform="translate(8.16 10.9) scale(.32)" d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+      </symbol>
+      <symbol id="glyph-ladder" viewBox="0 0 24 24">
+        <path d="M6.5 21 8.8 3M17.5 21 15.2 3M7.1 16.5h9.8M7.65 12h8.7M8.25 7.5h7.5"/>
+      </symbol>
+      <symbol id="glyph-planner" viewBox="0 0 24 24">
+        <rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/>
+        <path d="M3.5 10h17M8 3v4M16 3v4"/>
+        <rect x="13" y="13.5" width="4" height="4" rx="1" fill="currentColor" stroke="none"/>
+      </symbol>
+      <symbol id="glyph-wealth" viewBox="0 0 24 24">
+        <path d="M4 20.5h16M4 17C10 17 11.5 7.5 19 7"/>
+        <circle cx="19" cy="7" r="2" fill="currentColor" stroke="none"/>
+      </symbol>
+      <symbol id="glyph-expense" viewBox="0 0 24 24">
+        <path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4Z"/>
+        <path d="M9 8h6M9 11.5h6M9 15.5h4"/>
+      </symbol>
+      <symbol id="glyph-time" viewBox="0 0 24 24">
+        <circle cx="12" cy="13.5" r="7.5"/>
+        <path d="M10 3h4M12 3v3M18 7.5l1.3-1.3M12 13.5 15 10.5"/>
+      </symbol>
+      <symbol id="glyph-share" viewBox="0 0 24 24">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </symbol>
+      <symbol id="glyph-materials" viewBox="0 0 24 24">
+        <path d="M12 6.5C10 5 7 4.5 3.5 5v13.5c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5ZM12 6.5V20"/>
+        <path fill="currentColor" stroke="none" d="M15.2 5.3h2.6v5.4l-1.3-1-1.3 1Z"/>
+      </symbol>
+      <symbol id="glyph-admin" viewBox="0 0 24 24">
+        <path d="M12 3.2 19 6v5.4c0 4.3-2.9 7.8-7 9.4-4.1-1.6-7-5.1-7-9.4V6Z"/>
+        <path d="m9 12.2 2.1 2.1 4-4.2"/>
+      </symbol>
+      <symbol id="glyph-nila" viewBox="0 0 24 24">
+        <path d="M11.25 5A8 8 0 1 0 19.25 15 6.6 6.6 0 0 1 11.25 5Z"/>
+        <circle cx="17.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"/>
+      </symbol>
+      </defs>
+    </svg>
+
+    <section id="system">
+      <h2>The system</h2>
+      <p>
+        Every glyph is drawn on one 24-unit grid with its live area between 3 and 21.
+        Strokes are 1.8 units with round caps and joins, and rounded rectangles use a 2.5 radius.
+        Each glyph has one solid detail (a heart, a day, a dot, a ribbon) so it still reads at 16 px.
+      </p>
+      <p>
+        A tile is the same glyph at 12x on a 512 square with a 116 corner radius.
+        The tile colour is the app's light accent from <code>global/styles/tokens.css</code>.
+        The glyph is drawn in the paper colour <code>#f7f4ef</code>,
+        and its one detail takes the app's dark-mode accent, so the two themes meet in every tile.
+        Nila keeps its own character: a slate moon and a coral star on paper.
+      </p>
+      <p>
+        In the UI the glyph uses <code>currentColor</code>,
+        so the hub tiles, the header and the roles page tint it with the area colour,
+        which already switches between the light and dark tokens.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>What</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>public/apps/icons/&lt;id&gt;.svg</code></td>
+              <td>Tile source, tracked.</td>
+            </tr>
+            <tr>
+              <td><code>common/apps/icons/&lt;id&gt;.tsx</code></td>
+              <td>UI glyph, built on <code>Glyph.tsx</code>; <code>index.ts</code> maps app ids to glyphs.</td>
+            </tr>
+            <tr>
+              <td><code>scripts/build-app-icons.mjs</code></td>
+              <td>
+                Renders <code>&lt;id&gt;-180.png</code>, <code>-192.png</code>, <code>-512.png</code>
+                and <code>-maskable-512.png</code> next to each tile.
+                Runs before <code>npm run dev</code> and <code>npm run build</code>; the PNGs are gitignored.
+              </td>
+            </tr>
+            <tr>
+              <td><code>public/apps/&lt;app&gt;/icons/&lt;id&gt;.svg</code></td>
+              <td>Tile of a private app, in a gitignored folder; the build script renders it too.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The 180 px PNG is flattened onto the tile colour, because iOS draws transparent corners black.
+        The maskable PNG is flattened the same way, since the launcher applies its own mask.
+      </p>
+    </section>
+
+    <section id="light">
+      <h2>On a light background</h2>
+      <figure class="diagram">
+        <svg viewBox="0 0 780 2012" width="780" height="2012" role="img"
+          aria-label="Every app icon as glyph and tile at 16, 24, 48 and 180 px on a light background"
+          font-family="Nunito Sans, system-ui, sans-serif" font-size="13">
+          <rect width="780" height="2012" fill="#f7f4ef"/>
+          <text x="120" y="18" fill="#26221f" font-weight="700">Glyph</text>
+          <text x="120" y="40" fill="#6b635b">16</text>
+          <text x="150" y="40" fill="#6b635b">24</text>
+          <text x="190" y="40" fill="#6b635b">48</text>
+          <text x="252" y="40" fill="#6b635b">180</text>
+          <text x="452" y="18" fill="#26221f" font-weight="700">Tile</text>
+          <text x="452" y="40" fill="#6b635b">16</text>
+          <text x="482" y="40" fill="#6b635b">24</text>
+          <text x="522" y="40" fill="#6b635b">48</text>
+          <text x="584" y="40" fill="#6b635b">180</text>
+          <!-- Family -->
+          <text x="0" y="72" fill="#26221f" font-weight="700">Family</text>
+          <use href="#glyph-family" x="120" y="60" width="16" height="16"
+            color="#3f5b78" fill="none" stroke="#3f5b78" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-family" x="150" y="60" width="24" height="24"
+            color="#3f5b78" fill="none" stroke="#3f5b78" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-family" x="190" y="60" width="48" height="48"
+            color="#3f5b78" fill="none" stroke="#3f5b78" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-family" x="252" y="60" width="180" height="180"
+            color="#3f5b78" fill="none" stroke="#3f5b78" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/family.svg" x="452" y="60"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/family.svg" x="482" y="60"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/family.svg" x="522" y="60"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/family.svg" x="584" y="60"
+            width="180" height="180"/>
+          <!-- Ladder -->
+          <text x="0" y="268" fill="#26221f" font-weight="700">Ladder</text>
+          <use href="#glyph-ladder" x="120" y="256" width="16" height="16"
+            color="#596a1a" fill="none" stroke="#596a1a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-ladder" x="150" y="256" width="24" height="24"
+            color="#596a1a" fill="none" stroke="#596a1a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-ladder" x="190" y="256" width="48" height="48"
+            color="#596a1a" fill="none" stroke="#596a1a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-ladder" x="252" y="256" width="180" height="180"
+            color="#596a1a" fill="none" stroke="#596a1a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/ladder.svg" x="452" y="256"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/ladder.svg" x="482" y="256"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/ladder.svg" x="522" y="256"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/ladder.svg" x="584" y="256"
+            width="180" height="180"/>
+          <!-- Planner -->
+          <text x="0" y="464" fill="#26221f" font-weight="700">Planner</text>
+          <use href="#glyph-planner" x="120" y="452" width="16" height="16"
+            color="#0f7f8f" fill="none" stroke="#0f7f8f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-planner" x="150" y="452" width="24" height="24"
+            color="#0f7f8f" fill="none" stroke="#0f7f8f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-planner" x="190" y="452" width="48" height="48"
+            color="#0f7f8f" fill="none" stroke="#0f7f8f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-planner" x="252" y="452" width="180" height="180"
+            color="#0f7f8f" fill="none" stroke="#0f7f8f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/planner.svg" x="452" y="452"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/planner.svg" x="482" y="452"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/planner.svg" x="522" y="452"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/planner.svg" x="584" y="452"
+            width="180" height="180"/>
+          <!-- Wealth -->
+          <text x="0" y="660" fill="#26221f" font-weight="700">Wealth</text>
+          <use href="#glyph-wealth" x="120" y="648" width="16" height="16"
+            color="#3f55a8" fill="none" stroke="#3f55a8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-wealth" x="150" y="648" width="24" height="24"
+            color="#3f55a8" fill="none" stroke="#3f55a8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-wealth" x="190" y="648" width="48" height="48"
+            color="#3f55a8" fill="none" stroke="#3f55a8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-wealth" x="252" y="648" width="180" height="180"
+            color="#3f55a8" fill="none" stroke="#3f55a8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/wealth.svg" x="452" y="648"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/wealth.svg" x="482" y="648"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/wealth.svg" x="522" y="648"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/wealth.svg" x="584" y="648"
+            width="180" height="180"/>
+          <!-- Expense -->
+          <text x="0" y="856" fill="#26221f" font-weight="700">Expense</text>
+          <use href="#glyph-expense" x="120" y="844" width="16" height="16"
+            color="#a84c26" fill="none" stroke="#a84c26" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-expense" x="150" y="844" width="24" height="24"
+            color="#a84c26" fill="none" stroke="#a84c26" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-expense" x="190" y="844" width="48" height="48"
+            color="#a84c26" fill="none" stroke="#a84c26" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-expense" x="252" y="844" width="180" height="180"
+            color="#a84c26" fill="none" stroke="#a84c26" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/expense.svg" x="452" y="844"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/expense.svg" x="482" y="844"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/expense.svg" x="522" y="844"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/expense.svg" x="584" y="844"
+            width="180" height="180"/>
+          <!-- Time -->
+          <text x="0" y="1052" fill="#26221f" font-weight="700">Time</text>
+          <use href="#glyph-time" x="120" y="1040" width="16" height="16"
+            color="#1b6a90" fill="none" stroke="#1b6a90" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-time" x="150" y="1040" width="24" height="24"
+            color="#1b6a90" fill="none" stroke="#1b6a90" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-time" x="190" y="1040" width="48" height="48"
+            color="#1b6a90" fill="none" stroke="#1b6a90" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-time" x="252" y="1040" width="180" height="180"
+            color="#1b6a90" fill="none" stroke="#1b6a90" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/time.svg" x="452" y="1040"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/time.svg" x="482" y="1040"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/time.svg" x="522" y="1040"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/time.svg" x="584" y="1040"
+            width="180" height="180"/>
+          <!-- Share -->
+          <text x="0" y="1248" fill="#26221f" font-weight="700">Share</text>
+          <use href="#glyph-share" x="120" y="1236" width="16" height="16"
+            color="#844693" fill="none" stroke="#844693" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-share" x="150" y="1236" width="24" height="24"
+            color="#844693" fill="none" stroke="#844693" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-share" x="190" y="1236" width="48" height="48"
+            color="#844693" fill="none" stroke="#844693" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-share" x="252" y="1236" width="180" height="180"
+            color="#844693" fill="none" stroke="#844693" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/share.svg" x="452" y="1236"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/share.svg" x="482" y="1236"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/share.svg" x="522" y="1236"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/share.svg" x="584" y="1236"
+            width="180" height="180"/>
+          <!-- Materials -->
+          <text x="0" y="1444" fill="#26221f" font-weight="700">Materials</text>
+          <use href="#glyph-materials" x="120" y="1432" width="16" height="16"
+            color="#84563a" fill="none" stroke="#84563a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-materials" x="150" y="1432" width="24" height="24"
+            color="#84563a" fill="none" stroke="#84563a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-materials" x="190" y="1432" width="48" height="48"
+            color="#84563a" fill="none" stroke="#84563a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-materials" x="252" y="1432" width="180" height="180"
+            color="#84563a" fill="none" stroke="#84563a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/materials.svg" x="452" y="1432"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/materials.svg" x="482" y="1432"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/materials.svg" x="522" y="1432"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/materials.svg" x="584" y="1432"
+            width="180" height="180"/>
+          <!-- Admin -->
+          <text x="0" y="1640" fill="#26221f" font-weight="700">Admin</text>
+          <use href="#glyph-admin" x="120" y="1628" width="16" height="16"
+            color="#4b505a" fill="none" stroke="#4b505a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-admin" x="150" y="1628" width="24" height="24"
+            color="#4b505a" fill="none" stroke="#4b505a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-admin" x="190" y="1628" width="48" height="48"
+            color="#4b505a" fill="none" stroke="#4b505a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-admin" x="252" y="1628" width="180" height="180"
+            color="#4b505a" fill="none" stroke="#4b505a" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/admin.svg" x="452" y="1628"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/admin.svg" x="482" y="1628"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/admin.svg" x="522" y="1628"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/admin.svg" x="584" y="1628"
+            width="180" height="180"/>
+          <!-- Nila -->
+          <text x="0" y="1836" fill="#26221f" font-weight="700">Nila</text>
+          <use href="#glyph-nila" x="120" y="1824" width="16" height="16"
+            color="#b0476f" fill="none" stroke="#b0476f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-nila" x="150" y="1824" width="24" height="24"
+            color="#b0476f" fill="none" stroke="#b0476f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-nila" x="190" y="1824" width="48" height="48"
+            color="#b0476f" fill="none" stroke="#b0476f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-nila" x="252" y="1824" width="180" height="180"
+            color="#b0476f" fill="none" stroke="#b0476f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/nila.svg" x="452" y="1824"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/nila.svg" x="482" y="1824"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/nila.svg" x="522" y="1824"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/nila.svg" x="584" y="1824"
+            width="180" height="180"/>
+        </svg>
+        <figcaption>Glyphs in each app's light accent, then tiles, at 16, 24, 48 and 180 px.</figcaption>
+      </figure>
+    </section>
+
+    <section id="dark">
+      <h2>On a dark background</h2>
+      <figure class="diagram">
+        <svg viewBox="0 0 780 2012" width="780" height="2012" role="img"
+          aria-label="Every app icon as glyph and tile at 16, 24, 48 and 180 px on a dark background"
+          font-family="Nunito Sans, system-ui, sans-serif" font-size="13">
+          <rect width="780" height="2012" fill="#1b1815"/>
+          <text x="120" y="18" fill="#efe8de" font-weight="700">Glyph</text>
+          <text x="120" y="40" fill="#b0a69a">16</text>
+          <text x="150" y="40" fill="#b0a69a">24</text>
+          <text x="190" y="40" fill="#b0a69a">48</text>
+          <text x="252" y="40" fill="#b0a69a">180</text>
+          <text x="452" y="18" fill="#efe8de" font-weight="700">Tile</text>
+          <text x="452" y="40" fill="#b0a69a">16</text>
+          <text x="482" y="40" fill="#b0a69a">24</text>
+          <text x="522" y="40" fill="#b0a69a">48</text>
+          <text x="584" y="40" fill="#b0a69a">180</text>
+          <!-- Family -->
+          <text x="0" y="72" fill="#efe8de" font-weight="700">Family</text>
+          <use href="#glyph-family" x="120" y="60" width="16" height="16"
+            color="#9db8d6" fill="none" stroke="#9db8d6" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-family" x="150" y="60" width="24" height="24"
+            color="#9db8d6" fill="none" stroke="#9db8d6" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-family" x="190" y="60" width="48" height="48"
+            color="#9db8d6" fill="none" stroke="#9db8d6" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-family" x="252" y="60" width="180" height="180"
+            color="#9db8d6" fill="none" stroke="#9db8d6" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/family.svg" x="452" y="60"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/family.svg" x="482" y="60"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/family.svg" x="522" y="60"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/family.svg" x="584" y="60"
+            width="180" height="180"/>
+          <!-- Ladder -->
+          <text x="0" y="268" fill="#efe8de" font-weight="700">Ladder</text>
+          <use href="#glyph-ladder" x="120" y="256" width="16" height="16"
+            color="#c5d47c" fill="none" stroke="#c5d47c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-ladder" x="150" y="256" width="24" height="24"
+            color="#c5d47c" fill="none" stroke="#c5d47c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-ladder" x="190" y="256" width="48" height="48"
+            color="#c5d47c" fill="none" stroke="#c5d47c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-ladder" x="252" y="256" width="180" height="180"
+            color="#c5d47c" fill="none" stroke="#c5d47c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/ladder.svg" x="452" y="256"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/ladder.svg" x="482" y="256"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/ladder.svg" x="522" y="256"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/ladder.svg" x="584" y="256"
+            width="180" height="180"/>
+          <!-- Planner -->
+          <text x="0" y="464" fill="#efe8de" font-weight="700">Planner</text>
+          <use href="#glyph-planner" x="120" y="452" width="16" height="16"
+            color="#7fd3de" fill="none" stroke="#7fd3de" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-planner" x="150" y="452" width="24" height="24"
+            color="#7fd3de" fill="none" stroke="#7fd3de" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-planner" x="190" y="452" width="48" height="48"
+            color="#7fd3de" fill="none" stroke="#7fd3de" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-planner" x="252" y="452" width="180" height="180"
+            color="#7fd3de" fill="none" stroke="#7fd3de" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/planner.svg" x="452" y="452"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/planner.svg" x="482" y="452"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/planner.svg" x="522" y="452"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/planner.svg" x="584" y="452"
+            width="180" height="180"/>
+          <!-- Wealth -->
+          <text x="0" y="660" fill="#efe8de" font-weight="700">Wealth</text>
+          <use href="#glyph-wealth" x="120" y="648" width="16" height="16"
+            color="#a7b2f2" fill="none" stroke="#a7b2f2" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-wealth" x="150" y="648" width="24" height="24"
+            color="#a7b2f2" fill="none" stroke="#a7b2f2" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-wealth" x="190" y="648" width="48" height="48"
+            color="#a7b2f2" fill="none" stroke="#a7b2f2" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-wealth" x="252" y="648" width="180" height="180"
+            color="#a7b2f2" fill="none" stroke="#a7b2f2" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/wealth.svg" x="452" y="648"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/wealth.svg" x="482" y="648"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/wealth.svg" x="522" y="648"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/wealth.svg" x="584" y="648"
+            width="180" height="180"/>
+          <!-- Expense -->
+          <text x="0" y="856" fill="#efe8de" font-weight="700">Expense</text>
+          <use href="#glyph-expense" x="120" y="844" width="16" height="16"
+            color="#f2a07c" fill="none" stroke="#f2a07c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-expense" x="150" y="844" width="24" height="24"
+            color="#f2a07c" fill="none" stroke="#f2a07c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-expense" x="190" y="844" width="48" height="48"
+            color="#f2a07c" fill="none" stroke="#f2a07c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-expense" x="252" y="844" width="180" height="180"
+            color="#f2a07c" fill="none" stroke="#f2a07c" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/expense.svg" x="452" y="844"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/expense.svg" x="482" y="844"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/expense.svg" x="522" y="844"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/expense.svg" x="584" y="844"
+            width="180" height="180"/>
+          <!-- Time -->
+          <text x="0" y="1052" fill="#efe8de" font-weight="700">Time</text>
+          <use href="#glyph-time" x="120" y="1040" width="16" height="16"
+            color="#7ec6ea" fill="none" stroke="#7ec6ea" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-time" x="150" y="1040" width="24" height="24"
+            color="#7ec6ea" fill="none" stroke="#7ec6ea" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-time" x="190" y="1040" width="48" height="48"
+            color="#7ec6ea" fill="none" stroke="#7ec6ea" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-time" x="252" y="1040" width="180" height="180"
+            color="#7ec6ea" fill="none" stroke="#7ec6ea" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/time.svg" x="452" y="1040"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/time.svg" x="482" y="1040"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/time.svg" x="522" y="1040"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/time.svg" x="584" y="1040"
+            width="180" height="180"/>
+          <!-- Share -->
+          <text x="0" y="1248" fill="#efe8de" font-weight="700">Share</text>
+          <use href="#glyph-share" x="120" y="1236" width="16" height="16"
+            color="#dba4e8" fill="none" stroke="#dba4e8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-share" x="150" y="1236" width="24" height="24"
+            color="#dba4e8" fill="none" stroke="#dba4e8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-share" x="190" y="1236" width="48" height="48"
+            color="#dba4e8" fill="none" stroke="#dba4e8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-share" x="252" y="1236" width="180" height="180"
+            color="#dba4e8" fill="none" stroke="#dba4e8" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/share.svg" x="452" y="1236"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/share.svg" x="482" y="1236"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/share.svg" x="522" y="1236"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/share.svg" x="584" y="1236"
+            width="180" height="180"/>
+          <!-- Materials -->
+          <text x="0" y="1444" fill="#efe8de" font-weight="700">Materials</text>
+          <use href="#glyph-materials" x="120" y="1432" width="16" height="16"
+            color="#dcb38f" fill="none" stroke="#dcb38f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-materials" x="150" y="1432" width="24" height="24"
+            color="#dcb38f" fill="none" stroke="#dcb38f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-materials" x="190" y="1432" width="48" height="48"
+            color="#dcb38f" fill="none" stroke="#dcb38f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-materials" x="252" y="1432" width="180" height="180"
+            color="#dcb38f" fill="none" stroke="#dcb38f" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/materials.svg" x="452" y="1432"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/materials.svg" x="482" y="1432"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/materials.svg" x="522" y="1432"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/materials.svg" x="584" y="1432"
+            width="180" height="180"/>
+          <!-- Admin -->
+          <text x="0" y="1640" fill="#efe8de" font-weight="700">Admin</text>
+          <use href="#glyph-admin" x="120" y="1628" width="16" height="16"
+            color="#bcc1cb" fill="none" stroke="#bcc1cb" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-admin" x="150" y="1628" width="24" height="24"
+            color="#bcc1cb" fill="none" stroke="#bcc1cb" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-admin" x="190" y="1628" width="48" height="48"
+            color="#bcc1cb" fill="none" stroke="#bcc1cb" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-admin" x="252" y="1628" width="180" height="180"
+            color="#bcc1cb" fill="none" stroke="#bcc1cb" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/admin.svg" x="452" y="1628"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/admin.svg" x="482" y="1628"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/admin.svg" x="522" y="1628"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/admin.svg" x="584" y="1628"
+            width="180" height="180"/>
+          <!-- Nila -->
+          <text x="0" y="1836" fill="#efe8de" font-weight="700">Nila</text>
+          <use href="#glyph-nila" x="120" y="1824" width="16" height="16"
+            color="#f2a0bf" fill="none" stroke="#f2a0bf" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-nila" x="150" y="1824" width="24" height="24"
+            color="#f2a0bf" fill="none" stroke="#f2a0bf" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-nila" x="190" y="1824" width="48" height="48"
+            color="#f2a0bf" fill="none" stroke="#f2a0bf" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <use href="#glyph-nila" x="252" y="1824" width="180" height="180"
+            color="#f2a0bf" fill="none" stroke="#f2a0bf" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <image href="../public/apps/icons/nila.svg" x="452" y="1824"
+            width="16" height="16"/>
+          <image href="../public/apps/icons/nila.svg" x="482" y="1824"
+            width="24" height="24"/>
+          <image href="../public/apps/icons/nila.svg" x="522" y="1824"
+            width="48" height="48"/>
+          <image href="../public/apps/icons/nila.svg" x="584" y="1824"
+            width="180" height="180"/>
+        </svg>
+        <figcaption>Glyphs in each app's dark accent, then the same tiles.</figcaption>
+      </figure>
+    </section>
+
+    <section id="safe-zone">
+      <h2>Maskable safe zone</h2>
+      <p>
+        Android may crop a maskable icon to any shape inside the central circle of 80 percent.
+        Every glyph stays inside it with room to spare.
+      </p>
+      <figure class="diagram">
+        <svg viewBox="0 0 680 260" width="680" height="260" role="img"
+          aria-label="Each tile with the maskable safe zone, the central 80 percent circle, outlined">
+          <image href="../public/apps/icons/family.svg" x="0" y="0" width="120" height="120"/>
+          <circle cx="60" cy="60" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/ladder.svg" x="140" y="0" width="120" height="120"/>
+          <circle cx="200" cy="60" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/planner.svg" x="280" y="0" width="120" height="120"/>
+          <circle cx="340" cy="60" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/wealth.svg" x="420" y="0" width="120" height="120"/>
+          <circle cx="480" cy="60" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/expense.svg" x="560" y="0" width="120" height="120"/>
+          <circle cx="620" cy="60" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/time.svg" x="0" y="140" width="120" height="120"/>
+          <circle cx="60" cy="200" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/share.svg" x="140" y="140" width="120" height="120"/>
+          <circle cx="200" cy="200" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/materials.svg" x="280" y="140" width="120" height="120"/>
+          <circle cx="340" cy="200" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/admin.svg" x="420" y="140" width="120" height="120"/>
+          <circle cx="480" cy="200" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+          <image href="../public/apps/icons/nila.svg" x="560" y="140" width="120" height="120"/>
+          <circle cx="620" cy="200" r="48" fill="none"
+            stroke="#e9b25a" stroke-width="2" stroke-dasharray="5 4"/>
+        </svg>
+        <figcaption>The dashed circle is the maskable safe zone.</figcaption>
+      </figure>
+    </section>
+  </main>
+</body>
+</html>

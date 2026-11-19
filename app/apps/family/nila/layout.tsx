@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   title: "Nila",
   manifest: "/apps/manifest-nila.json",
   icons: {
-    icon: { url: "/apps/icon-nila.svg", type: "image/svg+xml" },
-    apple: "/apps/icon-nila-180.png",
+    icon: { url: "/apps/icons/nila.svg", type: "image/svg+xml" },
+    apple: "/apps/icons/nila-180.png",
   },
   appleWebApp: { capable: true, title: "Nila", statusBarStyle: "default" },
   other: { "apple-mobile-web-app-capable": "yes", "mobile-web-app-capable": "yes" },

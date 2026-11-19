@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { getDb } from '@/common/firebase/client'
+import { APP_GLYPH, isGlyphId } from '../icons'
 import { apps as registry } from '../registry'
 import { Badge } from '../shell/Badge'
 import { Card } from '../shell/Card'
@@ -38,11 +39,24 @@ function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
 }
 
-function ChipToggles({ options, selected, onChange, label }: {
+/** An app id with its icon when it has one (a stored id may be one this build no longer knows). */
+function AppName({ id }: { id: string }) {
+  const AppGlyph = isGlyphId(id) ? APP_GLYPH[id] : undefined
+  return (
+    <span className="inline-flex items-center gap-1">
+      {AppGlyph && <AppGlyph size={16} />}
+      {id}
+    </span>
+  )
+}
+
+function ChipToggles({ options, selected, onChange, label, appIcons = false }: {
   options: string[]
   selected: string[]
   onChange: (next: string[]) => void
   label: string
+  /** Values are app ids: show each app's icon. */
+  appIcons?: boolean
 }) {
   const all = Array.from(new Set([...options, ...selected]))
   return (
@@ -57,7 +71,7 @@ function ChipToggles({ options, selected, onChange, label }: {
             aria-pressed={selected.includes(value)}
             onClick={() => onChange(toggle(selected, value))}
           >
-            {value}
+            {appIcons ? <AppName id={value} /> : value}
           </button>
         ))}
       </div>
@@ -168,6 +182,7 @@ export function RolesPage() {
             options={APP_OPTIONS}
             selected={draft.apps}
             onChange={(apps) => setDraft({ ...draft, apps })}
+            appIcons
           />
           <ChipToggles
             label="Ladder trackers"
@@ -222,8 +237,12 @@ export function RolesPage() {
                     <span className="break-all">{role.email}</span>
                     {role.admin && <Badge tone="domain">Admin</Badge>}
                   </p>
+                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                    Apps:
+                    {role.apps.length > 0 ? role.apps.map((id) => <AppName key={id} id={id} />) : ' none'}
+                  </p>
                   <p className="text-xs text-muted">
-                    Apps: {role.apps.join(', ') || 'none'}. Trackers: {role.ladderTrackers.join(', ') || 'none'}{role.ladderHome ? ` (home ${role.ladderHome})` : ''}.
+                    Trackers: {role.ladderTrackers.join(', ') || 'none'}{role.ladderHome ? ` (home ${role.ladderHome})` : ''}.
                   </p>
                 </div>
                 <div className="flex gap-2">

@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   title: "Family",
   manifest: "/apps/manifest-family.json",
   icons: {
-    icon: { url: "/apps/icon-family.svg", type: "image/svg+xml" },
-    apple: "/apps/icon-family-180.png",
+    icon: { url: "/apps/icons/family.svg", type: "image/svg+xml" },
+    apple: "/apps/icons/family-180.png",
   },
   appleWebApp: { capable: true, title: "Family", statusBarStyle: "default" },
   other: { "mobile-web-app-capable": "yes" },

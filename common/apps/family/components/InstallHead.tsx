@@ -9,8 +9,8 @@ import { usePathname } from "next/navigation";
 // those tags from the current path on every navigation.
 
 const APPS = {
-  family: { title: "Family", manifest: "/apps/manifest-family.json", icon: "/apps/icon-family-180.png" },
-  nila: { title: "Nila", manifest: "/apps/manifest-nila.json", icon: "/apps/icon-nila-180.png" },
+  family: { title: "Family", manifest: "/apps/manifest-family.json", icon: "/apps/icons/family-180.png" },
+  nila: { title: "Nila", manifest: "/apps/manifest-nila.json", icon: "/apps/icons/nila-180.png" },
 };
 
 function setAttr(selector: string, tag: "link" | "meta", attrs: Record<string, string>, key: string, value: string) {

@@ -7,6 +7,8 @@ import { ThemeToggle } from './ThemeToggle';
 import { ProfileMenu } from '@/common/apps/components/ProfileMenu';
 import { apps } from '@/common/apps/registry';
 import { NotificationBell } from '@/common/notifications/NotificationBell';
+import { APP_GLYPH, isGlyphId, type GlyphId } from '@/common/apps/icons';
+import type { Domain } from '@/common/apps/shell/DomainScope';
 import { HEADER_SLOT_ID } from './HeaderSlot';
 
 const SHARE_PATH = '/apps/share';
@@ -29,13 +31,37 @@ const NAV_LINKS = [
   { href: '/profile', label: 'Profile' },
 ];
 
+interface Section {
+  href: string;
+  label: string;
+  /** The app's icon, shown before its name in the app's colour. */
+  glyph?: { id: GlyphId; domain: Domain };
+}
+
 // One label after the AM brand: the app when inside one, else the top-level section.
-function sectionFor(pathname: string): { href: string; label: string } | null {
-  if (pathname.startsWith(SHARE_PATH)) return { href: pathname, label: 'Shared deck' };
+function sectionFor(pathname: string): Section | null {
+  if (pathname.startsWith(SHARE_PATH)) {
+    return { href: pathname, label: 'Shared deck', glyph: { id: 'share', domain: 'share' } };
+  }
   const app = apps.find((a) => pathname.startsWith(a.path));
-  if (app) return { href: app.path, label: app.name };
+  if (app) {
+    return {
+      href: app.path,
+      label: app.name,
+      glyph: isGlyphId(app.id) ? { id: app.id, domain: app.domain } : undefined,
+    };
+  }
   const [section] = pathname.split('/').filter(Boolean);
   return section && SECTION_LABEL[section] ? { href: `/${section}`, label: SECTION_LABEL[section] } : null;
+}
+
+function SectionGlyph({ id, domain }: { id: GlyphId; domain: Domain }) {
+  const AppGlyph = APP_GLYPH[id];
+  return (
+    <span className={`app-header__glyph domain-${domain}`} aria-hidden>
+      <AppGlyph size={18} />
+    </span>
+  );
 }
 
 function AccountAction({ pathname }: { pathname: string }) {
@@ -74,8 +100,9 @@ export function SiteHeader() {
               <span className="app-header__sep" aria-hidden>
                 ›
               </span>
-              <Link href={section.href} className="app-header__title truncate tap" aria-current="page">
-                {section.label}
+              <Link href={section.href} className="app-header__title tap" aria-current="page">
+                {section.glyph && <SectionGlyph {...section.glyph} />}
+                <span className="truncate">{section.label}</span>
               </Link>
             </>
           )}

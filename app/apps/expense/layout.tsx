@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   title: "Expense",
   manifest: "/apps/manifest-expense.json",
   icons: {
-    icon: { url: "/apps/icon-expense.svg", type: "image/svg+xml" },
-    apple: "/apps/icon-expense-180.png",
+    icon: { url: "/apps/icons/expense.svg", type: "image/svg+xml" },
+    apple: "/apps/icons/expense-180.png",
   },
   appleWebApp: { capable: true, title: "Expense", statusBarStyle: "default" },
   other: { "mobile-web-app-capable": "yes" },
