@@ -7,7 +7,9 @@
 //   ladder/{tracker}/jobs/{slug}        JobDoc
 //   ladder/{tracker}/companies/{slug}   CompanyDoc
 //   ladder/{tracker}/requests/{id}      RequestDoc (queue read by the Mac worker)
+//   ladder/{tracker}/profile/current    ProfileFields (profile.ts)
 //   Storage ladder/{tracker}/generated/{slug}/<file>.pdf
+//   Storage ladder/{tracker}/resume/{requestId}.pdf (build-resume output)
 
 export const TRACKERS = ['anand', 'kavya'] as const
 export type Tracker = (typeof TRACKERS)[number]
@@ -141,7 +143,8 @@ export interface CompanyDoc extends CompanyFields {
   body_html: string
 }
 
-export type RequestType = 'refresh-job' | 'prepare-materials' | 'scrape'
+/** Job request types carry the job's slug; scrape and build-resume carry none. */
+export type RequestType = 'refresh-job' | 'prepare-materials' | 'score-fit' | 'scrape' | 'build-resume'
 export type RequestStatus = 'queued' | 'running' | 'done' | 'failed'
 
 export interface RequestDoc {
@@ -153,6 +156,8 @@ export interface RequestDoc {
   createdAt?: Date | null
   finishedAt?: Date | null
   error?: string | null
+  /** build-resume: Storage path of the built PDF, ladder/{tracker}/resume/{id}.pdf (worker sets it). */
+  pdf?: string
 }
 
 /** ladder/{tracker}: the base resume, as sanitised HTML. */

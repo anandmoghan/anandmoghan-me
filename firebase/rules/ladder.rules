@@ -1,10 +1,11 @@
 // ── ladder ────────────────────────────────────────────────────────────────
-// Job trackers under ladder/{tracker} (anand, kavya): jobs, companies and the request queue.
+// Job trackers under ladder/{tracker} (anand, kavya): jobs, companies, the profile and the
+// request queue.
 // Access: a verified admin, or a verified user with app 'ladder' and the tracker listed in the
 // ladderTrackers claim (both mirrored from roles/{email} by syncRoleClaims).
-// Clients change only the user-editable job fields and queue requests. Everything else (new
-// jobs, companies, body_html, PDFs, request progress) is written by scripts/ladder-migrate.ts and
-// the Mac worker (anandmoghan-me-apis/ladder) with the admin SDK, which bypasses rules.
+// Clients change only the user-editable job fields and the profile, and queue requests. Everything
+// else (new jobs, companies, body_html, PDFs, request progress) is written by
+// scripts/ladder-migrate.ts and the Mac worker (anandmoghan-me-apis/ladder) with the admin SDK, which bypasses rules.
 // Field shapes match anandmoghan-me-apis/ladder/schema.mjs.
 
 match /ladder/{tracker} {
@@ -73,7 +74,77 @@ match /ladder/{tracker} {
     allow write: if false;
   }
 
+  // Tracker profile (who the candidate is and what they want), read by the worker's agents.
+  // Shapes match profileDocSchema and profileHistorySchema in anandmoghan-me-api
+  // modules/ladder/schema.mjs; the site validates element shapes (common/apps/ladder/profile.ts).
+  function ladderProfileFields() {
+    return ['resumeTex', 'about', 'highlights', 'skills', 'targetRoles', 'industries',
+      'companiesPrefer', 'companiesAvoid', 'locations', 'workMode', 'workAuthorisation',
+      'salaryFloor', 'contractTypes', 'dealBreakers', 'searchSources', 'keywords',
+      'updatedAt', 'updatedBy'];
+  }
+
+  function ladderShortList(v) {
+    return v is list && v.size() <= 100;
+  }
+
+  function ladderValidSalaryFloor(v) {
+    return v == null
+      || (v is map
+        && v.keys().hasOnly(['amount', 'currency', 'period'])
+        && v.keys().hasAll(['amount', 'currency', 'period'])
+        && v.amount is number && v.amount >= 0
+        && v.currency is string && v.currency.matches('^[A-Z]{3}$')
+        && v.period in ['year', 'month', 'day', 'hour']);
+  }
+
+  function ladderValidProfile(d) {
+    return d.keys().hasOnly(ladderProfileFields())
+      && d.keys().hasAll(ladderProfileFields())
+      && d.resumeTex is string && d.resumeTex.size() <= 200000
+      && d.about is string && d.about.size() <= 5000
+      && d.workAuthorisation is string && d.workAuthorisation.size() <= 2000
+      && ladderShortList(d.highlights)
+      && ladderShortList(d.skills)
+      && ladderShortList(d.targetRoles)
+      && ladderShortList(d.industries)
+      && ladderShortList(d.companiesPrefer)
+      && ladderShortList(d.companiesAvoid)
+      && ladderShortList(d.locations)
+      && ladderShortList(d.dealBreakers)
+      && ladderShortList(d.searchSources)
+      && ladderShortList(d.keywords)
+      && d.workMode is list && d.workMode.hasOnly(['remote', 'hybrid', 'onsite'])
+      && d.contractTypes is list
+      && d.contractTypes.hasOnly(['permanent', 'fixed_term', 'contract', 'freelance', 'part_time', 'internship'])
+      && ladderValidSalaryFloor(d.salaryFloor)
+      && d.updatedAt == request.time
+      && d.updatedBy == request.auth.uid;
+  }
+
+  // ladder/{tracker}/profile/current: the one profile document per tracker.
+  match /profile/current {
+    allow read: if ladderCanAccess();
+    allow create, update: if ladderCanAccess() && ladderValidProfile(request.resource.data);
+    allow delete: if false;
+
+    // ladder/{tracker}/profile/current/history/{id}: earlier résumé versions, append-only.
+    match /history/{id} {
+      allow read: if ladderCanAccess();
+      allow create: if ladderCanAccess()
+        && request.resource.data.keys().hasOnly(['resumeTex', 'savedAt', 'savedBy'])
+        && request.resource.data.keys().hasAll(['resumeTex', 'savedAt', 'savedBy'])
+        && request.resource.data.resumeTex is string
+        && request.resource.data.resumeTex.size() <= 200000
+        && request.resource.data.savedAt == request.time
+        && request.resource.data.savedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+
   // Requests the Mac worker picks up. A client queues one; the worker owns every later change.
+  // scrape and build-resume (compile profile/current.resumeTex to a PDF) take no slug; the job
+  // types need an existing job.
   match /requests/{id} {
     allow read: if ladderCanAccess();
     allow create: if ladderCanAccess()
@@ -82,9 +153,9 @@ match /ladder/{tracker} {
       && request.resource.data.status == 'queued'
       && request.resource.data.createdBy == request.auth.uid
       && request.resource.data.createdAt == request.time
-      && (request.resource.data.type == 'scrape'
+      && (request.resource.data.type in ['scrape', 'build-resume']
           ? !('slug' in request.resource.data)
-          : request.resource.data.type in ['refresh-job', 'prepare-materials']
+          : request.resource.data.type in ['refresh-job', 'prepare-materials', 'score-fit']
             && request.resource.data.slug is string
             && exists(/databases/$(database)/documents/ladder/$(tracker)/jobs/$(request.resource.data.slug)))
       && (!('input' in request.resource.data)
