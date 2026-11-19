@@ -64,6 +64,12 @@ describe("roles", () => {
     await assertSucceeds(setDoc(doc(db, "roles/new@example.com"), { admin: false, apps: [], ladderTrackers: [] }));
   });
 
+  test("role ids are lower case", async () => {
+    const db = real("boss", { admin: true });
+    await assertFails(setDoc(doc(db, "roles/New@Example.com"), { admin: false, apps: [], ladderTrackers: [] }));
+    await assertSucceeds(deleteDoc(doc(db, "roles/someone@example.com")));
+  });
+
   test("admin claim without a verified email is denied", async () => {
     const db = real("boss", { admin: true, email_verified: false });
     await assertFails(getDoc(doc(db, "roles/someone@example.com")));
@@ -119,9 +125,15 @@ describe("users", () => {
     await assertFails(getDoc(doc(db, "users/alice/prefs/p")));
   });
 
-  test("only the owner writes; real users read profiles", async () => {
+  test("only the owner and admins read a profile; only the owner writes", async () => {
     const db = real("bob");
-    await assertSucceeds(getDoc(doc(db, "users/alice")));
+    await assertFails(getDoc(doc(db, "users/alice")));
+    await assertFails(getDoc(doc(real("bob", { apps: ["wealth"] }), "users/alice")));
+    await assertFails(getDocs(query(collection(db, "users"), where("email", "==", "alice@example.com"))));
+    await assertSucceeds(getDoc(doc(real("alice"), "users/alice")));
+    await assertSucceeds(getDoc(doc(real("boss", { admin: true }), "users/alice")));
+    await assertSucceeds(getDocs(collection(real("boss", { admin: true }), "users")));
+    await assertFails(getDoc(doc(real("boss", { admin: true, email_verified: false }), "users/alice")));
     await assertFails(updateDoc(doc(db, "users/alice"), { email: "x@example.com" }));
     await assertFails(getDoc(doc(db, "users/alice/prefs/p")));
     await assertSucceeds(updateDoc(doc(real("alice"), "users/alice"), { displayName: "Alice" }));
@@ -201,6 +213,56 @@ describe("private app data", () => {
     }
     await assertSucceeds(getDoc(doc(db, "wealth/alice")));
     await assertSucceeds(getDoc(doc(db, "t212Creds/alice")));
+  });
+});
+
+describe("wealth shared data", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "wealth/alice/assets/a1"), { n: "ISA" });
+      await setDoc(doc(db, "t212Snapshots/alice"), { v: 1 });
+      await setDoc(doc(db, "t212Settings/alice"), { growthRate: 5 });
+      await setDoc(doc(db, "config/exchangeRates"), { base: "GBP" });
+    });
+  });
+  const shared = ["wealth/alice/assets/a1", "t212Snapshots/alice", "t212Settings/alice", "config/exchangeRates"];
+
+  test("a verified user with the wealth app reads them, the owner's included", async () => {
+    for (const db of [real("bob", { apps: ["wealth"] }), real("alice", { apps: ["wealth"] })]) {
+      for (const p of shared) await assertSucceeds(getDoc(doc(db, p)));
+    }
+  });
+
+  test("admins read them", async () => {
+    const db = real("boss", { admin: true });
+    for (const p of shared) await assertSucceeds(getDoc(doc(db, p)));
+  });
+
+  test("the expense app reads the exchange rates only", async () => {
+    const db = real("bob", { apps: ["expense"] });
+    await assertSucceeds(getDoc(doc(db, "config/exchangeRates")));
+    for (const p of shared.slice(0, 3)) await assertFails(getDoc(doc(db, p)));
+  });
+
+  test("real users without the app, unverified claims, anonymous and signed-out are denied", async () => {
+    const dbs = [
+      real("bob"),
+      real("alice"),
+      real("bob", { apps: ["family"] }),
+      real("bob", { apps: ["wealth"], email_verified: false }),
+      anon("anon1"),
+      env.unauthenticatedContext().firestore(),
+    ];
+    for (const db of dbs) for (const p of shared) await assertFails(getDoc(doc(db, p)));
+  });
+
+  test("only the owner writes assets and settings; nobody writes snapshots of others or config", async () => {
+    await assertSucceeds(setDoc(doc(real("alice", { apps: ["wealth"] }), "wealth/alice/assets/a2"), { n: "GIA" }));
+    await assertSucceeds(setDoc(doc(real("alice", { apps: ["wealth"] }), "t212Settings/alice"), { growthRate: 6 }));
+    await assertFails(setDoc(doc(real("bob", { apps: ["wealth"] }), "wealth/alice/assets/a2"), { n: "x" }));
+    await assertFails(setDoc(doc(real("bob", { apps: ["wealth"] }), "t212Snapshots/alice"), { v: 2 }));
+    await assertFails(setDoc(doc(real("boss", { admin: true }), "config/exchangeRates"), { base: "USD" }));
   });
 });
 

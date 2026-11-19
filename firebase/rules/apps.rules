@@ -9,8 +9,8 @@ match /wealth/{uid} {
   allow read, write: if isRealOwner(uid);
 
   match /assets/{assetId} {
-    // Group members need to read each other's assets
-    allow read: if isRealAuth();
+    // Group members read each other's assets; wealth is granted by the app claim.
+    allow read: if hasApp('wealth') || isAdmin();
     allow write: if isRealOwner(uid);
   }
 
@@ -126,22 +126,23 @@ match /t212RateLimits/{uid} {
 // ── t212 snapshots ────────────────────────────────────────────────────────
 
 match /t212Snapshots/{uid} {
-  allow read: if isRealAuth();
+  allow read: if hasApp('wealth') || isAdmin();
   allow write: if isRealOwner(uid);
 }
 
 // ── t212 projection settings (growth rate, yearly contribution) ───────────
-// Owner writes, any authenticated user reads (so shared family projections work).
+// Owner writes; anyone with the wealth app reads (so shared family projections work).
 
 match /t212Settings/{uid} {
-  allow read: if isRealAuth();
+  allow read: if hasApp('wealth') || isAdmin();
   allow write: if isRealOwner(uid);
 }
 
 // ── config (exchange rates etc.) ──────────────────────────────────────────
+// Exchange rates for wealth and expense; written only by the api function (admin SDK).
 
 match /config/{doc} {
-  allow read: if isRealAuth();
+  allow read: if hasApp('wealth') || hasApp('expense') || isAdmin();
   allow write: if false;
 }
 

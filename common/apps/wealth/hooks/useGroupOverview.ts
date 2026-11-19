@@ -66,17 +66,19 @@ export function useGroupOverview(group: Group | null, selfUid: string | undefine
         snapshotLoading: true,
       })
 
-      // Fetch profile (one-shot — display names rarely change mid-session)
-      getDoc(doc(getDb(), 'users', uid)).then((snap) => {
+      // Fetch profile (one-shot: display names rarely change mid-session). Profiles are readable
+      // by their owner and admins only, so another member's profile shows as their uid.
+      const showProfile = (data: { displayName?: string; photoURL?: string } | undefined) => {
         const existing = memberMap.get(uid)
         if (!existing) return
         memberMap.set(uid, {
           ...existing,
-          displayName: snap.data()?.displayName || uid,
-          photoURL: snap.data()?.photoURL || '',
+          displayName: data?.displayName || uid,
+          photoURL: data?.photoURL || '',
         })
         publish()
-      })
+      }
+      getDoc(doc(getDb(), 'users', uid)).then((snap) => showProfile(snap.data()), () => showProfile(undefined))
 
       // Subscribe to assets
       const assetsQ = query(

@@ -80,9 +80,12 @@ export function useInvites() {
     receivedInvites.forEach(i => i.fromUid && uids.add(i.fromUid))
     if (uids.size === 0) return
 
-    Promise.all([...uids].map(uid => getDoc(doc(getDb(), 'users', uid)))).then(snaps => {
+    // Profiles are readable by their owner and admins only; unreadable ones are skipped.
+    Promise.allSettled([...uids].map(uid => getDoc(doc(getDb(), 'users', uid)))).then(results => {
       const profiles: Record<string, UserProfile> = {}
-      snaps.forEach(snap => {
+      results.forEach(result => {
+        if (result.status !== 'fulfilled') return
+        const snap = result.value
         if (snap.exists()) {
           profiles[snap.id] = { uid: snap.id, ...snap.data() } as UserProfile
         }

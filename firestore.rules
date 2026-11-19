@@ -69,10 +69,10 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      // Owner reads their own doc (anonymous included). Real users can fetch a profile, and look one
-      // up by email one at a time (group members and invites in the wealth app); only admins list.
-      allow get: if isOwner(uid) || isRealAuth() || isAdmin();
-      allow list: if isAdmin() || (isRealAuth() && request.query.limit <= 1);
+      // The profile holds the email, photo and visit data: the owner (anonymous included) and admins
+      // read it, nobody else. Only admins list.
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
       allow create: if isOwner(uid)
         && !request.resource.data.keys().hasAny(serverOnlyUserFields())
         && (!('displayName' in request.resource.data) || validNickname(request.resource.data.displayName));
@@ -107,10 +107,12 @@ service cloud.firestore {
 
     // ── roles (admin only) ────────────────────────────────────────────────────
     // roles/{emailLowercase}: { admin: bool, apps: string[], ladderTrackers: string[], ladderHome?: string }.
-    // Seeded with scripts/seed-roles.ts; edited from the admin panel.
+    // Seeded with scripts/seed-roles.ts; edited from the admin panel. The id is always lower case, so
+    // one email has one role doc (functions/src/roles.ts reads and mirrors only lower-case ids).
 
     match /roles/{email} {
-      allow read, write: if isAdmin();
+      allow read, delete: if isAdmin();
+      allow create, update: if isAdmin() && email == email.lower();
     }
 
     // ── personal apps ─────────────────────────────────────────────────────────
@@ -124,8 +126,8 @@ service cloud.firestore {
       allow read, write: if isRealOwner(uid);
 
       match /assets/{assetId} {
-        // Group members need to read each other's assets
-        allow read: if isRealAuth();
+        // Group members read each other's assets; wealth is granted by the app claim.
+        allow read: if hasApp('wealth') || isAdmin();
         allow write: if isRealOwner(uid);
       }
 
@@ -241,22 +243,23 @@ service cloud.firestore {
     // ── t212 snapshots ────────────────────────────────────────────────────────
 
     match /t212Snapshots/{uid} {
-      allow read: if isRealAuth();
+      allow read: if hasApp('wealth') || isAdmin();
       allow write: if isRealOwner(uid);
     }
 
     // ── t212 projection settings (growth rate, yearly contribution) ───────────
-    // Owner writes, any authenticated user reads (so shared family projections work).
+    // Owner writes; anyone with the wealth app reads (so shared family projections work).
 
     match /t212Settings/{uid} {
-      allow read: if isRealAuth();
+      allow read: if hasApp('wealth') || isAdmin();
       allow write: if isRealOwner(uid);
     }
 
     // ── config (exchange rates etc.) ──────────────────────────────────────────
+    // Exchange rates for wealth and expense; written only by the api function (admin SDK).
 
     match /config/{doc} {
-      allow read: if isRealAuth();
+      allow read: if hasApp('wealth') || hasApp('expense') || isAdmin();
       allow write: if false;
     }
 

@@ -81,6 +81,21 @@ npm run deploy       # build + wrangler pages deploy (confirm with the user firs
 
 Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy.yml`).
 
+## Security headers and the API
+
+- `firebase.json` sets a Content-Security-Policy on every path: scripts from the site only (plus the
+  Google sign-in and GA loaders), no inline scripts. Put page scripts in files (`public/site-init.js`
+  runs in `<head>`); `npm run build` moves Next's inline page data into
+  `/_next/static/chunks/inline/` (`scripts/externalize-inline-scripts.ts`) and fails on any other
+  inline script. A new external host (image, font, API) needs a CSP entry, and `npm run test:security`.
+- Camera and microphone are denied everywhere except `/apps/meetings/**` (Permissions-Policy).
+- The Mac-side API is `common/api/config.ts`: `NEXT_PUBLIC_API_BASE` (default
+  `https://api.anandmoghan.me`), with one prefix per app (`/family`, `/ladder`, `/planner`,
+  `/meetings`). The same-origin Cloud Function is `FUNCTIONS_BASE` in `common/firebase/client.ts`.
+- HTML from people or agents (ladder job descriptions, company notes, resumes) renders only through
+  `common/security/SafeHtml.tsx` (DOMPurify, strict allowlist). Blog posts, materials and KaTeX output
+  are author-controlled and rendered as built.
+
 ## Restricted apps and materials
 
 Family, materials, ladder and admin are restricted: their registry entries in
