@@ -96,6 +96,20 @@ Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy
   `common/security/SafeHtml.tsx` (DOMPurify, strict allowlist). Blog posts, materials and KaTeX output
   are author-controlled and rendered as built.
 
+## Standalone apps
+
+Every app under `/apps` installs on its own. `common/apps/standalone/apps.ts` lists them (the hub
+registry, private apps included, plus share and Nila); its scope is its path with no trailing slash
+(`trailingSlash: false`). Each layout sets `metadata = standaloneMetadata('<id>')` and
+`viewport = standaloneViewport('<id>')` (manifest link, icons, Apple tags, accent theme-color).
+`npm run build` writes `public/apps/<id>.webmanifest` before the build
+(`scripts/build-app-manifests.ts`, gitignored output) and one stamped copy of the worker template
+`common/apps/standalone/sw.js` per app to `out/apps/<id>-sw.js` after it (`scripts/stamp-app-sw.ts`).
+`StandaloneRuntime` (in `app/apps/layout.tsx`) registers the current app's worker in production and
+holds the install prompt (`useInstallPrompt`). The worker caches only the static export, never API
+or Firebase responses. A private app adds `common/apps/<id>/standalone.json` with
+`{"colors": {"light", "dark"}}` and its tile at `public/apps/<id>/icons/<id>.svg`.
+
 ## Restricted apps and materials
 
 Family, materials, ladder and admin are restricted: their registry entries in

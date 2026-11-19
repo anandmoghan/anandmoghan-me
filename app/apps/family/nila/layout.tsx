@@ -1,21 +1,11 @@
-import type { Metadata } from "next";
-import { NilaPwa } from "@/common/apps/family/components/parenting/NilaPwa";
+import type { Metadata, Viewport } from "next";
+import { standaloneMetadata, standaloneViewport } from "@/common/apps/standalone/metadata";
 
-// Nila installs on its own: this manifest (scope /apps/family/nila) replaces the Family one on these routes,
-// and the service worker is registered here only. The theme colours come from the Family layout.
-export const metadata: Metadata = {
-  title: "Nila",
-  manifest: "/apps/manifest-nila.json",
-  icons: {
-    icon: { url: "/apps/icons/nila.svg", type: "image/svg+xml" },
-    apple: "/apps/icons/nila-180.png",
-  },
-  appleWebApp: { capable: true, title: "Nila", statusBarStyle: "default" },
-  other: { "apple-mobile-web-app-capable": "yes", "mobile-web-app-capable": "yes" },
-};
+// Nila installs on its own: its manifest and service worker (scope /apps/family/nila) replace Family's on these routes.
+export const metadata: Metadata = standaloneMetadata("nila");
+
+export const viewport: Viewport = standaloneViewport("nila");
 
 export default function NilaLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <NilaPwa>{children}</NilaPwa>
-  );
+  return children;
 }

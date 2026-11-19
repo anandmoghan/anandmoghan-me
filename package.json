@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "predev": "node scripts/build-app-icons.mjs",
+    "predev": "node scripts/build-app-icons.mjs && tsx scripts/build-app-manifests.ts",
     "dev": "next dev",
-    "prebuild": "node scripts/build-app-icons.mjs",
+    "prebuild": "node scripts/build-app-icons.mjs && tsx scripts/build-app-manifests.ts",
     "build": "next build",
-    "postbuild": "tsx scripts/externalize-inline-scripts.ts && tsx scripts/stamp-nila-sw.ts",
+    "postbuild": "tsx scripts/externalize-inline-scripts.ts && tsx scripts/stamp-app-sw.ts",
     "start": "next start",
     "lint": "next lint",
     "sync-global": "node scripts/sync-global.mjs",
@@ -58,6 +58,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",
+    "@next/env": "^16.1.2",
     "@types/jsdom": "^21.1.7",
     "@types/katex": "^0.16.8",
     "@types/node": "^25.0.8",

@@ -1,4 +1,4 @@
-// Runs after `next build` (npm "postbuild", before stamp-nila-sw): moves the inline scripts of every exported
+// Runs after `next build` (npm "postbuild", before stamp-app-sw): moves the inline scripts of every exported
 // page into files (scripts/inline-scripts.ts), so the CSP in firebase.json can forbid inline scripts.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
