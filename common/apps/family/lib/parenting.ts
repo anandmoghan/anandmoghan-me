@@ -1,4 +1,4 @@
-// Client for the Mac bridge's /parenting routes (docs/parenting-design.md, bridge/parenting.mjs), plus the sums the
+// Client for the family API's /family/parenting routes (docs/parenting-design.md, bridge/parenting.mjs), plus the sums the
 // Nila pages need (age today, this week's sleep step, the night-log trend, context.md sections). A child's records
 // live on the Mac; the finished display content (plans, summaries, milestones, weeks) also has a read copy in
 // Firestore (lib/views.ts), so the pages load without the Mac. Working details (notes, questions and answers,
@@ -6,6 +6,7 @@
 // without a network: what both sources last returned is saved to IndexedDB on the device, per user (lib/views.ts,
 // lib/offlineStore.ts), shown with an "Offline" note when the network or the Mac is not there, and emptied on
 // sign-out. Nothing is kept in localStorage or sessionStorage.
+import { FAMILY_API } from "@/common/api/config";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_TIMEOUT_MS, HealthHttpError, HealthOfflineError, POLL_MS, jobIsActive, useHealthApi, type Ask, type HealthCtx, type HealthJob, type Source } from "@/common/apps/family/lib/health";
 import { useReadCopy, withPrefix, type ViewDocs } from "@/common/apps/family/lib/views";
@@ -201,7 +202,7 @@ async function call(ctx: HealthCtx, path: string, method = "GET", body?: unknown
   const timer = setTimeout(() => ctl.abort(), API_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(`${ctx.base}/parenting/${PARENTING_PERSON}${path}`, {
+    res = await fetch(`${FAMILY_API}/parenting/${PARENTING_PERSON}${path}`, {
       method,
       body: body === undefined ? undefined : JSON.stringify(body),
       headers: { Authorization: `Bearer ${token}`, "X-Timezone": phoneZone(), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { API_BASE, getDb } from '@/common/firebase/client';
+import { FUNCTIONS_BASE, getDb } from '@/common/firebase/client';
 
 const formatter = new Intl.NumberFormat('en-US');
 
@@ -12,7 +12,7 @@ async function countView(slug: string): Promise<void> {
   try {
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
-    await fetch(`${API_BASE}/views/${slug}`, { method: 'POST', keepalive: true });
+    await fetch(`${FUNCTIONS_BASE}/views/${slug}`, { method: 'POST', keepalive: true });
   } catch {
     // Counting is best effort; the stored count is still shown.
   }

@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { collection, doc, onSnapshot, type DocumentData } from "firebase/firestore";
 import { getDb } from "@/common/firebase/client";
 import { useAuth } from "@/common/firebase/AuthProvider";
-import { apiBase, newRequestId, pingMac, postRequest, type LiveJob } from "@/common/apps/family/lib/mac";
+import { newRequestId, pingMac, postRequest, type LiveJob } from "@/common/apps/family/lib/mac";
 import { createRequestDoc } from "@/common/apps/family/lib/writes";
 import { toMillis } from "@/common/apps/family/lib/format";
 import { readKey, writeKey } from "@/common/apps/family/lib/offlineStore";
@@ -16,7 +16,7 @@ import type {
 } from "@/common/apps/family/types";
 
 export type Access = "loading" | "allowed" | "denied";
-export type MacState = { live: boolean | null; lastSeen: MacStatus["last_seen"]; base: string };
+export type MacState = { live: boolean | null; lastSeen: MacStatus["last_seen"] };
 
 interface DataValue {
   access: Access;
@@ -112,17 +112,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => unsubs.forEach((u) => u());
   }, [access]);
 
-  const base = apiBase(macDoc?.api_url);
-  const baseRef = useRef(base);
-  baseRef.current = base;
-
-  // Poll GET /status every 30s while the tab is visible; pause while hidden.
+  // Poll GET /family/status every 30s while the tab is visible; pause while hidden.
   useEffect(() => {
     if (access !== "allowed") return;
     let timer: ReturnType<typeof setInterval> | undefined;
     let cancelled = false;
     const tick = async () => {
-      const ok = await pingMac(baseRef.current);
+      const ok = await pingMac();
       if (!cancelled) setLive(ok);
     };
     const start = () => {
@@ -144,7 +140,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       stop();
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [access, base]);
+  }, [access]);
 
   const liveRef = useRef(live);
   liveRef.current = live;
@@ -153,7 +149,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const request_id = newRequestId();
       if (liveRef.current && user) {
         const token = await user.getIdToken();
-        const job = await postRequest(baseRef.current, token, { request_id, ...r });
+        const job = await postRequest(token, { request_id, ...r });
         if (job) {
           setLiveJobs((j) => [job, ...j]);
           return { mode: "live", request_id, job };
@@ -192,13 +188,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       people: rows.people as PersonDoc[],
       tryons: rows.tryons as Tryon[],
       loaded: ["briefs", "suggestions", "feed"].every((c) => loadedCols.has(c as ColName)),
-      mac: { live, lastSeen: macDoc?.last_seen, base },
+      mac: { live, lastSeen: macDoc?.last_seen },
       macDoc,
       isUnsynced,
       liveJobs,
       submitRequest,
     }),
-    [access, rows, loadedCols, live, macDoc, base, isUnsynced, liveJobs, submitRequest],
+    [access, rows, loadedCols, live, macDoc, isUnsynced, liveJobs, submitRequest],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

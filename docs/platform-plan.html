@@ -46,7 +46,7 @@
           <tbody>
             <tr><td>Site and apps</td><td><code>anandmoghan-me</code></td><td>Firebase Hosting (static export)</td><td>Firestore, Storage, client SDK</td></tr>
             <tr><td>Cloud API</td><td><code>anandmoghan-me/functions</code></td><td>Cloud Functions us-central1</td><td>visits, account merge, role claims, Trading212</td></tr>
-            <tr><td>Family bridge and worker</td><td><code>anandmoghan-me-apis/family</code></td><td>Mac, launchd, cloudflared (familyapi)</td><td>Firestore <code>family/household</code>; Mac-only JSON for health, fitness, parenting</td></tr>
+            <tr><td>Family bridge and worker</td><td><code>anandmoghan-me-apis/family</code></td><td>Mac, launchd, cloudflared (<code>api.anandmoghan.me/family/*</code>)</td><td>Firestore <code>family/household</code>; Mac-only JSON for health, fitness, parenting</td></tr>
             <tr><td>Ladder worker</td><td><code>anandmoghan-me-apis/ladder</code></td><td>Mac, launchd, no tunnel</td><td>Firestore <code>ladder/{tracker}</code>, Storage PDFs</td></tr>
           </tbody>
         </table>
@@ -106,7 +106,7 @@
       </div>
       <h3 id="phase-2">Phase 2: cutover (needs Anand, one step at a time)</h3>
       <ul>
-        <li>Copy family Mac data to the new data folder and convert markdown to JSON and HTML; stop old bridge and worker, load the new plists, repoint the familyapi tunnel to 3201.</li>
+        <li>Copy family Mac data to the new data folder and convert markdown to JSON and HTML; stop old bridge and worker, load the new plists, point the <code>api.anandmoghan.me</code> tunnel at 3201 (family routes under <code>/family/*</code>).</li>
         <li>Run the ladder migration against production Firestore; retire the ladder tunnel route and the ladder-kavya Pages snapshot.</li>
         <li>Redirect family.anandmoghan.me, ladder.anandmoghan.me and materials.anandmoghan.me to the new paths.</li>
       </ul>

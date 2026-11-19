@@ -1,11 +1,11 @@
 import type { User } from 'firebase/auth';
 
-import { API_BASE } from '../firebase/client';
+import { FUNCTIONS_BASE } from '../firebase/client';
 
 // Visitor routes of the `api` Cloud Function (functions/src/visits.ts).
 
 async function post(user: User, path: string, body: unknown): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${FUNCTIONS_BASE}${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${await user.getIdToken()}`,

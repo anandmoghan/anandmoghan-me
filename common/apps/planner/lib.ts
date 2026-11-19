@@ -1,9 +1,9 @@
 import { addDays, format, startOfWeek } from 'date-fns'
+import { PLANNER_API } from '@/common/api/config'
 
-// Planner lives at /apps/planner; the Mac server ingests the iPhone Shortcut at this base.
-export const PLANNER_API_BASE = 'https://api.anandmoghan.me'
-export const INGEST_URL = `${PLANNER_API_BASE}/planner/ingest`
-export const SHORTCUT_URL = `${PLANNER_API_BASE}/planner/shortcut`
+// Planner lives at /apps/planner; the Mac server ingests the iPhone Shortcut under /planner.
+export const INGEST_URL = `${PLANNER_API}/ingest`
+export const SHORTCUT_URL = `${PLANNER_API}/shortcut`
 export const GENERIC_SHORTCUT_PATH = '/apps/planner-calendar-mirror.shortcut'
 
 export const COLOURS = ['a', 'b', 'c', 'd'] as const

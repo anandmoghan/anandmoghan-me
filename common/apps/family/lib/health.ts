@@ -1,11 +1,11 @@
-// Client for the Mac bridge's /health routes (docs/health-design.md, "Bridge API"). Health records live
+// Client for the family API's /family/health routes (docs/health-design.md, "Bridge API"). Health records live
 // on the Mac; the finished display content (summary, follow-up ticks, report summaries) also has a read
 // copy in Firestore (lib/views.ts), so the pages load without the Mac. Working details (questions and
 // answers, uploads, report text, files) and every action go to the Mac, with the Firebase ID token.
 // Nothing is kept in localStorage, sessionStorage or IndexedDB.
 import { useCallback, useMemo, useRef } from "react";
+import { FAMILY_API } from "@/common/api/config";
 import { useAuth } from "@/common/firebase/AuthProvider";
-import { useData } from "@/common/apps/family/hooks/useData";
 import { toMillis } from "@/common/apps/family/lib/format";
 import { useReadCopy, withPrefix, type ViewDocs } from "@/common/apps/family/lib/views";
 import type { Person } from "@/common/apps/family/types";
@@ -73,24 +73,22 @@ export class HealthHttpError extends Error {
   constructor(readonly status: number) { super(`Health API answered ${status}`); }
 }
 
-export interface HealthCtx { base: string; getToken: () => Promise<string> }
+export interface HealthCtx { getToken: () => Promise<string> }
 
-/** Base URL and ID token for the health routes. */
+/** ID token for the family API health routes. */
 export function useHealthApi(): HealthCtx {
   const { user } = useAuth();
-  const { mac } = useData();
   const userRef = useRef(user);
   userRef.current = user;
   return useMemo(
     () => ({
-      base: mac.base,
       getToken: async () => {
         const u = userRef.current;
         if (!u) throw new HealthHttpError(401);
         return u.getIdToken();
       },
     }),
-    [mac.base],
+    [],
   );
 }
 
@@ -101,7 +99,7 @@ async function call(ctx: HealthCtx, path: string, init: { method?: string; body?
   const timer = ms === null ? undefined : setTimeout(() => ctl.abort(), ms);
   let res: Response;
   try {
-    res = await fetch(`${ctx.base}${path}`, {
+    res = await fetch(`${FAMILY_API}${path}`, {
       method: init.method ?? "GET",
       body: init.body,
       headers: { Authorization: `Bearer ${token}`, ...init.headers },

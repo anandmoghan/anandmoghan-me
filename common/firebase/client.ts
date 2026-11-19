@@ -16,15 +16,13 @@ const PORTS = { auth: 9098, firestore: 8181, storage: 9199, functions: 5001 };
  * (`/api`). `next dev` does not apply rewrites, so emulator mode calls the functions emulator and
  * plain `npm run dev` calls the live function (it allows the http://localhost:3000 origin). Both
  * URLs have a doubled segment: the function routes on `/api/...`, so the URL is the function name
- * followed by the route prefix. NEXT_PUBLIC_API_BASE overrides all of these.
+ * followed by the route prefix. The Mac-side API (api.anandmoghan.me) is common/api/config.ts.
  */
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ||
-  (USE_EMULATORS
-    ? `http://${EMULATOR_HOST}:${PORTS.functions}/${EMULATOR_PROJECT_ID}/us-central1/api/api`
-    : process.env.NODE_ENV === 'development'
-      ? 'https://us-central1-anandmoghan-me.cloudfunctions.net/api/api'
-      : '/api');
+export const FUNCTIONS_BASE = USE_EMULATORS
+  ? `http://${EMULATOR_HOST}:${PORTS.functions}/${EMULATOR_PROJECT_ID}/us-central1/api/api`
+  : process.env.NODE_ENV === 'development'
+    ? 'https://us-central1-anandmoghan-me.cloudfunctions.net/api/api'
+    : '/api';
 
 // Static prerender runs with the same env, but must never talk to Firebase.
 // Nothing here runs at import time: call these getters inside effects, event

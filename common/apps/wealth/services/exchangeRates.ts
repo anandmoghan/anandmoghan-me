@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { getDb, getFirebaseAuth } from '@/common/firebase/client'
-import { API_BASE } from './api'
+import { FUNCTIONS_BASE } from '@/common/firebase/client'
 
 export interface ExchangeRates {
   base: 'GBP'
@@ -34,7 +34,7 @@ export async function getExchangeRates(): Promise<ExchangeRates> {
   const idToken = await getFirebaseAuth().currentUser?.getIdToken()
   if (!idToken) throw new Error('Not authenticated')
 
-  const resp = await fetch(`${API_BASE}/rates`, {
+  const resp = await fetch(`${FUNCTIONS_BASE}/rates`, {
     headers: { Authorization: `Bearer ${idToken}` },
   })
   if (!resp.ok) throw new Error(`/rates returned ${resp.status}`)

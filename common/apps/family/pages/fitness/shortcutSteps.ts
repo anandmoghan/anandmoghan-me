@@ -3,6 +3,8 @@
 // Same actions, in the same order, as the generated file. Action names are as they appear in the
 // Shortcuts action search on iOS 17 and 18.
 
+import { FAMILY_API } from "@/common/api/config";
+
 type ShortcutStep = { action: string; settings: string };
 
 const EMPTY_SAFE =
@@ -64,7 +66,7 @@ const shortcutSteps: { title: string; steps: ShortcutStep[] } = {
     {
       action: "Get Contents of URL",
       settings:
-        "URL https://api.anandmoghan.me/fitness/ingest. Tap Show More: Method POST; Headers: add Authorization with value " +
+        `URL ${FAMILY_API}/fitness/ingest. Tap Show More: Method POST; Headers: add Authorization with value ` +
         '"Bearer " then the Key variable (one space after Bearer); Request Body JSON, add these Text fields: date = Day, ' +
         "steps = Steps, active_kcal = ActiveKcal, resting_hr = RestingHR, hrv_ms = HRV, vo2max = VO2Max, weight_kg = Weight, " +
         "body_fat_pct = BodyFat, lean_mass_kg = LeanMass, bp_sys = BPSys, bp_dia = BPDia, sleep_h = SleepHours.",

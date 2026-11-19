@@ -1,9 +1,9 @@
 import type { User } from 'firebase/auth';
 
-import { API_BASE } from './client';
+import { FUNCTIONS_BASE } from './client';
 
 async function post(user: User, path: string, body: unknown): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${FUNCTIONS_BASE}${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${await user.getIdToken()}`,

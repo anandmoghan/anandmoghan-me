@@ -145,7 +145,6 @@ export interface MacStatus {
   synced_through?: Timestamp | string | null;
   version?: string;
   worker?: { running?: number; queued?: number };
-  api_url?: string;
 }
 
 export interface Household {

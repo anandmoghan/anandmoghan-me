@@ -12,13 +12,13 @@ import { convert } from '../services/exchangeRates'
 import { inferTickerCurrency, cleanTicker } from '../services/trading212'
 import type { Position } from '../services/trading212'
 import { getFirebaseAuth } from '@/common/firebase/client'
-import { API_BASE } from '../services/api'
+import { FUNCTIONS_BASE } from '@/common/firebase/client'
 
 
 async function saveT212Key(apiKey: string, apiSecret: string): Promise<void> {
   const idToken = await getFirebaseAuth().currentUser?.getIdToken()
   if (!idToken) throw new Error('Not authenticated')
-  const res = await fetch(`${API_BASE}/key`, {
+  const res = await fetch(`${FUNCTIONS_BASE}/key`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${idToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ apiKey, apiSecret }),

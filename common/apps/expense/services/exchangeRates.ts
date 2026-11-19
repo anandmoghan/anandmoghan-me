@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { getDb, getFirebaseAuth } from '@/common/firebase/client'
+import { FUNCTIONS_BASE, getDb, getFirebaseAuth } from '@/common/firebase/client'
 
 export interface ExchangeRates {
   base: 'GBP'
@@ -12,7 +12,7 @@ const RATES_TTL_MS = 60 * 60 * 1000 // 1 hour
 /**
  * Get exchange rates.
  * 1. Reads Firestore config/exchangeRates — if fresh (< 1 hour old), returns it.
- * 2. Otherwise calls the Worker /rates endpoint (server-side fetch, no CORS).
+ * 2. Otherwise calls the api function's /rates route (server-side fetch, no CORS).
  * 3. Stores the fresh result in Firestore so all users benefit.
  *
  * The Worker cron job keeps Firestore up-to-date every hour, so step 2
@@ -29,15 +29,14 @@ export async function getExchangeRates(): Promise<ExchangeRates> {
     }
   }
 
-  // Rates are stale or missing — fetch via Worker (avoids CORS)
-  const proxyUrl = process.env.NEXT_PUBLIC_T212_PROXY_URL
+  // Rates are stale or missing: fetch via the same-origin api function (avoids CORS)
   const idToken = await getFirebaseAuth().currentUser?.getIdToken()
-  if (!proxyUrl || !idToken) throw new Error('Not authenticated')
+  if (!idToken) throw new Error('Not authenticated')
 
-  const resp = await fetch(`${proxyUrl}/rates`, {
+  const resp = await fetch(`${FUNCTIONS_BASE}/rates`, {
     headers: { Authorization: `Bearer ${idToken}` },
   })
-  if (!resp.ok) throw new Error(`Worker /rates returned ${resp.status}`)
+  if (!resp.ok) throw new Error(`/rates returned ${resp.status}`)
 
   const rates = (await resp.json()) as ExchangeRates
 

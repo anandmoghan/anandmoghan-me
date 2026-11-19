@@ -1,8 +1,9 @@
-// Client for the Mac bridge's /fitness routes (docs/fitness-design.md, "Bridge API"), plus the sums the Fitness
+// Client for the family API's /family/fitness routes (docs/fitness-design.md, "Bridge API"), plus the sums the Fitness
 // pages need (target status, checklist adherence, the 7-day BP protocol, rolling averages). Fitness data lives
 // on the Mac; the plan, check-ins, measurements and BP runs also have a read copy in Firestore (lib/views.ts), so
 // the pages load without the Mac. Device and key management and every action go to the Mac, with the Firebase ID
 // token. Nothing is kept in localStorage, sessionStorage or IndexedDB.
+import { FAMILY_API } from "@/common/api/config";
 import { useCallback, useMemo } from "react";
 import {
   API_TIMEOUT_MS, HealthHttpError, HealthOfflineError, numericOf, reportTime, useHealthApi,
@@ -93,7 +94,7 @@ async function call(ctx: HealthCtx, path: string, method = "GET", body?: unknown
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let res: Response;
   try {
-    res = await fetch(`${ctx.base}${path}`, {
+    res = await fetch(`${FAMILY_API}${path}`, {
       method,
       body: body === undefined ? undefined : JSON.stringify(body),
       headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },

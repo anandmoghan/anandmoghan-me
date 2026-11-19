@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { getDb, getFirebaseAuth } from '@/common/firebase/client'
-import { API_BASE } from '../services/api'
+import { FUNCTIONS_BASE } from '@/common/firebase/client'
 import { inferTickerCurrency, cleanTicker } from '../services/trading212'
 import type { Position, AccountCash, Order } from '../services/trading212'
 
@@ -144,7 +144,7 @@ export function useT212Settings(uid: string | undefined) {
 export async function triggerT212Sync(): Promise<void> {
   const idToken = await getFirebaseAuth().currentUser?.getIdToken()
   if (!idToken) throw new Error('Not authenticated')
-  const res = await fetch(`${API_BASE}/sync`, {
+  const res = await fetch(`${FUNCTIONS_BASE}/sync`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${idToken}` },
   })
