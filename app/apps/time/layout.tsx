@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   title: 'Time',
   manifest: '/apps/manifest-time.json',
   icons: {
-    icon: { url: '/apps/icon-time.svg', type: 'image/svg+xml' },
-    apple: '/apps/icon-time-180.png',
+    icon: { url: '/apps/icons/time.svg', type: 'image/svg+xml' },
+    apple: '/apps/icons/time-180.png',
   },
   appleWebApp: { capable: true, title: 'Time', statusBarStyle: 'default' },
   other: { 'mobile-web-app-capable': 'yes' },

@@ -16,8 +16,8 @@ export const metadata: Metadata = {
   title: 'Materials',
   manifest: '/apps/manifest-materials.json',
   icons: {
-    icon: { url: '/apps/icon-materials.svg', type: 'image/svg+xml' },
-    apple: '/apps/icon-materials-180.png',
+    icon: { url: '/apps/icons/materials.svg', type: 'image/svg+xml' },
+    apple: '/apps/icons/materials-180.png',
   },
   appleWebApp: { capable: true, title: 'Materials', statusBarStyle: 'default' },
   other: { 'mobile-web-app-capable': 'yes' },

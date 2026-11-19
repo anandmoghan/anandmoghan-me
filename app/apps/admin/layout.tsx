@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   title: 'Admin',
   manifest: '/apps/manifest-admin.json',
   icons: {
-    icon: { url: '/apps/icon-admin.svg', type: 'image/svg+xml' },
-    apple: '/apps/icon-admin-180.png',
+    icon: { url: '/apps/icons/admin.svg', type: 'image/svg+xml' },
+    apple: '/apps/icons/admin-180.png',
   },
   appleWebApp: { capable: true, title: 'Admin', statusBarStyle: 'default' },
   other: { 'mobile-web-app-capable': 'yes' },

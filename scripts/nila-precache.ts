@@ -5,10 +5,11 @@ export const NILA_BASE = "/apps/family/nila";
 /** Public files the installed app needs besides its pages. */
 export const NILA_FILES = [
   "/apps/manifest-nila.json",
-  "/apps/icon-nila.svg",
-  "/apps/icon-nila-180.png",
-  "/apps/icon-nila-192.png",
-  "/apps/icon-nila-512.png",
+  "/apps/icons/nila.svg",
+  "/apps/icons/nila-180.png",
+  "/apps/icons/nila-192.png",
+  "/apps/icons/nila-512.png",
+  "/apps/icons/nila-maskable-512.png",
 ];
 
 /** Every Nila page the service worker saves at install: the entry route and each route tab. */

@@ -4,9 +4,9 @@ const CACHE = 'wealth-v1'
 const PRECACHE_URLS = [
   '/apps/wealth',
   '/apps/manifest-wealth.json',
-  '/apps/icon-wealth.svg',
-  '/apps/icon-wealth-192.png',
-  '/apps/icon-wealth-512.png',
+  '/apps/icons/wealth.svg',
+  '/apps/icons/wealth-192.png',
+  '/apps/icons/wealth-512.png',
 ]
 
 self.addEventListener('install', (event) => {

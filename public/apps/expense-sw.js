@@ -4,7 +4,7 @@ const CACHE = 'expense-v1'
 const PRECACHE_URLS = [
   '/apps/expense',
   '/apps/manifest-expense.json',
-  '/apps/icon-expense.svg',
+  '/apps/icons/expense.svg',
 ]
 
 self.addEventListener('install', (event) => {

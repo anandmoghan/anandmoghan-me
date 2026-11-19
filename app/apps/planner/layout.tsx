@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   title: 'Planner',
   manifest: '/apps/manifest-planner.json',
   icons: {
-    icon: { url: '/apps/icon-planner.svg', type: 'image/svg+xml' },
-    apple: '/apps/icon-planner-180.png',
+    icon: { url: '/apps/icons/planner.svg', type: 'image/svg+xml' },
+    apple: '/apps/icons/planner-180.png',
   },
   appleWebApp: { capable: true, title: 'Planner', statusBarStyle: 'default' },
   other: { 'mobile-web-app-capable': 'yes' },
