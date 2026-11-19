@@ -123,39 +123,8 @@ export default function RootLayout({
         <link rel="stylesheet" href="/global/styles/ui.css" />
         <link rel="stylesheet" href="/global/styles/app.css" />
         <link rel="stylesheet" href="/global/styles/print.css" media="print" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Apply the saved theme before first paint so there is no flash.
-              try {
-                var savedTheme = localStorage.getItem('theme');
-                if (savedTheme === 'dark' || savedTheme === 'light') {
-                  var root = document.documentElement;
-                  root.setAttribute('data-theme', savedTheme);
-                  root.classList.add(savedTheme);
-                }
-              } catch (err) {}
-            `
-          }}
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Prevent horizontal scroll on mobile
-              if (typeof window !== 'undefined') {
-                let scrollTimeout;
-                window.addEventListener('scroll', function() {
-                  if (window.scrollX !== 0) {
-                    clearTimeout(scrollTimeout);
-                    scrollTimeout = setTimeout(function() {
-                      window.scrollTo(0, window.scrollY);
-                    }, 10);
-                  }
-                }, { passive: true });
-              }
-            `
-          }}
-        />
+        {/* Theme before first paint, and the mobile horizontal-scroll guard (no inline scripts: CSP). */}
+        <script src="/site-init.js" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

@@ -4,6 +4,7 @@ export const NILA_BASE = "/apps/family/nila";
 
 /** Public files the installed app needs besides its pages. */
 export const NILA_FILES = [
+  "/site-init.js",
   "/apps/manifest-nila.json",
   "/apps/icon-nila.svg",
   "/apps/icon-nila-180.png",

@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { INLINE_DIR } from "./inline-scripts";
 import { NILA_BASE, NILA_FILES, nilaPages, staticFilesIn } from "./nila-precache";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -15,7 +16,11 @@ for (const page of pages) {
   const file = path.join(out, `${page}.html`);
   if (!existsSync(file)) throw new Error(`Nila page missing from the build: ${page}`);
   const html = readFileSync(file, "utf8");
-  for (const f of staticFilesIn(html)) statics.add(f);
+  for (const f of staticFilesIn(html)) {
+    statics.add(f);
+    // The page data moved out of the HTML (scripts/externalize-inline-scripts.ts) names chunks too.
+    if (f.startsWith(`${INLINE_DIR}/`)) for (const g of staticFilesIn(readFileSync(path.join(out, f), "utf8"))) statics.add(g);
+  }
   // The shared design system the layout links from public/global (not part of _next/static).
   for (const m of html.matchAll(/href="(\/global\/[^"?#]+\.css)"/g)) statics.add(m[1]);
 }

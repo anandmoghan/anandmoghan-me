@@ -49,6 +49,8 @@ next-env.d.ts
 !/scripts/verify-emulator.mjs
 !/scripts/nila-precache.ts
 !/scripts/stamp-nila-sw.ts
+!/scripts/inline-scripts.ts
+!/scripts/externalize-inline-scripts.ts
 
 # Firebase CLI cache
 .firebase/
