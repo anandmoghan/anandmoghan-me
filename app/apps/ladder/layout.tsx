@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { standaloneMetadata, standaloneViewport } from '@/common/apps/standalone/metadata'
 import { RequireApp } from '@/common/apps/components/RequireApp'
 import { LadderProvider } from '@/common/apps/ladder/LadderProvider'
 import { LadderShell } from '@/common/apps/ladder/components/LadderShell'
@@ -13,24 +14,9 @@ import { LadderShell } from '@/common/apps/ladder/components/LadderShell'
 //   /apps/ladder/company?slug=   one company
 //   /apps/ladder/resume          base resume and generated PDFs
 // The tracker is chosen in the app (stored in localStorage); ?t=anand|kavya preselects it.
-export const metadata: Metadata = {
-  title: 'Ladder',
-  manifest: '/apps/manifest-ladder.json',
-  icons: {
-    icon: { url: '/apps/icons/ladder.svg', type: 'image/svg+xml' },
-    apple: '/apps/icons/ladder-180.png',
-  },
-  appleWebApp: { capable: true, title: 'Ladder', statusBarStyle: 'default' },
-  other: { 'mobile-web-app-capable': 'yes' },
-}
+export const metadata: Metadata = standaloneMetadata('ladder')
 
-export const viewport: Viewport = {
-  // The page background of the light and dark themes (global tokens.css --bg).
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f7f4ef' },
-    { media: '(prefers-color-scheme: dark)', color: '#1b1815' },
-  ],
-}
+export const viewport: Viewport = standaloneViewport('ladder')
 
 export default function LadderLayout({ children }: { children: React.ReactNode }) {
   return (

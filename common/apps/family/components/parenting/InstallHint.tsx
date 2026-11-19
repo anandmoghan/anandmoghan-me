@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CloseIcon } from "@/common/apps/family/components/Icons";
 import { outlineBtn } from "@/common/apps/family/components/ui";
-import { useInstallPrompt } from "@/common/apps/family/components/parenting/NilaPwa";
+import { useInstallPrompt } from "@/common/apps/standalone/StandaloneRuntime";
 
 const DISMISSED_KEY = "nila-install-dismissed";
 

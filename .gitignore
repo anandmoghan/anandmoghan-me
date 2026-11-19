@@ -47,8 +47,9 @@ next-env.d.ts
 !/scripts/sync-materials.mjs
 !/scripts/publish-materials.ts
 !/scripts/verify-emulator.mjs
-!/scripts/nila-precache.ts
-!/scripts/stamp-nila-sw.ts
+!/scripts/app-precache.ts
+!/scripts/stamp-app-sw.ts
+!/scripts/build-app-manifests.ts
 !/scripts/inline-scripts.ts
 !/scripts/externalize-inline-scripts.ts
 !/scripts/build-app-icons.mjs
@@ -67,6 +68,9 @@ next-env.d.ts
 
 # App-icon PNGs rendered from the tile SVGs by scripts/build-app-icons.mjs
 /public/apps/icons/*.png
+
+# Web app manifests written by scripts/build-app-manifests.ts
+/public/apps/*.webmanifest
 
 # Private apps (listed through NEXT_PUBLIC_PRIVATE_APPS): their code and icons stay local
 /app/apps/meetings/

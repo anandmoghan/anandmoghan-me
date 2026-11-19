@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { standaloneMetadata, standaloneViewport } from '@/common/apps/standalone/metadata'
 import { RequireApp } from '@/common/apps/components/RequireApp'
 import { PlannerProvider } from '@/common/apps/planner/PlannerProvider'
 import { PlannerShell } from '@/common/apps/planner/PlannerShell'
@@ -9,24 +10,9 @@ import { PlannerShell } from '@/common/apps/planner/PlannerShell'
 //   /apps/planner/tasks    tasks, yours and the ones shared with the household
 //   /apps/planner/habits   habit list with this week's ticks
 //   /apps/planner/setup    colour, Shortcut keys and the Shortcut steps
-export const metadata: Metadata = {
-  title: 'Planner',
-  manifest: '/apps/manifest-planner.json',
-  icons: {
-    icon: { url: '/apps/icons/planner.svg', type: 'image/svg+xml' },
-    apple: '/apps/icons/planner-180.png',
-  },
-  appleWebApp: { capable: true, title: 'Planner', statusBarStyle: 'default' },
-  other: { 'mobile-web-app-capable': 'yes' },
-}
+export const metadata: Metadata = standaloneMetadata('planner')
 
-export const viewport: Viewport = {
-  // The page background of the light and dark themes (global tokens.css --bg).
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f7f4ef' },
-    { media: '(prefers-color-scheme: dark)', color: '#1b1815' },
-  ],
-}
+export const viewport: Viewport = standaloneViewport('planner')
 
 export default function PlannerLayout({ children }: { children: React.ReactNode }) {
   return (
