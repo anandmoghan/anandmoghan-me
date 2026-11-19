@@ -1,5 +1,6 @@
 'use client'
 
+import SafeHtml from '@/common/security/SafeHtml'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Badge } from '../../shell/Badge'
@@ -52,7 +53,7 @@ export function CompanyPage() {
               <CompanyInfoCard info={company} />
               {company.body_html && (
                 // Sanitised by the writer (migration, worker); clients cannot write it.
-                <div className="card prose overflow-x-auto" dangerouslySetInnerHTML={{ __html: company.body_html }} />
+                <SafeHtml className="card prose overflow-x-auto" html={company.body_html} />
               )}
               <div className="card">
                 <SectionTitle>Jobs at this company</SectionTitle>

@@ -1,5 +1,6 @@
 'use client'
 
+import SafeHtml from '@/common/security/SafeHtml'
 import { useState } from 'react'
 import { useLadder } from '../LadderProvider'
 import { companyHistory, formatPayRange } from '../lib'
@@ -123,7 +124,7 @@ export function JobDetail({ job }: { job: JobDoc }) {
         {tab === 'jd' &&
           (job.body_html ? (
             // body_html is sanitised by the writer (migration, worker); clients cannot write it.
-            <div className="card prose overflow-x-auto" dangerouslySetInnerHTML={{ __html: job.body_html }} />
+            <SafeHtml className="card prose overflow-x-auto" html={job.body_html} />
           ) : (
             <p className="card text-sm italic text-muted">No description saved.</p>
           ))}
