@@ -1,13 +1,58 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DeviceTile } from '../DeviceTile'
-import { SceneGlyph } from '../glyphs'
+import { AwayGlyph, ChevronGlyph, LightGlyph, MoonGlyph, SceneGlyph, SunGlyph, ToggleGlyph } from '../glyphs'
 import { useHome } from '../HomeProvider'
 import { LightSheet } from '../LightSheet'
-import { statusLine, type Device } from '../lib'
+import { isOn, type Device } from '../lib'
+import { buildHomeView, statusChips, type Tile } from '../view'
 
 const ACTIVATED_MS = 2000
+
+function ModeGlyph({ name }: { name: string }) {
+  if (/sleep/i.test(name)) return <MoonGlyph size={18} />
+  if (/awake/i.test(name)) return <SunGlyph size={18} />
+  if (/away/i.test(name)) return <AwayGlyph size={18} />
+  return <ToggleGlyph size={18} />
+}
+
+// The strip under the title: house modes (switches) and scenes (one-shot), as frosted pills.
+function Strip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section aria-label={label} className="home-strip-section">
+      <ul className="home-strip scroll-bare">{children}</ul>
+    </section>
+  )
+}
+
+function Modes({ modes }: { modes: Device[] }) {
+  const { act } = useHome()
+  if (modes.length === 0) return null
+  return (
+    <Strip label="Modes">
+      {modes.map((mode) => {
+        const on = isOn(mode)
+        return (
+          <li key={mode.entity_id}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={on}
+              className="home-scene"
+              data-activated={on || undefined}
+              disabled={!mode.controllable}
+              onClick={() => act(mode.entity_id, { action: 'toggle' })}
+            >
+              <span className="home-scene__glyph" aria-hidden><ModeGlyph name={mode.name} /></span>
+              <span>{mode.name}</span>
+            </button>
+          </li>
+        )
+      })}
+    </Strip>
+  )
+}
 
 function Scenes() {
   const { state, act } = useHome()
@@ -21,9 +66,8 @@ function Scenes() {
 
   if (!state?.scenes.length) return null
   return (
-    <section aria-labelledby="home-scenes" className="mt-6">
-      <h2 id="home-scenes" className="home-section-title site-container">Scenes</h2>
-      <ul className="home-scenes scroll-bare">
+    <>
+      <Strip label="Scenes">
         {state.scenes.map((scene) => (
           <li key={scene.entity_id}>
             <button
@@ -35,34 +79,53 @@ function Scenes() {
                 act(scene.entity_id, { action: 'activate' })
               }}
             >
-              <span className="home-scene__glyph" aria-hidden><SceneGlyph size={20} /></span>
+              <span className="home-scene__glyph" aria-hidden><SceneGlyph size={18} /></span>
               <span>{scene.name}</span>
             </button>
           </li>
         ))}
-      </ul>
+      </Strip>
       <p className="sr-only" aria-live="polite">
         {activated ? `${state.scenes.find((s) => s.entity_id === activated)?.name ?? 'Scene'} activated` : ''}
       </p>
-    </section>
+    </>
   )
 }
 
-function DeviceSection({ id, name, devices, onAdjust }: {
+function RoomSection({ id, name, tiles, allLights, onAdjust }: {
   id: string
   name: string
-  devices: Device[]
+  tiles: Tile[]
+  allLights: Device | null
   onAdjust: (entityId: string) => void
 }) {
-  if (devices.length === 0) return null
+  const { act } = useHome()
   const headingId = `home-room-${id}`
+  const lightsOn = allLights ? isOn(allLights) : false
   return (
-    <section aria-labelledby={headingId} className="site-container mt-7">
-      <h2 id={headingId} className="home-section-title">{name}</h2>
+    <section aria-labelledby={headingId} className="site-container home-room">
+      <div className="home-room__head">
+        <h2 id={headingId} className="home-room__title">
+          <span>{name}</span>
+          <ChevronGlyph size={16} />
+        </h2>
+        {allLights && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={lightsOn}
+            aria-label={`All lights, ${name}`}
+            className="home-roomtoggle"
+            onClick={() => act(allLights.entity_id, { action: 'toggle' })}
+          >
+            <LightGlyph size={18} />
+          </button>
+        )}
+      </div>
       <ul className="home-grid">
-        {devices.map((device) => (
-          <li key={device.entity_id}>
-            <DeviceTile device={device} onAdjust={onAdjust} />
+        {tiles.map((tile) => (
+          <li key={tile.id}>
+            <DeviceTile tile={tile} onAdjust={onAdjust} />
           </li>
         ))}
       </ul>
@@ -70,40 +133,57 @@ function DeviceSection({ id, name, devices, onAdjust }: {
   )
 }
 
-// The Home tab: the home's name and a one-line status, scenes, then one section per room.
+// The Home tab: the home's name and a status row, modes and scenes, then one section per room.
 export function HomePage() {
   const { state, stream } = useHome()
   const [sheet, setSheet] = useState<string | null>(null)
-  if (!state) return null
+  const view = useMemo(() => (state ? buildHomeView(state) : null), [state])
+  if (!state || !view) return null
 
-  const empty = state.rooms.every((r) => r.devices.length === 0) && state.unassigned.length === 0
+  const chips = statusChips(state, view)
+  const empty = view.rooms.length === 0 && view.other.length === 0
 
   return (
-    <div className="pb-10">
+    <div className="home-page">
       <header className="site-container home-hero">
         <h1 className="home-hero__name">{state.home.name}</h1>
-        <p className="home-hero__status">
-          <span>{statusLine(state)}</span>
+        <ul className="home-chips" aria-label="Status">
+          {chips.map((chip) => (
+            <li key={chip.key} className="home-chip">
+              <span className="home-chip__label">{chip.label}</span>
+              <span className="home-chip__value">{chip.value}</span>
+            </li>
+          ))}
           {stream !== 'live' && (
-            <span className="home-hero__stream">
+            <li className="home-chip home-chip--stream">
               {stream === 'connecting' ? 'Connecting for live updates' : 'Reconnecting'}
-            </span>
+            </li>
           )}
-        </p>
+        </ul>
       </header>
 
+      <Modes modes={view.modes} />
       <Scenes />
 
       {empty ? (
-        <p className="site-container mt-10 text-sm text-muted">
+        <p className="site-container home-empty">
           No devices yet. Lights and switches you add in Home Assistant show up here, grouped by area.
         </p>
       ) : (
         <>
-          {state.rooms.map((room) => (
-            <DeviceSection key={room.id} id={room.id} name={room.name} devices={room.devices} onAdjust={setSheet} />
+          {view.rooms.map((room) => (
+            <RoomSection
+              key={room.id}
+              id={room.id}
+              name={room.name}
+              tiles={room.tiles}
+              allLights={room.allLights}
+              onAdjust={setSheet}
+            />
           ))}
-          <DeviceSection id="unassigned" name="Unassigned" devices={state.unassigned} onAdjust={setSheet} />
+          {view.other.length > 0 && (
+            <RoomSection id="other" name="Other" tiles={view.other} allLights={null} onAdjust={setSheet} />
+          )}
         </>
       )}
 

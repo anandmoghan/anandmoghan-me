@@ -1,39 +1,48 @@
 'use client'
 
-import type { ReactNode } from 'react'
-import { HomeGlyph } from '../icons/home'
+import { useEffect, type ReactNode } from 'react'
+import { ProfileMenu } from '../components/ProfileMenu'
 import { PageSkeleton } from '../shell/Skeleton'
 import { TabBar, type Tab } from '../shell/TabBar'
-import { AutomationGlyph } from './glyphs'
+import { AutomationTabGlyph, HomeTabGlyph } from './glyphs'
 import { useHome } from './HomeProvider'
 
-// Chrome for every /apps/home page: bottom tabs, the failed-action notice and the first load.
+// Chrome for every /apps/home page: the wallpaper, an account button in place of the site header
+// (hidden while Home is open, see home.css), bottom tabs, the failed-action notice and the first load.
 export function HomeShell({ children }: { children: ReactNode }) {
   const { state, loadError, notice, dismissNotice, reload } = useHome()
   const base = '/apps/home'
 
+  useEffect(() => {
+    document.body.classList.add('home-immersive')
+    return () => document.body.classList.remove('home-immersive')
+  }, [])
+
   const tabs: Tab[] = [
-    { href: base, label: 'Home', icon: <HomeGlyph />, exact: true },
-    { href: `${base}/automations`, label: 'Automations', icon: <AutomationGlyph /> },
+    { href: base, label: 'Home', icon: <HomeTabGlyph size={26} />, exact: true },
+    { href: `${base}/automations`, label: 'Automation', icon: <AutomationTabGlyph size={26} /> },
   ]
 
   return (
     <div className="home-app with-tab-bar relative flex-1">
+      <div className="home-topbar site-container">
+        <ProfileMenu />
+      </div>
       <div className="home-notice-slot site-container" aria-live="assertive">
         {notice && (
           <p className="home-notice" role="alert">
             <span className="min-w-0 flex-1">{notice}</span>
-            <button type="button" className="btn btn--sm btn--ghost" onClick={dismissNotice}>Dismiss</button>
+            <button type="button" className="home-notice__dismiss" onClick={dismissNotice}>Dismiss</button>
           </p>
         )}
       </div>
       {state ? (
         children
       ) : loadError ? (
-        <div className="site-container py-16 text-center">
-          <p className="font-bold">Could not load your home</p>
-          <p className="mt-1 text-sm text-muted">{loadError}</p>
-          <button type="button" className="btn btn--primary mt-4" onClick={reload}>Try again</button>
+        <div className="site-container home-empty">
+          <p className="home-empty__title">Could not load your home</p>
+          <p>{loadError}</p>
+          <button type="button" className="home-empty__retry" onClick={reload}>Try again</button>
         </div>
       ) : (
         <PageSkeleton rows={3} />

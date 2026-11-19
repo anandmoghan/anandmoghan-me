@@ -1,58 +1,264 @@
-/* The Home app (/apps/home). Next does not scope layout CSS, so every rule is under .home-app
-   or uses a home- class name. Colours come from the global tokens; the one exception is the
-   lamp colour of a lit light, which the tile receives as --lamp ("r g b", from the bulb's own
-   colour or white temperature) with --level (brightness, 0 to 1). A lit tile is a pale paper
-   lit by that colour in both themes, so its ink is fixed dark. */
+/* The Home app (/apps/home), styled after Apple's Home app: a wallpaper behind frosted tiles,
+   the system font, an iOS tab bar and grouped inset lists. Next does not scope layout CSS, so every
+   rule is under .home-app (the dialog and the account button live inside it) or uses a home-
+   class name; the only rule outside is the one that hides the site header while Home is open.
+   Nothing here touches the shared tokens. Dynamic values reach CSS as custom properties on the
+   element: --lamp ("r g b" of a coloured bulb), --pct (brightness pill fill), --swatch (a
+   colour-temperature swatch), --drag (sheet swipe offset). */
+
+/* Home replaces the site header with its own account button (HomeShell adds the class). */
+body.home-immersive .site-header {
+  display: none;
+}
 
 .home-app {
-  --home-paper: #fffaf1;
-  --home-ink: #26221f;
-  --home-ink-muted: #5d554d;
-  --home-tile-radius: 1.15rem;
+  --h-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+  --h-text: #1c1c1e;
+  --h-text2: rgb(44 44 48 / 0.82);
+  --h-glass: rgb(255 255 255 / 0.34);
+  --h-glass-edge: rgb(255 255 255 / 0.5);
+  --h-glass-icon: rgb(60 60 67 / 0.14);
+  --h-glass-icon-ink: rgb(44 44 48 / 0.78);
+  --h-solid: rgb(255 255 255 / 0.96);
+  --h-solid-text: #1c1c1e;
+  --h-solid-text2: rgb(60 60 67 / 0.78);
+  --h-sheet: rgb(248 248 250 / 0.8);
+  --h-bar: rgb(248 248 250 / 0.74);
+  --h-inset: rgb(255 255 255 / 0.66);
+  --h-hairline: rgb(60 60 67 / 0.2);
+  --h-track: rgb(120 120 128 / 0.32);
+  --h-bar-ink: rgb(60 60 67 / 0.78);
+  --h-bar-active: #a85600;
+  --h-shadow: 0 6px 20px -8px rgb(60 40 40 / 0.35);
+  --h-backdrop: rgb(20 20 30 / 0.32);
+  --h-amber: #ffb800;
+  --h-green: #34c759;
+  --h-blue: #007aff;
+  --h-teal: #30b0c7;
+  --h-orange: #ff6a2b;
+  --h-ease: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --h-wallpaper:
+    radial-gradient(60% 42% at 12% 6%, #ffc98b 0%, transparent 72%),
+    radial-gradient(55% 40% at 92% 18%, #ffb4a2 0%, transparent 72%),
+    radial-gradient(70% 50% at 78% 96%, #9fb6e8 0%, transparent 72%),
+    radial-gradient(60% 45% at 8% 88%, #c9b8ea 0%, transparent 72%),
+    linear-gradient(180deg, #ffe0b8 0%, #f7cfc0 45%, #c5d0ec 100%);
+  position: relative;
+  isolation: isolate;
+  background: var(--h-wallpaper);
+  color: var(--h-text);
+  font-family: var(--h-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-app {
+    --h-text: #fff;
+    --h-text2: rgb(235 235 245 / 0.74);
+    --h-glass: rgb(40 40 52 / 0.46);
+    --h-glass-edge: rgb(255 255 255 / 0.12);
+    --h-glass-icon: rgb(255 255 255 / 0.14);
+    --h-glass-icon-ink: rgb(235 235 245 / 0.78);
+    --h-sheet: rgb(40 40 46 / 0.78);
+    --h-bar: rgb(28 28 34 / 0.74);
+    --h-inset: rgb(44 44 52 / 0.58);
+    --h-hairline: rgb(255 255 255 / 0.16);
+    --h-bar-ink: rgb(235 235 245 / 0.62);
+    --h-bar-active: #ff9500;
+    --h-shadow: 0 6px 22px -8px rgb(0 0 0 / 0.6);
+    --h-backdrop: rgb(0 0 0 / 0.5);
+    --h-wallpaper:
+      radial-gradient(60% 42% at 16% 0%, #3b2a78 0%, transparent 72%),
+      radial-gradient(55% 40% at 96% 28%, #1c3a82 0%, transparent 72%),
+      radial-gradient(70% 50% at 70% 100%, #4a2b6e 0%, transparent 72%),
+      linear-gradient(180deg, #0a0f2e 0%, #131a4a 55%, #1a1548 100%);
+  }
+}
+
+:root[data-theme="dark"] .home-app {
+  --h-text: #fff;
+  --h-text2: rgb(235 235 245 / 0.74);
+  --h-glass: rgb(40 40 52 / 0.46);
+  --h-glass-edge: rgb(255 255 255 / 0.12);
+  --h-glass-icon: rgb(255 255 255 / 0.14);
+  --h-glass-icon-ink: rgb(235 235 245 / 0.78);
+  --h-sheet: rgb(40 40 46 / 0.78);
+  --h-bar: rgb(28 28 34 / 0.74);
+  --h-inset: rgb(44 44 52 / 0.58);
+  --h-hairline: rgb(255 255 255 / 0.16);
+  --h-bar-ink: rgb(235 235 245 / 0.62);
+  --h-bar-active: #ff9500;
+  --h-shadow: 0 6px 22px -8px rgb(0 0 0 / 0.6);
+  --h-backdrop: rgb(0 0 0 / 0.5);
+  --h-wallpaper:
+    radial-gradient(60% 42% at 16% 0%, #3b2a78 0%, transparent 72%),
+    radial-gradient(55% 40% at 96% 28%, #1c3a82 0%, transparent 72%),
+    radial-gradient(70% 50% at 70% 100%, #4a2b6e 0%, transparent 72%),
+    linear-gradient(180deg, #0a0f2e 0%, #131a4a 55%, #1a1548 100%);
+}
+
+/* The wallpaper: fixed behind everything, edge to edge (the same gradient also paints the page
+   itself, so a full-page capture has it all the way down). */
+.home-app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--h-wallpaper);
+}
+
+.home-app button {
+  min-height: 0;
+  font-family: inherit;
+}
+
+.home-app :focus-visible {
+  outline: 2px solid var(--h-blue);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+.home-app svg {
+  stroke-width: 1.75;
+}
+
+.home-page {
+  padding-bottom: 1.5rem;
+}
+
+/* Frosted glass where the browser can blur; a firmer fill where it cannot. */
+.home-tile,
+.home-scene,
+.home-chip,
+.home-roomtoggle,
+.home-inset,
+.home-list,
+.home-round,
+.home-power,
+.home-pill,
+.home-topbar > div > button {
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .home-app {
+    --h-glass: rgb(255 255 255 / 0.6);
+    --h-inset: rgb(255 255 255 / 0.85);
+    --h-sheet: rgb(248 248 250 / 0.97);
+    --h-bar: rgb(248 248 250 / 0.97);
+  }
+
+  :root[data-theme="dark"] .home-app {
+    --h-glass: rgb(48 48 60 / 0.85);
+    --h-inset: rgb(48 48 58 / 0.9);
+    --h-sheet: rgb(40 40 46 / 0.98);
+    --h-bar: rgb(28 28 34 / 0.98);
+  }
 }
 
 /* == Header == */
 
-.home-hero {
-  padding-top: var(--space-6);
-}
-
-.home-hero__name {
-  font-size: clamp(1.9rem, 6vw, 2.5rem);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-}
-
-.home-hero__status {
+.home-topbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
-  margin-top: var(--space-2);
-  color: var(--muted);
-  font-size: 1.02rem;
+  justify-content: flex-end;
+  padding-top: max(0.5rem, env(safe-area-inset-top));
 }
 
-.home-hero__stream {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: var(--text-xs);
-}
-
-.home-hero__stream::before {
-  content: "";
-  width: 0.45rem;
-  height: 0.45rem;
-  background: var(--warn);
+.home-topbar > div > button {
   border-radius: 9999px;
 }
 
-.home-section-title {
-  margin-bottom: var(--space-3);
-  font-size: 1.05rem;
-  font-weight: 800;
+.home-hero {
+  padding-top: 0.25rem;
+}
+
+.home-hero__name {
+  font-size: 2.125rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  text-shadow: 0 1px 12px rgb(0 0 0 / 0.08);
+}
+
+:root[data-theme="dark"] .home-hero__name,
+:root[data-theme="dark"] .home-room__title {
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-hero__name,
+  :root:not([data-theme="light"]) .home-room__title {
+    text-shadow: 0 1px 8px rgb(0 0 0 / 0.45);
+  }
+}
+
+.home-hero__sub {
+  margin-top: 0.15rem;
+  color: var(--h-text2);
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+
+.home-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+  list-style: none;
+}
+
+.home-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.8125rem;
+  background: var(--h-glass);
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px var(--h-glass-edge);
+}
+
+.home-chip__label {
+  font-weight: 600;
+}
+
+.home-chip__value {
+  color: var(--h-text2);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-chip--stream::before {
+  content: "";
+  align-self: center;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.1rem;
+  background: var(--h-orange);
+  border-radius: 9999px;
+}
+
+.home-empty {
+  padding-top: 2.5rem;
+  color: var(--h-text2);
+  font-size: 0.9375rem;
+}
+
+.home-empty__title {
+  color: var(--h-text);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.home-empty__retry {
+  margin-top: 1rem;
+  padding: 0.55rem 1.1rem;
+  color: var(--h-solid-text);
+  font-weight: 600;
+  background: var(--h-solid);
+  border: 0;
+  border-radius: 9999px;
 }
 
 /* == Failed-action notice == */
@@ -64,21 +270,34 @@
 .home-notice {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  color: var(--fg);
-  font-size: var(--text-sm);
-  background: color-mix(in srgb, var(--destructive) 10%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.6rem 0.55rem 1rem;
+  color: var(--h-solid-text);
+  font-size: 0.875rem;
+  background: var(--h-solid);
+  border-radius: 1rem;
+  box-shadow: var(--h-shadow);
+}
+
+.home-notice__dismiss {
+  padding: 0.35rem 0.8rem;
+  color: var(--h-blue);
+  font-weight: 600;
+  background: none;
+  border: 0;
   border-radius: 9999px;
 }
 
-/* == Scenes: a strip that scrolls sideways and bleeds to the screen edge == */
+/* == Modes and scenes: pills in a strip that scrolls sideways == */
 
-.home-scenes {
+.home-strip-section {
+  margin-top: 1.1rem;
+}
+
+.home-strip {
   display: flex;
-  gap: var(--space-2);
+  gap: 0.5rem;
   overflow-x: auto;
   padding: 0.125rem var(--gutter) 0.25rem;
   scroll-padding-inline: var(--gutter);
@@ -86,13 +305,13 @@
 }
 
 @media (min-width: 640px) {
-  .home-scenes {
+  .home-strip {
     padding-inline: 1.5rem;
   }
 }
 
 @media (min-width: 1024px) {
-  .home-scenes {
+  .home-strip {
     flex-wrap: wrap;
     overflow-x: visible;
     max-width: 80rem;
@@ -101,23 +320,24 @@
   }
 }
 
-.home-scenes > li {
+.home-strip > li {
   flex: none;
 }
 
 .home-scene {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  min-height: 2.75rem;
-  padding: 0.4rem 1.1rem 0.4rem 0.5rem;
-  color: var(--fg);
-  font-weight: 700;
-  font-size: var(--text-sm);
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 1rem 0 0.4rem;
+  color: var(--h-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
   white-space: nowrap;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--h-glass);
+  border: 0;
   border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px var(--h-glass-edge);
   cursor: pointer;
 }
 
@@ -125,71 +345,109 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  color: var(--domain);
-  background: color-mix(in srgb, var(--domain) 14%, transparent);
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--h-glass-icon-ink);
+  background: var(--h-glass-icon);
   border-radius: 9999px;
 }
 
 .home-scene[data-activated] {
-  border-color: var(--domain);
+  color: var(--h-solid-text);
+  background: var(--h-solid);
 }
 
 .home-scene[data-activated] .home-scene__glyph {
-  color: var(--on-domain);
-  background: var(--domain);
+  color: var(--h-orange);
+  background: rgb(255 106 43 / 0.16);
 }
 
-/* == Device tiles == */
+.home-scene:disabled {
+  opacity: 0.55;
+}
+
+/* == Rooms == */
+
+.home-room {
+  margin-top: 1.6rem;
+}
+
+.home-room__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2rem;
+  margin-bottom: 0.6rem;
+}
+
+.home-room__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home-room__title svg {
+  opacity: 0.65;
+  stroke-width: 2.4;
+}
+
+.home-roomtoggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--h-glass-icon-ink);
+  background: var(--h-glass);
+  border: 0;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px var(--h-glass-edge);
+  cursor: pointer;
+}
+
+.home-roomtoggle[aria-checked="true"] {
+  color: var(--h-amber);
+  background: var(--h-solid);
+}
+
+.home-roomtoggle[aria-checked="true"] svg path:first-child {
+  fill: currentColor;
+}
+
+/* == Accessory tiles: wide, glass when off, white when on == */
 
 .home-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9.25rem, 1fr));
-  gap: 0.625rem;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.5rem;
   list-style: none;
 }
 
 @media (min-width: 640px) {
   .home-grid {
-    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+    gap: 0.625rem;
   }
 }
 
 .home-tile {
   position: relative;
-  isolation: isolate;
-  height: 100%;
-  min-height: 7.25rem;
-  color: var(--fg);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--home-tile-radius);
+  height: 4.25rem;
+  color: var(--h-text);
+  background: var(--h-glass);
+  border-radius: 1.0625rem;
+  box-shadow: inset 0 0 0 1px var(--h-glass-edge);
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* The lamp: a wash of the bulb's colour over warm paper, stronger the brighter the bulb. */
-.home-tile[data-lit] {
-  color: var(--home-ink);
-  background: var(--home-paper);
-  border-color: transparent;
-  box-shadow: 0 1px 2px rgb(70 50 30 / 0.08), 0 10px 28px -10px rgb(var(--lamp) / 0.7);
-}
-
-.home-tile[data-lit]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: radial-gradient(120% 95% at 18% 12%, rgb(var(--lamp) / 0.95), rgb(var(--lamp) / 0.35));
-  border-radius: inherit;
-  opacity: calc(0.3 + var(--level) * 0.6);
-}
-
-/* Switches, fans and toggles that are on take the area colour. */
-.home-tile[data-on]:not([data-lit]) {
-  background: color-mix(in srgb, var(--domain) 12%, var(--surface));
-  border-color: color-mix(in srgb, var(--domain) 35%, transparent);
+.home-tile[data-on] {
+  color: var(--h-solid-text);
+  background: var(--h-solid);
+  box-shadow: var(--h-shadow);
 }
 
 .home-tile[data-unavailable] {
@@ -198,12 +456,11 @@
 
 .home-tile__main {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  gap: 0.65rem;
   width: 100%;
   height: 100%;
-  min-height: inherit;
-  padding: 0.85rem 0.95rem 0.8rem;
+  padding: 0 0.7rem;
   color: inherit;
   text-align: left;
   background: none;
@@ -220,117 +477,121 @@
   cursor: default;
 }
 
-.home-tile__main:focus-visible,
-.home-tile__adjust:focus-visible {
-  outline: 2px solid var(--domain);
-  outline-offset: 2px;
-}
-
-.home-tile[data-lit] .home-tile__main:focus-visible,
-.home-tile[data-lit] .home-tile__adjust:focus-visible {
-  outline-color: var(--home-ink);
+div.home-tile__main {
+  cursor: default;
 }
 
 .home-tile__glyph {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 2.35rem;
-  height: 2.35rem;
-  margin-bottom: auto;
-  color: var(--muted);
-  background: var(--subtle);
+  width: 2.375rem;
+  height: 2.375rem;
+  color: var(--h-glass-icon-ink);
+  background: var(--h-glass-icon);
   border-radius: 9999px;
 }
 
-.home-tile[data-on] .home-tile__glyph {
-  color: var(--on-domain);
-  background: var(--domain);
+.home-tile__glyph--temp {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
-.home-tile[data-lit] .home-tile__glyph {
-  color: var(--home-ink);
-  background: rgb(var(--lamp));
-  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.45);
+.home-tile__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .home-tile__name {
-  display: -webkit-box;
-  margin-top: 0.75rem;
   overflow: hidden;
-  font-weight: 750;
-  font-size: 0.95rem;
-  line-height: 1.2;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-tile__state {
-  margin-top: 0.15rem;
-  color: var(--muted);
-  font-size: var(--text-xs);
+  overflow: hidden;
+  color: var(--h-text2);
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.home-tile[data-lit] .home-tile__state {
-  color: var(--home-ink-muted);
+.home-tile[data-on] .home-tile__state {
+  color: var(--h-solid-text2);
 }
 
+/* On: the icon takes the accessory's colour. Lights fill their bulb. */
+.home-tile[data-on] .home-tile__glyph {
+  color: var(--h-amber);
+  background: rgb(255 184 0 / 0.16);
+}
+
+.home-tile[data-kind="light"][data-on] svg path:first-child {
+  fill: currentColor;
+}
+
+.home-tile[data-kind="light"][data-colour] .home-tile__glyph {
+  color: rgb(var(--lamp));
+  background: rgb(var(--lamp) / 0.2);
+}
+
+.home-tile[data-kind="heater"][data-on] .home-tile__glyph {
+  color: var(--h-orange);
+  background: rgb(255 106 43 / 0.15);
+}
+
+.home-tile[data-kind="switch"][data-on] .home-tile__glyph {
+  color: #1f9d46;
+  background: rgb(52 199 89 / 0.16);
+}
+
+.home-tile[data-kind="toggle"][data-on] .home-tile__glyph {
+  color: var(--h-blue);
+  background: rgb(0 122 255 / 0.14);
+}
+
+.home-tile[data-kind="fan"][data-on] .home-tile__glyph {
+  color: #1b8ca3;
+  background: rgb(48 176 199 / 0.17);
+}
+
+.home-tile[data-kind="climate"][data-on] .home-tile__glyph {
+  color: var(--h-orange);
+  background: rgb(255 106 43 / 0.15);
+}
+
+/* The detail button is for the keyboard and screen readers; a long press or right click is the
+   pointer route. It shows itself only while focused. */
 .home-tile__adjust {
   position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  min-height: 2.25rem;
-  padding: 0;
-  color: var(--muted);
-  background: transparent;
+  top: 0.3rem;
+  right: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  color: var(--h-solid-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--h-solid);
   border: 0;
   border-radius: 9999px;
-  cursor: pointer;
+  box-shadow: var(--h-shadow);
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
 }
 
-.home-tile__adjust:hover {
-  background: color-mix(in srgb, currentColor 10%, transparent);
-}
-
-.home-tile[data-lit] .home-tile__adjust {
-  color: var(--home-ink);
-}
-
-/* Climate: read-only, the room temperature is the tile's headline. */
-.home-tile--climate {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0.85rem 0.95rem 0.8rem;
-}
-
-.home-tile--climate .home-tile__glyph {
-  margin-bottom: 0;
-}
-
-.home-tile--climate[data-active] .home-tile__glyph {
-  color: var(--warn);
-  background: color-mix(in srgb, var(--warn) 16%, transparent);
-}
-
-.home-tile__temp {
-  margin-top: auto;
-  padding-top: 0.5rem;
-  font-size: 1.7rem;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.home-tile--climate .home-tile__name {
-  margin-top: 0.35rem;
+.home-tile__adjust:focus-visible {
+  clip-path: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* == Light sheet == */
@@ -338,218 +599,319 @@
 .home-sheet {
   width: 100%;
   max-width: 100%;
+  max-height: 92dvh;
   margin: auto auto 0;
   padding: 0;
-  color: var(--fg);
-  background: var(--surface);
+  overflow: auto;
+  color: var(--h-text);
+  font-family: var(--h-font);
+  background: var(--h-sheet);
   border: 0;
-  border-radius: 1.5rem 1.5rem 0 0;
-  box-shadow: var(--shadow-float);
+  border-radius: 1.75rem 1.75rem 0 0;
+  box-shadow: 0 -10px 50px -10px rgb(0 0 0 / 0.35);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  transform: translateY(var(--drag, 0px));
+  overscroll-behavior: contain;
 }
 
 .home-sheet::backdrop {
-  background: var(--backdrop);
+  background: var(--h-backdrop);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 @media (min-width: 640px) {
   .home-sheet {
-    max-width: 26rem;
+    max-width: 24rem;
     margin: auto;
-    border-radius: 1.5rem;
+    border-radius: 1.75rem;
   }
 }
 
 .home-sheet__body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  gap: 1.1rem;
+  padding: 0.4rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+
+.home-sheet__grab {
+  align-self: center;
+  width: 100%;
+  height: 1.1rem;
+  background:
+    linear-gradient(var(--h-hairline), var(--h-hairline)) center / 2.25rem 0.28rem no-repeat;
+  border-radius: 9999px;
+  cursor: grab;
+  touch-action: none;
 }
 
 @media (min-width: 640px) {
+  .home-sheet__grab {
+    display: none;
+  }
+
   .home-sheet__body {
-    padding: var(--space-5);
+    padding-top: 1.25rem;
   }
 }
 
-.home-sheet__hero {
-  position: relative;
-  isolation: isolate;
+.home-sheet__head {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--subtle);
-  border-radius: var(--home-tile-radius);
-}
-
-.home-sheet__hero[data-lit] {
-  color: var(--home-ink);
-  background: var(--home-paper);
-}
-
-.home-sheet__hero[data-lit]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: radial-gradient(120% 120% at 10% 20%, rgb(var(--lamp) / 0.95), rgb(var(--lamp) / 0.3));
-  border-radius: inherit;
-  opacity: calc(0.3 + var(--level) * 0.6);
-}
-
-.home-sheet__bulb {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3.25rem;
-  height: 3.25rem;
-  flex: none;
-  color: var(--muted);
-  background: var(--surface);
-  border-radius: 9999px;
-}
-
-.home-sheet__hero[data-lit] .home-sheet__bulb {
-  color: var(--home-ink);
-  background: rgb(var(--lamp));
+  align-items: flex-start;
+  gap: 0.75rem;
 }
 
 .home-sheet__title {
   overflow: hidden;
-  font-size: 1.2rem;
-  font-weight: 800;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .home-sheet__state {
-  color: var(--muted);
-  font-size: var(--text-sm);
+  color: var(--h-text2);
+  font-size: 0.9375rem;
+  font-weight: 500;
 }
 
-.home-sheet__hero[data-lit] .home-sheet__state {
-  color: var(--home-ink-muted);
+.home-round,
+.home-power {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--h-glass-icon-ink);
+  background: var(--h-glass-icon);
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
 }
 
-.home-sheet__control {
+.home-round {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.home-power {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.home-power[aria-checked="true"] {
+  color: var(--h-amber);
+  background: var(--h-solid);
+  box-shadow: var(--h-shadow);
+}
+
+.home-sheet__controls {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  align-items: center;
+  gap: 1.25rem;
 }
 
-.home-sheet__label {
+/* Apple's brightness control: a tall pill that fills from the bottom. */
+.home-pill {
+  position: relative;
+  width: 9.5rem;
+  height: 15rem;
+  overflow: hidden;
+  background: var(--h-glass-icon);
+  border-radius: 2.25rem;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.home-pill__fill {
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--pct);
+  background: linear-gradient(180deg, #ffc93a, #ffb000);
+}
+
+.home-pill__glyph,
+.home-pill__value {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #1c1c1e;
+  pointer-events: none;
+}
+
+.home-pill__glyph {
+  bottom: 1rem;
   display: flex;
-  justify-content: space-between;
-  font-weight: 700;
-  font-size: var(--text-sm);
+  justify-content: center;
 }
 
-.home-sheet__ends {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: var(--text-xs);
+.home-pill__value {
+  bottom: 3.4rem;
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-/* A thick pill slider. Brightness fills in the area colour up to --pct; colour temperature
-   shows its range from warm to cool. */
-.home-range {
+.home-pill__input {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 2.75rem;
+  height: 100%;
   margin: 0;
-  background: transparent;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.home-range::-webkit-slider-runnable-track {
-  height: 2.75rem;
-  border-radius: 9999px;
-}
-
-.home-range::-moz-range-track {
-  height: 2.75rem;
-  border-radius: 9999px;
-}
-
-.home-range--brightness::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--domain) var(--pct), var(--subtle) var(--pct));
-}
-
-.home-range--brightness::-moz-range-track {
-  background: linear-gradient(to right, var(--domain) var(--pct), var(--subtle) var(--pct));
-}
-
-.home-range--kelvin::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--warm), var(--mid), var(--cool));
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
-.home-range--kelvin::-moz-range-track {
-  background: linear-gradient(to right, var(--warm), var(--mid), var(--cool));
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
-.home-range::-webkit-slider-thumb {
-  width: 2.75rem;
-  height: 2.75rem;
-  background: #fff;
-  border: 3px solid var(--surface);
-  border-radius: 9999px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
-  -webkit-appearance: none;
-}
-
-.home-range::-moz-range-thumb {
-  width: 2.75rem;
-  height: 2.75rem;
-  background: #fff;
-  border: 3px solid var(--surface);
-  border-radius: 9999px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
-}
-
-.home-range:focus-visible {
-  outline: 2px solid var(--domain);
+.home-pill:focus-within {
+  outline: 2px solid var(--h-blue);
   outline-offset: 3px;
-  border-radius: 9999px;
 }
 
-/* == Automations == */
+.home-sheet__side {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
 
-.home-automations {
-  max-width: 48rem;
+.home-swatches {
+  display: flex;
+  flex: 1;
+  gap: 0.6rem;
+}
+
+.home-swatch {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  background: var(--swatch);
+  border: 0;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+  cursor: pointer;
+}
+
+.home-swatch[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12), 0 0 0 3px var(--h-sheet), 0 0 0 5px var(--h-text);
+}
+
+/* The bulbs of a group. */
+.home-list,
+.home-inset {
+  overflow: hidden;
+  background: var(--h-inset);
+  border-radius: 1rem;
   list-style: none;
 }
 
-.home-automation {
-  display: grid;
-  grid-template-areas:
-    "glyph text switch"
-    ". run .";
-  grid-template-columns: auto minmax(0, 1fr) auto;
+.home-list__row {
+  display: flex;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
-  min-height: 4rem;
-  padding: var(--space-3) var(--space-4);
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3rem;
+  padding: 0 1rem;
 }
 
-.home-automation__glyph { grid-area: glyph; }
-.home-automation__text { grid-area: text; }
-.home-automation__run { grid-area: run; justify-self: start; }
-.home-automation .switch { grid-area: switch; }
+.home-list__row + .home-list__row {
+  background:
+    linear-gradient(var(--h-hairline), var(--h-hairline)) top left 1rem / calc(100% - 1rem) 1px no-repeat;
+}
 
-@media (min-width: 640px) {
-  .home-automation {
-    grid-template-areas: "glyph text run switch";
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+.home-list__name {
+  font-size: 1rem;
+}
+
+/* == iOS switch: 51 by 31, white knob == */
+
+.home-app button.home-switch {
+  position: relative;
+  flex: none;
+  width: 3.1875rem;
+  height: 1.9375rem;
+  padding: 0;
+  background: var(--h-track);
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+
+.home-app button.home-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.6875rem;
+  height: 1.6875rem;
+  background: #fff;
+  border-radius: 9999px;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.15), 0 1px 1px rgb(0 0 0 / 0.16), 0 3px 1px rgb(0 0 0 / 0.1);
+}
+
+.home-app button.home-switch[aria-checked="true"] {
+  background: var(--h-green);
+}
+
+.home-app button.home-switch[aria-checked="true"]::after {
+  transform: translateX(1.25rem);
+}
+
+/* == Automation: grouped inset lists == */
+
+.home-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  max-width: 48rem;
+  margin-inline: 0;
+}
+
+@media (min-width: 1024px) {
+  .home-groups {
+    margin-inline: auto;
   }
 }
 
-.home-automation + .home-automation {
-  border-top: 1px solid var(--border);
+.home-group__title {
+  margin: 0 1rem 0.4rem;
+  color: var(--h-text2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.home-inset {
+  box-shadow: inset 0 0 0 1px var(--h-glass-edge);
+}
+
+.home-automation {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.home-automation + .home-automation .home-automation__row {
+  background:
+    linear-gradient(var(--h-hairline), var(--h-hairline)) top right / calc(100% - 3.5rem) 1px no-repeat;
+}
+
+.home-automation__row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 3.75rem;
+  padding: 0.5rem 1rem 0.5rem 0.9rem;
+  background-color: transparent;
 }
 
 .home-automation__glyph {
@@ -557,56 +919,215 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  color: var(--muted);
-  background: var(--subtle);
-  border-radius: 9999px;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: #fff;
+  background: #8e8e93;
+  border-radius: 0.5rem;
 }
 
-.home-automation[data-enabled] .home-automation__glyph {
-  color: var(--domain);
-  background: color-mix(in srgb, var(--domain) 14%, transparent);
+.home-automation__glyph[data-group="heater"] {
+  background: #e8530f;
+}
+
+.home-automation__glyph[data-group="modes"] {
+  background: #5856d6;
+}
+
+.home-automation__glyph:not([data-group="heater"], [data-group="modes"]) {
+  background: #0a74e0;
+}
+
+.home-automation:not([data-enabled]) .home-automation__glyph {
+  background: #8e8e93;
+}
+
+.home-automation__text {
+  flex: 1;
+  min-width: 0;
 }
 
 .home-automation__name {
-  font-weight: 700;
-  line-height: 1.25;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .home-automation__meta {
-  margin-top: 0.1rem;
-  color: var(--muted);
-  font-size: var(--text-xs);
+  color: var(--h-text2);
+  font-size: 0.8125rem;
+  line-height: 1.3;
 }
 
-/* == Motion: only what answers a tap, and none when reduced motion is asked for == */
+/* Swipe action: Run now sits behind the row and the row slides over it. */
+.home-automation__row {
+  position: relative;
+}
+
+.home-automation__run {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5.5rem;
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  background: var(--h-orange);
+  border: 0;
+  border-radius: 0;
+  visibility: hidden;
+}
+
+.home-automation[data-open] .home-automation__run {
+  visibility: visible;
+}
+
+.home-automation[data-open] .home-automation__row {
+  transform: translateX(-5.5rem);
+  background-color: var(--h-sheet);
+}
+
+.home-automation__more {
+  position: absolute;
+  left: 0;
+  top: 0.25rem;
+  padding: 0.2rem 0.6rem;
+  color: var(--h-solid-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--h-solid);
+  border: 0;
+  border-radius: 9999px;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.home-automation__more:focus-visible {
+  clip-path: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* == Tab bar: translucent iOS bar over the wallpaper == */
+
+.home-app .tab-bar {
+  background: var(--h-bar);
+  border-color: var(--h-hairline);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+}
+
+.home-app .tab-bar__list {
+  max-width: 28rem;
+}
+
+.home-app .tab-bar__link {
+  gap: 0.15rem;
+  min-height: 3.1rem;
+  padding-top: 0.2rem;
+  color: var(--h-bar-ink);
+  font-family: var(--h-font);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.home-app .tab-bar__link:hover {
+  color: var(--h-bar-ink);
+}
+
+.home-app .tab-bar__icon,
+.home-app .tab-bar__link[aria-current="page"] .tab-bar__icon,
+.home-app .tab-bar__link:hover .tab-bar__icon {
+  width: 2rem;
+  height: 1.7rem;
+  background: none;
+  border-radius: 0;
+}
+
+.home-app .tab-bar__link[aria-current="page"] {
+  color: var(--h-bar-active);
+}
+
+.home-app .tab-bar__link[aria-current="page"] .tab-bar__icon {
+  color: #ff9500;
+}
+
+.home-app .tab-bar__link[aria-current="page"] .tab-bar__icon svg {
+  fill: rgb(255 149 0 / 0.18);
+}
+
+@media (min-width: 1024px) {
+  .home-app .tab-bar {
+    border-radius: 1.75rem;
+    box-shadow: var(--h-shadow);
+  }
+
+  .home-app .tab-bar__link,
+  .home-app .tab-bar--dense .tab-bar__link {
+    flex-direction: column;
+    gap: 0.1rem;
+    min-height: 3.4rem;
+    padding: 0.2rem 1.6rem 0;
+    font-size: 0.6875rem;
+  }
+
+  .home-app .tab-bar__icon {
+    width: 2rem;
+    height: 1.7rem;
+  }
+}
+
+/* == Motion: tiles press in and spring back; none of it when reduced motion is asked for == */
 
 @media (prefers-reduced-motion: no-preference) {
   .home-tile,
-  .home-tile__glyph,
   .home-scene,
+  .home-roomtoggle,
+  .home-power,
+  .home-swatch {
+    transition:
+      background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease,
+      transform 0.2s var(--h-ease);
+  }
+
+  .home-tile__glyph,
   .home-scene__glyph {
-    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.35s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  .home-tile[data-lit]::before,
-  .home-sheet__hero[data-lit]::before {
-    transition: opacity 0.35s ease;
+  .home-tile:has(.home-tile__main:active:not(:disabled)),
+  .home-scene:active,
+  .home-power:active {
+    transform: scale(0.96);
   }
 
-  .home-tile__main:active:not(:disabled),
-  .home-scene:active {
-    transform: scale(0.97);
-    transition: transform 0.1s ease;
+  .home-pill__fill {
+    transition: height 0.2s ease-out;
+  }
+
+  .home-app button.home-switch,
+  .home-app button.home-switch::after {
+    transition: background-color 0.2s ease, transform 0.2s var(--h-ease);
+  }
+
+  .home-automation__row {
+    transition: transform 0.25s var(--h-ease);
   }
 
   .home-sheet[open] {
-    animation: home-sheet-up 0.25s ease-out;
+    animation: home-sheet-up 0.3s var(--h-ease);
   }
 }
 
 @keyframes home-sheet-up {
-  from { transform: translateY(1.5rem); opacity: 0; }
-  to { transform: none; opacity: 1; }
+  from { translate: 0 2rem; opacity: 0; }
+  to { translate: 0 0; opacity: 1; }
 }

@@ -1,90 +1,73 @@
 'use client'
 
-import { useRef, type CSSProperties } from 'react'
-import { AdjustGlyph, DeviceGlyph } from './glyphs'
+import type { CSSProperties } from 'react'
+import { DeviceGlyph, HeaterGlyph } from './glyphs'
 import { useHome } from './HomeProvider'
-import { formatTemp, hasLightControls, isOn, isUnavailable, lampColour, stateLabel, type Device } from './lib'
+import { useLongPress } from './useLongPress'
+import { formatTemp, hasLightControls, isColourLamp, isOn, isUnavailable, lampColour, stateLabel } from './lib'
+import type { Tile } from './view'
 
-const LONG_PRESS_MS = 450
-
-/** Pointer handlers that call `onLongPress` after a held press and swallow the click that follows. */
-function useLongPress(onLongPress: (() => void) | undefined) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const fired = useRef(false)
-  const cancel = () => {
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = null
-  }
-  if (!onLongPress) return { handlers: {}, consumed: () => false }
-  return {
-    handlers: {
-      onPointerDown: () => {
-        fired.current = false
-        cancel()
-        timer.current = setTimeout(() => {
-          fired.current = true
-          onLongPress()
-        }, LONG_PRESS_MS)
-      },
-      onPointerUp: cancel,
-      onPointerLeave: cancel,
-      onPointerCancel: cancel,
-      onContextMenu: (e: React.MouseEvent) => {
-        e.preventDefault()
-        cancel()
-        fired.current = true
-        onLongPress()
-      },
-    },
-    consumed: () => {
-      const was = fired.current
-      fired.current = false
-      return was
-    },
-  }
+function TileGlyph({ tile }: { tile: Tile }) {
+  return tile.kind === 'heater' ? <HeaterGlyph size={20} /> : <DeviceGlyph domain={tile.device.domain} size={20} />
 }
 
-function ClimateTile({ device }: { device: Device }) {
+function ClimateTile({ tile }: { tile: Tile }) {
+  const { device } = tile
   const current = device.attributes.current_temperature
   const label = stateLabel(device)
+  const heating = device.attributes.hvac_action === 'heating' || device.attributes.hvac_action === 'cooling'
   return (
     <div
-      className="home-tile home-tile--climate"
-      data-active={device.attributes.hvac_action === 'heating' || device.attributes.hvac_action === 'cooling' || undefined}
+      className="home-tile"
+      data-kind="climate"
+      data-on={heating || undefined}
       role="group"
-      aria-label={`${device.name}, ${current !== undefined ? `${formatTemp(current)} now, ` : ''}${label}`}
+      aria-label={`${tile.title}, ${current !== undefined ? `${formatTemp(current)} now, ` : ''}${label}`}
     >
-      <span className="home-tile__glyph" aria-hidden>
-        <DeviceGlyph domain="climate" />
-      </span>
-      <span className="home-tile__temp" aria-hidden>{current !== undefined ? formatTemp(current) : '–'}</span>
-      <span className="home-tile__name" aria-hidden>{device.name}</span>
-      <span className="home-tile__state" aria-hidden>{label}</span>
+      <div className="home-tile__main">
+        <span className="home-tile__glyph home-tile__glyph--temp" aria-hidden>
+          {current !== undefined ? formatTemp(current) : '–'}
+        </span>
+        <span className="home-tile__text" aria-hidden>
+          <span className="home-tile__name">{tile.title}</span>
+          <span className="home-tile__state">{label}</span>
+        </span>
+      </div>
     </div>
   )
 }
 
-// One device: tap toggles it; a light that dims opens its sheet on a long press, a right click or
-// the corner button (the keyboard and screen-reader route).
-export function DeviceTile({ device, onAdjust }: { device: Device; onAdjust: (entityId: string) => void }) {
+function stateText(tile: Tile): string {
+  const { device, members } = tile
+  if (tile.kind === 'light' && members.length > 0 && isOn(device)) {
+    const on = members.filter(isOn).length
+    const pct = device.attributes.brightness_pct
+    return on < members.length ? `${on} of ${members.length} on` : pct !== undefined ? `${Math.round(pct)}%` : 'On'
+  }
+  return stateLabel(device)
+}
+
+// One tile: a tap toggles it. A light (or light group) opens its sheet on a long press, a right
+// click, or the focusable button that only shows itself to the keyboard and screen readers.
+export function DeviceTile({ tile, onAdjust }: { tile: Tile; onAdjust: (entityId: string) => void }) {
   const { act } = useHome()
+  const { device } = tile
   const adjustable = hasLightControls(device)
   const { handlers, consumed } = useLongPress(adjustable ? () => onAdjust(device.entity_id) : undefined)
 
-  if (device.domain === 'climate') return <ClimateTile device={device} />
+  if (tile.kind === 'climate') return <ClimateTile tile={tile} />
 
   const on = isOn(device)
   const unavailable = isUnavailable(device)
-  const lit = device.domain === 'light' && on
-  const style = lit
-    ? ({ '--lamp': lampColour(device), '--level': (device.attributes.brightness_pct ?? 100) / 100 } as CSSProperties)
-    : undefined
+  const colour = device.domain === 'light' && on && isColourLamp(device)
+  const style = colour ? ({ '--lamp': lampColour(device) } as CSSProperties) : undefined
 
   return (
     <div
       className="home-tile"
+      data-kind={tile.kind}
       data-on={on || undefined}
-      data-lit={lit || undefined}
+      data-colour={colour || undefined}
       data-unavailable={unavailable || undefined}
       style={style}
     >
@@ -92,6 +75,7 @@ export function DeviceTile({ device, onAdjust }: { device: Device; onAdjust: (en
         type="button"
         role="switch"
         aria-checked={on}
+        aria-label={device.name}
         disabled={unavailable || !device.controllable}
         className="home-tile__main"
         onClick={() => {
@@ -100,10 +84,12 @@ export function DeviceTile({ device, onAdjust }: { device: Device; onAdjust: (en
         {...handlers}
       >
         <span className="home-tile__glyph" aria-hidden>
-          <DeviceGlyph domain={device.domain} />
+          <TileGlyph tile={tile} />
         </span>
-        <span className="home-tile__name">{device.name}</span>
-        <span className="home-tile__state">{stateLabel(device)}</span>
+        <span className="home-tile__text">
+          <span className="home-tile__name">{tile.title}</span>
+          <span className="home-tile__state">{stateText(tile)}</span>
+        </span>
       </button>
       {adjustable && !unavailable && (
         <button
@@ -112,7 +98,7 @@ export function DeviceTile({ device, onAdjust }: { device: Device; onAdjust: (en
           aria-label={`Brightness and colour, ${device.name}`}
           onClick={() => onAdjust(device.entity_id)}
         >
-          <AdjustGlyph size={18} />
+          Adjust
         </button>
       )}
     </div>

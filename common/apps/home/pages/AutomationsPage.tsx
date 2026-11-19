@@ -1,11 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { AutomationGlyph } from '../glyphs'
+import { useEffect, useRef, useState } from 'react'
+import { AutomationGlyph, HeaterGlyph, HomeTabGlyph } from '../glyphs'
 import { useHome } from '../HomeProvider'
 import { ranAgo } from '../lib'
+import { useLongPress } from '../useLongPress'
+import { groupAutomations, type AutomationRow } from '../view'
 
 const TICK_MS = 30_000
+const SWIPE_PX = 36
 
 /** The current time, refreshed often enough for "5 minutes ago". */
 function useNow(): number {
@@ -17,65 +20,133 @@ function useNow(): number {
   return now
 }
 
-// Every Home Assistant automation: when it last ran, a switch to enable or disable it, and Run now.
+function GroupGlyph({ group }: { group: string }) {
+  if (group === 'heater') return <HeaterGlyph size={18} />
+  if (group === 'modes') return <HomeTabGlyph size={18} />
+  return <AutomationGlyph size={18} />
+}
+
+// A row: name, when it last ran, and an iOS switch. Run now is the row's secondary action,
+// revealed like a swipe action by swiping left, a long press, a right click, or the keyboard-only
+// "More" button.
+function AutomationItem({ row, groupId, now, open, onOpen, onRun, running }: {
+  row: AutomationRow
+  groupId: string
+  now: number
+  open: boolean
+  onOpen: (open: boolean) => void
+  onRun: () => void
+  running: boolean
+}) {
+  const { act } = useHome()
+  const { automation } = row
+  const ago = ranAgo(automation.last_triggered, now)
+  const start = useRef<number | null>(null)
+  const { handlers, consumed } = useLongPress(() => onOpen(!open))
+
+  return (
+    <li
+      className="home-automation"
+      data-enabled={automation.enabled || undefined}
+      data-open={open || undefined}
+      onPointerDown={(e) => { start.current = e.clientX }}
+      onPointerMove={(e) => {
+        if (start.current === null) return
+        const dx = e.clientX - start.current
+        if (dx < -SWIPE_PX) { start.current = null; onOpen(true) }
+        else if (dx > SWIPE_PX) { start.current = null; onOpen(false) }
+      }}
+      onPointerUp={() => { start.current = null }}
+      onPointerCancel={() => { start.current = null }}
+    >
+      <div className="home-automation__row" {...handlers} onClickCapture={(e) => { if (consumed()) e.stopPropagation() }}>
+        <span className="home-automation__glyph" data-group={groupId} aria-hidden><GroupGlyph group={groupId} /></span>
+        <div className="home-automation__text">
+          <p className="home-automation__name">{row.title}</p>
+          <p className="home-automation__meta">
+            {running ? 'Running now' : ago ? `Last ran ${ago}` : 'Never run'}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="home-automation__more"
+          aria-label={`More actions, ${automation.name}`}
+          aria-expanded={open}
+          onClick={() => onOpen(!open)}
+        >
+          More
+        </button>
+        <button
+          type="button"
+          role="switch"
+          className="home-switch"
+          aria-checked={automation.enabled}
+          aria-label={automation.name}
+          onClick={() => act(automation.entity_id, { action: automation.enabled ? 'disable' : 'enable' })}
+        />
+      </div>
+      <button
+        type="button"
+        className="home-automation__run"
+        aria-label={`Run now, ${automation.name}`}
+        tabIndex={open ? 0 : -1}
+        onClick={onRun}
+      >
+        Run now
+      </button>
+    </li>
+  )
+}
+
+// Every Home Assistant automation in grouped inset lists (by the first part of its name).
 export function AutomationsPage() {
   const { state, act } = useHome()
   const now = useNow()
-  const [ran, setRan] = useState<string | null>(null)
+  const [running, setRunning] = useState<string | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
   if (!state) return null
 
-  const automations = [...state.automations].sort((a, b) => a.name.localeCompare(b.name))
+  const groups = groupAutomations(state.automations)
+  const enabled = state.automations.filter((a) => a.enabled).length
 
   return (
-    <div className="site-container pb-10">
-      <header className="home-hero">
-        <h1 className="home-hero__name">Automations</h1>
-        <p className="home-hero__status">
-          {automations.filter((a) => a.enabled).length} of {automations.length} enabled
-        </p>
+    <div className="home-page">
+      <header className="site-container home-hero">
+        <h1 className="home-hero__name">Automation</h1>
+        <p className="home-hero__sub">{enabled} of {state.automations.length} on</p>
       </header>
 
-      {automations.length === 0 ? (
-        <p className="mt-8 text-sm text-muted">No automations yet. Automations you create in Home Assistant show up here.</p>
+      {groups.length === 0 ? (
+        <p className="site-container home-empty">
+          No automations yet. Automations you create in Home Assistant show up here.
+        </p>
       ) : (
-        <ul className="home-automations card card--flush mt-6">
-          {automations.map((automation) => {
-            const ago = ranAgo(automation.last_triggered, now)
-            const nameId = `home-auto-${automation.entity_id}`
-            return (
-              <li key={automation.entity_id} className="home-automation" data-enabled={automation.enabled || undefined}>
-                <span className="home-automation__glyph" aria-hidden><AutomationGlyph size={20} /></span>
-                <div className="home-automation__text">
-                  <p id={nameId} className="home-automation__name">{automation.name}</p>
-                  <p className="home-automation__meta">
-                    {ran === automation.entity_id ? 'Running now' : ago ? `Last ran ${ago}` : 'Never run'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="home-automation__run btn btn--sm btn--soft"
-                  aria-describedby={nameId}
-                  onClick={() => {
-                    setRan(automation.entity_id)
-                    act(automation.entity_id, { action: 'trigger' }).finally(() =>
-                      setRan((id) => (id === automation.entity_id ? null : id)),
-                    )
-                  }}
-                >
-                  Run now
-                </button>
-                <button
-                  type="button"
-                  role="switch"
-                  className="switch"
-                  aria-checked={automation.enabled}
-                  aria-labelledby={nameId}
-                  onClick={() => act(automation.entity_id, { action: automation.enabled ? 'disable' : 'enable' })}
-                />
-              </li>
-            )
-          })}
-        </ul>
+        <div className="site-container home-groups">
+          {groups.map((group) => (
+            <section key={group.id} aria-labelledby={`home-group-${group.id}`}>
+              <h2 id={`home-group-${group.id}`} className="home-group__title">{group.title}</h2>
+              <ul className="home-inset">
+                {group.rows.map((row) => (
+                  <AutomationItem
+                    key={row.automation.entity_id}
+                    row={row}
+                    groupId={group.id}
+                    now={now}
+                    open={open === row.automation.entity_id}
+                    onOpen={(next) => setOpen(next ? row.automation.entity_id : null)}
+                    running={running === row.automation.entity_id}
+                    onRun={() => {
+                      const id = row.automation.entity_id
+                      setRunning(id)
+                      setOpen(null)
+                      act(id, { action: 'trigger' }).finally(() => setRunning((r) => (r === id ? null : r)))
+                    }}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
     </div>
   )

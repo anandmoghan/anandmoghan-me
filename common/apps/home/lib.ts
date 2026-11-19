@@ -49,6 +49,10 @@ export interface HomeState {
   unassigned: Device[]
   scenes: Scene[]
   automations: Automation[]
+  /** Light groups that belong to no area (optional: the API may send them in `unassigned`). */
+  light_groups?: Device[]
+  /** Input booleans used as house modes (optional: the API may send them in `unassigned`). */
+  modes?: Device[]
 }
 
 export type HomeAction =
@@ -73,9 +77,14 @@ export function hasColourTemp(device: Device): boolean {
   return min_kelvin !== undefined && max_kelvin !== undefined && max_kelvin > min_kelvin
 }
 
-/** Every device, rooms first, then unassigned. */
+/** Every device, rooms first, then unassigned, light groups and modes. */
 export function allDevices(state: HomeState): Device[] {
-  return [...state.rooms.flatMap((room) => room.devices), ...state.unassigned]
+  return [
+    ...state.rooms.flatMap((room) => room.devices),
+    ...state.unassigned,
+    ...(state.light_groups ?? []),
+    ...(state.modes ?? []),
+  ]
 }
 
 /** Replaces one device wherever it appears. */
@@ -87,6 +96,8 @@ export function withDevice(state: HomeState, next: Device): HomeState {
     ...state,
     rooms: state.rooms.map((room) => ({ ...room, devices: swap(room.devices) })),
     unassigned: swap(state.unassigned),
+    ...(state.light_groups ? { light_groups: swap(state.light_groups) } : {}),
+    ...(state.modes ? { modes: swap(state.modes) } : {}),
   }
 }
 
@@ -121,20 +132,6 @@ export function optimisticDevice(device: Device, action: HomeAction): Device {
     default:
       return device
   }
-}
-
-/** The header's one-line summary, for example "3 lights on, 1 other device on, heating". */
-export function statusLine(state: HomeState): string {
-  const devices = allDevices(state)
-  const lights = devices.filter((d) => d.domain === 'light' && isOn(d)).length
-  const others = devices.filter((d) => d.domain !== 'light' && d.domain !== 'climate' && isOn(d)).length
-  const heating = devices.some((d) => d.domain === 'climate' && d.attributes.hvac_action === 'heating')
-  const parts = [
-    lights === 0 ? 'All lights off' : `${lights} ${lights === 1 ? 'light' : 'lights'} on`,
-    ...(others > 0 ? [`${others} other ${others === 1 ? 'device' : 'devices'} on`] : []),
-    ...(heating ? ['heating'] : []),
-  ]
-  return parts.join(', ')
 }
 
 /** What a tile says under the device name. */
@@ -176,6 +173,12 @@ export function kelvinToRgb(kelvin: number): [number, number, number] {
 }
 
 const WARM_WHITE = 2700
+
+/** True when the bulb shows a colour of its own rather than a white temperature. */
+export function isColourLamp(device: Device): boolean {
+  const { rgb_color, color_mode } = device.attributes
+  return Boolean(rgb_color) && color_mode !== 'color_temp'
+}
 
 /** The colour a lit tile glows in: the bulb's own colour, else its white temperature. */
 export function lampColour(device: Device): string {

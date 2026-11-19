@@ -68,12 +68,73 @@ export function AutomationGlyph({ size }: GlyphProps) {
   )
 }
 
-export function AdjustGlyph({ size }: GlyphProps) {
+export function HeaterGlyph({ size }: GlyphProps) {
   return (
     <Glyph size={size}>
-      <path d="M4.5 8h8M17.5 8h2M4.5 16h2M11.5 16h8" />
-      <circle cx="15" cy="8" r="2.2" />
-      <circle cx="9" cy="16" r="2.2" />
+      <path d="M12 3.5c.4 3-3.8 4.6-3.8 8.6a3.8 3.8 0 0 0 7.6 0c0-1.5-.7-2.5-1.5-3.4-.2 1.2-.8 1.9-1.6 2.3.6-3-.1-5.5-.7-7.5Z" />
+      <path d="M9 20.5h6" />
+    </Glyph>
+  )
+}
+
+export function SunGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <circle cx="12" cy="12" r="3.8" />
+      <path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6" />
+    </Glyph>
+  )
+}
+
+export function MoonGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1Z" />
+    </Glyph>
+  )
+}
+
+export function AwayGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <path d="M14 4.5h4.5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H14" />
+      <path d="M4.5 12H14M10.5 8.5 14 12l-3.5 3.5" />
+    </Glyph>
+  )
+}
+
+// The tab-bar icons: Apple's "house" and an automation check-in-a-circle, drawn as plain lines.
+export function HomeTabGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <path d="M3.5 11.2 12 4l8.5 7.2" />
+      <path d="M5.8 9.6V19a1 1 0 0 0 1 1h10.4a1 1 0 0 0 1-1V9.6" />
+      <path d="M10 20v-5.2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V20" />
+    </Glyph>
+  )
+}
+
+export function AutomationTabGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m8.2 12.4 2.7 2.7 5-5.6" />
+    </Glyph>
+  )
+}
+
+export function ChevronGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <path d="m9.5 5.5 6.5 6.5-6.5 6.5" />
+    </Glyph>
+  )
+}
+
+export function CloseGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <path d="m6.5 6.5 11 11M17.5 6.5l-11 11" />
     </Glyph>
   )
 }

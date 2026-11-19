@@ -21,6 +21,7 @@
     "rules:check": "node scripts/merge-rules.mjs --check",
     "test:rules": "npm run rules:check && firebase emulators:exec --only firestore,auth,storage --project demo-anandmoghan-me \"node --test --test-concurrency=1 tests/rules/*.test.mjs\"",
     "test:pwa": "node --import tsx --test tests/pwa/*.test.ts",
+    "test:home": "node --import tsx --test tests/home/*.test.ts",
     "test:security": "node --import tsx --test tests/security/*.test.ts",
     "test:merge": "firebase emulators:exec --only firestore,auth --project demo-anandmoghan-me \"npm --prefix functions test\"",
     "seed-roles": "tsx scripts/seed-roles.ts",
