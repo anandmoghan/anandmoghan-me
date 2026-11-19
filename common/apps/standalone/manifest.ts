@@ -18,21 +18,12 @@ function tokenColor(css: string, name: string): string {
   return match[1]
 }
 
-/** The app's accent in the light and dark themes: its area token in tokens.css, or for a private app the
- * colours in common/apps/<id>/standalone.json (gitignored with the rest of its code). */
+/** The app's accent in the light and dark themes: its area token in tokens.css. */
 export function accentColors(app: StandaloneApp): AccentColors {
-  if (app.domain) {
-    const css = readFileSync(TOKENS, 'utf8')
-    const darkAt = css.indexOf(DARK_ROOT)
-    if (darkAt < 0) throw new Error(`tokens.css has no ${DARK_ROOT} block`)
-    return { light: tokenColor(css.slice(0, darkAt), app.domain), dark: tokenColor(css.slice(darkAt), app.domain) }
-  }
-  const file = path.join(process.cwd(), 'common', 'apps', app.id, 'standalone.json')
-  const { colors } = JSON.parse(readFileSync(file, 'utf8')) as { colors?: Partial<AccentColors> }
-  if (typeof colors?.light !== 'string' || typeof colors.dark !== 'string') {
-    throw new Error(`${file}: needs {"colors": {"light": "#rrggbb", "dark": "#rrggbb"}}`)
-  }
-  return { light: colors.light, dark: colors.dark }
+  const css = readFileSync(TOKENS, 'utf8')
+  const darkAt = css.indexOf(DARK_ROOT)
+  if (darkAt < 0) throw new Error(`tokens.css has no ${DARK_ROOT} block`)
+  return { light: tokenColor(css.slice(0, darkAt), app.domain), dark: tokenColor(css.slice(darkAt), app.domain) }
 }
 
 /** The page background of the light theme (tokens.css --bg): the splash screen behind the icon. */

@@ -88,10 +88,10 @@ Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy
   runs in `<head>`); `npm run build` moves Next's inline page data into
   `/_next/static/chunks/inline/` (`scripts/externalize-inline-scripts.ts`) and fails on any other
   inline script. A new external host (image, font, API) needs a CSP entry, and `npm run test:security`.
-- Camera and microphone are denied everywhere except `/apps/meetings/**` (Permissions-Policy).
-- The Mac-side API is `common/api/config.ts`: `NEXT_PUBLIC_API_BASE` (default
-  `https://api.anandmoghan.me`), with one prefix per app (`/family`, `/ladder`, `/planner`,
-  `/meetings`). The same-origin Cloud Function is `FUNCTIONS_BASE` in `common/firebase/client.ts`.
+- Camera and microphone are denied everywhere (Permissions-Policy).
+- The home-server API is `common/api/config.ts`: `NEXT_PUBLIC_API_BASE` (default
+  `https://api.anandmoghan.me`), with one prefix per app (`/family`, `/ladder`, `/planner`). The
+  same-origin Cloud Function is `FUNCTIONS_BASE` in `common/firebase/client.ts`.
 - HTML from people or agents (ladder job descriptions, company notes, resumes) renders only through
   `common/security/SafeHtml.tsx` (DOMPurify, strict allowlist). Blog posts, materials and KaTeX output
   are author-controlled and rendered as built.
@@ -99,7 +99,7 @@ Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy
 ## Standalone apps
 
 Every app under `/apps` installs on its own. `common/apps/standalone/apps.ts` lists them (the hub
-registry, private apps included, plus share and Nila); its scope is its path with no trailing slash
+registry, plus share and Nila); its scope is its path with no trailing slash
 (`trailingSlash: false`). Each layout sets `metadata = standaloneMetadata('<id>')` and
 `viewport = standaloneViewport('<id>')` (manifest link, icons, Apple tags, accent theme-color).
 `npm run build` writes `public/apps/<id>.webmanifest` before the build
@@ -107,8 +107,7 @@ registry, private apps included, plus share and Nila); its scope is its path wit
 `common/apps/standalone/sw.js` per app to `out/apps/<id>-sw.js` after it (`scripts/stamp-app-sw.ts`).
 `StandaloneRuntime` (in `app/apps/layout.tsx`) registers the current app's worker in production and
 holds the install prompt (`useInstallPrompt`). The worker caches only the static export, never API
-or Firebase responses. A private app adds `common/apps/<id>/standalone.json` with
-`{"colors": {"light", "dark"}}` and its tile at `public/apps/<id>/icons/<id>.svg`.
+or Firebase responses.
 
 ## Restricted apps and materials
 

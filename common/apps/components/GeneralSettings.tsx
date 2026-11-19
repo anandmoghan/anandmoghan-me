@@ -70,7 +70,7 @@ export function GeneralSettings() {
   }, [user])
 
   // Same visibility rule as the hub.
-  const installable = appRegistry.filter((app) => isListed(app, isAdmin, apps))
+  const installable = appRegistry.filter((app) => isListed(app, isAdmin))
 
   if (loading) return <Spinner text="Loading" />
 

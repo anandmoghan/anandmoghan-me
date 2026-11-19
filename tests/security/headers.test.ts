@@ -28,7 +28,7 @@ test("framing, plugins, base and form targets are locked down", () => {
 test("the API is reachable at its base and nowhere else on anandmoghan.me", () => {
   const connect = directives.get("connect-src") ?? [];
   assert.ok(connect.includes("https://api.anandmoghan.me"));
-  assert.ok(connect.includes("wss://api.anandmoghan.me"));
+  assert.ok(!connect.some((s) => s.startsWith("wss:")));
   assert.ok(!connect.some((s) => s.includes("familyapi")));
 });
 
@@ -38,9 +38,7 @@ test("the other security headers apply everywhere", () => {
   assert.equal(header("**", "Permissions-Policy"), "camera=(), microphone=()");
 });
 
-test("camera and microphone are allowed for the site only under /apps/meetings, after the default", () => {
-  const sources = blocks.map((b) => b.source);
-  const meetings = "/apps/meetings{,/**}";
-  assert.equal(header(meetings, "Permissions-Policy"), "camera=(self), microphone=(self)");
-  assert.ok(sources.indexOf(meetings) > sources.indexOf("**"), "the later block wins in Hosting");
+test("no path overrides the site-wide Permissions-Policy", () => {
+  const overrides = blocks.filter((b) => b.source !== "**" && b.headers.some((h) => h.key === "Permissions-Policy"));
+  assert.deepEqual(overrides, []);
 });

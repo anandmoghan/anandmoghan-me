@@ -10,11 +10,10 @@ import { appFiles, scopeFiles, staticFilesIn, stampWorker } from "../../scripts/
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
-const tracked = standaloneApps.filter((app) => !app.private);
 
-test("every tracked app under /apps is standalone, each with its own scope", () => {
+test("every app under /apps is standalone, each with its own scope", () => {
   assert.deepEqual(
-    tracked.map((app) => app.id).sort(),
+    standaloneApps.map((app) => app.id).sort(),
     ["admin", "expense", "family", "ladder", "materials", "nila", "planner", "share", "time", "wealth"],
   );
   assert.equal(new Set(standaloneApps.map((app) => app.scope)).size, standaloneApps.length);
@@ -29,8 +28,8 @@ test("the narrowest scope wins", () => {
   assert.equal(standaloneAppFor("/apps"), undefined);
 });
 
-test("each tracked layout links its app's metadata and viewport", () => {
-  for (const app of tracked) {
+test("each layout links its app's metadata and viewport", () => {
+  for (const app of standaloneApps) {
     const layout = read(`app${app.scope}/layout.tsx`);
     assert.match(layout, new RegExp(`standaloneMetadata\\(["']${app.id}["']\\)`), app.id);
     assert.match(layout, new RegExp(`standaloneViewport\\(["']${app.id}["']\\)`), app.id);
@@ -38,7 +37,7 @@ test("each tracked layout links its app's metadata and viewport", () => {
 });
 
 test("each manifest is installable: standalone, start_url in scope, 192 and 512 icons plus a maskable one", () => {
-  for (const app of tracked) {
+  for (const app of standaloneApps) {
     const m = webManifest(app);
     assert.equal(m.display, "standalone");
     assert.equal(m.start_url, app.scope);
@@ -51,7 +50,7 @@ test("each manifest is installable: standalone, start_url in scope, 192 and 512 
 });
 
 test("every file the worker saves besides pages is in public/ (icons built by prebuild)", () => {
-  for (const app of tracked) {
+  for (const app of standaloneApps) {
     for (const file of appFiles(app)) {
       if (file.endsWith(".webmanifest")) continue;
       assert.ok(existsSync(path.join(root, "public", file)), file);

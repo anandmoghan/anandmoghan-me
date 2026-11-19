@@ -4,28 +4,21 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadEnvConfig } from "@next/env";
+import { serviceWorkerUrl, standaloneApps } from "../common/apps/standalone/apps";
+import { precacheList, stampWorker } from "./app-precache";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "out");
+const template = readFileSync(path.join(root, "common", "apps", "standalone", "sw.js"), "utf8");
+const buildId = readFileSync(path.join(root, ".next", "BUILD_ID"), "utf8").trim();
 
-async function main() {
-  loadEnvConfig(root);
-  const { serviceWorkerUrl, standaloneApps } = await import("../common/apps/standalone/apps");
-  const { precacheList, stampWorker } = await import("./app-precache");
-  const template = readFileSync(path.join(root, "common", "apps", "standalone", "sw.js"), "utf8");
-  const buildId = readFileSync(path.join(root, ".next", "BUILD_ID"), "utf8").trim();
-
-  for (const app of standaloneApps) {
-    const precache = precacheList(out, app, standaloneApps);
-    const sw = stampWorker(template, {
-      app: `const APP = ${JSON.stringify({ id: app.id, scope: app.scope })};`,
-      build: `const BUILD = ${JSON.stringify(buildId)};`,
-      precache: `const PRECACHE = ${JSON.stringify(precache)};`,
-    });
-    writeFileSync(path.join(out, serviceWorkerUrl(app)), sw);
-    console.log(`${serviceWorkerUrl(app)}: ${precache.length} files`);
-  }
+for (const app of standaloneApps) {
+  const precache = precacheList(out, app, standaloneApps);
+  const sw = stampWorker(template, {
+    app: `const APP = ${JSON.stringify({ id: app.id, scope: app.scope })};`,
+    build: `const BUILD = ${JSON.stringify(buildId)};`,
+    precache: `const PRECACHE = ${JSON.stringify(precache)};`,
+  });
+  writeFileSync(path.join(out, serviceWorkerUrl(app)), sw);
+  console.log(`${serviceWorkerUrl(app)}: ${precache.length} files`);
 }
-
-main();

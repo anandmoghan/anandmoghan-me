@@ -4,7 +4,7 @@ import { apps } from '../registry'
 // Every app under /apps installs as its own standalone web app. This list drives the build-time
 // manifests (scripts/build-app-manifests.ts), the per-app service workers (scripts/stamp-app-sw.ts),
 // the layout metadata (./metadata.ts) and the runtime that registers the worker (./StandaloneRuntime.tsx).
-// Hub apps come from the registry, private apps included; share and Nila are not on the hub.
+// Hub apps come from the registry; share and Nila are not on the hub.
 
 export interface StandaloneApp {
   id: string
@@ -13,10 +13,8 @@ export interface StandaloneApp {
   /** The app's path, also its manifest scope, start_url and service worker scope. The site serves no
    * trailing slashes (firebase.json trailingSlash: false), so the scope has none either. */
   scope: string
-  /** Area colour token in tokens.css; undefined for private apps, whose colours live in their own folder. */
-  domain?: Domain
-  /** Private apps keep their icons and manifest data in their gitignored folders. */
-  private: boolean
+  /** Area colour token in tokens.css. */
+  domain: Domain
 }
 
 const NOT_ON_HUB: StandaloneApp[] = [
@@ -26,7 +24,6 @@ const NOT_ON_HUB: StandaloneApp[] = [
     description: 'Decks shared by link.',
     scope: '/apps/share',
     domain: 'share',
-    private: false,
   },
   {
     id: 'nila',
@@ -34,7 +31,6 @@ const NOT_ON_HUB: StandaloneApp[] = [
     description: 'Nila: today, milestones, food, sleep and help.',
     scope: '/apps/family/nila',
     domain: 'parenting',
-    private: false,
   },
 ]
 
@@ -44,15 +40,13 @@ export const standaloneApps: StandaloneApp[] = [
     name: app.name,
     description: app.description,
     scope: app.path,
-    domain: app.private ? undefined : app.domain,
-    private: app.private === true,
+    domain: app.domain,
   })),
   ...NOT_ON_HUB,
 ]
 
 /** The URL prefix of the icon build outputs (scripts/build-app-icons.mjs): <prefix>.svg, -180.png and so on. */
-export const iconBase = (app: StandaloneApp) =>
-  app.private ? `/apps/${app.id}/icons/${app.id}` : `/apps/icons/${app.id}`
+export const iconBase = (app: StandaloneApp) => `/apps/icons/${app.id}`
 
 export const manifestUrl = (app: StandaloneApp) => `/apps/${app.id}.webmanifest`
 

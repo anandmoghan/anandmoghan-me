@@ -1,7 +1,7 @@
 import type { AppDefinition } from './types'
 
 // Apps listed on the hub (/apps). "share" is routed but intentionally not listed.
-const publicApps: AppDefinition[] = [
+export const apps: AppDefinition[] = [
   {
     id: 'family',
     name: 'Family',
@@ -74,47 +74,8 @@ const publicApps: AppDefinition[] = [
   },
 ]
 
-/**
- * Private apps: their code lives in gitignored folders, and NEXT_PUBLIC_PRIVATE_APPS (a JSON array of
- * {id, name, href, description?, accent?} in the gitignored .env.local) lists them. Unset or empty means none.
- */
-function parsePrivateApps(raw: string | undefined): AppDefinition[] {
-  if (!raw) return []
-  const entries: unknown = JSON.parse(raw)
-  if (!Array.isArray(entries)) throw new Error('NEXT_PUBLIC_PRIVATE_APPS must be a JSON array')
-  return entries.map((entry: unknown) => {
-    const { id, name, href, description = '', accent } = (entry ?? {}) as Record<string, unknown>
-    if (
-      typeof id !== 'string' ||
-      typeof name !== 'string' ||
-      typeof href !== 'string' ||
-      !href.startsWith('/apps/') ||
-      typeof description !== 'string' ||
-      (accent !== undefined && typeof accent !== 'string')
-    ) {
-      throw new Error(`NEXT_PUBLIC_PRIVATE_APPS: bad entry ${JSON.stringify(entry)}`)
-    }
-    return {
-      id,
-      name,
-      description,
-      domain: 'home',
-      path: href,
-      requiresAuth: true,
-      restricted: true,
-      private: true,
-      accent,
-    }
-  })
-}
-
-const privateApps = parsePrivateApps(process.env.NEXT_PUBLIC_PRIVATE_APPS)
-
-export const apps: AppDefinition[] = [...publicApps, ...privateApps]
-
-/** Whether the hub and settings list `app`: private apps need their id in the apps claim, admin-only apps the admin claim. */
-export function isListed(app: AppDefinition, isAdmin: boolean, granted: string[]): boolean {
-  if (app.private) return granted.includes(app.id)
+/** Whether the hub and settings list `app`: admin-only apps need the admin claim. */
+export function isListed(app: AppDefinition, isAdmin: boolean): boolean {
   return !app.adminOnly || isAdmin
 }
 

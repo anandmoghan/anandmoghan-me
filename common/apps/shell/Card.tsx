@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronRightIcon } from './icons'
-import { accentStyle, type Domain } from './DomainScope'
+import type { Domain } from './DomainScope'
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   /** No padding, clipped corners: for images, lists and tables. */
@@ -28,20 +28,18 @@ interface HubCardProps {
   lines?: (string | false | null | undefined)[]
   /** Colours the icon tile with another area's accent. */
   domain?: Domain
-  /** A colour that overrides the domain's (private apps). */
-  accent?: string
 }
 
 // A condensed card that links to its own page: icon tile, title with an optional
 // badge, up to two summary lines and a chevron.
-export function HubCard({ href, title, icon, badge, lines = [], domain, accent }: HubCardProps) {
+export function HubCard({ href, title, icon, badge, lines = [], domain }: HubCardProps) {
   const shown = lines.filter((line): line is string => Boolean(line)).slice(0, 2)
   const classes = ['card card--compact tap block h-full w-full', domain ? `domain-${domain}` : '']
     .filter(Boolean)
     .join(' ')
 
   return (
-    <Link href={href} className={classes} style={accentStyle(accent)}>
+    <Link href={href} className={classes}>
       <span className="flex h-full min-h-10 w-full items-center gap-3">
         {icon && (
           <span className="icon-tile icon-tile--lg" aria-hidden>

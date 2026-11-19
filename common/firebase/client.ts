@@ -16,7 +16,7 @@ const PORTS = { auth: 9098, firestore: 8181, storage: 9199, functions: 5001 };
  * (`/api`). `next dev` does not apply rewrites, so emulator mode calls the functions emulator and
  * plain `npm run dev` calls the live function (it allows the http://localhost:3000 origin). Both
  * URLs have a doubled segment: the function routes on `/api/...`, so the URL is the function name
- * followed by the route prefix. The Mac-side API (api.anandmoghan.me) is common/api/config.ts.
+ * followed by the route prefix. The home-server API (api.anandmoghan.me) is common/api/config.ts.
  */
 export const FUNCTIONS_BASE = USE_EMULATORS
   ? `http://${EMULATOR_HOST}:${PORTS.functions}/${EMULATOR_PROJECT_ID}/us-central1/api/api`

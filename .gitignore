@@ -71,8 +71,3 @@ next-env.d.ts
 
 # Web app manifests written by scripts/build-app-manifests.ts
 /public/apps/*.webmanifest
-
-# Private apps (listed through NEXT_PUBLIC_PRIVATE_APPS): their code and icons stay local
-/app/apps/meetings/
-/common/apps/meetings/
-/public/apps/meetings/

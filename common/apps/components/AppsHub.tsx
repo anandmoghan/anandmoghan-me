@@ -7,8 +7,8 @@ import { HubCard } from '../shell/Card'
 import { APP_GLYPH, isGlyphId } from '../icons'
 
 export function AppsHub() {
-  const { user, isAnonymous, isAdmin, apps: granted } = useAuth()
-  const listed = apps.filter((app) => isListed(app, isAdmin, granted))
+  const { user, isAnonymous, isAdmin } = useAuth()
+  const listed = apps.filter((app) => isListed(app, isAdmin))
 
   return (
     <div className="site-container py-8 sm:py-12">
@@ -28,7 +28,6 @@ export function AppsHub() {
                 href={href}
                 title={app.name}
                 domain={app.domain}
-                accent={app.accent}
                 icon={Icon && <Icon />}
                 badge={
                   (needsLogin || app.restricted) && (
