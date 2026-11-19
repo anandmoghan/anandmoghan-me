@@ -17,6 +17,7 @@ export type Domain =
   | 'ladder'
   | 'materials'
   | 'planner'
+  | 'smarthome'
   | 'admin'
 
 interface DomainScopeProps {

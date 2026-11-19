@@ -25,6 +25,7 @@ test("defaults to api.anandmoghan.me with one prefix per app", () => {
     FAMILY_API: "https://api.anandmoghan.me/family",
     LADDER_API: "https://api.anandmoghan.me/ladder",
     PLANNER_API: "https://api.anandmoghan.me/planner",
+    HOME_API: "https://api.anandmoghan.me/home",
   });
 });
 
@@ -33,6 +34,7 @@ test("NEXT_PUBLIC_API_BASE moves every app, without a doubled slash", () => {
   assert.equal(urls.API_BASE, "http://127.0.0.1:3201");
   assert.equal(urls.FAMILY_API, "http://127.0.0.1:3201/family");
   assert.equal(urls.PLANNER_API, "http://127.0.0.1:3201/planner");
+  assert.equal(urls.HOME_API, "http://127.0.0.1:3201/home");
 });
 
 test("no tracked source names the API host or the retired family host", () => {

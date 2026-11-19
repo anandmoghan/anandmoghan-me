@@ -3,6 +3,7 @@ import type { GlyphProps } from './Glyph'
 import { AdminGlyph } from './admin'
 import { ExpenseGlyph } from './expense'
 import { FamilyGlyph } from './family'
+import { HomeGlyph } from './home'
 import { LadderGlyph } from './ladder'
 import { MaterialsGlyph } from './materials'
 import { NilaGlyph } from './nila'
@@ -16,6 +17,7 @@ export type GlyphId =
   | 'family'
   | 'ladder'
   | 'planner'
+  | 'home'
   | 'wealth'
   | 'expense'
   | 'time'
@@ -28,6 +30,7 @@ export const APP_GLYPH: Record<GlyphId, ComponentType<GlyphProps>> = {
   family: FamilyGlyph,
   ladder: LadderGlyph,
   planner: PlannerGlyph,
+  home: HomeGlyph,
   wealth: WealthGlyph,
   expense: ExpenseGlyph,
   time: TimeGlyph,

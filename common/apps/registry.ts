@@ -72,6 +72,15 @@ export const apps: AppDefinition[] = [
     requiresAuth: true,
     restricted: true,
   },
+  {
+    id: 'home',
+    name: 'Home',
+    description: 'Lights, switches, scenes and automations at home, from Home Assistant.',
+    domain: 'smarthome',
+    path: '/apps/home',
+    requiresAuth: true,
+    restricted: true,
+  },
 ]
 
 /** Whether the hub and settings list `app`: admin-only apps need the admin claim. */

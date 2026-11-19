@@ -14,7 +14,7 @@ const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 test("every app under /apps is standalone, each with its own scope", () => {
   assert.deepEqual(
     standaloneApps.map((app) => app.id).sort(),
-    ["admin", "expense", "family", "ladder", "materials", "nila", "planner", "share", "time", "wealth"],
+    ["admin", "expense", "family", "home", "ladder", "materials", "nila", "planner", "share", "time", "wealth"],
   );
   assert.equal(new Set(standaloneApps.map((app) => app.scope)).size, standaloneApps.length);
   for (const app of standaloneApps) assert.match(app.scope, /^\/apps\/[a-z/]+[a-z]$/);

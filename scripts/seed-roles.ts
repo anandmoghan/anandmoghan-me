@@ -24,7 +24,7 @@ const ROOT = path.resolve(__dirname, "..");
 dotenv.config({ path: path.join(ROOT, ".env.local"), quiet: true });
 
 const EMULATOR_HOST = "127.0.0.1:8181";
-const ALL_APPS = ["family", "ladder", "wealth", "expense", "time", "share", "materials", "planner", "admin"];
+const ALL_APPS = ["family", "ladder", "wealth", "expense", "time", "share", "materials", "planner", "home", "admin"];
 const ALL_TRACKERS = ["anand", "kavya"];
 const HOUSEHOLD_APPS = ["family", "materials", "planner"];
 

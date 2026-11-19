@@ -6,3 +6,4 @@ export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'https://api.anandm
 export const FAMILY_API = `${API_BASE}/family`
 export const LADDER_API = `${API_BASE}/ladder`
 export const PLANNER_API = `${API_BASE}/planner`
+export const HOME_API = `${API_BASE}/home`

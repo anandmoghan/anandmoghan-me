@@ -22,11 +22,9 @@ interface Role {
   ladderHome: string
 }
 
-// App claims the rules check, plus every registry area. Values already on a role are kept even when
+// Every registry app id, plus share (not on the hub). Values already on a role are kept even when
 // they are not in this list.
-const APP_OPTIONS = Array.from(
-  new Set(['family', 'ladder', ...registry.map((a) => a.domain), 'share']),
-).filter((a) => a !== 'home')
+const APP_OPTIONS = [...registry.map((a) => a.id), 'share']
 const TRACKER_OPTIONS = ['anand', 'kavya']
 
 function strings(value: unknown): string[] {

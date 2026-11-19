@@ -38,6 +38,7 @@
 .domain-materials { --domain: var(--materials); --accent: var(--materials); }
 .domain-admin { --domain: var(--admin); --accent: var(--admin); }
 .domain-planner { --domain: var(--planner); --accent: var(--planner); }
+.domain-smarthome { --domain: var(--smarthome); --accent: var(--smarthome); }
 
 /* == Buttons and chips in apps == */
 

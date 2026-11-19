@@ -90,7 +90,7 @@ Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy
   inline script. A new external host (image, font, API) needs a CSP entry, and `npm run test:security`.
 - Camera and microphone are denied everywhere (Permissions-Policy).
 - The home-server API is `common/api/config.ts`: `NEXT_PUBLIC_API_BASE` (default
-  `https://api.anandmoghan.me`), with one prefix per app (`/family`, `/ladder`, `/planner`). The
+  `https://api.anandmoghan.me`), with one prefix per app (`/family`, `/ladder`, `/planner`, `/home`). The
   same-origin Cloud Function is `FUNCTIONS_BASE` in `common/firebase/client.ts`.
 - HTML from people or agents (ladder job descriptions, company notes, resumes) renders only through
   `common/security/SafeHtml.tsx` (DOMPurify, strict allowlist). Blog posts, materials and KaTeX output
