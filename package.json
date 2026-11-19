@@ -44,6 +44,7 @@
     "firebase-admin": "^13.8.0",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.27",
+    "mermaid": "^11.4.1",
     "next": "^16.1.2",
     "node": "^25.3.0",
     "pdfjs-dist": "^5.7.284",

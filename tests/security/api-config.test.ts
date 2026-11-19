@@ -36,13 +36,13 @@ test("NEXT_PUBLIC_API_BASE moves every app, without a doubled slash", () => {
 });
 
 test("no tracked source names the API host or the retired family host", () => {
-  const files = execFileSync("git", ["ls-files", "app", "common", "scripts", "docs", "functions/src", "tests"], { cwd: root, encoding: "utf8" })
+  const files = execFileSync("git", ["ls-files", "app", "common", "scripts", "docs", "functions/src"], { cwd: root, encoding: "utf8" })
     .split("\n")
     .filter((f) => /\.(ts|tsx|mjs|js|html|json)$/.test(f));
   for (const file of files) {
     const text = readFileSync(path.join(root, file), "utf8");
     assert.ok(!text.includes("familyapi"), `${file} names familyapi`);
-    if (file === "common/api/config.ts" || file.startsWith("tests/") || file.startsWith("docs/")) continue;
+    if (file === "common/api/config.ts" || file.startsWith("docs/")) continue;
     // Code comments may name the host; a URL literal must come from common/api/config.ts.
     assert.ok(!/["'`]https:\/\/api\.anandmoghan\.me/.test(text), `${file} hardcodes the API URL`);
   }

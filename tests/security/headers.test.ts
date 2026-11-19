@@ -28,6 +28,7 @@ test("framing, plugins, base and form targets are locked down", () => {
 test("the API is reachable at its base and nowhere else on anandmoghan.me", () => {
   const connect = directives.get("connect-src") ?? [];
   assert.ok(connect.includes("https://api.anandmoghan.me"));
+  assert.ok(connect.includes("wss://api.anandmoghan.me"));
   assert.ok(!connect.some((s) => s.includes("familyapi")));
 });
 
