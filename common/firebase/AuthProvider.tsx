@@ -161,7 +161,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     synced.current.add(key);
     try {
       await syncUserDoc(user);
-      if (!user.isAnonymous && (await refreshClaims(user))) await user.getIdToken(true);
+      // Claims need a verified email (the api function refuses others).
+      if (!user.isAnonymous && user.emailVerified && (await refreshClaims(user))) await user.getIdToken(true);
     } catch (err) {
       console.error('Session sync failed', err);
     }
@@ -289,7 +290,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const current = getFirebaseAuth().currentUser;
     if (!current) return;
     await current.reload();
-    if (!current.isAnonymous) await refreshClaims(current);
+    if (!current.isAnonymous && current.emailVerified) await refreshClaims(current);
     await current.getIdToken(true);
     await loadSession(current);
   };

@@ -11,7 +11,7 @@ import { decryptCredentials, encryptCredentials } from './crypto.js'
 import { checkRateLimit } from './rateLimit.js'
 import postSlugs from './postSlugs.json'
 import { fetchFrankfurterRates, writeRatesToFirestore } from './rates.js'
-import { applyRoleClaims, readRole, roleFromDoc } from './roles.js'
+import { applyRoleClaims, claimsRefreshFor, readRole, roleFromDoc, roleId } from './roles.js'
 import { fetchAndWriteSnapshot } from './trading212.js'
 import { countryFromHeaders, deleteVisitorData, parseVisit, recordVisit, type VisitInput } from './visits.js'
 import { incrementViews, parseViewSlug } from './views.js'
@@ -125,8 +125,13 @@ export const api = onRequest(
     // POST /api/account/refresh-claims: mirror roles/{email} into the caller's custom claims.
     // The client force-refreshes its ID token when `changed` is true.
     if (req.path === '/api/account/refresh-claims' && req.method === 'POST') {
-      if (isAnonymous || !decoded.email) {
+      const action = claimsRefreshFor(decoded)
+      if (action === 'skip' || !decoded.email) {
         json(res, 200, { changed: false })
+        return
+      }
+      if (action === 'unverified') {
+        text(res, 403, 'Email address not verified')
         return
       }
       try {
@@ -293,10 +298,12 @@ export const api = onRequest(
 
 // Mirrors roles/{email} into the custom claims of the user with that email, if one exists.
 // Users who sign up later pick their claims up via POST /api/account/refresh-claims.
+// Only lower-case ids are roles (the rules refuse others); readRole never reads any other id.
 export const syncRoleClaims = onDocumentWritten(
   { region: REGION, document: 'roles/{email}' },
   async (event) => {
-    const email = event.params.email.toLowerCase()
+    const email = event.params.email
+    if (email !== roleId(email)) return
     let userUid: string
     try {
       userUid = (await getAuth().getUserByEmail(email)).uid

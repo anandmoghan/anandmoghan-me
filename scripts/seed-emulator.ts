@@ -75,7 +75,7 @@ async function createUsers(): Promise<Map<string, string>> {
       uid = (await auth.createUser(props)).uid;
     }
     await auth.setCustomUserClaims(uid, user.role);
-    await db.doc(`roles/${user.email}`).set(user.role);
+    await db.doc(`roles/${user.email.toLowerCase()}`).set(user.role);
     await db.doc(`users/${uid}`).set(
       {
         isAnonymous: false,
