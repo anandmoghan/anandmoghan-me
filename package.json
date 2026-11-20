@@ -73,7 +73,7 @@
     "marked": "^13.0.3",
     "postcss": "^8.5.6",
     "sanitize-html": "^2.18.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
