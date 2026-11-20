@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DeviceTile } from '../DeviceTile'
 import { AwayGlyph, ChevronGlyph, LightGlyph, MoonGlyph, SceneGlyph, SunGlyph, ToggleGlyph } from '../glyphs'
 import { useHome } from '../HomeProvider'
 import { LightSheet } from '../LightSheet'
-import { isOn, type Device } from '../lib'
-import { buildHomeView, statusChips, type Tile } from '../view'
+import { isOn, roomLights, type Device, type Room } from '../lib'
+import { statusChips } from '../view'
 
 const ACTIVATED_MS = 2000
 
@@ -92,16 +92,12 @@ function Scenes() {
   )
 }
 
-function RoomSection({ id, name, tiles, allLights, onAdjust }: {
-  id: string
-  name: string
-  tiles: Tile[]
-  allLights: Device | null
-  onAdjust: (entityId: string) => void
-}) {
+function RoomSection({ room, onAdjust }: { room: Room; onAdjust: (entityId: string) => void }) {
   const { act } = useHome()
+  const { id, name, all_lights: allLights } = room
   const headingId = `home-room-${id}`
-  const lightsOn = allLights ? isOn(allLights) : false
+  // The header toggle reads like Apple's: lit when any light in the room is on.
+  const lightsOn = roomLights(room).some(isOn)
   return (
     <section aria-labelledby={headingId} className="site-container home-room">
       <div className="home-room__head">
@@ -116,15 +112,15 @@ function RoomSection({ id, name, tiles, allLights, onAdjust }: {
             aria-checked={lightsOn}
             aria-label={`All lights, ${name}`}
             className="home-roomtoggle"
-            onClick={() => act(allLights.entity_id, { action: 'toggle' })}
+            onClick={() => act(allLights, { action: lightsOn ? 'turn_off' : 'turn_on' })}
           >
             <LightGlyph size={18} />
           </button>
         )}
       </div>
       <ul className="home-grid">
-        {tiles.map((tile) => (
-          <li key={tile.id}>
+        {room.tiles.map((tile) => (
+          <li key={tile.entity_id}>
             <DeviceTile tile={tile} onAdjust={onAdjust} />
           </li>
         ))}
@@ -137,11 +133,10 @@ function RoomSection({ id, name, tiles, allLights, onAdjust }: {
 export function HomePage() {
   const { state, stream } = useHome()
   const [sheet, setSheet] = useState<string | null>(null)
-  const view = useMemo(() => (state ? buildHomeView(state) : null), [state])
-  if (!state || !view) return null
+  if (!state) return null
 
-  const chips = statusChips(state, view)
-  const empty = view.rooms.length === 0 && view.other.length === 0
+  const chips = statusChips(state)
+  const empty = state.rooms.length === 0 && state.other.length === 0
 
   return (
     <div className="home-page">
@@ -162,7 +157,7 @@ export function HomePage() {
         </ul>
       </header>
 
-      <Modes modes={view.modes} />
+      <Modes modes={state.modes} />
       <Scenes />
 
       {empty ? (
@@ -171,18 +166,11 @@ export function HomePage() {
         </p>
       ) : (
         <>
-          {view.rooms.map((room) => (
-            <RoomSection
-              key={room.id}
-              id={room.id}
-              name={room.name}
-              tiles={room.tiles}
-              allLights={room.allLights}
-              onAdjust={setSheet}
-            />
+          {state.rooms.map((room) => (
+            <RoomSection key={room.id} room={room} onAdjust={setSheet} />
           ))}
-          {view.other.length > 0 && (
-            <RoomSection id="other" name="Other" tiles={view.other} allLights={null} onAdjust={setSheet} />
+          {state.other.length > 0 && (
+            <RoomSection room={{ id: 'other', name: 'Other', all_lights: null, tiles: state.other }} onAdjust={setSheet} />
           )}
         </>
       )}

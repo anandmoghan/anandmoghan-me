@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { CloseGlyph, LightGlyph, SwitchGlyph } from './glyphs'
 import { useHome } from './HomeProvider'
-import { findDevice, hasColourTemp, isOn, kelvinToRgb, stateLabel, type Device } from './lib'
-import { buildHomeView, type Tile } from './view'
+import { findTile, hasColourTemp, isOn, kelvinToRgb, stateLabel, type Device } from './lib'
 
 // Sliders send after the hand settles: one action per adjustment, well inside the API's
 // per-user rate limit.
@@ -76,23 +75,23 @@ function BrightnessPill({ value, label, onChange }: { value: number; label: stri
   )
 }
 
-function Members({ members }: { members: Tile[] }) {
+function Members({ members }: { members: Device[] }) {
   const { act } = useHome()
   return (
     <section className="home-sheet__members" aria-label="Lights in this group">
       <ul className="home-list">
         {members.map((member) => {
-          const on = isOn(member.device)
+          const on = isOn(member)
           return (
-            <li key={member.id} className="home-list__row">
-              <span className="home-list__name">{member.title}</span>
+            <li key={member.entity_id} className="home-list__row">
+              <span className="home-list__name">{member.name}</span>
               <button
                 type="button"
                 role="switch"
                 aria-checked={on}
-                aria-label={member.device.name}
+                aria-label={member.name}
                 className="home-switch"
-                onClick={() => act(member.device.entity_id, { action: 'toggle' })}
+                onClick={() => act(member.entity_id, { action: 'toggle' })}
               />
             </li>
           )
@@ -102,7 +101,7 @@ function Members({ members }: { members: Tile[] }) {
   )
 }
 
-function Controls({ device, members, title }: { device: Device; members: Tile[]; title: string }) {
+function Controls({ device, members, title }: { device: Device; members: Device[]; title: string }) {
   const { act } = useHome()
   const on = isOn(device)
   const { brightness_pct, color_temp_kelvin, min_kelvin = 2000, max_kelvin = 6500 } = device.attributes
@@ -177,17 +176,14 @@ export function LightSheet({ entityId, onClose }: { entityId: string | null; onC
   const { state } = useHome()
   const dialog = useRef<HTMLDialogElement>(null)
   const drag = useRef<{ id: number; y: number } | null>(null)
-  const device = entityId && state ? findDevice(state, entityId) : undefined
-  const view = useMemo(() => (state ? buildHomeView(state) : null), [state])
-  const members = device && view ? view.membersOf(device.entity_id) : []
-  const title = (device && view?.tileFor(device.entity_id)?.title) || device?.name || ''
+  const tile = entityId && state ? findTile(state, entityId) : undefined
 
   useEffect(() => {
     const el = dialog.current
     if (!el) return
-    if (device && !el.open) el.showModal()
-    if (!device && el.open) el.close()
-  }, [device])
+    if (tile && !el.open) el.showModal()
+    if (!tile && el.open) el.close()
+  }, [tile])
 
   return (
     <dialog
@@ -199,7 +195,7 @@ export function LightSheet({ entityId, onClose }: { entityId: string | null; onC
         if (e.target === e.currentTarget) e.currentTarget.close()
       }}
     >
-      {device && (
+      {tile && (
         <div className="home-sheet__body">
           <div
             className="home-sheet__grab"
@@ -224,7 +220,7 @@ export function LightSheet({ entityId, onClose }: { entityId: string | null; onC
               dialog.current?.style.removeProperty('--drag')
             }}
           />
-          <Controls key={device.entity_id} device={device} members={members} title={title} />
+          <Controls key={tile.entity_id} device={tile} members={tile.members ?? []} title={tile.short_name} />
         </div>
       )}
     </dialog>

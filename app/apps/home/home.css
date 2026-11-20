@@ -3,8 +3,8 @@
    rule is under .home-app (the dialog and the account button live inside it) or uses a home-
    class name; the only rule outside is the one that hides the site header while Home is open.
    Nothing here touches the shared tokens. Dynamic values reach CSS as custom properties on the
-   element: --lamp ("r g b" of a coloured bulb), --pct (brightness pill fill), --swatch (a
-   colour-temperature swatch), --drag (sheet swipe offset). */
+   element: --pct (brightness pill fill), --swatch (a colour-temperature swatch), --drag (sheet
+   swipe offset). */
 
 /* Home replaces the site header with its own account button (HomeShell adds the class). */
 body.home-immersive .site-header {
@@ -535,13 +535,8 @@ div.home-tile__main {
   background: rgb(255 184 0 / 0.16);
 }
 
-.home-tile[data-kind="light"][data-on] svg path:first-child {
+.home-tile:is([data-kind="light"], [data-kind="light_group"])[data-on] svg path:first-child {
   fill: currentColor;
-}
-
-.home-tile[data-kind="light"][data-colour] .home-tile__glyph {
-  color: rgb(var(--lamp));
-  background: rgb(var(--lamp) / 0.2);
 }
 
 .home-tile[data-kind="heater"][data-on] .home-tile__glyph {
@@ -552,11 +547,6 @@ div.home-tile__main {
 .home-tile[data-kind="switch"][data-on] .home-tile__glyph {
   color: #1f9d46;
   background: rgb(52 199 89 / 0.16);
-}
-
-.home-tile[data-kind="toggle"][data-on] .home-tile__glyph {
-  color: var(--h-blue);
-  background: rgb(0 122 255 / 0.14);
 }
 
 .home-tile[data-kind="fan"][data-on] .home-tile__glyph {
@@ -926,7 +916,7 @@ div.home-tile__main {
   border-radius: 0.5rem;
 }
 
-.home-automation__glyph[data-group="heater"] {
+.home-automation__glyph:is([data-group="heater"], [data-group="heating"]) {
   background: #e8530f;
 }
 
@@ -934,7 +924,7 @@ div.home-tile__main {
   background: #5856d6;
 }
 
-.home-automation__glyph:not([data-group="heater"], [data-group="modes"]) {
+.home-automation__glyph:not([data-group="heater"], [data-group="heating"], [data-group="modes"]) {
   background: #0a74e0;
 }
 

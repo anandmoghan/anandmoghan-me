@@ -1,5 +1,5 @@
 import { HOME_API } from '@/common/api/config'
-import type { Automation, Device, HomeAction, HomeState } from './lib'
+import type { Automation, Device, HomeAction, HomeEvent, HomeState } from './lib'
 
 // The Home API client. Every call carries `Authorization: Bearer <Firebase ID token>`; a 401 gets
 // one retry with a freshly minted token (the cached one may have expired or lack a new claim).
@@ -38,7 +38,7 @@ export async function fetchState(token: TokenSource): Promise<HomeState> {
   return (await res.json()) as HomeState
 }
 
-/** Sends one action; resolves to the device or automation as Home Assistant now reports it. */
+/** Sends one action; resolves to the device, tile or automation as Home Assistant now reports it. */
 export async function sendAction(token: TokenSource, entityId: string, action: HomeAction): Promise<Device | Automation> {
   const res = await authedFetch(token, '/action', {
     method: 'POST',
@@ -49,9 +49,6 @@ export async function sendAction(token: TokenSource, entityId: string, action: H
   return (await res.json()) as Device | Automation
 }
 
-/** One state change from the stream: a device, or an automation's switch and last run. */
-export type StateEvent = { type: 'state'; entity_id: string } & Partial<Device> & Partial<Automation>
-
 export type StreamStatus = 'connecting' | 'live' | 'reconnecting'
 
 interface StreamOptions {
@@ -60,7 +57,7 @@ interface StreamOptions {
   onStatus: (status: StreamStatus) => void
   /** Called on every connect; `first` is false after a drop, when the caller must fetch what it missed. */
   onOpen: (first: boolean) => void
-  onEvent: (event: StateEvent) => void
+  onEvent: (event: HomeEvent) => void
 }
 
 // The server sends a heartbeat every 25 s; a connection silent for longer than this is dead even
@@ -78,8 +75,8 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-/** Parses one SSE block ("data: ..." lines; comments and other fields ignored). */
-function parseBlock(block: string): StateEvent | null {
+/** Parses one SSE block ("data: ..." lines; comments, heartbeats and other fields ignored). */
+function parseBlock(block: string): HomeEvent | null {
   const data = block
     .split(/\r?\n/)
     .filter((line) => line.startsWith('data:'))
@@ -88,13 +85,14 @@ function parseBlock(block: string): StateEvent | null {
   if (!data) return null
   try {
     const event = JSON.parse(data) as { type?: unknown; entity_id?: unknown }
-    return event.type === 'state' && typeof event.entity_id === 'string' ? (event as StateEvent) : null
+    const known = event.type === 'state' || event.type === 'automation'
+    return known && typeof event.entity_id === 'string' ? (event as HomeEvent) : null
   } catch {
     return null
   }
 }
 
-async function readStream(body: ReadableStream<Uint8Array>, onEvent: (event: StateEvent) => void, abort: () => void) {
+async function readStream(body: ReadableStream<Uint8Array>, onEvent: (event: HomeEvent) => void, abort: () => void) {
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''

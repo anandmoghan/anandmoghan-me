@@ -2,13 +2,15 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '@/common/firebase/AuthProvider'
-import { fetchState, HomeApiError, sendAction, streamEvents, type StateEvent, type StreamStatus, type TokenSource } from './api'
+import { fetchState, HomeApiError, sendAction, streamEvents, type StreamStatus, type TokenSource } from './api'
 import {
+  applyEvent,
   findDevice,
+  findRoomByAllLights,
   isAutomationId,
-  optimisticDevice,
+  optimisticChanges,
   withAutomation,
-  withDevice,
+  withDevices,
   type Automation,
   type Device,
   type HomeAction,
@@ -16,8 +18,9 @@ import {
 } from './lib'
 
 // Home state for every /apps/home page: one GET /home/state, then the SSE stream keeps it live.
-// Actions apply optimistically; the action's response and the stream reconcile them, and a failed
-// action rolls back unless something newer already replaced the optimistic value.
+// Actions apply optimistically (a light group's bulbs and a room's lights with it); the action's
+// response and the stream reconcile them, and a failed action rolls back each value unless something
+// newer already replaced it.
 
 interface HomeContextValue {
   state: HomeState | null
@@ -32,30 +35,8 @@ interface HomeContextValue {
 
 const HomeContext = createContext<HomeContextValue | undefined>(undefined)
 
-function applyEvent(state: HomeState, event: StateEvent): HomeState {
-  if (isAutomationId(event.entity_id)) {
-    const current = state.automations.find((a) => a.entity_id === event.entity_id)
-    if (!current) return state
-    return withAutomation(state, {
-      ...current,
-      name: event.name ?? current.name,
-      enabled: event.enabled ?? (event.state !== undefined ? event.state === 'on' : current.enabled),
-      last_triggered: event.last_triggered !== undefined ? event.last_triggered : current.last_triggered,
-    })
-  }
-  const current = findDevice(state, event.entity_id)
-  if (!current) return state
-  return withDevice(state, {
-    ...current,
-    ...(event.name !== undefined ? { name: event.name } : {}),
-    ...(event.state !== undefined ? { state: event.state } : {}),
-    ...(event.controllable !== undefined ? { controllable: event.controllable } : {}),
-    attributes: event.attributes ?? current.attributes,
-  })
-}
-
 function applyResult(state: HomeState, result: Device | Automation): HomeState {
-  return 'enabled' in result ? withAutomation(state, result) : withDevice(state, result)
+  return 'enabled' in result ? withAutomation(state, result) : withDevices(state, [result])
 }
 
 export function HomeProvider({ children }: { children: ReactNode }) {
@@ -107,28 +88,40 @@ export function HomeProvider({ children }: { children: ReactNode }) {
   const act = useCallback(async (entityId: string, action: HomeAction) => {
     if (!token || !state) return
     setNotice(null)
-    const before = isAutomationId(entityId)
-      ? state.automations.find((a) => a.entity_id === entityId)
-      : findDevice(state, entityId)
-    if (!before) return
-    let optimistic: Device | Automation = before
-    if ('domain' in before) optimistic = optimisticDevice(before, action)
-    else if (action.action === 'enable' || action.action === 'disable') optimistic = { ...before, enabled: action.action === 'enable' }
-    if (optimistic !== before) {
-      latest.current.set(entityId, optimistic)
-      setState((s) => (s ? applyResult(s, optimistic) : s))
+    const automation = state.automations.find((a) => a.entity_id === entityId)
+    const room = findRoomByAllLights(state, entityId)
+    const label = automation?.name
+      ?? state.scenes.find((scene) => scene.entity_id === entityId)?.name
+      ?? (room ? `${room.name} lights` : findDevice(state, entityId)?.name)
+    if (!label) return
+    const before: (Device | Automation)[] = []
+    const optimistic: (Device | Automation)[] = []
+    if (automation && (action.action === 'enable' || action.action === 'disable')) {
+      before.push(automation)
+      optimistic.push({ ...automation, enabled: action.action === 'enable' })
+    } else if (!isAutomationId(entityId)) {
+      for (const next of optimisticChanges(state, entityId, action)) {
+        const current = findDevice(state, next.entity_id)
+        if (current) {
+          before.push(current)
+          optimistic.push(next)
+        }
+      }
     }
+    optimistic.forEach((value) => latest.current.set(value.entity_id, value))
+    if (optimistic.length) setState((s) => (s ? optimistic.reduce(applyResult, s) : s))
     try {
       const result = await sendAction(token, entityId, action)
-      if (latest.current.get(entityId) === optimistic) latest.current.delete(entityId)
+      optimistic.forEach((value) => {
+        if (latest.current.get(value.entity_id) === value) latest.current.delete(value.entity_id)
+      })
       setState((s) => (s ? applyResult(s, result) : s))
     } catch (err) {
-      if (optimistic !== before && latest.current.get(entityId) === optimistic) {
-        latest.current.delete(entityId)
-        setState((s) => (s ? applyResult(s, before) : s))
-      }
+      const stale = before.filter((_, i) => latest.current.get(optimistic[i].entity_id) === optimistic[i])
+      stale.forEach((value) => latest.current.delete(value.entity_id))
+      if (stale.length) setState((s) => (s ? stale.reduce(applyResult, s) : s))
       const reason = err instanceof HomeApiError ? err.message : 'Could not reach the home server.'
-      setNotice(`${before.name}: ${reason}`)
+      setNotice(`${label}: ${reason}`)
     }
   }, [token, state])
 

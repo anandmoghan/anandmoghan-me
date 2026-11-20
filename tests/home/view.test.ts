@@ -3,86 +3,101 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { buildHomeView, groupAutomations, statusChips, stripRoomPrefix } from "../../common/apps/home/view";
-import type { HomeState } from "../../common/apps/home/lib";
+import {
+  applyEvent,
+  findDevice,
+  findTile,
+  optimisticChanges,
+  withDevices,
+  type HomeState,
+} from "../../common/apps/home/lib";
+import { automationGroups, lightsOn, statusChips } from "../../common/apps/home/view";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// A snapshot of the real home (states may be stale): rooms, light groups, modes, automations.
-const real = { unassigned: [], ...JSON.parse(readFileSync(path.join(here, "real-snapshot.json"), "utf8")) } as HomeState;
+// GET /home/state (contract v2) for the real home, with real names (states may be stale).
+const real = JSON.parse(readFileSync(path.join(here, "real-snapshot.json"), "utf8")) as HomeState;
+const fresh = () => structuredClone(real);
 
-test("strips the room prefix but keeps names without one", () => {
-  assert.equal(stripRoomPrefix("Living Room Wall Lights", "Living Room"), "Wall Lights");
-  assert.equal(stripRoomPrefix("Dining Room Pendant 2", "Dining Room"), "Pendant 2");
-  assert.equal(stripRoomPrefix("Hallway", "Hallway"), "Hallway");
-  assert.equal(stripRoomPrefix("Lamp", "Living Room"), "Lamp");
+test("the snapshot is drawn as the server placed it", () => {
+  assert.deepEqual(real.rooms.map((r) => r.name), ["Living Room", "Hallway", "Master Bedroom", "Dining Room", "Kitchen"]);
+  const tiles = (name: string) => real.rooms.find((r) => r.name === name)!.tiles.map((t) => `${t.kind}:${t.short_name}`);
+  assert.deepEqual(tiles("Dining Room"), ["light_group:Pendants", "light_group:Spotlights", "light:Lamp"]);
+  assert.deepEqual(tiles("Kitchen"), ["light_group:Spotlights", "heater:Heater"]);
+  assert.equal(real.rooms[0].all_lights, "light.living_room_lights");
+  assert.equal(real.rooms[1].all_lights, null);
+  assert.deepEqual(real.modes.map((m) => m.name), ["Away Mode", "Awake Mode", "Anand Sleep Mode", "Kavya Sleep Mode"]);
 });
 
-test("rooms: one tile per light group, ungrouped bulbs alone, empty rooms hidden", () => {
-  const view = buildHomeView(real);
-  assert.deepEqual(view.rooms.map((r) => r.name), ["Living Room", "Hallway", "Master Bedroom", "Dining Room", "Kitchen"]);
-  const titles = (name: string) => view.rooms.find((r) => r.name === name)!.tiles.map((t) => t.title);
-  assert.deepEqual(titles("Living Room"), ["Wall Lights", "Lamp", "Thermostat"]);
-  assert.deepEqual(titles("Dining Room"), ["Pendants", "Spotlights", "Lamp"]);
-  assert.deepEqual(titles("Kitchen"), ["Spotlights", "Heater"]);
-  assert.deepEqual(titles("Master Bedroom"), ["Wall Lights", "Heater"]);
-  assert.deepEqual(titles("Hallway"), ["Lights"]);
+test("finds tiles, members and modes by entity id", () => {
+  assert.equal(findTile(real, "light.dining_room_pendants")?.members?.length, 3);
+  assert.equal(findDevice(real, "light.dining_room_pendant_2")?.name, "Dining Room Pendant 2");
+  assert.equal(findDevice(real, "input_boolean.away_mode")?.domain, "input_boolean");
+  assert.equal(findTile(real, "light.dining_room_pendant_2"), undefined);
 });
 
-test("group tiles list their bulbs and rooms get the whole-room group", () => {
-  const view = buildHomeView(real);
-  const living = view.rooms[0];
-  assert.equal(living.allLights?.entity_id, "light.living_room_lights");
-  assert.equal(view.rooms.find((r) => r.name === "Hallway")!.allLights, null);
-  assert.equal(view.membersOf("light.living_room_wall_lights").length, 4);
-  assert.deepEqual(
-    view.membersOf("light.dining_room_pendants").map((t) => t.title),
-    ["Pendant 1", "Pendant 2", "Pendant 3"],
-  );
-  assert.equal(view.membersOf("light.kitchen_spotlights").length, 3);
+test("a light group's action changes its bulbs optimistically", () => {
+  const state = fresh();
+  const changes = optimisticChanges(state, "light.living_room_wall_lights", { action: "toggle" });
+  assert.equal(changes.length, 5);
+  assert.ok(changes.every((d) => d.state === "on"));
+  const dimmed = optimisticChanges(state, "light.dining_room_pendants", { action: "brightness", value: 40 });
+  assert.deepEqual(dimmed.map((d) => d.attributes.brightness_pct), [40, 40, 40, 40]);
+  const next = withDevices(state, changes);
+  const group = findTile(next, "light.living_room_wall_lights")!;
+  assert.equal(group.kind, "light_group");
+  assert.equal(group.short_name, "Wall Lights");
+  assert.ok(group.members!.every((m) => m.state === "on"));
 });
 
-test("modes exclude heater controls and nothing is left over", () => {
-  const view = buildHomeView(real);
-  assert.deepEqual(view.modes.map((m) => m.name), ["Anand Sleep Mode", "Awake Mode", "Away Mode", "Kavya Sleep Mode"]);
-  assert.equal(view.other.length, 0);
-  const heater = view.rooms.find((r) => r.name === "Kitchen")!.tiles.find((t) => t.kind === "heater")!;
-  assert.equal(heater.device.entity_id, "input_boolean.kitchen_heater_control");
+test("a bulb's action updates the group it belongs to", () => {
+  const changes = optimisticChanges(fresh(), "light.kitchen_spotlights_2", { action: "turn_on" });
+  assert.deepEqual(changes.map((d) => `${d.entity_id} ${d.state}`), [
+    "light.kitchen_spotlights_2 on",
+    "light.kitchen_spotlights on",
+  ]);
 });
 
-test("works when groups and modes arrive in unassigned, and drops adaptive lighting switches", () => {
-  const flat: HomeState = {
-    ...real,
-    unassigned: [
-      ...(real.light_groups ?? []),
-      ...(real.modes ?? []),
-      { entity_id: "switch.adaptive_lighting_living_room", name: "Adaptive Lighting: Living Room", domain: "switch", state: "on", controllable: true, attributes: {} },
-      { entity_id: "switch.garden", name: "Garden", domain: "switch", state: "off", controllable: true, attributes: {} },
-    ],
-    light_groups: undefined,
-    modes: undefined,
-  };
-  const view = buildHomeView(flat);
-  assert.equal(view.modes.length, 4);
-  assert.deepEqual(view.other.map((t) => t.title), ["Garden"]);
-  assert.equal(view.rooms[0].allLights?.entity_id, "light.living_room_lights");
+test("the whole-room group turns every light in the room on or off", () => {
+  const state = fresh();
+  const on = optimisticChanges(state, "light.dining_room_lights", { action: "turn_on" });
+  assert.equal(on.length, 9);
+  const next = withDevices(state, on);
+  assert.equal(lightsOn(next), 7);
+  const off = optimisticChanges(next, "light.dining_room_lights", { action: "toggle" });
+  assert.ok(off.every((d) => d.state === "off"));
+});
+
+test("stream events update members, tiles and automations", () => {
+  let state = fresh();
+  const pendant = findDevice(state, "light.dining_room_pendant_1")!;
+  state = applyEvent(state, { type: "state", ...pendant, state: "on", attributes: { brightness_pct: 20 } });
+  assert.equal(findDevice(state, "light.dining_room_pendant_1")?.state, "on");
+  assert.equal(lightsOn(state), 1);
+  state = applyEvent(state, { type: "automation", entity_id: "automation.heating_evening_20", enabled: false, last_triggered: null });
+  const evening = state.automations.find((a) => a.entity_id === "automation.heating_evening_20")!;
+  assert.equal(evening.enabled, false);
+  assert.equal(evening.title, "Evening: 20°");
+  assert.equal(applyEvent(state, { type: "state", ...pendant, entity_id: "light.unknown" }).rooms, state.rooms);
 });
 
 test("status chips summarise lights, climate and heaters", () => {
-  const state: HomeState = structuredClone(real);
-  state.rooms[0].devices[0].state = "on";
-  state.rooms[0].devices[1].state = "on";
-  state.rooms[0].devices[5].attributes = { current_temperature: 20.5 };
-  state.modes!.find((m) => m.entity_id === "input_boolean.kitchen_heater_control")!.state = "on";
-  const chips = statusChips(state, buildHomeView(state));
-  assert.deepEqual(chips.map((c) => `${c.label} ${c.value}`), ["Lights 2 on", "Climate 20.5°", "Heaters 1 on"]);
-  assert.equal(statusChips(real, buildHomeView(real))[0].value, "Off");
+  const state = fresh();
+  const living = state.rooms[0].tiles;
+  living[0].members![0].state = "on";
+  living[0].members![1].state = "on";
+  living[2].attributes = { current_temperature: 20.5 };
+  state.rooms.find((r) => r.id === "kitchen")!.tiles[1].state = "on";
+  assert.deepEqual(statusChips(state).map((c) => `${c.label} ${c.value}`), ["Lights 2 on", "Climate 20.5°", "Heaters 1 on"]);
+  assert.equal(statusChips(real)[0].value, "Off");
 });
 
-test("automations group by first segment with sentence-case titles", () => {
-  const groups = groupAutomations(real.automations);
-  assert.deepEqual(groups.map((g) => [g.title, g.rows.length]), [["Heater", 2], ["Modes", 6]]);
-  assert.deepEqual(groups[0].rows.map((r) => r.title), ["Kitchen: off after 2 hours", "Master bedroom: off after 2 hours"]);
-  assert.ok(groups[1].rows.some((r) => r.title === "Away mode on: awake mode off"));
-  const odd = groupAutomations([{ entity_id: "automation.x", name: "Porch light", enabled: true, last_triggered: null }]);
-  assert.deepEqual(odd.map((g) => [g.title, g.rows[0].title]), [["Other", "Porch light"]]);
+test("automations keep the server's groups, Other last", () => {
+  const groups = automationGroups(real.automations);
+  assert.deepEqual(groups.map((g) => [g.title, g.automations.length]), [["Heater", 2], ["Heating", 2], ["Modes", 6]]);
+  assert.deepEqual(groups[1].automations.map((a) => a.title), ["Evening: 20°", "Morning: 23° and kitchen heater"]);
+  const odd = automationGroups([
+    { entity_id: "automation.x", name: "Porch light", group: "Other", title: "Porch light", enabled: true, last_triggered: null },
+    ...real.automations,
+  ]);
+  assert.equal(odd.at(-1)?.title, "Other");
 });

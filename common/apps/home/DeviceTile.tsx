@@ -1,35 +1,32 @@
 'use client'
 
-import type { CSSProperties } from 'react'
 import { DeviceGlyph, HeaterGlyph } from './glyphs'
 import { useHome } from './HomeProvider'
 import { useLongPress } from './useLongPress'
-import { formatTemp, hasLightControls, isColourLamp, isOn, isUnavailable, lampColour, stateLabel } from './lib'
-import type { Tile } from './view'
+import { formatTemp, hasLightControls, isOn, isUnavailable, stateLabel, type Tile } from './lib'
 
 function TileGlyph({ tile }: { tile: Tile }) {
-  return tile.kind === 'heater' ? <HeaterGlyph size={20} /> : <DeviceGlyph domain={tile.device.domain} size={20} />
+  return tile.kind === 'heater' ? <HeaterGlyph size={20} /> : <DeviceGlyph domain={tile.domain} size={20} />
 }
 
 function ClimateTile({ tile }: { tile: Tile }) {
-  const { device } = tile
-  const current = device.attributes.current_temperature
-  const label = stateLabel(device)
-  const heating = device.attributes.hvac_action === 'heating' || device.attributes.hvac_action === 'cooling'
+  const current = tile.attributes.current_temperature
+  const label = stateLabel(tile)
+  const heating = tile.attributes.hvac_action === 'heating' || tile.attributes.hvac_action === 'cooling'
   return (
     <div
       className="home-tile"
       data-kind="climate"
       data-on={heating || undefined}
       role="group"
-      aria-label={`${tile.title}, ${current !== undefined ? `${formatTemp(current)} now, ` : ''}${label}`}
+      aria-label={`${tile.short_name}, ${current !== undefined ? `${formatTemp(current)} now, ` : ''}${label}`}
     >
       <div className="home-tile__main">
         <span className="home-tile__glyph home-tile__glyph--temp" aria-hidden>
           {current !== undefined ? formatTemp(current) : '–'}
         </span>
         <span className="home-tile__text" aria-hidden>
-          <span className="home-tile__name">{tile.title}</span>
+          <span className="home-tile__name">{tile.short_name}</span>
           <span className="home-tile__state">{label}</span>
         </span>
       </div>
@@ -38,48 +35,43 @@ function ClimateTile({ tile }: { tile: Tile }) {
 }
 
 function stateText(tile: Tile): string {
-  const { device, members } = tile
-  if (tile.kind === 'light' && members.length > 0 && isOn(device)) {
+  const members = tile.members ?? []
+  if (tile.kind === 'light_group' && members.length > 0 && isOn(tile)) {
     const on = members.filter(isOn).length
-    const pct = device.attributes.brightness_pct
+    const pct = tile.attributes.brightness_pct
     return on < members.length ? `${on} of ${members.length} on` : pct !== undefined ? `${Math.round(pct)}%` : 'On'
   }
-  return stateLabel(device)
+  return stateLabel(tile)
 }
 
 // One tile: a tap toggles it. A light (or light group) opens its sheet on a long press, a right
 // click, or the focusable button that only shows itself to the keyboard and screen readers.
 export function DeviceTile({ tile, onAdjust }: { tile: Tile; onAdjust: (entityId: string) => void }) {
   const { act } = useHome()
-  const { device } = tile
-  const adjustable = hasLightControls(device)
-  const { handlers, consumed } = useLongPress(adjustable ? () => onAdjust(device.entity_id) : undefined)
+  const adjustable = hasLightControls(tile)
+  const { handlers, consumed } = useLongPress(adjustable ? () => onAdjust(tile.entity_id) : undefined)
 
   if (tile.kind === 'climate') return <ClimateTile tile={tile} />
 
-  const on = isOn(device)
-  const unavailable = isUnavailable(device)
-  const colour = device.domain === 'light' && on && isColourLamp(device)
-  const style = colour ? ({ '--lamp': lampColour(device) } as CSSProperties) : undefined
+  const on = isOn(tile)
+  const unavailable = isUnavailable(tile)
 
   return (
     <div
       className="home-tile"
       data-kind={tile.kind}
       data-on={on || undefined}
-      data-colour={colour || undefined}
       data-unavailable={unavailable || undefined}
-      style={style}
     >
       <button
         type="button"
         role="switch"
         aria-checked={on}
-        aria-label={device.name}
-        disabled={unavailable || !device.controllable}
+        aria-label={tile.name}
+        disabled={unavailable || !tile.controllable}
         className="home-tile__main"
         onClick={() => {
-          if (!consumed()) act(device.entity_id, { action: 'toggle' })
+          if (!consumed()) act(tile.entity_id, { action: 'toggle' })
         }}
         {...handlers}
       >
@@ -87,7 +79,7 @@ export function DeviceTile({ tile, onAdjust }: { tile: Tile; onAdjust: (entityId
           <TileGlyph tile={tile} />
         </span>
         <span className="home-tile__text">
-          <span className="home-tile__name">{tile.title}</span>
+          <span className="home-tile__name">{tile.short_name}</span>
           <span className="home-tile__state">{stateText(tile)}</span>
         </span>
       </button>
@@ -95,8 +87,8 @@ export function DeviceTile({ tile, onAdjust }: { tile: Tile; onAdjust: (entityId
         <button
           type="button"
           className="home-tile__adjust"
-          aria-label={`Brightness and colour, ${device.name}`}
-          onClick={() => onAdjust(device.entity_id)}
+          aria-label={`Brightness and colour, ${tile.name}`}
+          onClick={() => onAdjust(tile.entity_id)}
         >
           Adjust
         </button>

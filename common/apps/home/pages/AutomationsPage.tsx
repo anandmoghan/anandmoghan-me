@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AutomationGlyph, HeaterGlyph, HomeTabGlyph } from '../glyphs'
 import { useHome } from '../HomeProvider'
-import { ranAgo } from '../lib'
+import { ranAgo, type Automation } from '../lib'
 import { useLongPress } from '../useLongPress'
-import { groupAutomations, type AutomationRow } from '../view'
+import { automationGroups } from '../view'
 
 const TICK_MS = 30_000
 const SWIPE_PX = 36
@@ -21,7 +21,7 @@ function useNow(): number {
 }
 
 function GroupGlyph({ group }: { group: string }) {
-  if (group === 'heater') return <HeaterGlyph size={18} />
+  if (group === 'heater' || group === 'heating') return <HeaterGlyph size={18} />
   if (group === 'modes') return <HomeTabGlyph size={18} />
   return <AutomationGlyph size={18} />
 }
@@ -29,8 +29,8 @@ function GroupGlyph({ group }: { group: string }) {
 // A row: name, when it last ran, and an iOS switch. Run now is the row's secondary action,
 // revealed like a swipe action by swiping left, a long press, a right click, or the keyboard-only
 // "More" button.
-function AutomationItem({ row, groupId, now, open, onOpen, onRun, running }: {
-  row: AutomationRow
+function AutomationItem({ automation, groupId, now, open, onOpen, onRun, running }: {
+  automation: Automation
   groupId: string
   now: number
   open: boolean
@@ -39,7 +39,6 @@ function AutomationItem({ row, groupId, now, open, onOpen, onRun, running }: {
   running: boolean
 }) {
   const { act } = useHome()
-  const { automation } = row
   const ago = ranAgo(automation.last_triggered, now)
   const start = useRef<number | null>(null)
   const { handlers, consumed } = useLongPress(() => onOpen(!open))
@@ -62,7 +61,7 @@ function AutomationItem({ row, groupId, now, open, onOpen, onRun, running }: {
       <div className="home-automation__row" {...handlers} onClickCapture={(e) => { if (consumed()) e.stopPropagation() }}>
         <span className="home-automation__glyph" data-group={groupId} aria-hidden><GroupGlyph group={groupId} /></span>
         <div className="home-automation__text">
-          <p className="home-automation__name">{row.title}</p>
+          <p className="home-automation__name">{automation.title}</p>
           <p className="home-automation__meta">
             {running ? 'Running now' : ago ? `Last ran ${ago}` : 'Never run'}
           </p>
@@ -98,7 +97,7 @@ function AutomationItem({ row, groupId, now, open, onOpen, onRun, running }: {
   )
 }
 
-// Every Home Assistant automation in grouped inset lists (by the first part of its name).
+// Every Home Assistant automation in grouped inset lists, under the group the server gives it.
 export function AutomationsPage() {
   const { state, act } = useHome()
   const now = useNow()
@@ -106,7 +105,7 @@ export function AutomationsPage() {
   const [open, setOpen] = useState<string | null>(null)
   if (!state) return null
 
-  const groups = groupAutomations(state.automations)
+  const groups = automationGroups(state.automations)
   const enabled = state.automations.filter((a) => a.enabled).length
 
   return (
@@ -126,17 +125,17 @@ export function AutomationsPage() {
             <section key={group.id} aria-labelledby={`home-group-${group.id}`}>
               <h2 id={`home-group-${group.id}`} className="home-group__title">{group.title}</h2>
               <ul className="home-inset">
-                {group.rows.map((row) => (
+                {group.automations.map((automation) => (
                   <AutomationItem
-                    key={row.automation.entity_id}
-                    row={row}
+                    key={automation.entity_id}
+                    automation={automation}
                     groupId={group.id}
                     now={now}
-                    open={open === row.automation.entity_id}
-                    onOpen={(next) => setOpen(next ? row.automation.entity_id : null)}
-                    running={running === row.automation.entity_id}
+                    open={open === automation.entity_id}
+                    onOpen={(next) => setOpen(next ? automation.entity_id : null)}
+                    running={running === automation.entity_id}
                     onRun={() => {
-                      const id = row.automation.entity_id
+                      const id = automation.entity_id
                       setRunning(id)
                       setOpen(null)
                       act(id, { action: 'trigger' }).finally(() => setRunning((r) => (r === id ? null : r)))

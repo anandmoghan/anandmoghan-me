@@ -2,265 +2,23 @@
  "home": {
   "name": "42 Warley Mount"
  },
- "rooms": [
-  {
-   "id": "living_room",
-   "name": "Living Room",
-   "devices": [
-    {
-     "entity_id": "light.living_room_wall_lights_1",
-     "name": "Living Room Wall Lights 1",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.living_room_wall_lights_2",
-     "name": "Living Room Wall Lights 2",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.living_room_wall_lights_3",
-     "name": "Living Room Wall Lights 3",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.living_room_wall_lights_4",
-     "name": "Living Room Wall Lights 4",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.living_room_lamp",
-     "name": "Living Room Lamp",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "climate.living_room_thermostat",
-     "name": "Living Room Thermostat",
-     "domain": "climate",
-     "state": "off",
-     "controllable": false,
-     "attributes": {}
-    }
-   ]
-  },
-  {
-   "id": "hallway",
-   "name": "Hallway",
-   "devices": [
-    {
-     "entity_id": "light.hallway_lights",
-     "name": "Hallway Lights",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    }
-   ]
-  },
-  {
-   "id": "master_bedroom",
-   "name": "Master Bedroom",
-   "devices": [
-    {
-     "entity_id": "light.master_bedroom_wall_lights_1",
-     "name": "Master Bedroom Wall Lights 1",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.master_bedroom_wall_lights_2",
-     "name": "Master Bedroom Wall Lights 2",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    }
-   ]
-  },
-  {
-   "id": "dining_room",
-   "name": "Dining Room",
-   "devices": [
-    {
-     "entity_id": "light.dining_room_pendant_1",
-     "name": "Dining Room Pendant 1",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.dining_room_pendant_2",
-     "name": "Dining Room Pendant 2",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.dining_room_pendant_3",
-     "name": "Dining Room Pendant 3",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.dining_room_spotlights_1",
-     "name": "Dining Room Spotlights 1",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.dining_room_spotlights_3",
-     "name": "Dining Room Spotlights 3",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.dining_room_spotlights_2",
-     "name": "Dining Room Spotlights 2",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.dining_room_lamp",
-     "name": "Dining Room Lamp",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    }
-   ]
-  },
-  {
-   "id": "kitchen",
-   "name": "Kitchen",
-   "devices": [
-    {
-     "entity_id": "light.kitchen_spotlights_1",
-     "name": "Kitchen Spotlights 1",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.kitchen_spotlights_3",
-     "name": "Kitchen Spotlights 3",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    },
-    {
-     "entity_id": "light.kitchen_spotlights_2",
-     "name": "Kitchen Spotlights 2",
-     "domain": "light",
-     "state": "off",
-     "controllable": true,
-     "attributes": {}
-    }
-   ]
-  }
- ],
- "light_groups": [
-  {
-   "entity_id": "light.living_room_wall_lights",
-   "name": "Living Room Wall Lights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.master_bedroom_wall_lights",
-   "name": "Master Bedroom Wall Lights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.dining_room_pendants",
-   "name": "Dining Room Pendants",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.dining_room_spotlights",
-   "name": "Dining Room Spotlights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.kitchen_spotlights",
-   "name": "Kitchen Spotlights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.living_room_lights",
-   "name": "Living Room Lights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.dining_room_lights",
-   "name": "Dining Room Lights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.kitchen_lights",
-   "name": "Kitchen Lights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "light.master_bedroom_lights",
-   "name": "Master Bedroom Lights",
-   "domain": "light",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  }
- ],
  "modes": [
+  {
+   "entity_id": "input_boolean.away_mode",
+   "name": "Away Mode",
+   "domain": "input_boolean",
+   "state": "off",
+   "controllable": true,
+   "attributes": {}
+  },
+  {
+   "entity_id": "input_boolean.awake_mode",
+   "name": "Awake Mode",
+   "domain": "input_boolean",
+   "state": "on",
+   "controllable": true,
+   "attributes": {}
+  },
   {
    "entity_id": "input_boolean.anand_sleep_mode",
    "name": "Anand Sleep Mode",
@@ -276,89 +34,367 @@
    "state": "off",
    "controllable": true,
    "attributes": {}
-  },
-  {
-   "entity_id": "input_boolean.awake_mode",
-   "name": "Awake Mode",
-   "domain": "input_boolean",
-   "state": "on",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "input_boolean.away_mode",
-   "name": "Away Mode",
-   "domain": "input_boolean",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "input_boolean.kitchen_heater_control",
-   "name": "Kitchen Heater Control",
-   "domain": "input_boolean",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
-  },
-  {
-   "entity_id": "input_boolean.master_bedroom_heater_control",
-   "name": "Master Bedroom Heater Control",
-   "domain": "input_boolean",
-   "state": "off",
-   "controllable": true,
-   "attributes": {}
   }
  ],
+ "rooms": [
+  {
+   "id": "living_room",
+   "name": "Living Room",
+   "all_lights": "light.living_room_lights",
+   "tiles": [
+    {
+     "entity_id": "light.living_room_wall_lights",
+     "name": "Living Room Wall Lights",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light_group",
+     "short_name": "Wall Lights",
+     "members": [
+      {
+       "entity_id": "light.living_room_wall_lights_1",
+       "name": "Living Room Wall Lights 1",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.living_room_wall_lights_2",
+       "name": "Living Room Wall Lights 2",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.living_room_wall_lights_3",
+       "name": "Living Room Wall Lights 3",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.living_room_wall_lights_4",
+       "name": "Living Room Wall Lights 4",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      }
+     ]
+    },
+    {
+     "entity_id": "light.living_room_lamp",
+     "name": "Living Room Lamp",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light",
+     "short_name": "Lamp"
+    },
+    {
+     "entity_id": "climate.living_room_thermostat",
+     "name": "Living Room Thermostat",
+     "domain": "climate",
+     "state": "off",
+     "controllable": false,
+     "attributes": {},
+     "kind": "climate",
+     "short_name": "Thermostat"
+    }
+   ]
+  },
+  {
+   "id": "hallway",
+   "name": "Hallway",
+   "all_lights": null,
+   "tiles": [
+    {
+     "entity_id": "light.hallway_lights",
+     "name": "Hallway Lights",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light",
+     "short_name": "Lights"
+    }
+   ]
+  },
+  {
+   "id": "master_bedroom",
+   "name": "Master Bedroom",
+   "all_lights": "light.master_bedroom_lights",
+   "tiles": [
+    {
+     "entity_id": "light.master_bedroom_wall_lights",
+     "name": "Master Bedroom Wall Lights",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light_group",
+     "short_name": "Wall Lights",
+     "members": [
+      {
+       "entity_id": "light.master_bedroom_wall_lights_1",
+       "name": "Master Bedroom Wall Lights 1",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.master_bedroom_wall_lights_2",
+       "name": "Master Bedroom Wall Lights 2",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      }
+     ]
+    },
+    {
+     "entity_id": "input_boolean.master_bedroom_heater_control",
+     "name": "Master Bedroom Heater Control",
+     "domain": "input_boolean",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "heater",
+     "short_name": "Heater"
+    }
+   ]
+  },
+  {
+   "id": "dining_room",
+   "name": "Dining Room",
+   "all_lights": "light.dining_room_lights",
+   "tiles": [
+    {
+     "entity_id": "light.dining_room_pendants",
+     "name": "Dining Room Pendants",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light_group",
+     "short_name": "Pendants",
+     "members": [
+      {
+       "entity_id": "light.dining_room_pendant_1",
+       "name": "Dining Room Pendant 1",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.dining_room_pendant_2",
+       "name": "Dining Room Pendant 2",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.dining_room_pendant_3",
+       "name": "Dining Room Pendant 3",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      }
+     ]
+    },
+    {
+     "entity_id": "light.dining_room_spotlights",
+     "name": "Dining Room Spotlights",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light_group",
+     "short_name": "Spotlights",
+     "members": [
+      {
+       "entity_id": "light.dining_room_spotlights_1",
+       "name": "Dining Room Spotlights 1",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.dining_room_spotlights_2",
+       "name": "Dining Room Spotlights 2",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.dining_room_spotlights_3",
+       "name": "Dining Room Spotlights 3",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      }
+     ]
+    },
+    {
+     "entity_id": "light.dining_room_lamp",
+     "name": "Dining Room Lamp",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light",
+     "short_name": "Lamp"
+    }
+   ]
+  },
+  {
+   "id": "kitchen",
+   "name": "Kitchen",
+   "all_lights": "light.kitchen_lights",
+   "tiles": [
+    {
+     "entity_id": "light.kitchen_spotlights",
+     "name": "Kitchen Spotlights",
+     "domain": "light",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "light_group",
+     "short_name": "Spotlights",
+     "members": [
+      {
+       "entity_id": "light.kitchen_spotlights_1",
+       "name": "Kitchen Spotlights 1",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.kitchen_spotlights_2",
+       "name": "Kitchen Spotlights 2",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      },
+      {
+       "entity_id": "light.kitchen_spotlights_3",
+       "name": "Kitchen Spotlights 3",
+       "domain": "light",
+       "state": "off",
+       "controllable": true,
+       "attributes": {}
+      }
+     ]
+    },
+    {
+     "entity_id": "input_boolean.kitchen_heater_control",
+     "name": "Kitchen Heater Control",
+     "domain": "input_boolean",
+     "state": "off",
+     "controllable": true,
+     "attributes": {},
+     "kind": "heater",
+     "short_name": "Heater"
+    }
+   ]
+  }
+ ],
+ "other": [],
  "scenes": [],
  "automations": [
   {
    "entity_id": "automation.modes_both_asleep_awake_mode_off",
    "name": "Modes - Both Asleep - Awake Mode Off",
+   "group": "Modes",
+   "title": "Both asleep: awake mode off",
    "enabled": true,
    "last_triggered": "2026-11-14T20:22:29.254371+00:00"
   },
   {
    "entity_id": "automation.modes_both_awake_awake_mode_on",
    "name": "Modes - Both Awake - Awake Mode On",
+   "group": "Modes",
+   "title": "Both awake: awake mode on",
    "enabled": true,
    "last_triggered": "2026-11-19T07:30:01.633784+00:00"
   },
   {
    "entity_id": "automation.modes_awake_mode_off_lights_sleep_mode_on",
    "name": "Modes - Awake Mode Off - Lights Sleep Mode On",
+   "group": "Modes",
+   "title": "Awake mode off: lights sleep mode on",
    "enabled": true,
    "last_triggered": "2026-11-14T20:22:29.255081+00:00"
   },
   {
    "entity_id": "automation.modes_awake_mode_on_lights_sleep_mode_off",
    "name": "Modes - Awake Mode On - Lights Sleep Mode Off",
+   "group": "Modes",
+   "title": "Awake mode on: lights sleep mode off",
    "enabled": true,
    "last_triggered": "2026-11-14T20:22:38.564167+00:00"
   },
   {
    "entity_id": "automation.modes_away_mode_on_awake_mode_off",
    "name": "Modes - Away Mode On - Awake Mode Off",
+   "group": "Modes",
+   "title": "Away mode on: awake mode off",
    "enabled": true,
    "last_triggered": null
   },
   {
    "entity_id": "automation.modes_away_mode_off_restore_awake_mode",
    "name": "Modes - Away Mode Off - Restore Awake Mode",
+   "group": "Modes",
+   "title": "Away mode off: restore awake mode",
    "enabled": true,
    "last_triggered": null
   },
   {
    "entity_id": "automation.heater_kitchen_off_after_2_hours",
    "name": "Heater - Kitchen - Off After 2 Hours",
+   "group": "Heater",
+   "title": "Kitchen: off after 2 hours",
    "enabled": true,
    "last_triggered": "2026-11-19T14:51:14.481529+00:00"
   },
   {
    "entity_id": "automation.heater_master_bedroom_off_after_2_hours",
    "name": "Heater - Master Bedroom - Off After 2 Hours",
+   "group": "Heater",
+   "title": "Master bedroom: off after 2 hours",
    "enabled": true,
    "last_triggered": null
+  },
+  {
+   "entity_id": "automation.heating_morning_23_and_kitchen_heater",
+   "name": "Heating - Morning - 23° and Kitchen Heater",
+   "group": "Heating",
+   "title": "Morning: 23° and kitchen heater",
+   "enabled": true,
+   "last_triggered": "2026-11-20T06:30:00.412000+00:00"
+  },
+  {
+   "entity_id": "automation.heating_evening_20",
+   "name": "Heating - Evening - 20°",
+   "group": "Heating",
+   "title": "Evening: 20°",
+   "enabled": true,
+   "last_triggered": "2026-11-19T17:00:00.208000+00:00"
   }
  ]
 }
