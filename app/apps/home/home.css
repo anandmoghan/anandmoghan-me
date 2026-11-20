@@ -4,7 +4,7 @@
    class name; the only rule outside is the one that hides the site header while Home is open.
    Nothing here touches the shared tokens. Dynamic values reach CSS as custom properties on the
    element: --pct (brightness pill fill), --swatch (a colour-temperature swatch), --drag (sheet
-   swipe offset). */
+   swipe offset), --x (chart tooltip position), --share (a device's share of today). */
 
 /* Home replaces the site header with its own account button (HomeShell adds the class). */
 body.home-immersive .site-header {
@@ -36,6 +36,9 @@ body.home-immersive .site-header {
   --h-blue: #007aff;
   --h-teal: #30b0c7;
   --h-orange: #ff6a2b;
+  /* Energy series (validated as a pair for colour vision deficiency and contrast on the cards). */
+  --e-electricity: #b87800;
+  --e-gas: #2f6fe0;
   --h-ease: cubic-bezier(0.34, 1.4, 0.64, 1);
   --h-wallpaper:
     radial-gradient(60% 42% at 12% 6%, #ffc98b 0%, transparent 72%),
@@ -65,6 +68,8 @@ body.home-immersive .site-header {
     --h-hairline: rgb(255 255 255 / 0.16);
     --h-bar-ink: rgb(235 235 245 / 0.62);
     --h-bar-active: #ff9500;
+    --e-electricity: #c98400;
+    --e-gas: #4a8cf0;
     --h-shadow: 0 6px 22px -8px rgb(0 0 0 / 0.6);
     --h-backdrop: rgb(0 0 0 / 0.5);
     --h-wallpaper:
@@ -88,6 +93,8 @@ body.home-immersive .site-header {
   --h-hairline: rgb(255 255 255 / 0.16);
   --h-bar-ink: rgb(235 235 245 / 0.62);
   --h-bar-active: #ff9500;
+  --e-electricity: #c98400;
+  --e-gas: #4a8cf0;
   --h-shadow: 0 6px 22px -8px rgb(0 0 0 / 0.6);
   --h-backdrop: rgb(0 0 0 / 0.5);
   --h-wallpaper:
@@ -136,6 +143,7 @@ body.home-immersive .site-header {
 .home-round,
 .home-power,
 .home-pill,
+.home-energy-card,
 .home-topbar > div > button {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
@@ -1120,4 +1128,338 @@ div.home-tile__main {
 @keyframes home-sheet-up {
   from { translate: 0 2rem; opacity: 0; }
   to { translate: 0 0; opacity: 1; }
+}
+
+/* == Energy == */
+
+.home-energy {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 48rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .home-energy {
+    margin-inline: auto;
+  }
+}
+
+.home-energy-card {
+  padding: 1rem 1.1rem;
+  background: var(--h-inset);
+  border-radius: 1.25rem;
+  box-shadow: inset 0 0 0 1px var(--h-glass-edge), var(--h-shadow);
+}
+
+.home-energy-hero__label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--h-text2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.home-energy-hero__now {
+  margin-top: 0.1rem;
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-energy-hero__today {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--h-hairline);
+}
+
+.home-energy-hero__cost {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-energy-hero__compare {
+  margin-top: 0.7rem;
+  color: var(--h-text2);
+  font-size: 0.9375rem;
+}
+
+/* The live dot breathes while the stream is connected. */
+.home-energy-live {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--h-green);
+  border-radius: 9999px;
+  box-shadow: 0 0 0 0 rgb(52 199 89 / 0.5);
+  animation: home-energy-pulse 2.4s ease-out infinite;
+}
+
+@keyframes home-energy-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(52 199 89 / 0.5);
+  }
+
+  70%,
+  100% {
+    box-shadow: 0 0 0 0.45rem rgb(52 199 89 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-energy-live {
+    animation: none;
+  }
+}
+
+.home-energy-split {
+  align-items: center;
+}
+
+.home-legend {
+  display: flex;
+  gap: 0.8rem;
+  color: var(--h-text2);
+  font-size: 0.75rem;
+  list-style: none;
+}
+
+.home-legend li {
+  display: inline-flex;
+  align-items: center;
+}
+
+.home-legend__swatch {
+  display: inline-block;
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.35rem;
+  border-radius: 0.2rem;
+}
+
+.home-legend__swatch[data-series="electricity"] {
+  background: var(--e-electricity);
+}
+
+.home-legend__swatch[data-series="gas"] {
+  background: var(--e-gas);
+}
+
+/* Charts: recessive grid and axis text, series colour only on the marks. */
+.home-chart__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.home-chart__title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.home-chart__plot {
+  position: relative;
+  border-radius: 0.5rem;
+  touch-action: pan-y;
+}
+
+.home-chart__plot svg {
+  display: block;
+  overflow: visible;
+}
+
+.home-chart__grid line {
+  stroke: var(--h-hairline);
+  stroke-width: 1;
+}
+
+.home-chart__grid[data-baseline] line {
+  stroke: var(--h-text2);
+  stroke-opacity: 0.4;
+}
+
+.home-chart__grid text,
+.home-chart__tick {
+  fill: var(--h-text2);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-chart__col path[data-series="electricity"] {
+  fill: var(--e-electricity);
+}
+
+.home-chart__col path[data-series="gas"] {
+  fill: var(--e-gas);
+}
+
+.home-chart__col path {
+  transition: opacity 0.15s;
+}
+
+.home-chart__col[data-dim] path {
+  opacity: 0.4;
+}
+
+.home-chart__hit {
+  fill: transparent;
+}
+
+.home-chart__tip {
+  position: absolute;
+  top: -0.5rem;
+  left: var(--x);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.65rem;
+  color: var(--h-solid-text);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--h-solid);
+  border-radius: 0.6rem;
+  box-shadow: var(--h-shadow);
+  transform: translate(-50%, -100%);
+}
+
+.home-chart__tip > span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.home-chart__tip-title {
+  font-weight: 600;
+}
+
+.home-chart__empty {
+  padding: 1.5rem 0;
+  color: var(--h-text2);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+/* Where it went today. */
+.home-usage {
+  padding: 0.8rem 1rem;
+}
+
+.home-usage + .home-usage {
+  border-top: 1px solid var(--h-hairline);
+}
+
+.home-usage__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.home-usage__text {
+  min-width: 0;
+}
+
+.home-usage__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.home-usage__meta,
+.home-usage__cost,
+.home-usage__note {
+  color: var(--h-text2);
+  font-size: 0.8125rem;
+}
+
+.home-usage__figures {
+  flex: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-usage__kwh {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.home-usage__share {
+  height: 0.25rem;
+  margin-top: 0.55rem;
+  overflow: hidden;
+  background: var(--h-track);
+  border-radius: 9999px;
+}
+
+.home-usage__fill {
+  display: block;
+  width: var(--share);
+  height: 100%;
+  background: var(--e-electricity);
+  border-radius: 9999px;
+}
+
+.home-usage__note {
+  margin-top: 0.35rem;
+}
+
+.home-badge {
+  padding: 0.05rem 0.45rem;
+  color: var(--h-text2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--h-glass-icon);
+  border-radius: 9999px;
+}
+
+.home-energy__updated {
+  color: var(--h-text2);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.home-energy-waiting {
+  padding: 2rem 1.25rem;
+  color: var(--h-text2);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+.home-energy-waiting__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--e-electricity);
+  background: var(--h-glass-icon);
+  border-radius: 9999px;
+}
+
+.home-energy-waiting__title {
+  margin-bottom: 0.35rem;
+  color: var(--h-text);
+  font-size: 1.0625rem;
+  font-weight: 600;
 }

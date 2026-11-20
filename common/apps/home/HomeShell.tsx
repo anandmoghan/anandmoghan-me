@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from 'react'
 import { ProfileMenu } from '../components/ProfileMenu'
 import { PageSkeleton } from '../shell/Skeleton'
 import { TabBar, type Tab } from '../shell/TabBar'
-import { AutomationTabGlyph, HomeTabGlyph } from './glyphs'
+import { AutomationTabGlyph, EnergyTabGlyph, HomeTabGlyph } from './glyphs'
 import { useHome } from './HomeProvider'
 
 // Chrome for every /apps/home page: the wallpaper, an account button in place of the site header
@@ -21,6 +21,7 @@ export function HomeShell({ children }: { children: ReactNode }) {
   const tabs: Tab[] = [
     { href: base, label: 'Home', icon: <HomeTabGlyph size={26} />, exact: true },
     { href: `${base}/automations`, label: 'Automation', icon: <AutomationTabGlyph size={26} /> },
+    { href: `${base}/energy`, label: 'Energy', icon: <EnergyTabGlyph size={26} /> },
   ]
 
   return (

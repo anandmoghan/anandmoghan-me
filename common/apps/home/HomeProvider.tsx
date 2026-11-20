@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '@/common/firebase/AuthProvider'
-import { fetchState, HomeApiError, sendAction, streamEvents, type StreamStatus, type TokenSource } from './api'
+import { mergeEnergy, type Energy } from './energy'
+import { fetchEnergy, fetchState, HomeApiError, sendAction, streamEvents, type StreamStatus, type TokenSource } from './api'
 import {
   applyEvent,
   findDevice,
@@ -22,8 +23,13 @@ import {
 // response and the stream reconcile them, and a failed action rolls back each value unless something
 // newer already replaced it.
 
+/** Energy has its own load: the Home tabs work while the meter has not reported. */
+export type EnergyStatus = 'loading' | 'ready' | 'unavailable'
+
 interface HomeContextValue {
   state: HomeState | null
+  energy: Energy | null
+  energyStatus: EnergyStatus
   loadError: string | null
   stream: StreamStatus
   /** The last failed action, shown until the next one. */
@@ -46,6 +52,8 @@ export function HomeProvider({ children }: { children: ReactNode }) {
   const [stream, setStream] = useState<StreamStatus>('connecting')
   const [notice, setNotice] = useState<string | null>(null)
   const [generation, setGeneration] = useState(0)
+  const [energy, setEnergy] = useState<Energy | null>(null)
+  const [energyStatus, setEnergyStatus] = useState<EnergyStatus>('loading')
   // The newest value written for each entity by this page, so a late rollback never clobbers it.
   const latest = useRef(new Map<string, Device | Automation>())
 
@@ -63,9 +71,19 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const loadEnergy = useCallback(async (source: TokenSource) => {
+    try {
+      setEnergy(await fetchEnergy(source))
+      setEnergyStatus('ready')
+    } catch {
+      setEnergyStatus((status) => (status === 'ready' ? status : 'unavailable'))
+    }
+  }, [])
+
   useEffect(() => {
     if (!token) return
     const controller = new AbortController()
+    loadEnergy(token)
     load(token).then((loaded) => {
       if (controller.signal.aborted) return
       streamEvents({
@@ -75,15 +93,21 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         // Events missed while disconnected (or a first load that failed) need a fresh snapshot.
         onOpen: (first) => {
           if (!first || !loaded) load(token).then((ok) => { loaded = loaded || ok })
+          if (!first) loadEnergy(token)
         },
         onEvent: (event) => {
+          if (event.type === 'energy') {
+            setEnergy((current) => mergeEnergy(current, event))
+            setEnergyStatus('ready')
+            return
+          }
           latest.current.delete(event.entity_id)
           setState((s) => (s ? applyEvent(s, event) : s))
         },
       })
     })
     return () => controller.abort()
-  }, [token, load, generation])
+  }, [token, load, loadEnergy, generation])
 
   const act = useCallback(async (entityId: string, action: HomeAction) => {
     if (!token || !state) return
@@ -127,13 +151,15 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<HomeContextValue>(() => ({
     state,
+    energy,
+    energyStatus,
     loadError,
     stream,
     notice,
     dismissNotice: () => setNotice(null),
     act,
     reload: () => setGeneration((g) => g + 1),
-  }), [state, loadError, stream, notice, act])
+  }), [state, energy, energyStatus, loadError, stream, notice, act])
 
   return <HomeContext.Provider value={value}>{children}</HomeContext.Provider>
 }

@@ -1,24 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { AutomationGlyph, HeaterGlyph, HomeTabGlyph } from '../glyphs'
 import { useHome } from '../HomeProvider'
 import { ranAgo, type Automation } from '../lib'
 import { useLongPress } from '../useLongPress'
+import { useNow } from '../useNow'
 import { automationGroups } from '../view'
 
-const TICK_MS = 30_000
 const SWIPE_PX = 36
-
-/** The current time, refreshed often enough for "5 minutes ago". */
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS)
-    return () => clearInterval(timer)
-  }, [])
-  return now
-}
 
 function GroupGlyph({ group }: { group: string }) {
   if (group === 'heater' || group === 'heating') return <HeaterGlyph size={18} />

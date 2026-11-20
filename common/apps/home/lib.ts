@@ -2,6 +2,8 @@
 // Home Assistant and decides rooms, tiles, groups and modes; the browser only ever sees the shapes
 // below, never the Home Assistant token.
 
+import type { Energy } from './energy'
+
 export type DeviceDomain = 'light' | 'switch' | 'fan' | 'input_boolean' | 'climate' | (string & {})
 
 export interface DeviceAttributes {
@@ -82,6 +84,7 @@ export type HomeAction =
 export type HomeEvent =
   | ({ type: 'state' } & Device)
   | { type: 'automation'; entity_id: string; enabled: boolean; last_triggered: string | null }
+  | ({ type: 'energy' } & Energy)
 
 export const isOn = (device: Device) => device.state === 'on'
 
@@ -171,8 +174,8 @@ export function withAutomation(state: HomeState, next: Partial<Automation> & { e
   }
 }
 
-/** Applies one stream message; entities the snapshot does not hold are ignored. */
-export function applyEvent(state: HomeState, event: HomeEvent): HomeState {
+/** Applies one device or automation message; entities the snapshot does not hold are ignored. */
+export function applyEvent(state: HomeState, event: Exclude<HomeEvent, { type: 'energy' }>): HomeState {
   if (event.type === 'automation') {
     const { entity_id, enabled, last_triggered } = event
     return withAutomation(state, { entity_id, enabled, last_triggered })

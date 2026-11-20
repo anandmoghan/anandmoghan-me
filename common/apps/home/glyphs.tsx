@@ -103,7 +103,7 @@ export function AwayGlyph({ size }: GlyphProps) {
   )
 }
 
-// The tab-bar icons: Apple's "house" and an automation check-in-a-circle, drawn as plain lines.
+// The tab-bar icons: Apple's "house", an automation check-in-a-circle and a bolt, drawn as plain lines.
 export function HomeTabGlyph({ size }: GlyphProps) {
   return (
     <Glyph size={size}>
@@ -119,6 +119,15 @@ export function AutomationTabGlyph({ size }: GlyphProps) {
     <Glyph size={size}>
       <circle cx="12" cy="12" r="8.5" />
       <path d="m8.2 12.4 2.7 2.7 5-5.6" />
+    </Glyph>
+  )
+}
+
+// A lightning bolt, Apple's "bolt" in the same line weight.
+export function EnergyTabGlyph({ size }: GlyphProps) {
+  return (
+    <Glyph size={size}>
+      <path d="M13.2 3.5 5.8 13.1a.5.5 0 0 0 .4.8h5.1l-1 6.6 7.4-9.6a.5.5 0 0 0-.4-.8h-5.1l1-6.6Z" />
     </Glyph>
   )
 }

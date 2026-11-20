@@ -5,10 +5,11 @@ import { HomeProvider } from '@/common/apps/home/HomeProvider'
 import { HomeShell } from '@/common/apps/home/HomeShell'
 import './home.css'
 
-// Home: lights, switches, scenes and automations from Home Assistant, through the home-server
+// Home: lights, switches, scenes, automations and energy from Home Assistant, through the home-server
 // API (/home on api.anandmoghan.me), live over its event stream. One static page per tab:
 //   /apps/home              rooms, scenes and device tiles
 //   /apps/home/automations  every automation, with enable, disable and Run now
+//   /apps/home/energy       live use, today's cost, hourly and weekly charts, where it went
 export const metadata: Metadata = standaloneMetadata('home')
 
 export const viewport: Viewport = standaloneViewport('home')

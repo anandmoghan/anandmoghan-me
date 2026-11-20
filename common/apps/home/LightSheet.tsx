@@ -190,7 +190,10 @@ export function LightSheet({ entityId, onClose }: { entityId: string | null; onC
       ref={dialog}
       className="home-sheet"
       aria-labelledby="home-sheet-title"
-      onClose={onClose}
+      // The close event is queued; a sheet reopened before it fires stays open.
+      onClose={(e) => {
+        if (!e.currentTarget.open) onClose()
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) e.currentTarget.close()
       }}

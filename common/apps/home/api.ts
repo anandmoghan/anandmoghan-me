@@ -1,4 +1,5 @@
 import { HOME_API } from '@/common/api/config'
+import type { Energy } from './energy'
 import type { Automation, Device, HomeAction, HomeEvent, HomeState } from './lib'
 
 // The Home API client. Every call carries `Authorization: Bearer <Firebase ID token>`; a 401 gets
@@ -36,6 +37,13 @@ export async function fetchState(token: TokenSource): Promise<HomeState> {
   const res = await authedFetch(token, '/state')
   if (!res.ok) throw await errorFrom(res)
   return (await res.json()) as HomeState
+}
+
+/** Today's energy, rates and per-device estimates (GET /home/energy). */
+export async function fetchEnergy(token: TokenSource): Promise<Energy> {
+  const res = await authedFetch(token, '/energy')
+  if (!res.ok) throw await errorFrom(res)
+  return (await res.json()) as Energy
 }
 
 /** Sends one action; resolves to the device, tile or automation as Home Assistant now reports it. */
@@ -85,6 +93,7 @@ function parseBlock(block: string): HomeEvent | null {
   if (!data) return null
   try {
     const event = JSON.parse(data) as { type?: unknown; entity_id?: unknown }
+    if (event.type === 'energy') return event as HomeEvent
     const known = event.type === 'state' || event.type === 'automation'
     return known && typeof event.entity_id === 'string' ? (event as HomeEvent) : null
   } catch {
