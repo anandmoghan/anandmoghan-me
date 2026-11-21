@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   barsSummary,
-  compareWithYesterday,
+  addDays,
+  compareSummary,
+  costBasisNote,
   dailyBars,
+  dayRows,
   DASH,
   formatKwh,
   formatMoney,
@@ -14,6 +17,7 @@ import {
   mergeEnergy,
   niceMax,
   shareOf,
+  tipFor,
   tariffLine,
   usageRows,
   weekday,
@@ -43,13 +47,26 @@ test("the subtitle names the tariff and the unit rate, whichever are known", () 
   assert.equal(tariffLine(null), null);
 });
 
-test("compares today's cost with yesterday's", () => {
-  const day = (total_cost: number | null) => ({ total_cost });
-  assert.equal(compareWithYesterday({ rates, today: day(3.12), yesterday: day(3.52) }), "£0.40 less than yesterday");
-  assert.equal(compareWithYesterday({ today: day(5), yesterday: day(4.5) }), "£0.50 more than yesterday");
-  assert.equal(compareWithYesterday({ today: day(4.501), yesterday: day(4.5) }), "Same as yesterday");
-  assert.equal(compareWithYesterday({ today: day(4), yesterday: day(null) }), null);
-  assert.equal(compareWithYesterday(null), null);
+test("compares today so far with yesterday at the same time", () => {
+  const compare = (today: number | null, yesterday: number | null) => ({
+    until: "14:47",
+    today: { electricity_kwh: 6.6, gas_kwh: 58, cost: today },
+    yesterday: { electricity_kwh: 7.9, gas_kwh: 66, cost: yesterday },
+  });
+  const less = compareSummary({ rates, compare: compare(3.1, 3.72) });
+  assert.equal(less?.tone, "less");
+  assert.equal(less?.arrow, "↓");
+  assert.equal(less?.headline, "£0.62 less than yesterday by 14:47");
+  assert.equal(less?.detail, "6.6 kWh vs 7.9 kWh electricity · 58.0 kWh vs 66.0 kWh gas");
+  const more = compareSummary({ compare: compare(4.5, 4) });
+  assert.deepEqual([more?.tone, more?.arrow, more?.headline], ["more", "↑", "£0.50 more than yesterday by 14:47"]);
+  const same = compareSummary({ compare: compare(4.05, 4) });
+  assert.deepEqual([same?.tone, same?.headline], ["same", "About the same as yesterday by 14:47"]);
+  assert.equal(compareSummary({ compare: compare(4, null) }), null);
+  assert.equal(compareSummary({ compare: null }), null);
+  assert.equal(compareSummary(null), null);
+  const noGas = compareSummary({ compare: { until: "09:00", today: { electricity_kwh: 1, cost: 1 }, yesterday: { electricity_kwh: 2, gas_kwh: null, cost: 2 } } });
+  assert.equal(noGas?.detail, "1.0 kWh vs 2.0 kWh electricity");
 });
 
 test("shares clamp to 0..1 and are unknown without a total", () => {
@@ -92,11 +109,47 @@ test("hourly bars cover the whole day; hours come as numbers or times", () => {
   assert.equal(bars[7].label, "07:00");
 });
 
-test("daily bars run oldest first with weekday ticks", () => {
+test("tooltip values: kWh and cost per fuel at the unit rates, nothing for hours without a reading", () => {
+  const bars = hourlyBars([{ hour: 6, electricity_kwh: 1, gas_kwh: 2 }, { hour: 7, electricity_kwh: 0.5 }], rates);
+  const tip = tipFor(bars[6], "GBP");
+  assert.equal(tip?.title, "06:00");
+  assert.deepEqual(tip?.lines.map((l) => l.text), ["Electricity 1.0 kWh · £0.27", "Gas 2.0 kWh · £0.12"]);
+  assert.equal(tip?.total, "Total £0.38");
+  assert.deepEqual(tipFor(bars[7])?.lines.map((l) => l.series), ["electricity"]);
+  assert.equal(tipFor(bars[19]), null);
+  const unpriced = tipFor(hourlyBars([{ hour: 1, electricity_kwh: 1 }])[1]);
+  assert.deepEqual([unpriced?.lines[0].text, unpriced?.total], ["Electricity 1.0 kWh", null]);
+});
+
+test("daily bars fill the 7 dates up to the newest, empty days have no data, the newest is partial", () => {
   assert.equal(weekday("2026-11-16"), "Mon");
-  const bars = dailyBars([{ date: "2026-11-20", electricity_kwh: 11 }, { date: "2026-11-19", electricity_kwh: 18, gas_kwh: 32 }]);
-  assert.deepEqual(bars.map((b) => b.tick), ["Thu", "Fri"]);
-  assert.equal(bars[0].label, "Thu 19 Nov");
+  assert.equal(addDays("2026-11-02", -3), "2026-10-30");
+  const bars = dailyBars([
+    { date: "2026-11-21", electricity_kwh: 11, electricity_cost: 3.4, total_cost: 3.4 },
+    { date: "2026-11-20", electricity_kwh: 18, gas_kwh: 32, electricity_cost: 5.3, gas_cost: 2.2, total_cost: 7.51 },
+  ]);
+  assert.deepEqual(bars.map((b) => b.tick), ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]);
+  assert.deepEqual(bars.map((b) => b.key).slice(0, 2), ["2026-11-15", "2026-11-16"]);
+  assert.deepEqual([bars[0].electricity, bars[0].totalCost, bars[0].partial], [null, null, false]);
+  assert.deepEqual([bars[5].totalCost, bars[5].partial, bars[6].partial], [7.51, false, true]);
+  assert.equal(bars[5].label, "Fri 20 Nov");
+  assert.deepEqual(dailyBars([]), []);
+  assert.equal(tipFor(bars[0]), null);
+  assert.equal(tipFor(bars[6])?.title, "Sat 21 Nov so far");
+});
+
+test("the week's table lists days with data, newest first, today marked so far", () => {
+  const bars = dailyBars([
+    { date: "2026-11-21", electricity_kwh: 6.6, total_cost: 1.9 },
+    { date: "2026-11-20", electricity_kwh: 18, gas_kwh: 32, total_cost: 7.51 },
+  ]);
+  assert.deepEqual(dayRows(bars, "GBP"), [
+    { key: "2026-11-21", day: "Sat 21", electricity: "6.6 kWh", gas: DASH, cost: "£1.90", partial: true },
+    { key: "2026-11-20", day: "Fri 20", electricity: "18.0 kWh", gas: "32.0 kWh", cost: "£7.51", partial: false },
+  ]);
+  assert.deepEqual(dayRows(dailyBars([])), []);
+  assert.equal(costBasisNote("current_rates"), "Costs at today's rates, incl. standing charges");
+  assert.equal(costBasisNote(undefined), null);
 });
 
 test("axis tops are clean numbers and the summary names the busiest bar", () => {
@@ -113,5 +166,7 @@ test("a stream reading replaces only the fields it carries", () => {
   assert.equal(next.today?.total_cost, 3);
   assert.equal(next.rates?.tariff, "Flexible Octopus");
   assert.ok(!("type" in next));
+  const withCompare = mergeEnergy(next, { type: "energy", compare: { until: "10:00" }, hourly_yesterday: [], daily_cost_basis: "current_rates" });
+  assert.deepEqual([withCompare.compare?.until, withCompare.hourly_yesterday, withCompare.daily_cost_basis], ["10:00", [], "current_rates"]);
   assert.equal(mergeEnergy(null, { today: { total_cost: 1 } }).today?.total_cost, 1);
 });

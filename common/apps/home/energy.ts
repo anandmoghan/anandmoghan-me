@@ -36,6 +36,25 @@ export interface EnergyDate {
   date: string
   electricity_kwh?: number | null
   gas_kwh?: number | null
+  /** At today's unit rates plus that fuel's standing charge (see daily_cost_basis). */
+  electricity_cost?: number | null
+  gas_cost?: number | null
+  total_cost?: number | null
+}
+
+/** Usage for one stretch of time: kWh and cost at the unit rates (no standing charge). */
+export interface CompareSide {
+  electricity_kwh?: number | null
+  gas_kwh?: number | null
+  cost?: number | null
+}
+
+/** Today so far against yesterday up to the same clock time. */
+export interface EnergyCompare {
+  /** "HH:MM" local. */
+  until: string
+  today?: CompareSide | null
+  yesterday?: CompareSide | null
 }
 
 export interface EnergyDevice {
@@ -58,6 +77,9 @@ export interface Energy {
   today?: EnergyDay | null
   yesterday?: EnergyDay | null
   hourly_today?: EnergyHour[] | null
+  hourly_yesterday?: EnergyHour[] | null
+  compare?: EnergyCompare | null
+  daily_cost_basis?: string | null
   daily_7d?: EnergyDate[] | null
   devices?: EnergyDevice[] | null
   other_today?: { electricity_kwh?: number | null } | null
@@ -73,7 +95,8 @@ export function mergeEnergy(current: Energy | null, reading: Energy & { type?: s
 }
 
 const ENERGY_KEYS = [
-  'updated', 'rates', 'now', 'today', 'yesterday', 'hourly_today', 'daily_7d', 'devices', 'other_today',
+  'updated', 'rates', 'now', 'today', 'yesterday', 'hourly_today', 'hourly_yesterday', 'compare',
+  'daily_cost_basis', 'daily_7d', 'devices', 'other_today',
 ] as const satisfies readonly (keyof Energy)[]
 
 /** "640 W" under a kilowatt, "1.24 kW" from there. */
@@ -113,14 +136,38 @@ export function tariffLine(rates: EnergyRates | null | undefined): string | null
   return parts.length ? parts.join(' · ') : null
 }
 
-/** "£0.40 less than yesterday", "£0.40 more than yesterday", "Same as yesterday", or null. */
-export function compareWithYesterday(energy: Energy | null | undefined): string | null {
-  const today = energy?.today?.total_cost
-  const yesterday = energy?.yesterday?.total_cost
-  if (!known(today) || !known(yesterday)) return null
+export interface Comparison {
+  tone: 'less' | 'more' | 'same'
+  arrow: string
+  /** "£0.62 less than yesterday by 14:47". */
+  headline: string
+  /** "6.6 kWh vs 7.9 kWh electricity · 58 kWh vs 66 kWh gas", or null when no kWh is known. */
+  detail: string | null
+}
+
+/** Within this share of yesterday's cost, the two count as the same. */
+const SAME_WITHIN = 0.02
+
+/** Today so far against yesterday at the same time, from `compare`; null when either cost is unknown. */
+export function compareSummary(energy: Energy | null | undefined): Comparison | null {
+  const compare = energy?.compare
+  const today = compare?.today?.cost
+  const yesterday = compare?.yesterday?.cost
+  if (!compare || !known(today) || !known(yesterday)) return null
   const diff = today - yesterday
-  if (Math.abs(diff) < 0.005) return 'Same as yesterday'
-  return `${formatMoney(Math.abs(diff), energy?.rates?.currency)} ${diff < 0 ? 'less' : 'more'} than yesterday`
+  const same = Math.abs(diff) <= SAME_WITHIN * Math.abs(yesterday)
+  const tone = same ? 'same' : diff < 0 ? 'less' : 'more'
+  const by = compare.until ? ` by ${compare.until}` : ''
+  const headline = same
+    ? `About the same as yesterday${by}`
+    : `${formatMoney(Math.abs(diff), energy?.rates?.currency)} ${tone} than yesterday${by}`
+  const pair = (a: Num, b: Num, fuel: string) =>
+    known(a) && known(b) ? `${formatKwh(a)} vs ${formatKwh(b)} ${fuel}` : null
+  const parts = [
+    pair(compare.today?.electricity_kwh, compare.yesterday?.electricity_kwh, 'electricity'),
+    pair(compare.today?.gas_kwh, compare.yesterday?.gas_kwh, 'gas'),
+  ].filter((part): part is string => part !== null)
+  return { tone, arrow: tone === 'less' ? '↓' : tone === 'more' ? '↑' : '→', headline, detail: parts.length ? parts.join(' · ') : null }
 }
 
 /** A part of today's electricity, 0 to 1; null when either side is unknown or today is zero. */
@@ -212,10 +259,22 @@ export interface Bar {
   label: string
   electricity: number | null
   gas: number | null
+  electricityCost: number | null
+  gasCost: number | null
+  totalCost: number | null
+  /** The bar's day is not over yet (the last day of the week). */
+  partial: boolean
 }
 
-/** Today's 24 hours (hours with no reading stay empty). */
-export function hourlyBars(hours: EnergyHour[] | null | undefined): Bar[] {
+const money = (n: Num) => (known(n) ? n : null)
+const cost = (kwh: Num, rate: Num) => (known(kwh) && known(rate) ? kwh * rate : null)
+const sumKnown = (...xs: Num[]) => {
+  const present = xs.filter(known)
+  return present.length ? present.reduce((a, b) => a + b, 0) : null
+}
+
+/** Today's 24 hours (hours with no reading stay empty); cost is kWh times the unit rate. */
+export function hourlyBars(hours: EnergyHour[] | null | undefined, rates?: EnergyRates | null): Bar[] {
   const byHour = new Map<number, EnergyHour>()
   for (const h of hours ?? []) {
     const hour = hourOf(h.hour)
@@ -224,26 +283,100 @@ export function hourlyBars(hours: EnergyHour[] | null | undefined): Bar[] {
   return Array.from({ length: 24 }, (_, hour) => {
     const reading = byHour.get(hour)
     const hh = String(hour).padStart(2, '0')
+    const electricityCost = cost(reading?.electricity_kwh, rates?.electricity_per_kwh)
+    const gasCost = cost(reading?.gas_kwh, rates?.gas_per_kwh)
     return {
       key: hh,
       tick: hour % 6 === 0 ? hh : '',
       label: `${hh}:00`,
       electricity: known(reading?.electricity_kwh) ? reading.electricity_kwh : null,
       gas: known(reading?.gas_kwh) ? reading.gas_kwh : null,
+      electricityCost,
+      gasCost,
+      totalCost: sumKnown(electricityCost, gasCost),
+      partial: false,
     }
   })
 }
 
+/** "YYYY-MM-DD" moved by `days` (calendar arithmetic, no time zone). */
+export function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
+
+/** The 7 dates ending at the newest one given, oldest first; days the API has no row for stay empty.
+ * The newest day is today, so it is partial. */
 export function dailyBars(days: EnergyDate[] | null | undefined): Bar[] {
-  return [...(days ?? [])]
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((day) => ({
-      key: day.date,
-      tick: weekday(day.date),
-      label: `${weekday(day.date)} ${shortDate(day.date)}`,
-      electricity: known(day.electricity_kwh) ? day.electricity_kwh : null,
-      gas: known(day.gas_kwh) ? day.gas_kwh : null,
+  const byDate = new Map((days ?? []).map((day) => [day.date, day]))
+  const newest = [...byDate.keys()].sort().pop()
+  if (!newest) return []
+  return Array.from({ length: 7 }, (_, i) => addDays(newest, i - 6)).map((date) => {
+    const day = byDate.get(date)
+    return {
+      key: date,
+      tick: weekday(date),
+      label: `${weekday(date)} ${shortDate(date)}`,
+      electricity: known(day?.electricity_kwh) ? day.electricity_kwh : null,
+      gas: known(day?.gas_kwh) ? day.gas_kwh : null,
+      electricityCost: money(day?.electricity_cost),
+      gasCost: money(day?.gas_cost),
+      totalCost: money(day?.total_cost),
+      partial: date === newest,
+    }
+  })
+}
+
+/** True when the bar has any reading to show or hover. */
+export const hasData = (bar: Bar) => bar.electricity !== null || bar.gas !== null
+
+export interface Tip {
+  title: string
+  lines: { series: 'electricity' | 'gas'; text: string }[]
+  /** "Total £0.29", or null when no cost is known. */
+  total: string | null
+}
+
+/** What the tooltip shows for a bar: each fuel that has a reading with its kWh and cost, then the total. */
+export function tipFor(bar: Bar, currency?: string | null): Tip | null {
+  if (!hasData(bar)) return null
+  const line = (series: 'electricity' | 'gas', label: string, kwh: number | null, cost: number | null) =>
+    kwh === null ? [] : [{ series, text: `${label} ${formatKwh(kwh)}${cost === null ? '' : ` · ${formatMoney(cost, currency)}`}` }]
+  return {
+    title: bar.partial ? `${bar.label} so far` : bar.label,
+    lines: [...line('electricity', 'Electricity', bar.electricity, bar.electricityCost), ...line('gas', 'Gas', bar.gas, bar.gasCost)],
+    total: bar.totalCost === null ? null : `Total ${formatMoney(bar.totalCost, currency)}`,
+  }
+}
+
+export interface DayRow {
+  key: string
+  /** "Sat 21". */
+  day: string
+  electricity: string
+  gas: string
+  cost: string
+  partial: boolean
+}
+
+/** The week's table: days with data, newest first. */
+export function dayRows(bars: Bar[], currency?: string | null): DayRow[] {
+  return bars
+    .filter(hasData)
+    .reverse()
+    .map((bar) => ({
+      key: bar.key,
+      day: `${bar.tick} ${Number(bar.key.slice(8))}`,
+      electricity: formatKwh(bar.electricity),
+      gas: formatKwh(bar.gas),
+      cost: formatMoney(bar.totalCost, currency),
+      partial: bar.partial,
     }))
+}
+
+/** The footnote under the week's table; null when the API does not say how it priced the days. */
+export function costBasisNote(basis: string | null | undefined): string | null {
+  return basis === 'current_rates' ? "Costs at today's rates, incl. standing charges" : null
 }
 
 export const barTotal = (bar: Bar) => (bar.electricity ?? 0) + (bar.gas ?? 0)

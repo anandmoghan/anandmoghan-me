@@ -3,8 +3,10 @@
 import type { CSSProperties } from 'react'
 import { EnergyChart } from '../EnergyChart'
 import {
-  compareWithYesterday,
+  compareSummary,
+  costBasisNote,
   dailyBars,
+  dayRows,
   formatKwh,
   formatMoney,
   formatPower,
@@ -27,7 +29,7 @@ function hasAnyReading(energy: Energy | null): boolean {
   return now?.electricity_w != null
     || today?.total_cost != null
     || today?.electricity_kwh != null
-    || hasReadings(hourlyBars(energy.hourly_today))
+    || hasReadings(hourlyBars(energy.hourly_today, energy.rates))
     || hasReadings(dailyBars(energy.daily_7d))
 }
 
@@ -63,7 +65,7 @@ function Hero({ energy, live }: { energy: Energy; live: boolean }) {
   const { now, today, rates } = energy
   const currency = rates?.currency
   const watts = now?.electricity_w
-  const comparison = compareWithYesterday(energy)
+  const comparison = compareSummary(energy)
   return (
     <section className="home-energy-card home-energy-hero" aria-label="Now and today">
       <p className="home-energy-hero__label">
@@ -79,7 +81,15 @@ function Hero({ energy, live }: { energy: Energy; live: boolean }) {
         <SplitChip series="electricity" label="Electricity" kwh={today?.electricity_kwh} cost={today?.electricity_cost} currency={currency} />
         <SplitChip series="gas" label="Gas" kwh={today?.gas_kwh} cost={today?.gas_cost} currency={currency} />
       </ul>
-      {comparison && <p className="home-energy-hero__compare">{comparison}</p>}
+      {comparison && (
+        <div className="home-compare" data-tone={comparison.tone}>
+          <span className="home-compare__pill" aria-hidden>{comparison.arrow}</span>
+          <div className="home-compare__text">
+            <p className="home-compare__headline">{comparison.headline}</p>
+            {comparison.detail && <p className="home-compare__detail">{comparison.detail}</p>}
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -121,6 +131,10 @@ export function EnergyPage() {
   const subtitle = tariffLine(energy?.rates)
   const waiting = !hasAnyReading(energy)
   const rows = usageRows(energy)
+  const currency = energy?.rates?.currency
+  const week = dailyBars(energy?.daily_7d)
+  const days = dayRows(week, currency)
+  const basisNote = costBasisNote(energy?.daily_cost_basis)
   const updated = ranAgo(energy?.updated ?? null, now)
 
   return (
@@ -140,17 +154,48 @@ export function EnergyPage() {
               <EnergyChart
                 title="Today by hour"
                 rowHeader="Hour"
-                bars={hourlyBars(energy.hourly_today)}
+                bars={hourlyBars(energy.hourly_today, energy.rates)}
                 empty="No hourly readings yet today."
+                currency={energy.rates?.currency}
               />
             </section>
             <section className="home-energy-card" aria-label="Last 7 days">
               <EnergyChart
                 title="Last 7 days"
                 rowHeader="Day"
-                bars={dailyBars(energy.daily_7d)}
+                bars={week}
                 empty="Daily totals appear after the first full day."
+                currency={currency}
+                labels
               />
+              {days.length > 0 && (
+                <>
+                  <table className="home-days">
+                    <thead>
+                      <tr>
+                        <th scope="col">Day</th>
+                        <th scope="col">Electricity</th>
+                        <th scope="col">Gas</th>
+                        <th scope="col">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {days.map((row) => (
+                        <tr key={row.key}>
+                          <th scope="row">
+                            {row.day}
+                            {row.partial && <span className="home-days__partial">so far</span>}
+                          </th>
+                          <td>{row.electricity}</td>
+                          <td>{row.gas}</td>
+                          <td>{row.cost}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {basisNote && <p className="home-days__note">{basisNote}</p>}
+                </>
+              )}
             </section>
             {rows.length > 0 && (
               <section aria-labelledby="home-energy-where">

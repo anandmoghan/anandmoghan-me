@@ -1227,10 +1227,43 @@ div.home-tile__main {
   font-variant-numeric: tabular-nums;
 }
 
-.home-energy-hero__compare {
-  margin-top: 0.7rem;
-  color: var(--h-text2);
+.home-compare {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.home-compare__pill {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--h-glass-icon);
+  border-radius: 9999px;
+}
+
+.home-compare[data-tone="less"] .home-compare__pill {
+  background: color-mix(in srgb, var(--h-green) 28%, transparent);
+}
+
+.home-compare[data-tone="more"] .home-compare__pill {
+  background: color-mix(in srgb, var(--h-amber) 36%, transparent);
+}
+
+.home-compare__headline {
   font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.home-compare__detail {
+  color: var(--h-text2);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The live dot breathes while the stream is connected. */
@@ -1353,6 +1386,18 @@ div.home-tile__main {
   opacity: 0.4;
 }
 
+.home-chart__value {
+  fill: var(--h-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-chart__nodata {
+  fill: var(--h-text2);
+  font-size: 0.625rem;
+}
+
 .home-chart__hit {
   fill: transparent;
 }
@@ -1385,11 +1430,68 @@ div.home-tile__main {
   font-weight: 600;
 }
 
+.home-chart__tip-total {
+  padding-top: 0.2rem;
+  font-weight: 600;
+  border-top: 1px solid var(--h-solid-text2);
+}
+
 .home-chart__empty {
   padding: 1.5rem 0;
   color: var(--h-text2);
   font-size: 0.9375rem;
   text-align: center;
+}
+
+/* The week as a table under its chart. */
+.home-days {
+  width: 100%;
+  margin-top: 0.8rem;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  border-collapse: collapse;
+}
+
+.home-days th,
+.home-days td {
+  padding: 0.4rem 0;
+  text-align: right;
+  white-space: nowrap;
+  border-top: 1px solid var(--h-hairline);
+}
+
+.home-days th:first-child {
+  text-align: left;
+}
+
+.home-days thead th {
+  color: var(--h-text2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-top: 0;
+}
+
+.home-days tbody th {
+  font-weight: 600;
+}
+
+.home-days td:last-child {
+  font-weight: 600;
+}
+
+.home-days__partial {
+  margin-left: 0.4rem;
+  color: var(--h-text2);
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+
+.home-days__note {
+  margin-top: 0.5rem;
+  color: var(--h-text2);
+  font-size: 0.75rem;
 }
 
 /* Where it went today. */

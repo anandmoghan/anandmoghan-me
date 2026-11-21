@@ -1,15 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { barsSummary, barTotal, formatKwh, hasReadings, niceMax, type Bar } from './energy'
+import { barsSummary, barTotal, formatKwh, formatMoney, hasData, hasReadings, niceMax, tipFor, type Bar } from './energy'
 
 // A stacked column chart drawn as inline SVG at the plot's measured width (so text never scales):
 // electricity at the baseline, gas above it with a 2px surface gap, 4px rounded tops, a recessive
 // grid at the top and middle of a clean scale. A pointer or the arrow keys pick a column for the
-// tooltip; the visually hidden table holds every value.
+// tooltip; the visually hidden table holds every value. With `labels` each bar carries its cost
+// above it and days with no data say so.
 
 const PLOT_H = 132
 const TOP = 8
+const LABEL_H = 16
 const TICKS_H = 20
 const AXIS_W = 56
 const GAP = 2
@@ -49,7 +51,14 @@ export function Legend() {
 }
 
 /** `rowHeader` names the table's first column ("Hour", "Day"); `empty` shows before any reading. */
-export function EnergyChart({ title, bars, rowHeader, empty }: { title: string; bars: Bar[]; rowHeader: string; empty: string }) {
+export function EnergyChart({ title, bars, rowHeader, empty, currency, labels = false }: {
+  title: string
+  bars: Bar[]
+  rowHeader: string
+  empty: string
+  currency?: string | null
+  labels?: boolean
+}) {
   const [plot, width] = useWidth()
   const [active, setActive] = useState<number | null>(null)
   const readings = hasReadings(bars)
@@ -58,14 +67,20 @@ export function EnergyChart({ title, bars, rowHeader, empty }: { title: string; 
   const slot = bars.length ? plotW / bars.length : 0
   const barW = Math.min(MAX_BAR, Math.max(3, slot * 0.62))
   const scale = (kwh: number) => (kwh / max) * PLOT_H
-  const base = TOP + PLOT_H
-  const picked = active !== null ? bars[active] : null
+  const top = labels ? TOP + LABEL_H : TOP
+  const base = top + PLOT_H
+  const picked = active !== null ? tipFor(bars[active], currency) : null
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
     e.preventDefault()
     const step = e.key === 'ArrowRight' ? 1 : -1
-    setActive((i) => Math.min(bars.length - 1, Math.max(0, (i ?? (step > 0 ? -1 : bars.length)) + step)))
+    setActive((i) => {
+      for (let next = (i ?? (step > 0 ? -1 : bars.length)) + step; next >= 0 && next < bars.length; next += step) {
+        if (hasData(bars[next])) return next
+      }
+      return i
+    })
   }
 
   return (
@@ -111,18 +126,31 @@ export function EnergyChart({ title, bars, rowHeader, empty }: { title: string; 
                   <g key={bar.key} className="home-chart__col" data-dim={(active !== null && active !== i) || undefined}>
                     {e > 0 && <path data-series="electricity" d={segment(x, base - e, barW, e, g <= 0)} />}
                     {g > 0 && <path data-series="gas" d={segment(x, base - e - gGap - g, barW, g, true)} />}
+                    {labels && hasData(bar) && bar.totalCost !== null && (
+                      <text className="home-chart__value" x={x + barW / 2} y={base - e - (g > 0 ? gGap + g : 0) - 5} textAnchor="middle">
+                        {formatMoney(bar.totalCost, currency)}
+                      </text>
+                    )}
+                    {labels && !hasData(bar) && (
+                      <text className="home-chart__nodata" x={x + barW / 2} textAnchor="middle">
+                        <tspan x={x + barW / 2} y={base - 18}>No</tspan>
+                        <tspan x={x + barW / 2} y={base - 6}>data</tspan>
+                      </text>
+                    )}
                     {bar.tick && (
                       <text className="home-chart__tick" x={x + barW / 2} y={base + 14} textAnchor="middle">{bar.tick}</text>
                     )}
-                    <rect
-                      className="home-chart__hit"
-                      x={i * slot}
-                      y={0}
-                      width={slot}
-                      height={base}
-                      onPointerEnter={() => setActive(i)}
-                      onPointerDown={() => setActive(i)}
-                    />
+                    {hasData(bar) && (
+                      <rect
+                        className="home-chart__hit"
+                        x={i * slot}
+                        y={0}
+                        width={slot}
+                        height={base}
+                        onPointerEnter={() => setActive(i)}
+                        onPointerDown={() => setActive(i)}
+                      />
+                    )}
                   </g>
                 )
               })}
@@ -134,9 +162,11 @@ export function EnergyChart({ title, bars, rowHeader, empty }: { title: string; 
               role="status"
               style={{ '--x': `${Math.min(Math.max(active * slot + slot / 2, 70), Math.max(70, plotW - 70))}px` } as CSSProperties}
             >
-              <span className="home-chart__tip-title">{picked.label}</span>
-              <span><span className="home-legend__swatch" data-series="electricity" aria-hidden />Electricity {formatKwh(picked.electricity)}</span>
-              <span><span className="home-legend__swatch" data-series="gas" aria-hidden />Gas {formatKwh(picked.gas)}</span>
+              <span className="home-chart__tip-title">{picked.title}</span>
+              {picked.lines.map((line) => (
+                <span key={line.series}><span className="home-legend__swatch" data-series={line.series} aria-hidden />{line.text}</span>
+              ))}
+              {picked.total && <span className="home-chart__tip-total">{picked.total}</span>}
             </div>
           )}
         </div>
@@ -150,6 +180,7 @@ export function EnergyChart({ title, bars, rowHeader, empty }: { title: string; 
             <th scope="col">{rowHeader}</th>
             <th scope="col">Electricity</th>
             <th scope="col">Gas</th>
+            <th scope="col">Cost</th>
           </tr>
         </thead>
         <tbody>
@@ -158,6 +189,7 @@ export function EnergyChart({ title, bars, rowHeader, empty }: { title: string; 
               <th scope="row">{bar.label}</th>
               <td>{formatKwh(bar.electricity)}</td>
               <td>{formatKwh(bar.gas)}</td>
+              <td>{formatMoney(bar.totalCost, currency)}</td>
             </tr>
           ))}
         </tbody>
