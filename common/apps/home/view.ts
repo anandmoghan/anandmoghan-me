@@ -27,12 +27,10 @@ export function lightsOn(state: HomeState): number {
 export function statusChips(state: HomeState): StatusChip[] {
   const tiles = allTiles(state)
   const thermostat = tiles.find((t) => t.kind === 'climate' && t.attributes.current_temperature !== undefined)
-  const heaters = tiles.filter((t) => t.kind === 'heater' && isOn(t)).length
   const on = lightsOn(state)
   return [
     { key: 'lights', label: 'Lights', value: on > 0 ? `${on} on` : 'Off' },
     ...(thermostat ? [{ key: 'climate', label: 'Climate', value: formatTemp(thermostat.attributes.current_temperature as number) }] : []),
-    ...(heaters > 0 ? [{ key: 'heaters', label: 'Heaters', value: `${heaters} on` }] : []),
   ]
 }
 

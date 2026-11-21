@@ -1,35 +1,84 @@
 'use client'
 
-import { DeviceGlyph, HeaterGlyph } from './glyphs'
+import { DeviceGlyph } from './glyphs'
 import { useHome } from './HomeProvider'
 import { useLongPress } from './useLongPress'
 import { formatTemp, hasLightControls, isOn, isUnavailable, stateLabel, type Tile } from './lib'
 
-function TileGlyph({ tile }: { tile: Tile }) {
-  return tile.kind === 'heater' ? <HeaterGlyph size={20} /> : <DeviceGlyph domain={tile.domain} size={20} />
-}
+const TEMP_STEP = 0.5
 
+// A thermostat or heater. When the server says it is controllable, a tap toggles it and, while it
+// is on with a known target, a stepper nudges the target by half a degree within its range.
 function ClimateTile({ tile }: { tile: Tile }) {
+  const { act } = useHome()
   const current = tile.attributes.current_temperature
+  const target = tile.attributes.temperature
+  const min = tile.attributes.min_temp ?? 5
+  const max = tile.attributes.max_temp ?? 35
+  const on = isOn(tile)
+  const unavailable = isUnavailable(tile)
   const label = stateLabel(tile)
-  const heating = tile.attributes.hvac_action === 'heating' || tile.attributes.hvac_action === 'cooling'
+  const steps = tile.controllable && !unavailable && on && target !== undefined
+  const step = (delta: number) =>
+    act(tile.entity_id, { action: 'temperature', value: Math.min(max, Math.max(min, (target ?? min) + delta)) })
+
+  const content = (
+    <>
+      <span className="home-tile__glyph home-tile__glyph--temp" aria-hidden>
+        {current !== undefined ? formatTemp(current) : '–'}
+      </span>
+      <span className="home-tile__text" aria-hidden={!tile.controllable || undefined}>
+        <span className="home-tile__name">{tile.short_name}</span>
+        <span className="home-tile__state">{label}</span>
+      </span>
+    </>
+  )
+
   return (
     <div
       className="home-tile"
       data-kind="climate"
-      data-on={heating || undefined}
-      role="group"
-      aria-label={`${tile.short_name}, ${current !== undefined ? `${formatTemp(current)} now, ` : ''}${label}`}
+      data-on={on || undefined}
+      data-unavailable={unavailable || undefined}
+      {...(tile.controllable ? {} : { role: 'group', 'aria-label': `${tile.short_name}, ${current !== undefined ? `${formatTemp(current)} now, ` : ''}${label}` })}
     >
-      <div className="home-tile__main">
-        <span className="home-tile__glyph home-tile__glyph--temp" aria-hidden>
-          {current !== undefined ? formatTemp(current) : '–'}
-        </span>
-        <span className="home-tile__text" aria-hidden>
-          <span className="home-tile__name">{tile.short_name}</span>
-          <span className="home-tile__state">{label}</span>
-        </span>
-      </div>
+      {tile.controllable ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={tile.name}
+          disabled={unavailable}
+          className="home-tile__main"
+          onClick={() => act(tile.entity_id, { action: 'toggle' })}
+        >
+          {content}
+        </button>
+      ) : (
+        <div className="home-tile__main">{content}</div>
+      )}
+      {steps && (
+        <div className="home-tile__stepper">
+          <button
+            type="button"
+            className="home-tile__step"
+            aria-label={`Lower ${tile.name} target`}
+            disabled={target <= min}
+            onClick={() => step(-TEMP_STEP)}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            className="home-tile__step"
+            aria-label={`Raise ${tile.name} target`}
+            disabled={target >= max}
+            onClick={() => step(TEMP_STEP)}
+          >
+            +
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -76,7 +125,7 @@ export function DeviceTile({ tile, onAdjust }: { tile: Tile; onAdjust: (entityId
         {...handlers}
       >
         <span className="home-tile__glyph" aria-hidden>
-          <TileGlyph tile={tile} />
+          <DeviceGlyph domain={tile.domain} size={20} />
         </span>
         <span className="home-tile__text">
           <span className="home-tile__name">{tile.short_name}</span>

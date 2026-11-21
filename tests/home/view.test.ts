@@ -9,6 +9,7 @@ import {
   findTile,
   optimisticChanges,
   withDevices,
+  stateLabel,
   type HomeState,
 } from "../../common/apps/home/lib";
 import { automationGroups, lightsOn, statusChips } from "../../common/apps/home/view";
@@ -22,7 +23,7 @@ test("the snapshot is drawn as the server placed it", () => {
   assert.deepEqual(real.rooms.map((r) => r.name), ["Living Room", "Hallway", "Master Bedroom", "Dining Room", "Kitchen"]);
   const tiles = (name: string) => real.rooms.find((r) => r.name === name)!.tiles.map((t) => `${t.kind}:${t.short_name}`);
   assert.deepEqual(tiles("Dining Room"), ["light_group:Pendants", "light_group:Spotlights", "light:Lamp"]);
-  assert.deepEqual(tiles("Kitchen"), ["light_group:Spotlights", "heater:Heater"]);
+  assert.deepEqual(tiles("Kitchen"), ["light_group:Spotlights", "climate:Heater"]);
   assert.equal(real.rooms[0].all_lights, "light.living_room_lights");
   assert.equal(real.rooms[1].all_lights, null);
   assert.deepEqual(real.modes.map((m) => m.name), ["Away Mode", "Awake Mode", "Anand Sleep Mode", "Kavya Sleep Mode"]);
@@ -67,6 +68,20 @@ test("the whole-room group turns every light in the room on or off", () => {
   assert.ok(off.every((d) => d.state === "off"));
 });
 
+test("climate: on in any mode but off; toggle, target and labels", () => {
+  const state = fresh();
+  const heater = findTile(state, "climate.kitchen_heater")!;
+  assert.equal(stateLabel(heater), "Off");
+  const on = optimisticChanges(state, heater.entity_id, { action: "toggle" })[0];
+  assert.equal(on.state, "heat");
+  assert.equal(stateLabel(on), "Heat to 21°");
+  assert.equal(optimisticChanges(withDevices(state, [on]), heater.entity_id, { action: "toggle" })[0].state, "off");
+  const warmer = optimisticChanges(state, heater.entity_id, { action: "temperature", value: 21.5 })[0];
+  assert.equal(warmer.attributes.temperature, 21.5);
+  assert.equal(stateLabel({ ...on, attributes: { ...on.attributes, hvac_action: "heating" } }), "Heating to 21°");
+  assert.equal(stateLabel({ ...on, state: "unavailable" }), "Unavailable");
+});
+
 test("stream events update members, tiles and automations", () => {
   let state = fresh();
   const pendant = findDevice(state, "light.dining_room_pendant_1")!;
@@ -80,14 +95,13 @@ test("stream events update members, tiles and automations", () => {
   assert.equal(applyEvent(state, { type: "state", ...pendant, entity_id: "light.unknown" }).rooms, state.rooms);
 });
 
-test("status chips summarise lights, climate and heaters", () => {
+test("status chips summarise lights, and climate", () => {
   const state = fresh();
   const living = state.rooms[0].tiles;
   living[0].members![0].state = "on";
   living[0].members![1].state = "on";
   living[2].attributes = { current_temperature: 20.5 };
-  state.rooms.find((r) => r.id === "kitchen")!.tiles[1].state = "on";
-  assert.deepEqual(statusChips(state).map((c) => `${c.label} ${c.value}`), ["Lights 2 on", "Climate 20.5°", "Heaters 1 on"]);
+  assert.deepEqual(statusChips(state).map((c) => `${c.label} ${c.value}`), ["Lights 2 on", "Climate 20.5°"]);
   assert.equal(statusChips(real)[0].value, "Off");
 });
 

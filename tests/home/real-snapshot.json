@@ -159,13 +159,24 @@
      ]
     },
     {
-     "entity_id": "input_boolean.master_bedroom_heater_control",
-     "name": "Master Bedroom Heater Control",
-     "domain": "input_boolean",
+     "entity_id": "climate.master_bedroom_heater",
+     "name": "Master Bedroom Heater",
+     "domain": "climate",
      "state": "off",
      "controllable": true,
-     "attributes": {},
-     "kind": "heater",
+     "attributes": {
+      "current_temperature": 18,
+      "temperature": 21,
+      "min_temp": 5,
+      "max_temp": 35,
+      "hvac_modes": [
+       "off",
+       "heat",
+       "fan_only"
+      ],
+      "hvac_mode": "off"
+     },
+     "kind": "climate",
      "short_name": "Heater"
     }
    ]
@@ -301,13 +312,24 @@
      ]
     },
     {
-     "entity_id": "input_boolean.kitchen_heater_control",
-     "name": "Kitchen Heater Control",
-     "domain": "input_boolean",
+     "entity_id": "climate.kitchen_heater",
+     "name": "Kitchen Heater",
+     "domain": "climate",
      "state": "off",
      "controllable": true,
-     "attributes": {},
-     "kind": "heater",
+     "attributes": {
+      "current_temperature": 18,
+      "temperature": 21,
+      "min_temp": 5,
+      "max_temp": 35,
+      "hvac_modes": [
+       "off",
+       "heat",
+       "fan_only"
+      ],
+      "hvac_mode": "off"
+     },
+     "kind": "climate",
      "short_name": "Heater"
     }
    ]

@@ -15,6 +15,9 @@ export interface DeviceAttributes {
   supported_color_modes?: string[]
   current_temperature?: number
   temperature?: number
+  min_temp?: number
+  max_temp?: number
+  hvac_modes?: string[]
   hvac_action?: string
   hvac_mode?: string
 }
@@ -28,7 +31,7 @@ export interface Device {
   attributes: DeviceAttributes
 }
 
-export type TileKind = 'light' | 'light_group' | 'switch' | 'fan' | 'heater' | 'climate'
+export type TileKind = 'light' | 'light_group' | 'switch' | 'fan' | 'climate'
 
 /** A device as the server places it on the Home tab, with its name inside the room. */
 export interface Tile extends Device {
@@ -79,6 +82,7 @@ export type HomeAction =
   | { action: 'turn_on' | 'turn_off' | 'toggle' | 'activate' | 'enable' | 'disable' | 'trigger' }
   | { action: 'brightness'; value: number }
   | { action: 'color_temp'; value: number }
+  | { action: 'temperature'; value: number }
 
 /** One message from GET /home/events. */
 export type HomeEvent =
@@ -86,9 +90,11 @@ export type HomeEvent =
   | { type: 'automation'; entity_id: string; enabled: boolean; last_triggered: string | null }
   | ({ type: 'energy' } & Energy)
 
-export const isOn = (device: Device) => device.state === 'on'
-
 export const isUnavailable = (device: Device) => device.state === 'unavailable' || device.state === 'unknown'
+
+/** On for a switch is "on"; a climate entity is on in any mode but "off" (heat, fan_only, auto...). */
+export const isOn = (device: Device) =>
+  device.domain === 'climate' ? device.state !== 'off' && !isUnavailable(device) : device.state === 'on'
 
 export const isAutomationId = (entityId: string) => entityId.startsWith('automation.')
 
@@ -187,11 +193,13 @@ export function applyEvent(state: HomeState, event: Exclude<HomeEvent, { type: '
 export function optimisticDevice(device: Device, action: HomeAction): Device {
   switch (action.action) {
     case 'turn_on':
-      return { ...device, state: 'on' }
+      return { ...device, state: device.domain === 'climate' ? 'heat' : 'on' }
     case 'turn_off':
       return { ...device, state: 'off' }
     case 'toggle':
-      return { ...device, state: isOn(device) ? 'off' : 'on' }
+      return optimisticDevice(device, { action: isOn(device) ? 'turn_off' : 'turn_on' })
+    case 'temperature':
+      return { ...device, attributes: { ...device.attributes, temperature: action.value } }
     case 'brightness':
       return { ...device, state: 'on', attributes: { ...device.attributes, brightness_pct: action.value } }
     case 'color_temp':
@@ -242,9 +250,10 @@ export function stateLabel(device: Device): string {
   if (device.domain === 'climate') {
     const { temperature, hvac_action } = device.attributes
     const target = temperature !== undefined ? `${formatTemp(temperature)}` : null
+    if (device.state === 'off') return 'Off'
     if (hvac_action === 'heating') return target ? `Heating to ${target}` : 'Heating'
     if (hvac_action === 'cooling') return target ? `Cooling to ${target}` : 'Cooling'
-    if (device.state === 'off') return 'Off'
+    if (device.state === 'heat' && target) return `Heat to ${target}`
     return target ? `Set to ${target}` : 'Idle'
   }
   if (!isOn(device)) return 'Off'
