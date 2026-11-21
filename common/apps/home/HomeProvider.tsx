@@ -101,7 +101,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
             setEnergyStatus('ready')
             return
           }
-          latest.current.delete(event.entity_id)
+          if (event.type !== 'room') latest.current.delete(event.entity_id)
           setState((s) => (s ? applyEvent(s, event) : s))
         },
       })

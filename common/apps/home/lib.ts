@@ -45,6 +45,8 @@ export interface Tile extends Device {
 export interface Room {
   id: string
   name: string
+  /** The room's temperature from the server (a sensor, else a thermostat), null when unknown. */
+  temperature: number | null
   /** The whole-room light group ("Living Room Lights"), driven by the room header toggle. */
   all_lights: string | null
   tiles: Tile[]
@@ -87,6 +89,7 @@ export type HomeAction =
 /** One message from GET /home/events. */
 export type HomeEvent =
   | ({ type: 'state' } & Device)
+  | { type: 'room'; id: string; temperature: number | null }
   | { type: 'automation'; entity_id: string; enabled: boolean; last_triggered: string | null }
   | ({ type: 'energy' } & Energy)
 
@@ -173,6 +176,13 @@ export function withDevices(state: HomeState, next: Device[]): HomeState {
   }
 }
 
+/** Sets a room's temperature; a room the snapshot does not hold leaves the state untouched. Rooms
+ * keep the order the server sent them in. */
+export function withRoomTemperature(state: HomeState, id: string, temperature: number | null): HomeState {
+  if (!state.rooms.some((room) => room.id === id)) return state
+  return { ...state, rooms: state.rooms.map((room) => (room.id === id ? { ...room, temperature } : room)) }
+}
+
 export function withAutomation(state: HomeState, next: Partial<Automation> & { entity_id: string }): HomeState {
   return {
     ...state,
@@ -180,8 +190,9 @@ export function withAutomation(state: HomeState, next: Partial<Automation> & { e
   }
 }
 
-/** Applies one device or automation message; entities the snapshot does not hold are ignored. */
+/** Applies one device, room or automation message; entities the snapshot does not hold are ignored. */
 export function applyEvent(state: HomeState, event: Exclude<HomeEvent, { type: 'energy' }>): HomeState {
+  if (event.type === 'room') return withRoomTemperature(state, event.id, event.temperature)
   if (event.type === 'automation') {
     const { entity_id, enabled, last_triggered } = event
     return withAutomation(state, { entity_id, enabled, last_triggered })

@@ -92,8 +92,12 @@ function parseBlock(block: string): HomeEvent | null {
     .join('\n')
   if (!data) return null
   try {
-    const event = JSON.parse(data) as { type?: unknown; entity_id?: unknown }
+    const event = JSON.parse(data) as { type?: unknown; entity_id?: unknown; id?: unknown; temperature?: unknown }
     if (event.type === 'energy') return event as HomeEvent
+    if (event.type === 'room') {
+      const valid = typeof event.id === 'string' && (event.temperature === null || typeof event.temperature === 'number')
+      return valid ? (event as HomeEvent) : null
+    }
     const known = event.type === 'state' || event.type === 'automation'
     return known && typeof event.entity_id === 'string' ? (event as HomeEvent) : null
   } catch {

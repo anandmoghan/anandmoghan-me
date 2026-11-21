@@ -5,7 +5,7 @@ import { DeviceTile } from '../DeviceTile'
 import { AwayGlyph, ChevronGlyph, LightGlyph, MoonGlyph, SceneGlyph, SunGlyph, ToggleGlyph } from '../glyphs'
 import { useHome } from '../HomeProvider'
 import { LightSheet } from '../LightSheet'
-import { isOn, roomLights, type Device, type Room } from '../lib'
+import { formatTemp, isOn, roomLights, type Device, type Room } from '../lib'
 import { statusChips } from '../view'
 
 const ACTIVATED_MS = 2000
@@ -94,7 +94,7 @@ function Scenes() {
 
 function RoomSection({ room, onAdjust }: { room: Room; onAdjust: (entityId: string) => void }) {
   const { act } = useHome()
-  const { id, name, all_lights: allLights } = room
+  const { id, name, temperature, all_lights: allLights } = room
   const headingId = `home-room-${id}`
   // The header toggle reads like Apple's: lit when any light in the room is on.
   const lightsOn = roomLights(room).some(isOn)
@@ -103,6 +103,7 @@ function RoomSection({ room, onAdjust }: { room: Room; onAdjust: (entityId: stri
       <div className="home-room__head">
         <h2 id={headingId} className="home-room__title">
           <span>{name}</span>
+          {temperature !== null && <span className="home-room__temp">{formatTemp(temperature)}</span>}
           <ChevronGlyph size={16} />
         </h2>
         {allLights && (
@@ -120,7 +121,7 @@ function RoomSection({ room, onAdjust }: { room: Room; onAdjust: (entityId: stri
       </div>
       <ul className="home-grid">
         {room.tiles.map((tile) => (
-          <li key={tile.entity_id}>
+          <li key={tile.entity_id} className={tile.kind === 'climate' ? 'home-grid__wide' : undefined}>
             <DeviceTile tile={tile} onAdjust={onAdjust} />
           </li>
         ))}
@@ -170,7 +171,7 @@ export function HomePage() {
             <RoomSection key={room.id} room={room} onAdjust={setSheet} />
           ))}
           {state.other.length > 0 && (
-            <RoomSection room={{ id: 'other', name: 'Other', all_lights: null, tiles: state.other }} onAdjust={setSheet} />
+            <RoomSection room={{ id: 'other', name: 'Other', temperature: null, all_lights: null, tiles: state.other }} onAdjust={setSheet} />
           )}
         </>
       )}

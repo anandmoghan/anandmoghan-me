@@ -7,8 +7,9 @@ import { formatTemp, hasLightControls, isOn, isUnavailable, stateLabel, type Til
 
 const TEMP_STEP = 0.5
 
-// A thermostat or heater. When the server says it is controllable, a tap toggles it and, while it
-// is on with a known target, a stepper nudges the target by half a degree within its range.
+// A thermostat or heater: a full-width card. The main area (name, state, big current temperature)
+// is the on/off switch; while on with a known target, a stepper at the right shows the target and
+// nudges it by half a degree within its range.
 function ClimateTile({ tile }: { tile: Tile }) {
   const { act } = useHome()
   const current = tile.attributes.current_temperature
@@ -24,12 +25,12 @@ function ClimateTile({ tile }: { tile: Tile }) {
 
   const content = (
     <>
-      <span className="home-tile__glyph home-tile__glyph--temp" aria-hidden>
-        {current !== undefined ? formatTemp(current) : '–'}
-      </span>
       <span className="home-tile__text" aria-hidden={!tile.controllable || undefined}>
         <span className="home-tile__name">{tile.short_name}</span>
         <span className="home-tile__state">{label}</span>
+      </span>
+      <span className="home-tile__current" aria-hidden>
+        {current !== undefined ? formatTemp(current) : '–'}
       </span>
     </>
   )
@@ -62,20 +63,23 @@ function ClimateTile({ tile }: { tile: Tile }) {
           <button
             type="button"
             className="home-tile__step"
-            aria-label={`Lower ${tile.name} target`}
-            disabled={target <= min}
-            onClick={() => step(-TEMP_STEP)}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            className="home-tile__step"
             aria-label={`Raise ${tile.name} target`}
             disabled={target >= max}
             onClick={() => step(TEMP_STEP)}
           >
             +
+          </button>
+          <span className="home-tile__target" aria-live="polite">
+            {formatTemp(target)}
+          </span>
+          <button
+            type="button"
+            className="home-tile__step"
+            aria-label={`Lower ${tile.name} target`}
+            disabled={target <= min}
+            onClick={() => step(-TEMP_STEP)}
+          >
+            −
           </button>
         </div>
       )}

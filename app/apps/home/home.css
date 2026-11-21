@@ -1,14 +1,17 @@
 /* The Home app (/apps/home), styled after Apple's Home app: a wallpaper behind frosted tiles,
    the system font, an iOS tab bar and grouped inset lists. Next does not scope layout CSS, so every
-   rule is under .home-app (the dialog and the account button live inside it) or uses a home-
-   class name; the only rule outside is the one that hides the site header while Home is open.
+   rule is under .home-app (the dialog lives inside it) or uses a home-
+   class name; the only rule outside makes the shared site header transparent over the wallpaper.
    Nothing here touches the shared tokens. Dynamic values reach CSS as custom properties on the
    element: --pct (brightness pill fill), --swatch (a colour-temperature swatch), --drag (sheet
    swipe offset), --x (chart tooltip position), --share (a device's share of today). */
 
-/* Home replaces the site header with its own account button (HomeShell adds the class). */
+/* The shared site header ("AM > Home", theme, account) stays; over Home it is clear so the
+   fixed wallpaper runs edge to edge behind it, status bar included (HomeShell adds the class). */
 body.home-immersive .site-header {
-  display: none;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .home-app {
@@ -143,8 +146,7 @@ body.home-immersive .site-header {
 .home-round,
 .home-power,
 .home-pill,
-.home-energy-card,
-.home-topbar > div > button {
+.home-energy-card {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
 }
@@ -166,16 +168,6 @@ body.home-immersive .site-header {
 }
 
 /* == Header == */
-
-.home-topbar {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: max(0.5rem, env(safe-area-inset-top));
-}
-
-.home-topbar > div > button {
-  border-radius: 9999px;
-}
 
 .home-hero {
   padding-top: 0.25rem;
@@ -397,6 +389,13 @@ body.home-immersive .site-header {
   letter-spacing: -0.01em;
 }
 
+.home-room__temp {
+  margin-left: 0.25rem;
+  color: var(--h-text2);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
 .home-room__title svg {
   opacity: 0.65;
   stroke-width: 2.4;
@@ -440,6 +439,10 @@ body.home-immersive .site-header {
     grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
     gap: 0.625rem;
   }
+}
+
+.home-grid__wide {
+  grid-column: 1 / -1;
 }
 
 .home-tile {
@@ -501,13 +504,6 @@ div.home-tile__main {
   border-radius: 9999px;
 }
 
-.home-tile__glyph--temp {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
 .home-tile__text {
   display: flex;
   flex-direction: column;
@@ -562,35 +558,75 @@ div.home-tile__main {
   background: rgb(255 106 43 / 0.15);
 }
 
-/* A climate tile: the toggle fills the tile, the target stepper sits at its right. */
+/* A climate tile: full width and tall. The toggle fills the card (name and state above a large
+   current temperature); the target stepper stands at its right. */
 .home-tile[data-kind="climate"] {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  height: auto;
+  min-height: 7.5rem;
 }
 
 .home-tile[data-kind="climate"] .home-tile__main {
   flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
   width: auto;
   min-width: 0;
+  padding: 0.85rem 1rem;
+  text-align: left;
+}
+
+.home-tile[data-kind="climate"] .home-tile__name {
+  font-size: 1.0625rem;
+}
+
+.home-tile[data-kind="climate"] .home-tile__state {
+  font-size: 0.875rem;
+}
+
+.home-tile__current {
+  font-size: 2.5rem;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-tile[data-kind="climate"][data-on] .home-tile__current {
+  color: var(--h-orange);
 }
 
 .home-tile__stepper {
   display: flex;
   flex: none;
-  gap: 0.25rem;
-  padding-right: 0.6rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem 0.5rem 0;
+}
+
+.home-tile__target {
+  min-width: 2.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-tile__step {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
   padding: 0;
   color: var(--h-solid-text);
-  font-size: 1.125rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 500;
   line-height: 1;
   background: rgb(60 60 67 / 0.12);
   border: 0;

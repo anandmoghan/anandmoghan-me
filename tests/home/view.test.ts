@@ -29,6 +29,25 @@ test("the snapshot is drawn as the server placed it", () => {
   assert.deepEqual(real.modes.map((m) => m.name), ["Away Mode", "Awake Mode", "Anand Sleep Mode", "Kavya Sleep Mode"]);
 });
 
+test("rooms keep the server's order and carry their temperature", () => {
+  assert.deepEqual(real.rooms.map((r) => [r.name, r.temperature]), [
+    ["Living Room", 19.5],
+    ["Hallway", null],
+    ["Master Bedroom", 17],
+    ["Dining Room", null],
+    ["Kitchen", 18],
+  ]);
+});
+
+test("a room message sets that room's temperature and never reorders rooms", () => {
+  const state = fresh();
+  const next = applyEvent(state, { type: "room", id: "kitchen", temperature: 20.3 });
+  assert.equal(next.rooms.find((r) => r.id === "kitchen")?.temperature, 20.3);
+  assert.deepEqual(next.rooms.map((r) => r.id), state.rooms.map((r) => r.id));
+  assert.equal(applyEvent(next, { type: "room", id: "kitchen", temperature: null }).rooms.find((r) => r.id === "kitchen")?.temperature, null);
+  assert.equal(applyEvent(state, { type: "room", id: "attic", temperature: 5 }), state);
+});
+
 test("finds tiles, members and modes by entity id", () => {
   assert.equal(findTile(real, "light.dining_room_pendants")?.members?.length, 3);
   assert.equal(findDevice(real, "light.dining_room_pendant_2")?.name, "Dining Room Pendant 2");

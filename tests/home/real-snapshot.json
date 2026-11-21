@@ -106,7 +106,8 @@
      "kind": "climate",
      "short_name": "Thermostat"
     }
-   ]
+   ],
+   "temperature": 19.5
   },
   {
    "id": "hallway",
@@ -123,7 +124,8 @@
      "kind": "light",
      "short_name": "Lights"
     }
-   ]
+   ],
+   "temperature": null
   },
   {
    "id": "master_bedroom",
@@ -179,7 +181,8 @@
      "kind": "climate",
      "short_name": "Heater"
     }
-   ]
+   ],
+   "temperature": 17
   },
   {
    "id": "dining_room",
@@ -268,7 +271,8 @@
      "kind": "light",
      "short_name": "Lamp"
     }
-   ]
+   ],
+   "temperature": null
   },
   {
    "id": "kitchen",
@@ -332,7 +336,8 @@
      "kind": "climate",
      "short_name": "Heater"
     }
-   ]
+   ],
+   "temperature": 18
   }
  ],
  "other": [],

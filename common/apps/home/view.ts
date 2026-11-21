@@ -18,7 +18,7 @@ export interface AutomationGroup {
 
 /** Bulbs on across the house: light tiles and light-group members, each counted once. */
 export function lightsOn(state: HomeState): number {
-  const other = { id: 'other', name: 'Other', all_lights: null, tiles: state.other }
+  const other = { id: 'other', name: 'Other', temperature: null, all_lights: null, tiles: state.other }
   const bulbs = [...state.rooms, other].flatMap(roomLights)
   return new Set(bulbs.filter(isOn).map((d) => d.entity_id)).size
 }

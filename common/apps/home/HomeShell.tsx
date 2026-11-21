@@ -1,14 +1,13 @@
 'use client'
 
 import { useEffect, type ReactNode } from 'react'
-import { ProfileMenu } from '../components/ProfileMenu'
 import { PageSkeleton } from '../shell/Skeleton'
 import { TabBar, type Tab } from '../shell/TabBar'
 import { AutomationTabGlyph, EnergyTabGlyph, HomeTabGlyph } from './glyphs'
 import { useHome } from './HomeProvider'
 
-// Chrome for every /apps/home page: the wallpaper, an account button in place of the site header
-// (hidden while Home is open, see home.css), bottom tabs, the failed-action notice and the first load.
+// Chrome for every /apps/home page: the wallpaper (the site header's "AM > Home" bar floats over it,
+// see home.css), bottom tabs, the failed-action notice and the first load.
 export function HomeShell({ children }: { children: ReactNode }) {
   const { state, loadError, notice, dismissNotice, reload } = useHome()
   const base = '/apps/home'
@@ -26,9 +25,6 @@ export function HomeShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="home-app with-tab-bar relative flex-1">
-      <div className="home-topbar site-container">
-        <ProfileMenu />
-      </div>
       <div className="home-notice-slot site-container" aria-live="assertive">
         {notice && (
           <p className="home-notice" role="alert">
