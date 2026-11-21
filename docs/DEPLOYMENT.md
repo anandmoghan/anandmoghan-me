@@ -39,7 +39,7 @@ npm run deploy:all      # build + hosting, functions, firestore rules, storage r
 npm run deploy:preview  # build + preview channel named "preview"
 ```
 
-Run `npx firebase login` once. Normal deploys go through CI on push to `main` (see [CI-CD.md](CI-CD.md)).
+Run `npx firebase login` once. Deploys run from the Mac (`npm run deploy` or `npm run deploy:all`); there is no CI.
 
 ## Custom domain (anandmoghan.me)
 

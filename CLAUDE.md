@@ -1,7 +1,7 @@
 # anandmoghan.me
 
 Public portfolio and blog at https://anandmoghan.me. Next.js (App Router, `output: "export"`),
-Tailwind for the site chrome, deployed to Cloudflare Pages (project `anandmoghan-me`).
+Tailwind for the site chrome, deployed to Firebase Hosting (project `anandmoghan-me`).
 `apps/` is a separate Vite app (apps.anandmoghan.me) with its own build and deploy; this file
 does not cover it.
 
@@ -76,10 +76,11 @@ global CSS lacks gets added to `global/styles/` and documented in the guide, nev
 ```bash
 npm run dev          # local dev server
 npm run build        # static export to out/; fails on malformed post fragments
-npm run deploy       # build + wrangler pages deploy (confirm with the user first)
+npm run deploy       # build + Firebase Hosting deploy (confirm with the user first)
+npm run deploy:all   # build + hosting, functions, Firestore and Storage rules
 ```
 
-Pushing to `main` also deploys through GitHub Actions (`.github/workflows/deploy.yml`).
+There is no CI: pushing to `main` deploys nothing. Deploys run from the Mac.
 
 ## Security headers and the API
 

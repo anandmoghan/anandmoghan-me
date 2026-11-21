@@ -88,11 +88,10 @@ npm run deploy:all      # hosting, functions, firestore rules, storage rules
 npm run deploy:preview  # preview channel
 ```
 
-- **Production**: GitHub Actions deploys hosting, functions, and rules on push to `main`
-- **Preview**: each pull request gets a Hosting preview channel URL
+- **Production**: deployed from the Mac with the commands above; there is no CI
 - **Rollback**: Hosting release history in the Firebase console, or `firebase hosting:clone`
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/CI-CD.md](docs/CI-CD.md).
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## License
 
